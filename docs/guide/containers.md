@@ -147,7 +147,9 @@ order, and an empty one as `set()`.
   first answer and a list built first would not; of a list they are native.
 - A standalone binary's `KeyError` for a string key says `KeyError` without
   the key.
-- A container holding objects or dataclasses keeps a Python caller on the
-  Python body; native callers are not affected.
+- A container of objects or dataclasses crosses from Python as
+  [objects do](classes.md#the-python-boundary). A container of objects
+  whose class is an exception or generic keeps a Python caller on the Python
+  body; native callers are not affected.
 
 Examples: [Collections](../howto/47_collections.md), [Strings](../howto/48_strings.md).

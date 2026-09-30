@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from ._record import record as dataclass
-from .abi import NativeParam, NativeSignature
+from .abi import NativeParam, NativeSignature, classes_from_json
 
 __all__ = ["Manifest", "ManifestError", "NativeEntry", "RegionLibrary", "load"]
 
@@ -78,6 +78,8 @@ def _signature(payload: dict) -> NativeSignature:
             fields=tuple((f, s) for f, s in parameter.get("fields", ())),
             class_name=parameter.get("class_name", ""),
             written=bool(parameter.get("written", False)),
+            source=parameter.get("source", ""),
+            nullable=bool(parameter.get("nullable", False)),
             exact=bool(parameter.get("exact", False)),
         )
         for parameter in abi["parameters"]
@@ -91,6 +93,7 @@ def _signature(payload: dict) -> NativeSignature:
         cpu_features=tuple(str(f) for f in abi.get("cpu_features", ())),
         future=str(abi.get("future", "")),
         returned=str(abi.get("returned", "")),
+        classes=classes_from_json(abi.get("classes", [])),
         effects=bool(abi.get("effects", False)),
     )
 

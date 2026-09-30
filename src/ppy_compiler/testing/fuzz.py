@@ -54,6 +54,8 @@ __all__ = [
 
 #: Every path a program can take, the reference first.
 ALL_PATHS = ("python", "ppy", "run", "standalone", "c", "cpp")
+#: The paths a program with module state runs on (`generate_program(state=True)`).
+STATE_PATHS = ("python", "ppy", "run")
 
 #: What native code says where CPython would compute an integer no word holds.
 OVERFLOW_64 = "OverflowError: the result does not fit in a 64-bit integer"
@@ -155,6 +157,36 @@ class Ring:
 
 """
 
+#: What a program with module state adds: objects Python makes and native
+#: code walks. `ppy run` passes both across its boundary; a standalone build
+#: has no Python to hold them, so those programs run on the paths that do.
+_STATE_PRELUDE = """\
+class Link:
+    def __init__(self, value: int, label: str) -> None:
+        self.value: int = value
+        self.label: str = label
+        self.next: Link | None = None
+
+
+def chain(n: int) -> Link:
+    head = Link(n, "0")
+    for i in range(1, n):
+        made = Link(n - i, str(i))
+        made.next = head
+        head = made
+    return head
+
+
+def values(head: Link | None) -> list[int]:
+    out: list[int] = []
+    while head is not None:
+        out.append(head.value)
+        head = head.next
+    return out
+
+
+"""
+
 _BIG = (2**62, -(2**62), 2**63 - 1, -(2**63), 3037000499, 4611686018427387903)
 _FLOATS = ("0.5", "-0.0", "1e308", "-2.5", "3.0", "1e-300", "7.25")
 _SPECIAL_FLOATS = ('float("inf")', 'float("-inf")', 'float("nan")')
@@ -187,11 +219,15 @@ class _Scope:
 
 
 class _Generator:
-    def __init__(self, seed: int, prints: bool = False) -> None:
+    def __init__(self, seed: int, prints: bool = False, state: bool = False) -> None:
         self.rng = random.Random(seed)
         self.fresh = 0
         #: Whether functions print too, between checks that may fall back.
         self.prints = prints
+        #: Whether the program also has module state and objects crossing
+        #: `ppy run`'s boundary, drawn from a sequence of their own.
+        self.with_state = state
+        self.state = random.Random(seed ^ 0x5EED)
 
     def name(self, prefix: str) -> str:
         self.fresh += 1
@@ -990,9 +1026,82 @@ class _Generator:
             return repr(rng.choice(_WORDS))
         return rng.choice(("True", "False"))
 
+    # -- module state and objects ----------------------------------------------
+
+    def state_globals(self, w: _Writer) -> None:
+        """Module globals bound once and never rebound (settled), which native
+        code is passed at the call: a list and a dict it reads and writes, a
+        number and a string made by a call, so none is a folded constant."""
+        rng = self.state
+        w.put(
+            f"G_TABLE: list[int] = [k * {rng.randint(1, 9)} - {rng.randint(0, 5)} "
+            f"for k in range({rng.randint(3, 9)})]"
+        )
+        w.put("G_SEEN: dict[int, int] = {}")
+        w.put(f'G_SCALE = int("{rng.randint(-3, 7)}")')
+        w.put(f"G_WORD = str({rng.randint(0, 99)}) + {rng.choice(_WORDS)!r}")
+        w.put("")
+        w.put("")
+
+    def state_function(self, w: _Writer, name: str, callee: str | None) -> None:
+        """A function over the settled globals: reads them, writes the list and
+        the dict, and, when `callee` is given, calls another that does, which
+        passes the globals on."""
+        rng = self.state
+        w.put(f"def {name}(a: int, b: int) -> int:")
+        w.depth += 1
+        scope = _Scope(ints=["a", "b", "total"])
+        w.put(f"total = {'0' if callee is None else f'{callee}(b, a)'}")
+        w.put(f"for i in range(b % {rng.randint(2, 7)} + 1):")
+        w.depth += 1
+        inner = scope.copy()
+        inner.ints.append("i")
+        w.put("total += G_TABLE[(a + i) % len(G_TABLE)] * G_SCALE")
+        if rng.random() < 0.7:
+            w.put(f"G_SEEN[(a * i + {rng.randint(0, 9)}) % 11] = {self.int_expr(inner, 1)}")
+        if rng.random() < 0.5:
+            w.put(f"if len(G_TABLE) < 30 and {self.bool_expr(inner, 2)}:")
+            w.put(f"    G_TABLE.append({self.int_expr(inner, 1)})")
+        if rng.random() < 0.4:
+            w.put(f"total += G_SEEN.get(i, {rng.randint(-2, 2)})")
+        w.depth -= 1
+        w.put(f"return total + len(G_WORD) + len(G_SEEN) + {self.int_expr(scope, 1)}")
+        w.depth -= 1
+        w.put("")
+        w.put("")
+
+    def object_function(self, w: _Writer, name: str) -> None:
+        """A function that walks linked objects Python made, writing their
+        fields: the objects cross whole, and the writes come back."""
+        rng = self.state
+        w.put(f"def {name}(head: Link, k: int) -> int:")
+        w.depth += 1
+        w.put("total = 0")
+        w.put("node: Link | None = head")
+        w.put("while node is not None:")
+        w.depth += 1
+        scope = _Scope(ints=["k", "total", "node.value"], strs=["node.label"])
+        w.put(f"node.value = ({self.int_expr(scope, 1)}) % {rng.randint(50, 999)}")
+        if rng.random() < 0.5:
+            w.put(f"node.label = {self.str_expr(scope, 2)}")
+        w.put("total += node.value + len(node.label)")
+        if rng.random() < 0.3:
+            w.put("if node.next is None and k > 0:")
+            w.put('    node.next = Link(k, "new")')
+            w.put("    k = 0")
+        w.put("node = node.next")
+        w.depth -= 1
+        w.put("return total")
+        w.depth -= 1
+        w.put("")
+        w.put("")
+
     def program(self) -> str:
         w = _Writer()
         w.lines.extend(_PRELUDE.splitlines())
+        if self.with_state:
+            w.lines.extend(_STATE_PRELUDE.splitlines())
+            self.state_globals(w)
         calls: list[str] = []
         for _ in range(self.rng.randint(3, 6)):
             name = self.name("fn")
@@ -1001,19 +1110,44 @@ class _Generator:
                 f"{name}({', '.join(self.argument(k) for k in kinds)})"
                 for _ in range(self.rng.randint(1, 3))
             )
+        after = self.state_part(w) if self.with_state else []
         w.put("def main() -> None:")
         for call in calls:
             w.put(f"    print({call})")
+        for line in after:
+            w.put(f"    {line}")
         w.put("")
         w.put("")
         w.put("main()")
         return "\n".join(w.lines) + "\n"
 
+    def state_part(self, w: _Writer) -> list[str]:
+        """The functions over module state and objects, and what `main` does with them."""
+        after: list[str] = []
+        first = self.name("st")
+        self.state_function(w, first, None)
+        second = self.name("st")
+        self.state_function(w, second, first)
+        for _ in range(self.state.randint(1, 3)):
+            a, b = self.state.randint(-5, 9), self.state.randint(0, 9)
+            after.append(f"print({self.state.choice((first, second))}({a}, {b}))")
+        after.append("print(G_TABLE, sorted(G_SEEN.items()))")
+        walker = self.name("walk")
+        self.object_function(w, walker)
+        after.append(f"h = chain({self.state.randint(1, 6)})")
+        after.extend(
+            f"print({walker}(h, {self.state.randint(-3, 9)}), values(h), h.label)"
+            for _ in range(self.state.randint(1, 2))
+        )
+        return after
 
-def generate_program(seed: int, prints: bool = False) -> str:
+
+def generate_program(seed: int, prints: bool = False, state: bool = False) -> str:
     """The program for `seed`: identical on every machine and every run. With
-    `prints`, functions print between checks that may fall back."""
-    return _Generator(seed, prints).program()
+    `prints`, functions print between checks that may fall back. With `state`,
+    it also reads and writes module globals and walks objects Python made,
+    which only the paths with a Python boundary run (`STATE_PATHS`)."""
+    return _Generator(seed, prints, state).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:

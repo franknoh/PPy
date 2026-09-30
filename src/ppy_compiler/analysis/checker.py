@@ -736,6 +736,23 @@ def receiver_bindings(
     return found
 
 
+def _settled_names(info: FunctionInfo, settled: set[str]) -> frozenset[str]:
+    """The settled globals `info`'s body reads and does not bind itself."""
+    if info.node is None or not settled:
+        return frozenset()
+    loaded: set[str] = set()
+    stored: set[str] = {p.name for p in info.params}
+    for node in ast.walk(info.node):
+        if isinstance(node, ast.Name):
+            if isinstance(node.ctx, ast.Load):
+                loaded.add(node.id)
+            else:
+                stored.add(node.id)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            stored.update(node.names)
+    return frozenset((loaded & settled) - stored)
+
+
 def _collection_root(node: ast.expr) -> ast.expr:
     """The variable a write through a collection element lands in: `adj` for
     `adj[u].push(v)` and for `grid[i][j] = x`. An element is held by its
@@ -841,6 +858,9 @@ class _Checker:
         #: Parameters handed to a callee that writes through what it is given.
         self._delegated: set[str] = set()
         self._foreign_writes = False
+        #: Settled globals the body reads, and whether it read any other.
+        self._settled_reads: dict[str, T.Type] = {}
+        self._unsettled_global = False
         self._local_writes: set[str] = set()
         self._shared: set[str] = set()
         self._returned_names: set[str] = set()
@@ -969,6 +989,8 @@ class _Checker:
             self._dynamic_depth,
             self._function_locals,
             self._foreign_writes,
+            self._settled_reads,
+            self._unsettled_global,
             self._local_writes,
             self._shared,
             self._returned_names,
@@ -991,6 +1013,8 @@ class _Checker:
         self._mutated = set()
         self._delegated = set()
         self._foreign_writes = False
+        self._settled_reads = {}
+        self._unsettled_global = False
         self._local_writes = set()
         self._shared = set()
         self._returned_names = set()
@@ -1002,10 +1026,14 @@ class _Checker:
         # The map depends on the body and on which parameters are immutable,
         # and on nothing else, so one computed on an earlier pass still holds.
         immutable = frozenset(p.name for p in info.params if p.known and T.is_immutable(p.type))
-        cached = self.project.alias_cache.get((id(info.node), immutable))
+        # A settled global the body reads is, to the alias map, one more
+        # parameter: native code is handed it at the boundary, and a write
+        # through it lands in the module's object as a parameter's does.
+        settled = _settled_names(info, self.symbols.settled_globals)
+        cached = self.project.alias_cache.get((id(info.node), immutable, settled))
         if cached is None:
-            cached = analyze_aliases(info.node, immutable)
-            self.project.alias_cache[(id(info.node), immutable)] = cached
+            cached = analyze_aliases(info.node, immutable, settled)
+            self.project.alias_cache[(id(info.node), immutable, settled)] = cached
         self._aliases = cached  # type: ignore[assignment]
         if info.dynamic:
             self._dynamic_depth += 1
@@ -1077,6 +1105,8 @@ class _Checker:
             self._dynamic_depth,
             self._function_locals,
             self._foreign_writes,
+            self._settled_reads,
+            self._unsettled_global,
             self._local_writes,
             self._shared,
             self._returned_names,
@@ -1184,6 +1214,8 @@ class _Checker:
             native_blockers=tuple(dict.fromkeys(self._native_blockers)),
             escaping=set(self._escaping),
             mutated_params=set(self._mutated),
+            settled_globals=dict(self._settled_reads),
+            unsettled_global=self._unsettled_global,
             delegated_writes=set(self._delegated),
             foreign_writes=self._foreign_writes,
             writes_only_locals=not self._external_writes
@@ -2222,7 +2254,18 @@ class _Checker:
                 return Binding(T.strip_literal(binding.type))
             if self._is_module_global(node.id) and self._current is not None:
                 self._effects = self._effects.add(Effect.READ_GLOBAL)
-                self._blockers.append(f"reads mutable global `{node.id}`")
+                if node.id in self.symbols.settled_globals:
+                    declared = self.symbols.globals.get(node.id, binding.type)
+                    self._settled_reads.setdefault(node.id, T.strip_literal(declared))
+                else:
+                    self._unsettled_global = True
+                    self._blockers.append(f"reads mutable global `{node.id}`")
+                # A function reads the global as it is when the function runs,
+                # which a rebinding no analysis sees (`setattr` on the module)
+                # or a write to a container may have changed: what the
+                # module's body knew of its value (a constant, a length) is
+                # not known here. A literal constant is folded instead.
+                return Binding(T.strip_literal(binding.type))
             return binding
         if node.id in T.BUILTIN_MRO:
             return Binding(T.ClassObject(node.id, T.instance(node.id)))
@@ -2502,7 +2545,7 @@ class _Checker:
                     self._calls.add(own.qualname)
             if result is not None:
                 self._mark_call_arguments(node, env, retains=not _is_inspecting_builtin(node, env))
-                self._effects = self._effects | result.effects
+                self._add_summarized_effects(result.effects)
                 if Effect.IO in result.effects:
                     self._blockers.append(f"calls `{node.func.id}` which performs I/O")
                 if Effect.PYTHON_CALLBACK in result.effects:
@@ -2527,11 +2570,11 @@ class _Checker:
                 return refined
             decided = stdlib.call(callee.type.qualname, [(a.type, a.facts) for a in args])
             if decided is not None:
-                self._effects = self._effects | decided[1]
+                self._add_summarized_effects(decided[1])
                 return Binding(decided[0])
             described = stdlib.lookup(callee.type.qualname)
             if described is not None:
-                self._effects = self._effects | described[1]
+                self._add_summarized_effects(described[1])
                 if described[1].violations():
                     self._blockers.append(
                         f"calls `{callee.type.qualname}` with effects: {described[1]}"
@@ -2817,6 +2860,14 @@ class _Checker:
         # A coercing Pydantic model accepts constructor input that differs from
         # the validated output type (spec 23.2).
         return info.is_pydantic
+
+    def _add_summarized_effects(self, effects: EffectSet) -> None:
+        """The effects of a call known only by its summary: a builtin, a library
+        function, a plugin's. A global such a call reads is not one the module
+        settled, so only CPython can read it."""
+        if Effect.READ_GLOBAL in effects:
+            self._unsettled_global = True
+        self._effects = self._effects | effects
 
     def _call_signature(
         self,
@@ -3276,7 +3327,7 @@ class _Checker:
             else None
         )
         if known is not None:
-            self._effects = self._effects | known[1]
+            self._add_summarized_effects(known[1])
             if known[1].violations():
                 self._blockers.append(f"uses `{base.name}.{node.attr}` with effects: {known[1]}")
             self._native_blockers.append(f"`{base.name}.{node.attr}` has no native lowering")
@@ -3374,6 +3425,7 @@ class _Checker:
         other = self.project.modules.get(module)
         if other is not None and node.attr in other.globals:
             self._effects = self._effects.add(Effect.READ_GLOBAL)
+            self._unsettled_global = True
             return Binding(other.globals[node.attr], other.global_facts.get(node.attr, Facts()))
         known = stdlib.MODULE_ATTRIBUTES.get(qualname)
         if known is not None:
@@ -3406,7 +3458,7 @@ class _Checker:
 
         effects = B.MODULE_EFFECTS.get(module.partition(".")[0])
         if effects is not None:
-            self._effects = self._effects | effects
+            self._add_summarized_effects(effects)
             self._blockers.append(f"uses `{module}` which has effects: {effects}")
         return Binding(T.UNKNOWN)
 
@@ -4624,6 +4676,7 @@ class _Checker:
                 if len(args) != 1:
                     self._error("E1305", "`ppy.native.compiled(f)` takes the function", node)
                 self._effects = self._effects.add(Effect.READ_GLOBAL)
+                self._unsettled_global = True
                 return Binding(T.BOOL)
             self._error("E1630", f"`ppy.native.{operation}` is not a function", node)
             return Binding(T.UNKNOWN)
@@ -5108,6 +5161,7 @@ class _Checker:
             if len(args) != 1:
                 self._error("E1644", f"`{spelled}(kernel)` takes the kernel", node)
             self._effects = self._effects.add(Effect.READ_GLOBAL)
+            self._unsettled_global = True
             return Binding(T.BOOL)
         if operation in {"syncthreads", "syncwarp"}:
             if args:
@@ -5189,6 +5243,7 @@ class _Checker:
             if len(args) != 1:
                 self._error("E1644", f"`{spelled}(kernel)` takes the kernel", node)
             self._effects = self._effects.add(Effect.READ_GLOBAL)
+            self._unsettled_global = True
             return Binding(T.BOOL)
         if operation == "arange":
             block = (
@@ -5581,6 +5636,7 @@ class _Checker:
             if len(args) != 1:
                 self._error("E1645", f"`{spelled}(coroutine)` takes the function", node)
             self._effects = self._effects.add(Effect.READ_GLOBAL)
+            self._unsettled_global = True
             return Binding(T.BOOL)
         self._error("E1645", f"`{spelled}` is not part of the aio namespace", node)
         return Binding(T.UNKNOWN)
@@ -6666,6 +6722,28 @@ class _Checker:
             else:
                 self._external_writes = True
             return
+        # A write through a field or an element of a name the checker could not
+        # type still lands in something that name reaches: what its roots hold.
+        root = node
+        while isinstance(root, (ast.Attribute, ast.Subscript)):
+            root = root.value
+        if (
+            root is not node
+            and isinstance(root, ast.Name)
+            and self._aliases is not None
+            and self._super_receiver(root) is None
+        ):
+            roots = self._roots(root, root.id)
+            params = self._aliases.param_roots(roots)
+            if params:
+                self._mutated.update(params)
+                for name in sorted(params):
+                    self._blockers.append(f"mutates parameter `{name}`")
+                self._external_writes = True
+                return
+            if self._aliases.only_local(roots):
+                self._local_writes.update(roots)
+                return
         # The target is an expression, so which object it reached is unknown.
         self._foreign_writes = True
         self._external_writes = True
@@ -6884,7 +6962,7 @@ class _Checker:
             result = plugin.call(qualname, typed_args, typed_keywords)
         if result is None:
             return None
-        self._effects = self._effects | result.effects
+        self._add_summarized_effects(result.effects)
         if result.kind == "Reject":
             reason = result.reason or getattr(result.spec, "reason", "")
             message = f"`{qualname}` is not supported under the current PPY mode"
@@ -7008,7 +7086,7 @@ class _Checker:
         result = plugin.call(qualname, [(o.type, o.facts) for o in operands], {})
         if result is None:
             return None
-        self._effects = self._effects | result.effects
+        self._add_summarized_effects(result.effects)
         if result.kind == "PythonFallback":
             self._native_blockers.append(f"`{symbol}` on `{root}` stays on the Python path")
         if self.record:
@@ -7192,6 +7270,7 @@ def analyze(
     are known.
     """
     from .inference import infer_fields, modules_with_unannotated_fields
+    from .settled import close_settled_globals
 
     analysis = ProjectAnalysis(symbols=symbols, diagnostics=diagnostics)
     ordered = [symbols.modules[m.name] for m in symbols.graph.order() if m.name in symbols.modules]
@@ -7273,7 +7352,9 @@ def analyze(
                 cascaded += settled.cascaded
             if cascaded:
                 diagnostics.add(_unresolved_summary(cascaded, modules))
+            close_settled_globals(analysis)
             return analysis
+    close_settled_globals(analysis)
     return analysis
 
 

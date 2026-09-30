@@ -39,7 +39,13 @@ from .link import (
     write_header,
     write_manifest,
 )
-from .lowering import LoweredFunction, LoweringResult, NativeSignature, should_lower_native
+from .lowering import (
+    LoweredFunction,
+    LoweringResult,
+    NativeSignature,
+    should_lower_native,
+    with_implicit_globals,
+)
 from .specialize import SpecializationPolicy, Specializer
 from .wrapper_build import build_wrappers
 
@@ -300,9 +306,12 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
             # The cached module no longer matches the source in front of us.
             return NativeModule(name=name)
         info, _analysis, node = entry
+        if signature.reads_globals:
+            # Lowered with the globals it reads as parameters, as it was then.
+            info = with_implicit_globals(info, _analysis)
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
-        exposed, why = should_lower_native(info, _analysis, layouts)
+        exposed, why = should_lower_native(info, _analysis, layouts, signature.classes)
         functions[qualname] = LoweredFunction(
             info,
             signature,

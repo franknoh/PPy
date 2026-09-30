@@ -279,8 +279,11 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
     entries: dict[str, int] = {}
 
     # A collection crosses through `ppy_runtime.collection_boundary`, which the
-    # Python-level binding drives; there is no C wrapper for it.
-    signatures = {q: s for q, s in signatures.items() if not s.crosses_collections}
+    # Python-level binding drives, and so is a global the binding reads; there
+    # is no C wrapper for either.
+    signatures = {
+        q: s for q, s in signatures.items() if not s.crosses_collections and not s.reads_globals
+    }
     for index, (qualname, signature) in enumerate(sorted(signatures.items())):
         entries[qualname] = index
         parts.append(_function(index, signature))

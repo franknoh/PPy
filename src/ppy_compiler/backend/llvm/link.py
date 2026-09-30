@@ -17,6 +17,7 @@ import sysconfig
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ppy_runtime.abi import classes_to_json
 from ppy_runtime.manifest import SUPPORTED_ABI as MANIFEST_ABI_VERSION
 
 from .lowering import NativeParam, NativeSignature
@@ -410,6 +411,8 @@ def write_manifest(
                             "fields": [list(pair) for pair in parameter.fields],
                             "class_name": parameter.class_name,
                             "written": parameter.written,
+                            "source": parameter.source,
+                            "nullable": parameter.nullable,
                             "exact": parameter.exact,
                         }
                         for parameter in signature.parameters
@@ -419,6 +422,7 @@ def write_manifest(
                     "cpu_features": list(signature.cpu_features),
                     "future": signature.future,
                     "returned": signature.returned,
+                    "classes": classes_to_json(signature.classes),
                     "effects": signature.effects,
                 },
             }

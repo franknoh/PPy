@@ -1,0 +1,17 @@
+# found: path=run (a list only read beside a dict written: the Python boundary passed the list as a
+# buffer where the function took a handle, and the program crashed)
+def fill(xs: list[int], d: dict[int, int]) -> int:
+    total = 0
+    for x in xs:
+        d[x] = x * 2
+        total += x
+    return total
+
+
+def main() -> None:
+    d: dict[int, int] = {}
+    xs = [1, 2, 3]
+    print(fill(xs, d), d, fill(xs, d), xs)
+
+
+main()

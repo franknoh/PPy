@@ -11,13 +11,15 @@ from __future__ import annotations
 
 import json
 
+from ppy_runtime.abi import classes_from_json, classes_to_json
+
 from .fusion import FusedLoop, SourceSpan
 from .lowering import NativeParam, NativeSignature
 
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 13
 
 
 class CachedLowering:
@@ -81,6 +83,8 @@ def _param(p: NativeParam) -> dict:
         "fields": [list(f) for f in p.fields],
         "class_name": p.class_name,
         "written": p.written,
+        "source": p.source,
+        "nullable": p.nullable,
         "exact": p.exact,
     }
 
@@ -94,6 +98,8 @@ def _read_param(raw: dict) -> NativeParam:
         fields=tuple(tuple(f) for f in raw["fields"]),
         class_name=raw["class_name"],
         written=bool(raw.get("written", False)),
+        source=raw.get("source", ""),
+        nullable=bool(raw.get("nullable", False)),
         exact=bool(raw.get("exact", False)),
     )
 
@@ -108,6 +114,7 @@ def _signature(s: NativeSignature) -> dict:
         "cpu_features": list(s.cpu_features),
         "future": s.future,
         "returned": s.returned,
+        "classes": classes_to_json(s.classes),
         "effects": s.effects,
     }
 
@@ -122,6 +129,7 @@ def _read_signature(raw: dict) -> NativeSignature:
         cpu_features=tuple(raw.get("cpu_features", ())),
         future=str(raw.get("future", "")),
         returned=str(raw.get("returned", "")),
+        classes=classes_from_json(raw.get("classes", [])),
         effects=bool(raw.get("effects", False)),
     )
 

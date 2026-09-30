@@ -44,6 +44,8 @@ from ..backend.llvm.lowering import (
     _signature,
     eligible,
     should_lower_native,
+    with_implicit_globals,
+    writes,
     written_params,
 )
 from ..backend.llvm.obligations import BinOp, Const, Obligation, Relation, Term, Var, variables
@@ -91,7 +93,7 @@ from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .closures import ClosureLowering
-from .collections import HANDLE, Held, records_of
+from .collections import HANDLE, Held, crossing_classes, records_of
 from .containers import ContainerLowering
 from .effects import EffectLowering, check_effects, rule_of, wants_exceptions
 from .exceptions import ExceptionLowering, uses_exceptions
@@ -494,6 +496,9 @@ class Frontend:
                     "it has no single native entry point"
                 )
                 continue
+            passes_globals = self._passes_globals(info, analysis)
+            # The settled globals it reads are parameters of its native entry.
+            info = with_implicit_globals(info, analysis) if passes_globals else info  # noqa: PLW2901
             try:
                 if self.cpu_compatible:
                     ok, reason = eligible(
@@ -504,6 +509,7 @@ class Frontend:
                         allow_python=self.effects,
                         allow_launch=self.launches,
                         allow_async=self.asynchronous,
+                        allow_globals=passes_globals,
                     )
                     if not ok:
                         raise Unsupported(reason)
@@ -528,9 +534,14 @@ class Frontend:
                 continue
             if proved:
                 lowered.proved[qualname] = tuple(proved)
-            exposed, why = should_lower_native(info, analysis, self.layouts)
             signature = self.declared[qualname][1]
             assert isinstance(signature, IRSignature)
+            exposed, why = should_lower_native(
+                info,
+                analysis,
+                self.layouts,
+                signature.native.classes if signature.native is not None else (),
+            )
             boundary = self._text_boundary(info, signature) if exposed else None
             lowered.functions[qualname] = CanonicalFunction(
                 info, signature, exposed=exposed, exposure_reason=why, boundary=boundary
@@ -623,6 +634,8 @@ class Frontend:
                 ir_type = _param_type(native_param)
             if native_param is not None and _param_type(native_param) != ir_type:
                 native_param = None
+            if native_param is not None and parameter.global_of:
+                native_param = replace(native_param, source=parameter.global_of)
             parameters.append(IRParameter(parameter.name, ir_type, native_param))
         facts = info.ret_facts
         if analysis is not None:
@@ -645,6 +658,9 @@ class Frontend:
             and results == _result_types(info, self.layouts)
         ):
             native = self._exact_signature(info, _signature(info, self.layouts, analysis))
+            classes = self._crossing_classes(info)
+            if classes:
+                native = replace(native, classes=classes)
         if self.cpu_compatible and native is None:
             raise Unsupported("canonical signature has no CPU native ABI")
         return IRSignature(
@@ -655,13 +671,20 @@ class Frontend:
             native,
         )
 
+    def _crossing_classes(self, info: FunctionInfo) -> tuple:
+        """The project classes whose instances cross the Python boundary with the
+        function's arguments and result (`CrossingClass`); none where one of
+        them cannot."""
+        types = [p.type for p in info.params] + [info.ret]
+        return crossing_classes(types, self.analysis.symbols.classes, records_of(self)) or ()
+
     def _effects_of(self, info: FunctionInfo) -> tuple[str, ...]:
         """What the IR says the function may do: the analysis's effects, with
         a write through a buffer spelled as the native memory write it is."""
         analysis = self.analysis.functions.get(info.qualname)
         effects = info.effects if analysis is None else analysis.effects
         spelled = set(effects.spelled())
-        if analysis is not None and (analysis.mutated_params or analysis.delegated_writes):
+        if analysis is not None and writes(analysis):
             spelled.add("write_memory")
         if any(isinstance(self.lower_type(p.type, p.facts), BufferType) for p in info.params):
             spelled.add("read_memory")
@@ -798,7 +821,7 @@ class Frontend:
         else:
             core.ret(b)
         parameters = tuple(
-            NativeParam(p.name, TEXT) if is_text else p
+            NativeParam(p.name, TEXT, source=p.source) if is_text else p
             for p, is_text in zip(native.parameters, texts, strict=True)
         )
         return replace(
@@ -987,6 +1010,19 @@ class Frontend:
 
     def _drop(self, qualname: str) -> None:
         self.declared[qualname][0].body.blocks.clear()
+
+    def _passes_globals(self, info: FunctionInfo, analysis: FunctionAnalysis) -> bool:
+        """Whether the settled globals `info` reads are passed to it as
+        parameters: under `ppy run`, whose boundary reads them from the module,
+        for a function Python calls by name. A standalone program has no
+        module to read them from, and a C export's caller does not pass them."""
+        return (
+            self.cpu_compatible
+            and not self.standalone
+            and self.backend_name == "llvm"
+            and analysis.globals_native
+            and info.directive("native.export") is None
+        )
 
     def _generic_owner(self, info: FunctionInfo) -> bool:
         """A method of a generic class: specialized with its class, as a generic is."""
@@ -1297,6 +1333,16 @@ class Frontend:
             summary = summaries.get(function.name)
             native = entry.signature.native
             if summary is None or not summary.barrier or native is None or not entry.exposed:
+                continue
+            read = next((p.source for p in native.parameters if p.source), "")
+            if read and function.name not in broken:
+                # The boundary read the global before the call; Python that
+                # runs at the barrier could rebind it, or change what it holds,
+                # and the native code would go on with what it was given.
+                broken[function.name] = (
+                    f"reads module global `{read.rpartition(':')[2]}`, which Python could "
+                    f"rebind or change at {summary.why.get('barrier', 'a barrier')}"
+                )
                 continue
             copied = next(
                 (
@@ -3903,7 +3949,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         one = self._int_constant(1)
         grid = (programs, one, one)
         block = (self._int_constant(int(threads)), one, one)  # type: ignore[call-overload]
-        arguments = self._call_arguments(signature, node.args[2:], name)
+        arguments = self._call_arguments(signature, node.args[2:], name, called=False)
         self.frontend.module.require("gpu", 1)
         gpu_dialect.launch(self.b, function.name, grid, block, tuple(arguments))
         return core.const(self.b, 0, I64)
@@ -3956,7 +4002,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             raise Unsupported(f"`{name}` is not a kernel; mark it `@{api}.kernel`")
         grid = self._gpu_extent(node.args[1])
         block = self._gpu_extent(node.args[2])
-        arguments = self._call_arguments(signature, node.args[3:], name)
+        arguments = self._call_arguments(signature, node.args[3:], name, called=False)
         gpu_dialect.launch(self.b, function.name, grid, block, tuple(arguments))
         return core.const(self.b, 0, I64)
 
@@ -4169,7 +4215,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             function, signature = found
             if function.results:
                 raise Unsupported("a spawned function returns nothing")
-            arguments = self._call_arguments(signature, args[1:], target.id)
+            arguments = self._call_arguments(signature, args[1:], target.id, called=False)
             return concurrency_dialect.spawn(self.b, function.name, tuple(arguments))
         if operation == "join":
             handle = self._coerce(self._expr(args[0]), "int")
@@ -4204,9 +4250,37 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         return core.const(self.b, 0, I64)
 
     def _call_arguments(
-        self, signature: NativeSignature | IRSignature, spelled: list[ast.expr], qualname: str
+        self,
+        signature: NativeSignature | IRSignature,
+        spelled: list[ast.expr],
+        qualname: str,
+        *,
+        called: bool = True,
     ) -> list[Value]:
-        """Arguments for a native callee, each in the shape its parameter takes."""
+        """Arguments for a native callee, each in the shape its parameter takes.
+
+        A settled global the callee reads is passed after the spelled ones, as
+        the parameter this function was given it by. A thread or a kernel
+        (`called` false) is not a call this function waits on, so it is not
+        passed one."""
+        sources = [_source_of(parameter) for parameter in signature.parameters]
+        if any(sources):
+            if not called:
+                raise Unsupported(
+                    f"`{qualname}` reads module globals, which it cannot be passed here"
+                )
+            held = {p.global_of: p.name for p in self.info.params if p.global_of}
+            passed = []
+            for source in sources:
+                if not source:
+                    continue
+                if source not in held:
+                    raise Unsupported(
+                        f"`{qualname}` reads module global `{source.rpartition(':')[2]}`, "
+                        "which this function is not passed"
+                    )
+                passed.append(ast.Name(held[source], ast.Load()))
+            spelled = [*spelled, *passed]
         if len(spelled) != len(signature.parameters):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         arguments: list[Value] = []
@@ -5227,6 +5301,12 @@ _OPERATOR_DUNDERS: dict[type[ast.operator], str] = {
     ast.BitOr: "__or__",
     ast.BitXor: "__xor__",
 }
+
+
+def _source_of(parameter: NativeParam | IRParameter) -> str:
+    """The settled global a parameter passes (`module:name`), or ""."""
+    native = parameter.native if isinstance(parameter, IRParameter) else parameter
+    return native.source if native is not None else ""
 
 
 def _specialized_info(

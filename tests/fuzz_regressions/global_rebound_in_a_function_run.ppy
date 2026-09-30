@@ -1,0 +1,15 @@
+# found: path=run (a store to a name declared `global` was removed as an unused local, and a read of the global in another function folded to the value the module body gave it)
+SCALE = int("3")
+
+
+def hook() -> None:
+    global SCALE
+    SCALE = 100
+
+
+def main() -> None:
+    hook()
+    print(SCALE)
+
+
+main()

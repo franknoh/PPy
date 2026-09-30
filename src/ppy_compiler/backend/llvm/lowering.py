@@ -26,10 +26,17 @@ may not mutate it (spec 13.2, 13.3, 13.5).
 from __future__ import annotations
 
 import ast
+import dataclasses
 from dataclasses import dataclass, field
 
 from ppy_runtime._record import replace
-from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK, NativeParam, NativeSignature
+from ppy_runtime.abi import (
+    STATUS_FALLBACK,
+    STATUS_OK,
+    CrossingClass,
+    NativeParam,
+    NativeSignature,
+)
 from ppy_runtime.collection_boundary import RETURNS_NOTHING
 from ppy_runtime.collection_boundary import parse as crossing_spec
 
@@ -38,7 +45,8 @@ from ...analysis.checker import FunctionAnalysis
 from ...analysis.closures import callable_spelled, is_plain_callable
 from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
-from ...analysis.symbols import FunctionInfo
+from ...analysis.settled import implicit_parameter_name
+from ...analysis.symbols import FunctionInfo, ParamInfo
 
 __all__ = [
     "STATUS_FALLBACK",
@@ -244,11 +252,26 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     function that writes through a parameter may be handed the same list
     twice (`f(xs, xs)`), and a copy would not see the write: then each list
     goes by handle, and the boundary keeps one object one handle."""
-    if analysis is None:
+    if analysis is None or not writes(analysis):
         return frozenset()
-    if not analysis.mutated_params and not analysis.delegated_writes:
-        return frozenset()
-    return frozenset(p.name for p in analysis.info.params)
+    return frozenset(p.name for p in analysis.info.params) | {
+        implicit_parameter_name(analysis, held) for held in analysis.implicit_globals
+    }
+
+
+def writes(analysis: FunctionAnalysis) -> set[str]:
+    """The parameters the function writes through, itself or by handing them to
+    a callee that does, and the settled globals passed to it that it or a
+    callee writes, by the names it takes them as."""
+    return (
+        analysis.mutated_params
+        | analysis.delegated_writes
+        | {
+            implicit_parameter_name(analysis, held)
+            for held in analysis.implicit_globals
+            if held.written
+        }
+    )
 
 
 def _holds_strings(info: FunctionInfo) -> bool:
@@ -313,6 +336,7 @@ def _collection_param(
         if not _held_natively(base, layouts):
             return None
         return NativeParam(name, "handle", str(base), class_name=base.name)
+    nullable = False
     if isinstance(base, T.Union_):
         members = [m for m in base.members if m != T.NONE]
         if len(members) != 1 or len(members) == len(base.members):
@@ -320,12 +344,15 @@ def _collection_param(
         base = T.strip_literal(members[0])
         if not isinstance(base, T.Instance) or base.name in _COLLECTIONS:
             return None
+        nullable = True
     if not isinstance(base, T.Instance):
         return None
     if base.name in _COLLECTIONS and base.args:
         return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
     if layouts is not None and layouts.get(base.name) == ():
-        return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
+        return NativeParam(
+            name, "handle", collection_spelled(base), class_name=base.name, nullable=nullable
+        )
     return None
 
 
@@ -382,6 +409,7 @@ def eligible(
     allow_launch: bool = False,
     allow_async: bool = False,
     allow_python: bool = False,
+    allow_globals: bool = False,
 ) -> tuple[bool, str]:
     """Can this function be lowered to a native scalar entry point?
 
@@ -391,15 +419,22 @@ def eligible(
     as one, where the CPU backends have no launch runtime yet. `allow_python`
     is `ppy run`'s: a call native code cannot make it makes through Python
     (`lowering/effects.py`), so a call of unknown effect is the lowering's to
-    refuse, one call at a time.
+    refuse, one call at a time. `allow_globals` is `ppy run`'s too: the
+    settled globals the function reads are parameters of `info` (see
+    `with_implicit_globals`), which Python's boundary reads from the module
+    at the call.
     """
     if info.is_generator and info.is_async:
         return False, "an async generator runs on CPython"
     if info.is_async and not allow_async:
         return False, "a coroutine runs natively only where the async runtime does"
-    written = analysis.mutated_params | analysis.delegated_writes
+    written = writes(analysis)
+    passes_globals = allow_globals and analysis.globals_native
     for name in sorted(written):
         declared = next((p.type for p in info.params if p.name == name), None)
+        if declared is None and not passes_globals:
+            # A global written where it is not passed: reading it is the blocker.
+            continue
         described = _buffer_element(declared) if declared is not None else None
         handle = _collection_param(name, declared, layouts) if declared is not None else None
         # Writing through a borrowed buffer is visible to the caller, which is
@@ -420,6 +455,9 @@ def eligible(
     violations.discard(Effect.ATOMIC)
     violations.discard(Effect.SYNC)
     violations.discard(Effect.THREAD)
+    if passes_globals:
+        # Every global it reads is one no one rebinds, passed in as a parameter.
+        violations.discard(Effect.READ_GLOBAL)
     if allow_io:
         violations.discard(Effect.IO)
     if allow_python:
@@ -452,6 +490,23 @@ def eligible(
     return True, ""
 
 
+def with_implicit_globals(info: FunctionInfo, analysis: FunctionAnalysis) -> FunctionInfo:
+    """`info` with the settled globals native code passes it (see
+    `analysis/settled.py`) as parameters after its own."""
+    if not analysis.implicit_globals:
+        return info
+    added = [
+        ParamInfo(
+            implicit_parameter_name(analysis, held),
+            held.type,
+            annotated=True,
+            global_of=held.key,
+        )
+        for held in analysis.implicit_globals
+    ]
+    return dataclasses.replace(info, params=[*info.params, *added])
+
+
 def called_back_only(info: FunctionInfo) -> bool:
     """`def __eq__(self, other: object)` of a class: `other` has no native ABI, and
     what calls it natively is a collection comparing two of its own keys, which
@@ -465,7 +520,10 @@ def called_back_only(info: FunctionInfo) -> bool:
 
 
 def _crossing_costs_more(
-    info: FunctionInfo, layouts: ClassLayouts | None, written: frozenset[str]
+    info: FunctionInfo,
+    layouts: ClassLayouts | None,
+    written: frozenset[str],
+    classes: tuple[CrossingClass, ...] = (),
 ) -> str | None:
     """Why copying the function's containers across the boundary would cost more
     than running it natively saves, or None when it pays.
@@ -484,9 +542,9 @@ def _crossing_costs_more(
         is not None
         and native.is_handle
         and native.element != "str"
-        and _crosses(native)
+        and _crosses(native, classes)
     ]
-    if crossing and not _works_through(info.node, crossing):
+    if crossing and not _works_through(info.node, crossing, info.name):
         return "copying the collections in costs more than the body does with them"
     if _holds_strings(info) and not _nested_loop(info.node):
         return "copying its strings across costs what one pass over them saves"
@@ -507,12 +565,14 @@ _WHOLE_METHODS = frozenset(
 )  # fmt: skip
 
 
-def _works_through(function: ast.AST, names: list[str]) -> bool:
+def _works_through(function: ast.AST, names: list[str], own: str = "") -> bool:
     """Whether the function does work that grows with one of `names`, which pays
     for copying it across the boundary: a loop or a comprehension walks it, a
     loop's body calls a method on it or writes an element of it, an operator
     takes it whole (`s & t`), or a builtin or a method goes over all of it
-    (`sum(v)`, `v.sort()`, `", ".join(v)`)."""
+    (`sum(v)`, `v.sort()`, `", ".join(v)`). Objects linked to one another are
+    walked by a loop that follows a field (`node = node.next`) or by the
+    function calling itself on one (`height(node.left)`)."""
     wanted = set(names)
 
     def whole(node: ast.expr) -> bool:
@@ -529,6 +589,16 @@ def _works_through(function: ast.AST, names: list[str]) -> bool:
     for node in ast.walk(function):
         # Work over the whole container without a loop of the function's own.
         if isinstance(node, ast.comprehension) and rooted(node.iter):
+            return True
+        if (
+            own
+            and isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == own
+            and any(isinstance(a, ast.Attribute) and rooted(a) for a in node.args)
+        ):
+            return True
+        if isinstance(node, ast.While) and _follows_a_field(node):
             return True
         if isinstance(node, ast.BinOp) and (whole(node.left) or whole(node.right)):
             return True  # `s & t`, `v + w`
@@ -567,6 +637,23 @@ def _works_through(function: ast.AST, names: list[str]) -> bool:
     return False
 
 
+def _follows_a_field(loop: ast.While) -> bool:
+    """A loop that steps along linked objects: `node = node.next` in its body."""
+    for child in ast.walk(loop):
+        if (
+            isinstance(child, ast.Assign)
+            and len(child.targets) == 1
+            and isinstance(child.targets[0], ast.Name)
+            and isinstance(child.value, ast.Attribute)
+        ):
+            root = child.value
+            while isinstance(root, ast.Attribute):
+                root = root.value
+            if isinstance(root, ast.Name) and root.id == child.targets[0].id:
+                return True
+    return False
+
+
 def _returns_none(t: T.Type) -> bool:
     return t == T.NONE
 
@@ -587,7 +674,10 @@ def can_lower_native(
 
 
 def should_lower_native(
-    info: FunctionInfo, analysis: FunctionAnalysis, layouts: ClassLayouts | None = None
+    info: FunctionInfo,
+    analysis: FunctionAnalysis,
+    layouts: ClassLayouts | None = None,
+    classes: tuple[CrossingClass, ...] = (),
 ) -> tuple[bool, str]:
     """Is native execution through the Python boundary expected to be faster?
 
@@ -606,8 +696,9 @@ def should_lower_native(
             # Device code has no CPU form to bind; a launch runs it, and under
             # CPython its own definition is the reference.
             return False, "device code runs where it is launched"
+    filled = writes(analysis)
     fills = any(
-        _crosses(native) and native is not None and native.name in analysis.mutated_params
+        _crosses(native, classes) and native is not None and native.name in filled
         for native in (
             _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
         )
@@ -618,7 +709,7 @@ def should_lower_native(
         # unless what it does is fill a collection the caller passed.
         return False, "returns nothing, which has no Python boundary"
     returned = _collection_param("", info.ret, layouts)
-    if returned is not None and returned.element != "str" and not _crosses(returned):
+    if returned is not None and returned.element != "str" and not _crosses(returned, classes):
         return False, "returns an object, which native callers receive by handle"
     for param in info.params:
         native = _native_param(param.name, param.type, layouts, param.name in written)
@@ -626,13 +717,13 @@ def should_lower_native(
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
             return False, "takes a native pointer, which has no Python boundary"
-        crosses = native is not None and (native.element == "str" or _crosses(native))
+        crosses = native is not None and (native.element == "str" or _crosses(native, classes))
         if native is not None and native.is_handle and not crosses:
             return False, "takes an object, which native callers pass by handle"
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
-    refused = _crossing_costs_more(info, layouts, written)
+    refused = _crossing_costs_more(info, layouts, written, classes)
     if refused is not None:
         return False, refused
     for param in info.params:
@@ -678,11 +769,18 @@ def _signature(
     layouts: ClassLayouts | None = None,
     analysis: FunctionAnalysis | None = None,
 ) -> NativeSignature:
-    written = analysis.mutated_params | analysis.delegated_writes if analysis is not None else set()
+    written = writes(analysis) if analysis is not None else set()
+    # Held by handle as the function's IR takes them: each one, when it writes
+    # through any (see `written_params`).
+    held = written_params(analysis)
     parameters = tuple(
-        _written(
-            _native_param(p.name, p.type, layouts, p.name in written) or NativeParam(p.name, "int"),
-            written,
+        _sourced(
+            _written(
+                _native_param(p.name, p.type, layouts, p.name in held)
+                or NativeParam(p.name, "int"),
+                written,
+            ),
+            p.global_of,
         )
         for p in info.params
     )
@@ -726,10 +824,19 @@ def _written(parameter: NativeParam, written: set[str]) -> NativeParam:
     return parameter
 
 
-def _crosses(parameter: NativeParam | None) -> bool:
+def _sourced(parameter: NativeParam, source: str) -> NativeParam:
+    """A settled global passed as a parameter, marked for the boundary to read."""
+    return replace(parameter, source=source) if source else parameter
+
+
+def _crosses(parameter: NativeParam | None, classes: tuple[CrossingClass, ...] = ()) -> bool:
     """Whether a handle has a Python form at the boundary: a collection of numbers,
-    tuples of numbers, and collections of those, not an object."""
-    return parameter is not None and crossing_spec(parameter.element) is not None
+    strings, tuples of numbers, and collections of those, or an object of a
+    class among `classes`."""
+    if parameter is None:
+        return False
+    described = {c.qualname: c for c in classes}
+    return crossing_spec(parameter.element, described) is not None
 
 
 def _cpu_features(info: FunctionInfo) -> tuple[str, ...]:

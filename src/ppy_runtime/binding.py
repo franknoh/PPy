@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import array
 import ctypes
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -89,6 +90,9 @@ def value_class_types(signature: NativeSignature, fallback: Callable[..., object
     Resolved from the defining module, so a class the wrapper cannot see means
     no fast entry rather than a wrong one.
     """
+    if signature.reads_globals:
+        # The Python-level binding reads the globals; a C wrapper would not.
+        return None
     namespace = getattr(fallback, "__globals__", None)
     found = []
     for parameter in signature.parameters:
@@ -184,6 +188,7 @@ def bind(
     fast_entry: Callable[..., object] | None = None,
     owner: object | None = None,
     register: Callable[[int, tuple], bool] | None = None,
+    globals_read: bool = False,
 ) -> NativeBinding:
     """Build the Python-callable wrapper for one native function.
 
@@ -200,6 +205,8 @@ def bind(
         return NativeBinding(
             signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
         )
+    if signature.reads_globals and not globals_read:
+        return _bind_globals(signature, address, fallback, owner)
     effects = None
     if signature.effects:
         from .effects import effects_for, register_namespace
@@ -214,7 +221,7 @@ def bind(
                 fast_entry=None,
                 owner=owner,
             )
-        register_namespace(signature.qualname, getattr(fallback, "__globals__", None))
+        register_namespace(signature.qualname, _namespace(fallback))
         # The generated wrapper knows nothing of held output.
         fast_entry = None
     argument_types: list[type] = []
@@ -248,7 +255,7 @@ def bind(
     ):
         return _bind_collections(signature, native, result_types, fallback, owner, effects)
 
-    namespace = getattr(fallback, "__globals__", None)
+    namespace = _namespace(fallback)
     expanders = [
         _expander_for(p, (lambda: namespace) if namespace is not None else None)
         for p in signature.parameters
@@ -376,6 +383,65 @@ def bind(
     return binding
 
 
+def _namespace(function: object) -> dict | None:
+    """The globals a Python function reads: its module's, or, for the one
+    `_bind_globals` makes, those of the function it stands for."""
+    return getattr(function, "__ppy_globals__", None) or getattr(function, "__globals__", None)
+
+
+def _bind_globals(  # type: ignore[no-untyped-def]
+    signature: NativeSignature, address: int, fallback: Callable[..., object], owner
+) -> NativeBinding:
+    """A function passed the settled module globals it reads (`NativeParam.
+    source`). Python's caller spells the other arguments; the wrapper reads
+    each global from its module at the call and passes it after them, where
+    the native entry takes it. A global the module no longer holds, or holds
+    as something the function does not take, runs the Python body.
+    """
+    count = sum(1 for p in signature.parameters if not p.source)
+    own = signature.qualname.rpartition(".")[0]
+    namespace = _namespace(fallback)
+    places: list[tuple[str, str]] = []
+    for parameter in signature.parameters[count:]:
+        module, _, name = parameter.source.rpartition(":")
+        places.append((module, name))
+
+    def spelled(*args: object, **keywords: object) -> object:
+        # The Python function takes the arguments Python spelled; the globals
+        # the native entry takes after them are left off.
+        return fallback(*args[:count], **keywords)
+
+    spelled.__ppy_globals__ = namespace  # type: ignore[attr-defined]
+    inner = bind(signature, address, spelled, owner=owner, globals_read=True)
+    if inner.wrapper is inner.fallback:
+        # No native entry here after all: the Python function is the function.
+        inner.wrapper = inner.fallback = fallback
+        return inner
+    native = inner.wrapper
+
+    def read(module: str, name: str) -> object:
+        if module == own and namespace is not None:
+            return namespace[name]
+        return sys.modules[module].__dict__[name]
+
+    def wrapper(*args: object, **keywords: object) -> object:
+        if keywords or len(args) != count:
+            return fallback(*args, **keywords)
+        try:
+            values = [read(module, name) for module, name in places]
+        except KeyError:
+            inner.fallbacks += 1
+            return fallback(*args)
+        return native(*args, *values)
+
+    _dress(wrapper, signature, fallback)
+    wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
+    wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
+    inner.wrapper = wrapper
+    inner.fallback = fallback
+    return inner
+
+
 def _settled(effects, status, outer, signature, owner, target) -> bool | BaseException:  # type: ignore[no-untyped-def]
     """Whether a call with effects answered: what it printed is written out once
     its result is read (`Effects.commit`); where it fell back, dropped. What it
@@ -430,12 +496,21 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     rt = crossing.runtime(library)
     if rt is None:
         return unbound
-    specs = [crossing.parse(p.element) if p.is_handle else None for p in signature.parameters]
+    described = {c.qualname: c for c in signature.classes}
+    classes = crossing.Classes(signature.classes, _class_finder(fallback)) if described else None
+    specs = [
+        crossing.parse(p.element + ("?" if p.nullable else ""), described) if p.is_handle else None
+        for p in signature.parameters
+    ]
     parameters = signature.parameters
     if any(p.is_handle and spec is None for p, spec in zip(parameters, specs, strict=True)):
         return unbound
     nothing = signature.returned == crossing.RETURNS_NOTHING
-    returned = crossing.parse(signature.returned) if signature.returned and not nothing else None
+    returned = (
+        crossing.parse(signature.returned, described)
+        if signature.returned and not nothing
+        else None
+    )
     if signature.returned and not nothing and returned is None:
         return unbound
     expanders = [None if p.is_handle else _expander_for(p, None) for p in signature.parameters]
@@ -447,7 +522,7 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     def wrapper(*args: object, **keywords: object) -> object:
         if keywords or len(args) != len(expanders):
             return fallback(*args, **keywords)
-        boundary = crossing.Boundary(rt)
+        boundary = crossing.Boundary(rt, classes)
         try:
             if effects is not None:
                 answered, answer = _cross_with_effects(boundary, args)
@@ -543,6 +618,22 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
     return binding
+
+
+def _class_finder(fallback: Callable[..., object]) -> Callable[[object], object]:
+    """How the boundary finds a described class: in the function's own module's
+    namespace, where the program defines it, else in its module."""
+    namespace = _namespace(fallback)
+
+    def find(described):  # type: ignore[no-untyped-def]
+        if namespace is not None:
+            found = namespace.get(described.name)
+            if isinstance(found, type) and found.__qualname__ == described.name:
+                return found
+        module = sys.modules.get(described.module)
+        return getattr(module, described.name, None) if module is not None else None
+
+    return find
 
 
 def _expander_for(

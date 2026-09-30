@@ -495,6 +495,14 @@ class UnusedLocals(Pass):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         self.generic_visit(node)
         loaded = _loaded_names(node.body)
+        # A store to a name declared `global` or `nonlocal` is not a local's:
+        # the module or the enclosing function reads it.
+        loaded |= {
+            name
+            for child in ast.walk(node)
+            if isinstance(child, (ast.Global, ast.Nonlocal))
+            for name in child.names
+        }
         kept: list[ast.stmt] = []
         for statement in node.body:
             if (
