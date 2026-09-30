@@ -114,6 +114,11 @@ PROJECT = {
 
         def roll(n: int) -> int:
             return sum(random.randint(1, 6) for _ in range(n))
+
+
+        def reseed(text: str) -> float:
+            random.seed(text)
+            return random.random()
     """,
     "broken.ppy": "def oops(:\n    pass\n",
 }
@@ -147,8 +152,10 @@ def test_the_summary_places_every_function_and_says_why(tmp_path: Path):
     tiers = {f["qualname"].rpartition(".")[2]: f["tier"] for f in report["functions"]}
     assert tiers["total"] == "native"
     assert tiers["shout"] in {"python", "internal"}
-    # Drawing random numbers is native since 0.6.0: CPython's generator.
+    # Drawing random numbers is native since 0.6.0: CPython's generator. A
+    # string seed is still Python's.
     assert tiers["roll"] != "python"
+    assert tiers["reseed"] == "python"
     categories = {b["category"] for b in report["blockers"]}
     assert "does I/O (`print`, `input`, files)" in categories or tiers["shout"] == "internal"
     assert any("broken.ppy" in path for path in report["failed"])
