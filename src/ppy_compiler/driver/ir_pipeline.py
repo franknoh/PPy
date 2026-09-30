@@ -83,8 +83,11 @@ def optimize_shared_ir(  # type: ignore[no-untyped-def]
     """
     registry = plugins.dialect_registry() if plugins is not None else None
     verify_or_raise(module, registry)
-    external = (plugins is not None and len(plugins) > 0) or backend is not None
-    ctx = PassContext(registry, verify_after_each=_verify_between_passes() or external)
+    # Every pass is verified when asked (`PPY_IR_VERIFY`); otherwise the passes
+    # plugins and backends add are, each as it runs, and the pipeline's own are
+    # verified once, at the end. Verifying after every one of them cost a
+    # project with a plugin installed a third of its first build.
+    ctx = PassContext(registry, verify_after_each=_verify_between_passes())
     manager = default_pipeline(
         level,
         ctx,

@@ -269,7 +269,8 @@ def run_llvm_backend(
         return 2
     from .fastrun import remember
 
-    warm = locate(file, options)
+    # The command line already looked, for its own fast path; the answer holds.
+    warm = getattr(options, "located", None) or locate(file, options)
     project = open_project(file, config_overrides=_overrides(options))
     _answer_removed_road(project, reporter)
     _resolve_safeguards(options, project, "run")

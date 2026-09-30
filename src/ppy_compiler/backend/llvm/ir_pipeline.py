@@ -56,7 +56,12 @@ def lower_module_via_ir(
     sanitize=(),  # type: ignore[no-untyped-def]
     instrument: bool = False,
     profile=None,  # type: ignore[no-untyped-def]
+    emit_llvm: bool = True,
 ) -> LoweringResult:
+    """One module lowered to the canonical IR and through the shared passes,
+    and emitted as LLVM IR unless `emit_llvm` is False: a build that links the
+    program from every module's `.ppyir` never reads a module's own LLVM IR,
+    and emitting it cost a first `ppy run` as much as the linked program's."""
     from ...lowering import lower_module_to_ir
 
     lowered = lower_module_to_ir(
@@ -82,7 +87,7 @@ def lower_module_via_ir(
         profile=profile,
     )
     _reject_external_operations(lowered)
-    text = emit_module(lowered.module, target) if lowered.functions else ""
+    text = emit_module(lowered.module, target) if lowered.functions and emit_llvm else ""
     libraries = lowered.module.attributes.get("ppy.libraries", ())
     exports = {
         str(f.attributes["ppy.export"]): str(f.attributes.get("ppy.qualname", name))
