@@ -96,5 +96,7 @@ A function using any of these runs as Python:
 - a closure sharing a tuple, a buffer, or a value class
 - `min` and `max` with a key over strings or objects; a key giving a string
 - `map` over several iterables
+- a function of another module used as a value, or a method bound to its
+  object (`f = obj.method`)
 
-`tests/test_closures.py` holds each form above to CPython on every path.
+`tests/test_closures.py` holds each form in the table to CPython on every path.
