@@ -552,6 +552,18 @@ class _ReplaceExpr(ast.NodeTransformer):
         return super().visit(node)
 
 
+_FRESH = (
+    ast.List,
+    ast.Dict,
+    ast.Set,
+    ast.ListComp,
+    ast.DictComp,
+    ast.SetComp,
+    ast.GeneratorExp,
+    ast.Lambda,
+)
+
+
 class LoopInvariantMotion(Pass):
     """Hoist pure loop-invariant expressions out of a loop body."""
 
@@ -611,6 +623,11 @@ class LoopInvariantMotion(Pass):
         # Hoisted, it runs before the first pass, and even for a loop that
         # runs none: only what cannot raise may go.
         if not _cannot_raise(value) or _loaded_names(value) & varying:
+            return None
+        # A display makes a new object on every pass; hoisted, every pass
+        # would share the one, and `row = []` would keep what the last pass
+        # appended.
+        if any(isinstance(child, _FRESH) for child in ast.walk(value)):
             return None
         if target.id in _loaded_names(node.iter):
             return None

@@ -638,6 +638,26 @@ def test_an_invariant_computation_still_moves_out(write, analyze):
     assert "_ppy_licm" in header, "the invariant computation was not hoisted"
 
 
+def test_a_new_list_in_a_loop_stays_in_the_loop(write, analyze):
+    """TheAlgorithms project_euler/problem_049: `tmp = []` hoisted out of the
+    loop made every pass append to one list."""
+    path = write(
+        "fresh.ppy",
+        """
+        def rows(n: int) -> list[list[int]]:
+            out: list[list[int]] = []
+            for i in range(n):
+                row = [0]
+                seen = {1: 2}
+                row.append(seen[1] + i)
+                out.append(row)
+            return out
+        """,
+    )
+    code = _generated(analyze(path, opt_level=3), "fresh")
+    assert "_ppy_licm" not in code.split("def rows")[1]
+
+
 STDIN_READING = """
 import sys
 
