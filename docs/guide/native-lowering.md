@@ -51,6 +51,11 @@ The subset includes what a loop is normally made of:
 - statement-level calls whose result is discarded
 - buffers handed on to another native function
 - the bitwise operators, including `~`
+- `raise`, `try` with its handlers, `else`, and `finally`, and `assert`
+- a generator consumed where it is made: by `for`, `next`, `sum`, `min`,
+  `max`, a comprehension, or a collection built from it
+
+[Exceptions and generators](exceptions-and-generators.md) has the details.
 
 A module constant written as an expression, such as `MOD = 10**9 + 7` or
 `LIMIT = 1 << 20`, folds into the code rather than staying a global read.
@@ -74,6 +79,52 @@ gives -2**63, and C leaves it undefined), so each case is a guard:
 
 The guards are range checks, so `--unsafe` keeps them. Nothing saturates to
 the largest or smallest word: Python's integers have no largest.
+
+## Finding what stays in Python
+
+`ppy explain --summary` answers, for a file, a directory, or a project, how
+much of the code goes native and what keeps the rest in Python. Here it is
+over the `sorts` folder of TheAlgorithms/Python, trimmed:
+
+```text
+167 functions, 1389 statements
+  native, called from Python              1 functions (  1%)        8 statements (  1%)
+  native, called from native code         0 functions (  0%)        0 statements (  0%)
+  Python                                166 functions ( 99%)     1381 statements ( 99%)
+  (76 of the Python functions are generic: each native caller compiles its own instance)
+
+what keeps functions in Python, by statements kept out (a function can count under more than one):
+      161 statements     13 functions  calls code whose effects are unknown (a library, or a call the checker cannot type)
+      annotate it, add a stub or plugin, or call it outside the hot function
+      most often: `dict.fromkeys` (1), `file.readlines` (1), `file.write` (1), `heapq.heapify` (1)
+      see https://ppy.franknoh.dev/latest/guide/effects/
+      sorts/benchmark_sorts.py:56 sorts.benchmark_sorts.is_sorted
+      155 statements      9 functions  writes to a parameter native code copies
+      return the new value, or take a `Buffer`, a list, or a ppy collection
+      see https://ppy.franknoh.dev/latest/guide/native/
+      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
+```
+
+Read it from the top down:
+
+- The first block counts every function once. "Called from native code"
+  means the function compiled but Python calls its Python body, because the
+  crossing costs more than the body saves or it passes objects by handle;
+  the summary lists those reasons last.
+- The reasons are ordered by statements kept out, so the first one is where
+  a change moves the most code. A function with several effects counts
+  under each.
+- A generic function is not a blocker: it has no entry point of its own and
+  is compiled for each native caller that names its types. Most of `sorts`
+  is generic sorts that nothing calls natively.
+- A nested function lowers with the function around it. When that one
+  stays in Python, the nested one says so, and the reason to fix is the
+  outer function's.
+- Each reason says what to do and links the page that explains it. The
+  first places it occurs are listed with their line.
+
+`--json` gives every function with its tier and reason, for a script or a
+dashboard. See [the command](../cli.md#ppy-explain).
 
 ## Threads
 

@@ -1,0 +1,52 @@
+# fuzz: path=standalone seed=131 (a conditional expression in a loop that returns)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+
+
+
+
+
+
+
+
+def fn43(a44: bool, a45: int, a46: int) -> int:
+    a46 -= a45
+    for i47 in range(0):
+        if (1e-300 != (1e308 / (-0.0 if -0.0 != 0.0 else 2.0))):
+            return (((i47 % (a45 if a45 != 0 else 3)) * a46) + ((a45 % (i47 if i47 != 0 else -3)) - (0 % (a45 if a45 != 0 else 3))))
+    n55: int = 0
+    return (((4611686018427387904 // (a45 if a45 != 0 else -7)) * (n55 - -10)) // (-5 if -5 != 0 else -7))
+
+
+def main() -> None:
+    print(fn43(False, -7, 9))
+
+
+main()

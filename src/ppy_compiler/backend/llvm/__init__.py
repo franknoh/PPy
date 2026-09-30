@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -60,7 +62,8 @@ __all__ = [
 @dataclass(slots=True)
 class NativeModule:
     name: str
-    ir: str
+    #: The module's own LLVM IR once emitted; `ir` emits it on first read.
+    llvm: str = ""
     #: The module's PPy IR as text, for the linker; empty for a module with nothing native.
     ppyir: str = ""
     functions: dict[str, LoweredFunction] = field(default_factory=dict)
@@ -77,6 +80,21 @@ class NativeModule:
     exports: dict[str, str] = field(default_factory=dict)
     #: What the lowering and the passes said, as remarks; cached with the module.
     remarks: tuple[str, ...] = ()
+    #: Makes `llvm` from `ppyir` when it is first read; None once it has.
+    emitter: object = None
+
+    @property
+    def ir(self) -> str:
+        """The module's own LLVM IR, emitted the first time it is read.
+
+        Lowering does not emit it: the usual build links every module's PPy
+        IR into one program and emits that, so a module's own LLVM IR is only
+        for a build that cannot link, the JIT, and `ppy inspect --ir`.
+        """
+        if self.emitter is not None:
+            emit, self.emitter = self.emitter, None
+            self.llvm = emit()  # type: ignore[operator]
+        return self.llvm
 
 
 #: Members that make attribute reads observable, so the class stays boxed.
@@ -102,8 +120,13 @@ def prover_for(config):  # type: ignore[no-untyped-def]
     return Prover()
 
 
-def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
-    """Lower every module in the project to LLVM IR, reusing a cached result."""
+def _collect(bundle, opt_level: int | None = None, failures=None) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
+    """Lower every module in the project to LLVM IR, reusing a cached result.
+
+    With `failures` (a dict), a module whose lowering raises is recorded
+    there, by name, and left out, so a report over many modules survives one
+    it cannot lower; without it, the error propagates as it always has.
+    """
     modules: dict[str, NativeModule] = {}
     layouts = _value_class_layouts(bundle)
     available: dict[str, tuple] = {}  # type: ignore[type-arg]
@@ -129,21 +152,25 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         reused = _cached_lowering(bundle, module.name, opt_level)
         if reused is not None:
             modules[module.name] = _module_from_cache(module.name, reused, candidates, layouts)
+            if not modules[module.name].llvm:
+                modules[module.name].emitter = _emitter(bundle, modules[module.name])
             _offer(available, modules[module.name])
             continue
 
         fused, plan, notes = _fuse(symbols, analysis)
         if not candidates and not fused:
             continue
-        result: LoweringResult = _lower(
-            bundle, analysis, candidates, layouts, opt_level, available.get
-        )
-        ir_text = result.ir
-        if fused:
-            ir_text = _append_fused(ir_text, module.name, fused)
+        try:
+            result: LoweringResult = _lower(
+                bundle, analysis, candidates, layouts, opt_level, available.get
+            )
+        except Exception as error:  # reported through `failures`, see the docstring
+            if failures is None:
+                raise
+            failures[module.name] = f"{type(error).__name__}: {str(error).splitlines()[0]}"
+            continue
         native = NativeModule(
             name=module.name,
-            ir=ir_text,
             ppyir=result.ppyir,
             functions=result.functions,
             rejected=result.rejected,
@@ -160,6 +187,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
             libraries=result.libraries,
             exports=result.exports,
         )
+        native.emitter = _emitter(bundle, native)
         modules[module.name] = native
         _offer(available, native)
         _store_lowering(bundle, module.name, opt_level, native)
@@ -194,7 +222,33 @@ def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # t
         sanitize=config.llvm.sanitize,
         instrument=config.llvm.instrument,
         profile=profile_for(config),
+        emit_llvm=False,
     )
+
+
+def _emitter(bundle, native: NativeModule):  # type: ignore[no-untyped-def]
+    """What `native.ir` runs when first read: its `.ppyir` emitted as LLVM IR,
+    with any fused loops after it."""
+
+    def emit() -> str:
+        return _module_llvm(bundle, native)
+
+    return emit if native.ppyir or native.fused else None
+
+
+def _module_llvm(bundle, native: NativeModule) -> str:  # type: ignore[no-untyped-def]
+    text = ""
+    if native.ppyir:
+        from ...ir import decode
+        from .from_ir import emit_module
+
+        registry = bundle.project.plugins.dialect_registry()
+        text = emit_module(
+            decode(native.ppyir, registry), configured_target(bundle.project.config.llvm.target)
+        )
+    if native.fused:
+        text = _append_fused(text, native.name, native.fused)
+    return text
 
 
 def _lowering_key(bundle, name: str, opt_level: int | None) -> str:  # type: ignore[no-untyped-def]
@@ -241,7 +295,7 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         entry = candidates.get(qualname)
         if entry is None:
             # The cached module no longer matches the source in front of us.
-            return NativeModule(name=name, ir="")
+            return NativeModule(name=name)
         info, _analysis, node = entry
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
@@ -256,7 +310,7 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         sources[qualname] = (info, node)
     return NativeModule(
         name=name,
-        ir=reused.ir,
+        llvm=reused.ir,
         ppyir=reused.ppyir,
         functions=functions,
         rejected=dict(reused.rejected),
@@ -445,6 +499,23 @@ def _library_key(objects: list[Path]) -> str:
     return digest("ppy-library", *(o.read_bytes().hex() for o in sorted(objects))) + ".so"
 
 
+def _runtime_stamp(library: str) -> str:
+    """A library the link names, with the digest of its source where the link
+    compiles that source in: a runtime edit must not reuse a library linked
+    with the runtime before it."""
+    if library == "ppy_collections":
+        from ppy_runtime.collections import source_path as collections_source
+
+        return collections_source().stem
+    if library == "ppy_aio":
+        from ppy_runtime.aio import source_path
+
+        from ...cache import digest
+
+        return f"{library}-{digest('ppy-aio', source_path().read_bytes().hex())[:16]}"
+    return library
+
+
 def _link_and_cache(
     artifacts, store, key: str, destination: Path, libraries=(), target=None
 ) -> None:  # type: ignore[no-untyped-def]
@@ -535,9 +606,18 @@ def compile_project(  # type: ignore[no-untyped-def]
 
     for name, native in natives.items():
         key: CacheKey = module_cache_key(bundle, name, target="llvm", opt_level=level)
-        if store.get(key) is None:
-            store.put(key, engine().optimized_ir(native.ir), kind="llvm", source=name, suffix=".ll")
-        store.mark_root(key, f"llvm:{name}")
+        if not linked:
+            # A module built on its own keeps its optimized LLVM IR; a linked
+            # program's modules have only their PPy IR, and the program's object.
+            if store.get(key) is None:
+                store.put(
+                    key,
+                    engine().optimized_ir(native.ir),
+                    kind="llvm",
+                    source=name,
+                    suffix=".ll",
+                )
+            store.mark_root(key, f"llvm:{name}")
         _report(native, reporter, bundle)
 
         if not native.functions and not native.fused:
@@ -609,7 +689,9 @@ def compile_project(  # type: ignore[no-untyped-def]
     artifacts.exports = dict(exports)
     artifacts.libraries = needed
     if artifacts.objects:
-        library_key = _library_key(artifacts.objects) + ("+" + ",".join(needed) if needed else "")
+        library_key = _library_key(artifacts.objects) + (
+            "+" + ",".join(_runtime_stamp(lib) for lib in needed) if needed else ""
+        )
         if not target.is_host:
             library_key = f"{target.triple}+{library_key}"
         destination = build_directory / (
@@ -657,6 +739,22 @@ def compile_project(  # type: ignore[no-untyped-def]
             "generated": listed,
             "search_paths": [str(path) for path in bundle.project.search_paths],
             "safeguards": bundle.project.config.llvm.safeguards or "hoisted",
+            # Whether any module could import `ppy`, whose loader the launcher
+            # then installs first; a program that never names it skips that
+            # import. A mention in a comment counts: the answer only has to be
+            # yes when it matters.
+            "uses_ppy": any(
+                re.search(r"\bppy\b", symbols.module.source.text) is not None
+                for symbols in bundle.symbols.modules.values()
+            ),
+            # What the artifact was built from, by content: a warm `ppy run`
+            # trusts file stats taken after the build only where these match.
+            "sources": {
+                str(symbols.module.path): hashlib.blake2b(
+                    symbols.module.source.text.encode("utf-8"), digest_size=16
+                ).hexdigest()
+                for symbols in bundle.symbols.modules.values()
+            },
         }
     regions_section = _ship_regions(bundle, reporter, build_directory, artifacts)
     staged_section = _ship_staged(bundle, reporter, build_directory, artifacts)
@@ -672,6 +770,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             signatures,
             bundle.project.config.cache_path,
             notify=reporter.note,
+            shared=True,
         )
         if built.ok and built.path is not None:
             shipped = build_directory / built.path.name
@@ -841,7 +940,13 @@ def compile_for_run(  # type: ignore[no-untyped-def]
         return None
     _publish_directory(draft, directory)
     manifest = directory / MANIFEST
-    return manifest if manifest.is_file() else None
+    if not manifest.is_file():
+        return None
+    from ppy_runtime.launch import write_light  # pylint: disable=import-outside-toplevel
+
+    # A program whose native code Python never calls runs without the launcher.
+    write_light(manifest)
+    return manifest
 
 
 def _publish_directory(draft: Path, final: Path) -> None:
@@ -939,6 +1044,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
             {q: lowered.python for q, lowered in native.functions.items()},
             bundle.project.config.cache_path,
             notify=reporter.note,
+            shared=True,
         )
         if not wrappers.ok and wrappers.reason and native.functions:
             reporter.emit(

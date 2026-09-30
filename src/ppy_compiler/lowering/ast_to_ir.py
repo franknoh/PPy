@@ -17,9 +17,11 @@ import ast
 import math
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
+from dataclasses import replace as dataclass_replace
 from pathlib import Path
 
+from ppy_runtime._record import replace
 from ppy_runtime.abi import TEXT, NativeParam, NativeSignature
 from ppy_runtime.aio import available as aio_available
 
@@ -27,7 +29,7 @@ from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
 from ..analysis.lexical import LexicalBindings
 from ..analysis.refinements import Facts
-from ..analysis.symbols import FunctionInfo, derivative_spec, fold_flags
+from ..analysis.symbols import FunctionInfo, ParamInfo, derivative_spec, fold_flags
 from ..backend.llvm.lowering import (
     _ALLOCATIONS,
     _MATH_INTRINSICS,
@@ -42,6 +44,7 @@ from ..backend.llvm.lowering import (
     _signature,
     eligible,
     should_lower_native,
+    written_params,
 )
 from ..backend.llvm.obligations import BinOp, Const, Obligation, Relation, Term, Var, variables
 from ..backend.llvm.prover import Prover
@@ -87,8 +90,11 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
-from .collection_api import CollectionApiLowering
+from .closures import ClosureLowering
 from .collections import HANDLE, Held
+from .containers import ContainerLowering
+from .exceptions import ExceptionLowering, uses_exceptions
+from .generators import GeneratorLowering
 from .strings import StringLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
@@ -353,6 +359,10 @@ class Frontend:
         # LLVM build/run retain their existing explicit two's-complement wrap.
         self.native_arithmetic = native_arithmetic and safeguards == "off"
         self.standalone = standalone
+        #: Whether this module raises or catches: its checks are then
+        #: exceptions native code can catch (`lowering/exceptions.py`). A
+        #: standalone build sets it for every module where any has one.
+        self.native_exceptions = False
         self.prover = prover
         #: Source locations are spelled relative to this, so the IR text is
         #: the same wherever the project sits.
@@ -380,6 +390,13 @@ class Frontend:
         #: Generic functions by qualname, lowered per instantiation.
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         #: Instantiations made so far: (qualname, type arguments) -> declaration.
+        #: Closure entries, by the definition's node id: (node, function, signature).
+        self._closures: dict[int, tuple[ast.AST, IRFunction, IRSignature]] = {}
+        #: Lambdas and functions used as values, with the nodes made for them.
+        self._lambdas: dict[int, tuple[FunctionInfo, ast.FunctionDef]] = {}
+        self._adapters: dict[str, tuple[FunctionInfo, ast.FunctionDef]] = {}
+        #: Nodes lowering made and gave types to, kept alive with their types.
+        self.synthetic: list[ast.AST] = []
         self.instances: dict[
             tuple[str, tuple[str, ...]], tuple[IRFunction, NativeSignature | IRSignature]
         ] = {}
@@ -407,7 +424,18 @@ class Frontend:
         candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.sources = functions
+        if uses_exceptions([node for _info, _analysis, node in functions.values()]):
+            self.native_exceptions = True
+        if self.native_exceptions:
+            # The backends ask each call's status for the raised one.
+            self.module.attributes["ppy.exceptions"] = True
         for qualname, (info, analysis, node) in functions.items():
+            if info.enclosing is not None:
+                # Lowered as a closure where it is defined, never on its own.
+                lowered.rejected[qualname] = (
+                    "a function defined inside another is lowered as a closure where it is defined"
+                )
+                continue
             extern = info.directive("native.extern")
             if extern is not None:
                 # A C binding: called, never lowered.
@@ -465,7 +493,12 @@ class Frontend:
         self._reject_callers_of_rejected(lowered)
         for qualname in lowered.rejected:
             declaration = self.declared.get(qualname)
-            if declaration is not None and declaration[0].is_declaration:
+            if declaration is None:
+                continue
+            # A function rejected after it lowered (a callee stayed in Python)
+            # takes its string boundary thunk with it: the thunk calls it.
+            self.module.functions.pop(f"{declaration[0].name}.py", None)
+            if declaration[0].is_declaration:
                 self.module.functions.pop(declaration[0].name, None)
         lowered.remarks = tuple(self.remarks)
         return lowered
@@ -527,9 +560,15 @@ class Frontend:
         self, info: FunctionInfo, analysis: FunctionAnalysis | None = None
     ) -> IRSignature:
         parameters = []
+        written = written_params(analysis)
         for parameter in info.params:
             ir_type = self.lower_type(parameter.type, parameter.facts)
-            native_param = _native_param(parameter.name, parameter.type, self.layouts)
+            native_param = _native_param(
+                parameter.name, parameter.type, self.layouts, parameter.name in written
+            )
+            if native_param is not None and native_param.is_handle:
+                # A list of numbers the function writes is held by handle, not lent.
+                ir_type = _param_type(native_param)
             if native_param is not None and _param_type(native_param) != ir_type:
                 native_param = None
             parameters.append(IRParameter(parameter.name, ir_type, native_param))
@@ -543,6 +582,9 @@ class Frontend:
                 else facts.shape,
             )
         result = self.lower_type(info.ret, facts)
+        if _return_atoms(info.ret, self.layouts) == ("handle",):
+            # A list of numbers handed back is a new list, by handle.
+            result = HANDLE
         results = () if result == VOID else (result,)
         native = None
         if (
@@ -610,7 +652,14 @@ class Frontend:
         if native is None or self.standalone or not self.cpu_compatible:
             return None
         texts = [p.is_handle and p.element == "str" for p in native.parameters]
-        if any(p.is_handle and not text for p, text in zip(native.parameters, texts, strict=True)):
+        # A collection parameter that crosses on its own (a `dict[str, int]`)
+        # passes through the thunk as its handle.
+        from ppy_runtime.collection_boundary import parse  # pylint: disable=import-outside-toplevel
+
+        if any(
+            p.is_handle and not text and parse(p.element) is None
+            for p, text in zip(native.parameters, texts, strict=True)
+        ):
             return None
         returns_text = T.strip_literal(info.ret) == T.STR
         if not any(texts) and not returns_text:
@@ -677,6 +726,8 @@ class Frontend:
             symbol=f"{native.symbol}_py",
             parameters=parameters,
             returns=(TEXT,) if returns_text else native.returns,
+            # A string handed back is the thunk's copy of its bytes, not a handle.
+            returned="" if returns_text else native.returned,
         )
 
     def declare(self, info: FunctionInfo, signature: NativeSignature | IRSignature) -> IRFunction:
@@ -917,6 +968,158 @@ class Frontend:
             self._instantiating.pop()
         return self.instances[key]
 
+    # -- closures ---------------------------------------------------------------
+
+    def closure_code(
+        self, info: FunctionInfo, node: ast.FunctionDef, captured: dict[str, T.Type]
+    ) -> tuple[IRFunction, IRSignature]:
+        """The native entry of a nested function, a lambda, or a function used as
+        a value: its parameters after one more, the closure it runs as, whose
+        words after the first are the cells of `captured`, in that order.
+
+        Made once per definition; a body with no native lowering refuses, and
+        the function that makes the closure stays in Python with it."""
+        key = id(node)
+        found = self._closures.get(key)
+        if found is not None:
+            return found[1], found[2]
+        analysis = self.analysis.functions.get(info.qualname)
+        if self.cpu_compatible and analysis is not None:
+            ok, reason = eligible(info, analysis, self.layouts, allow_io=self.standalone)
+            if not ok:
+                raise Unsupported(f"`{info.name}` has no native lowering: {reason}")
+        base = self.signature(info, analysis)
+        if base.native is None:
+            raise Unsupported(f"`{info.name}` takes or returns what a closure cannot")
+        # Parameters as a call through the value passes them, whatever the
+        # body does with them: the caller knows only the value's type.
+        parameters = tuple(self._value_parameter(p.name, p.type) for p in info.params)
+        results = self._value_results(info.ret)
+        env = NativeParam("__closure", "handle", "closure", class_name="closure")
+        spelled = re.sub(r"\W+", "_", f"{info.qualname}_{node.lineno}_{node.col_offset}").strip("_")
+        signature = IRSignature(
+            spelled,
+            f"ppy_{spelled}",
+            (IRParameter("__closure", HANDLE, env), *parameters),
+            results,
+            replace(
+                base.native,
+                parameters=(env, *(p.native for p in parameters)),
+                symbol=f"ppy_{spelled}",
+            ),
+        )
+        function = self.declare(dataclass_replace(info, qualname=spelled), signature)
+        self._closures[key] = (node, function, signature)
+        try:
+            lowering = _FunctionLowering(self, function, signature, info, {})
+            lowering.captures = captured
+            lowering.run(node)
+        except Unsupported:
+            del self._closures[key]
+            del self.module.functions[function.name]
+            raise
+        return function, signature
+
+    def adapter_code(self, qualname: str) -> tuple[IRFunction, IRSignature]:
+        """A function of this module used as a value: a closure entry that calls it."""
+        entry = self.sources.get(qualname)
+        if entry is None or qualname not in self.declared:
+            raise Unsupported(f"`{qualname}` has no native lowering to call as a value")
+        info = entry[0]
+        known = self._adapters.get(qualname)
+        if known is not None:
+            return self.closure_code(known[0], known[1], {})
+        names = [ast.Name(p.name, ast.Load()) for p in info.params]
+        call = ast.Call(ast.Name(info.name, ast.Load()), list(names), [])
+        body: ast.stmt = ast.Expr(call) if info.ret == T.NONE else ast.Return(call)
+        node = ast.FunctionDef(
+            name=f"{info.name}_as_value",
+            args=ast.arguments([], [ast.arg(p.name) for p in info.params], None, [], [], None, []),
+            body=[body],
+            decorator_list=[],
+            returns=None,
+            type_params=[],
+        )
+        ast.copy_location(node, info.node)
+        ast.fix_missing_locations(node)
+        for name, parameter in zip(names, info.params, strict=True):
+            self.analysis.node_types[id(name)] = parameter.type
+        self.analysis.node_types[id(call)] = info.ret
+        value_info = dataclass_replace(
+            info, qualname=f"{info.qualname}.<value>", node=node, enclosing=None
+        )
+        self._adapters[qualname] = (value_info, node)
+        return self.closure_code(value_info, node, {})
+
+    def lambda_code(
+        self, node: ast.Lambda, typed: T.Callable_, outer: FunctionInfo
+    ) -> tuple[FunctionInfo, ast.FunctionDef]:
+        """A lambda as a function whose body returns its expression, typed as the
+        checker typed it where it is used; `closure_code` makes its entry."""
+        known = self._lambdas.get(id(node))
+        if known is None:
+            params = [
+                ParamInfo(arg.arg, given.type, annotated=True)
+                for arg, given in zip(node.args.args, typed.params, strict=True)
+            ]
+            body = ast.Return(node.body)
+            wrapper = ast.FunctionDef(
+                name="<lambda>",
+                args=node.args,
+                body=[body],
+                decorator_list=[],
+                returns=None,
+                type_params=[],
+            )
+            ast.copy_location(body, node)
+            ast.copy_location(wrapper, node)
+            info = FunctionInfo(
+                name="<lambda>",
+                qualname=f"{outer.qualname}.<locals>.<lambda>",
+                module=outer.module,
+                node=wrapper,
+                path=outer.path,
+                params=params,
+                ret=typed.ret,
+                ret_annotated=True,
+                enclosing=outer.qualname,
+            )
+            known = (info, wrapper)
+            self._lambdas[id(node)] = known
+        return known
+
+    def callable_signature(self, typed: T.Callable_) -> IRSignature:
+        """How a call through a function value of type `typed` passes its
+        arguments and takes its result: the closure entry's own ABI, less the
+        closure it is called with."""
+        parameters = tuple(
+            self._value_parameter(f"arg{index}", given.type)
+            for index, given in enumerate(typed.params)
+        )
+        return IRSignature("<value>", "", parameters, self._value_results(typed.ret), None)
+
+    def _value_parameter(self, name: str, t: T.Type) -> IRParameter:
+        """A parameter of a function called through a value: a scalar, or a
+        handle to a collection, a string, an object, or another function."""
+        native = _native_param(name, t, self.layouts, True)
+        if (
+            native is None
+            or native.is_buffer
+            or native.is_pointer
+            or native.is_tuple
+            or native.is_object
+        ):
+            raise Unsupported(f"a function value's parameter `{t}` has no native form")
+        return IRParameter(name, _param_type(native), native)
+
+    def _value_results(self, t: T.Type) -> tuple[IRType, ...]:
+        atoms = _return_atoms(t, self.layouts)
+        if t == T.NONE:
+            return ()
+        if atoms is None or len(atoms) != 1:
+            raise Unsupported(f"a function value's result `{t}` has no native form")
+        return (HANDLE,) if atoms == ("handle",) else (_scalar_type(atoms[0]),)
+
     def narrowed(
         self, qualname: str, parameter: str, taken_as: T.Type
     ) -> tuple[IRFunction, NativeSignature | IRSignature] | None:
@@ -1031,7 +1234,9 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(CollectionApiLowering, StringLowering):
+class _FunctionLowering(
+    ClosureLowering, ExceptionLowering, GeneratorLowering, ContainerLowering, StringLowering
+):
     """Lowers one function body."""
 
     def __init__(
@@ -1131,6 +1336,8 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         #: Integer parameters the body never rebinds, and their entry loads.
         self._stable: set[str] = set()
         self._entry_loads: dict[str, Value] = {}
+        self._exception_setup()
+        self._closure_setup()
 
     # -- setup ------------------------------------------------------------
 
@@ -1139,6 +1346,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         self.b.at_end(self.entry)
         self._location(node)
         self._bind_parameters()
+        self._setup_closure(node)
         if self.prover is not None:
             self._guard_declared_ranges()
         stored = {
@@ -1153,8 +1361,10 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
         } - stored
         self._body(node.body)
+        self._check_cells()
         if self._open():
             self._return_default()
+        self._finish_exceptions()
 
     def _bind_parameters(self) -> None:
         """Each parameter into the representation the body reads it by."""
@@ -1162,6 +1372,9 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         for argument, parameter in zip(
             self.entry.arguments, self.signature.parameters, strict=True
         ):
+            if parameter.name == "__closure":
+                self._closure_env = argument
+                continue
             if parameter.is_buffer:
                 self.buffers[parameter.name] = argument
                 self._buffer_origins[parameter.name] = (
@@ -1217,6 +1430,24 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         self._entry_loads[name] = value
         return value
 
+    def _has_edge_to(self, block: Block) -> bool:
+        """Whether some branch of the function goes to `block`."""
+        for other in self.function.body.blocks:
+            for op in other.operations:
+                if any(successor.block is block for successor in op.successors):
+                    return True
+        return False
+
+    def _dead_latch(self, latch: Block) -> bool:
+        """A loop's latch no edge reaches, every way through the body having
+        returned: it ends unreachable, not in a branch back to the loop's head,
+        which would make the head appear to have a way in that no path takes."""
+        if self._has_edge_to(latch):
+            return False
+        core.unreachable(self.b)
+        self._dead.add(id(latch))
+        return True
+
     def _block(self, label: str) -> Block:
         self._labels += 1
         return self.function.body.add_block(f"{label}{self._labels}")
@@ -1255,10 +1486,13 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
     # -- statements -------------------------------------------------------
 
     def _body(self, body: list[ast.stmt]) -> None:
-        for statement in body:
+        for index, statement in enumerate(body):
             if not self._open():
                 return
             self._location(statement)
+            if self._stepped_generator(statement, body[index + 1 :]):
+                # `it = gen()` stepped by the statements after it, which it lowered.
+                return
             self._statement(statement)
 
     def _resolves_to(self, node: ast.expr, qualname: str) -> bool:
@@ -1317,17 +1551,33 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             case ast.Break():
                 if not self._loops:
                     raise Unsupported("`break` outside a loop")
+                self._leave_for_loop()
                 core.br(self.b, Successor(self._loops[-1][1]))
             case ast.Continue():
                 if not self._loops:
                     raise Unsupported("`continue` outside a loop")
+                self._leave_for_loop()
                 core.br(self.b, Successor(self._loops[-1][0]))
+            case ast.Expr(value=ast.Yield() | ast.YieldFrom()):
+                self._yield_statement(node.value)
+            case ast.Try():
+                self._try(node)
+            case ast.Raise():
+                self._raise(node)
+            case ast.Assert():
+                self._assert(node)
             case ast.While():
                 self._while(node)
             case ast.For():
                 self._for(node)
             case ast.Pass():
                 return
+            case ast.FunctionDef():
+                self._define_closure(node)
+            case ast.Nonlocal():
+                self._declare_nonlocal(node)
+            case ast.Delete():
+                self._delete(node)
             case ast.Expr(value=ast.Constant()):
                 return
             case ast.Expr(value=ast.Call() | ast.Await()):
@@ -1341,11 +1591,14 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                 raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
     def _return(self, node: ast.Return) -> None:
+        if self._generator_return(node):
+            return
         if (
             node.value is None
             or (isinstance(node.value, ast.Constant) and node.value.value is None)
         ) and not self.function.results:
             self._check_thread_failures()
+            self._leave_for_return()
             self._release_collections()
             core.ret(self.b)
             return
@@ -1363,6 +1616,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             items = [
                 self._coerce_type(item, t) for item, t in zip(values, expected.items, strict=True)
             ]
+            self._leave_for_return()
             self._release_collections()
             core.ret(self.b, core.tuple_make(self.b, *items))
             return
@@ -1370,10 +1624,12 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             handle, owned = self._handle(node.value)
             if not owned:
                 self._retain(handle)
+            self._leave_for_return()
             self._release_collections()
             core.ret(self.b, handle)
             return
         returned = self._coerce_type(self._expr(node.value), expected)
+        self._leave_for_return()
         self._release_collections()
         core.ret(self.b, returned)
 
@@ -1383,6 +1639,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             return
         if self.info.ret == T.NONE and not self.function.results:
             self._check_thread_failures()
+            self._leave_for_return()
             self._release_collections()
             core.ret(self.b)
             return
@@ -1392,7 +1649,9 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         if len(node.targets) != 1:
             raise Unsupported("chained assignment has no native lowering")
         target = node.targets[0]
-        if isinstance(target, ast.Name) and self._make_collection(target.id, node.value):
+        if isinstance(target, ast.Name) and self._make_collection(
+            target.id, node.value, self._type_of(target)
+        ):
             return
         if self._unpack_strings(target, node.value):
             return
@@ -1644,6 +1903,8 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             raise Unsupported("augmented assignment to a non-local has no native lowering")
         if self._augment_string(node.target.id, node):
             return
+        if self._augment_set(node):
+            return
         current = self._load(node.target.id)
         if self.prover is not None and current.type == I64:
             self._term_for_load(current, node.target)
@@ -1683,6 +1944,12 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         core.store(self.b, self._coerce_type(value, slot.type.pointee), slot)
 
     def _if(self, node: ast.If) -> None:
+        facts = self.frontend.analysis.facts_of(node.test)
+        if facts.has_constant and facts.constant in (True, False) and type(facts.constant) is bool:
+            # A test the checker proved constant: it analyzed the side taken
+            # and nothing it made unreachable, so only that side is code.
+            self._body(node.body if facts.constant else node.orelse)
+            return
         condition = self._test(node.test)
         then_block = self._block("then")
         else_block = self._block("else")
@@ -1731,6 +1998,8 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             self.b.at_end(dead)
 
     def _for(self, node: ast.For) -> None:
+        if self._for_generator(node):
+            return
         if self._is_walk(node.iter):
             self._for_collection(node)
             return
@@ -1786,7 +2055,10 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
 
         site: _GuardSite | None = None
         saved_induction = self._induction.get(name)
-        if self.hoist and not _rebinds(node.body, name):
+        # A variable a closure shares lives in its cell, where a call in the
+        # body may change it: the loop counts in a slot of its own.
+        shared = self._is_cell(name)
+        if self.hoist and not _rebinds(node.body, name) and not shared:
             guards = self._block("for.guards")
             setup = self._block("for.setup")
             core.br(self.b, Successor(guards))
@@ -1805,11 +2077,18 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                 self._induction_terms[name] = self._induction_bounds(start, stop, step_value > 0)
 
         slot = self.slots.get(name)
-        if slot is None or slot.type != PtrType(I64, "stack"):
+        if not shared and (slot is None or slot.type != PtrType(I64, "stack")):
             slot = self._alloca(I64, name)
             self.slots[name] = slot
             self.tuples.pop(name, None)
-        core.store(self.b, start, slot)
+        assert slot is not None
+        # A body that assigns the loop variable does not steer the loop in
+        # Python: `range` hands out the next value whatever the name holds.
+        # The count then lives in a slot of its own, and each iteration
+        # binds the name from it.
+        rebound = _rebinds(node.body, name) or shared
+        counter = self._alloca(I64, f"{name}.count") if rebound else slot
+        core.store(self.b, start, counter)
 
         header = self._block("for.head")
         body = self._block("for.body")
@@ -1819,22 +2098,35 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         assert loop_setup is not None
         core.br(self.b, Successor(header))
         self.b.at_end(header)
-        current = core.load(self.b, slot)
+        current = core.load(self.b, counter)
         condition = core.cmp(self.b, "gt" if step_value < 0 else "lt", current, stop)
         core.cond_br(self.b, condition, Successor(body), Successor(done))
         self.b.at_end(body)
+        if rebound:
+            core.store(self.b, current, slot)
         self._loops.append((latch, done))
         self._body(node.body)
         self._loops.pop()
         if self._open():
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)
-        value = core.load(self.b, slot)
+        if self._dead_latch(latch):
+            self.b.at_end(done)
+            if site is not None:
+                site.finish(loop_setup)
+                self._guard_sites.pop()
+                if saved_induction is None:
+                    self._induction.pop(name, None)
+                    self._induction_terms.pop(name, None)
+                else:
+                    self._induction[name] = saved_induction
+            return
+        value = core.load(self.b, counter)
         if site is not None:
             self._ranges[value] = self._induction[name]
         if self.prover is not None:
             self._term_for_load(value, node.target)
-        core.store(self.b, self._checked_binary(value, step, "add"), slot)
+        core.store(self.b, self._checked_binary(value, step, "add"), counter)
         core.br(self.b, Successor(header))
         self.b.at_end(done)
         if site is not None:
@@ -1856,9 +2148,11 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         assert isinstance(target, ast.Name)
         carried = _scalar_type(_read_as(_kind(element)))
         slot = self.slots.get(target.id)
-        if slot is None or slot.type != PtrType(carried, "stack"):
+        shared = self._is_cell(target.id)
+        if not shared and (slot is None or slot.type != PtrType(carried, "stack")):
             slot = self._alloca(carried, target.id)
             self.slots[target.id] = slot
+        assert slot is not None
         length = core.cast(self.b, core.buffer_len(self.b, buffer), I64)
 
         header = self._block("each.head")
@@ -1881,9 +2175,11 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         if self._open():
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)
-        one = core.const(self.b, 1, I64)
-        core.store(self.b, core.add(self.b, core.load(self.b, index), one, overflow="wrap"), index)
-        core.br(self.b, Successor(header))
+        if not self._dead_latch(latch):
+            one = core.const(self.b, 1, I64)
+            step = core.add(self.b, core.load(self.b, index), one, overflow="wrap")
+            core.store(self.b, step, index)
+            core.br(self.b, Successor(header))
         self.b.at_end(done)
 
     # -- buffers ----------------------------------------------------------
@@ -1942,7 +2238,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             core.cmp(self.b, "ge", position, zero),
             core.cmp(self.b, "lt", position, length),
         )
-        core.guard(self.b, in_range, "bounds", "index out of range", raises=raises)
+        self._guard(in_range, "bounds", "index out of range", raises=raises)
         return position
 
     def _buffer_element(self, name: str, index: Value) -> Value:
@@ -1960,9 +2256,10 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         zero = core.const(self.b, 0, I64)
         carried_as = _read_as(_kind(buffer.type.element))
         carried_type = _scalar_type(carried_as)
+        if operation == "sum" and carried_as == "float":
+            return self._buffer_float_sum(buffer, length)
         if operation in {"min", "max"}:
-            core.guard(
-                self.b,
+            self._guard(
                 core.cmp(self.b, "ne", length, zero),
                 "contract",
                 f"{operation}() of empty",
@@ -2002,12 +2299,66 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         self.b.at_end(done)
         return core.load(self.b, accumulator)
 
+    def _buffer_float_sum(self, buffer: Value, length: Value) -> Value:
+        """`sum(xs)` of floats as CPython adds them, with Neumaier's compensation
+        carried and added at the end: `sum([0.1, 0.2, 0.3])` is `0.6`."""
+        zero = core.const(self.b, 0.0, F64)
+        # An empty sum is the int 0, which a float result cannot be.
+        self._guard(
+            core.cmp(self.b, "ne", length, core.const(self.b, 0, I64)),
+            "bounds",
+            "sum of no floats is the int 0",
+            raises="TypeError: sum() of no floats is the int 0, which a native float cannot hold",
+        )
+        running = self._alloca(F64, "sum.f")
+        carried = self._alloca(F64, "sum.c")
+        index = self._alloca(I64, "sum.i")
+        core.store(self.b, zero, running)
+        core.store(self.b, zero, carried)
+        core.store(self.b, core.const(self.b, 0, I64), index)
+        header = self._block("sum.head")
+        body = self._block("sum.body")
+        done = self._block("sum.end")
+        core.br(self.b, Successor(header))
+        self.b.at_end(header)
+        current = core.load(self.b, index)
+        core.cond_br(
+            self.b, core.cmp(self.b, "lt", current, length), Successor(body), Successor(done)
+        )
+        self.b.at_end(body)
+        position = core.load(self.b, index)
+        x = self._coerce(core.buffer_load(self.b, buffer, position), "float")
+        f = core.load(self.b, running)
+        t = core.add(self.b, f, x)
+        bigger = core.cmp(self.b, "ge", _magnitude(self, f), _magnitude(self, x))
+        first = core.add(self.b, core.sub(self.b, f, t), x)
+        second = core.add(self.b, core.sub(self.b, x, t), f)
+        step = core.select(self.b, bigger, first, second)
+        core.store(self.b, core.add(self.b, core.load(self.b, carried), step), carried)
+        core.store(self.b, t, running)
+        one = core.const(self.b, 1, I64)
+        core.store(self.b, core.add(self.b, position, one, overflow="wrap"), index)
+        core.br(self.b, Successor(header))
+        self.b.at_end(done)
+        f = core.load(self.b, running)
+        c = core.load(self.b, carried)
+        finite = core.cmp(self.b, "eq", core.sub(self.b, c, c), zero)
+        nonzero = core.cmp(self.b, "ne", c, zero)
+        compensated = core.bitwise(self.b, "and", finite, nonzero)
+        return core.select(self.b, compensated, core.add(self.b, f, c), f)
+
     # -- expressions ------------------------------------------------------
 
     def _expr(self, node: ast.expr) -> Value:
         match node:
             case ast.Constant(value=bool() as value):
                 return core.const(self.b, value, BOOL)
+            case ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=int() as value)) if (
+                not isinstance(value, bool) and value == 1 << 63
+            ):
+                # `-9223372036854775808` is `-(9223372036854775808)` to the
+                # parser; the literal alone is past a word, the value is not.
+                return core.const(self.b, -(1 << 63), I64)
             case ast.Constant(value=int() as value):
                 if not -(1 << 63) <= value < (1 << 63):
                     raise Unsupported("an integer literal exceeds the native machine range")
@@ -2070,6 +2421,16 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                     if isinstance(node.slice, ast.Slice):
                         raise Unsupported("slicing a buffer allocates, so it stays boxed")
                     return self._buffer_element(node.value.id, self._expr(node.slice))
+                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                    # `pairs[-1][1]`: an item of a tuple an expression gave.
+                    held = self._expr(node.value)
+                    if isinstance(held.type, TupleType):
+                        count = len(held.type.items)
+                        index = (
+                            node.slice.value + count if node.slice.value < 0 else node.slice.value
+                        )
+                        if 0 <= index < count:
+                            return core.tuple_extract(self.b, held, index)
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
@@ -2165,7 +2526,21 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         raise Unsupported("unary operator has no native lowering")
 
     def _boolop(self, node: ast.BoolOp) -> Value:
-        """`and`/`or` with short-circuit evaluation, joined by a block argument."""
+        """`and`/`or` with short-circuit evaluation, joined by a block argument.
+
+        Python hands back the operand that decided, not its truth: `0 or 5` is
+        5. Over bools the two are one; over numbers the operand is the value.
+        """
+        answer = T.strip_literal(self._type_of(node))
+        if answer in (T.INT, T.FLOAT):
+            return self._boolop_value(node, "int" if answer == T.INT else "float")
+        if answer != T.BOOL:
+            spelled = type(node.op).__name__.lower()
+            raise Unsupported(f"`{spelled}` of `{answer}` as a value has no native lowering")
+        return self._boolop_truth(node)
+
+    def _boolop_truth(self, node: ast.BoolOp) -> Value:
+        """`and`/`or` where only its truth is asked (a condition), or over bools."""
         done = self._block("boolop.end")
         result = done.add_argument(BOOL, "boolop")
         is_and = isinstance(node.op, ast.And)
@@ -2179,6 +2554,47 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                 core.cond_br(self.b, truth, Successor(following), Successor(done, [truth]))
             else:
                 core.cond_br(self.b, truth, Successor(done, [truth]), Successor(following))
+            self.b.at_end(following)
+        self.b.at_end(done)
+        return result
+
+    def _cannot_fail(self, node: ast.expr) -> bool:
+        """Whether evaluating `node` can neither raise nor fail a guard, so it
+        may run when Python would not have: names, constants, signs,
+        comparisons, and float `+`, `-`, `*` (an int's may overflow a word)."""
+        if isinstance(node, (ast.Name, ast.Constant)):
+            return True
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd, ast.Not)):
+            if isinstance(node.op, ast.USub) and T.strip_literal(self._type_of(node)) != T.FLOAT:
+                return False
+            return self._cannot_fail(node.operand)
+        if isinstance(node, ast.Compare):
+            return all(self._cannot_fail(part) for part in (node.left, *node.comparators))
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
+            return (
+                T.strip_literal(self._type_of(node)) == T.FLOAT
+                and self._cannot_fail(node.left)
+                and self._cannot_fail(node.right)
+            )
+        return False
+
+    def _boolop_value(self, node: ast.BoolOp, kind: str) -> Value:
+        """`a or b`, `a and b` over numbers: the first operand whose truth
+        decides (true for `or`, false for `and`), else the last."""
+        done = self._block("boolop.end")
+        result = done.add_argument(_scalar_type(kind), "boolop")
+        is_and = isinstance(node.op, ast.And)
+        for index, value_node in enumerate(node.values):
+            value = self._coerce(self._expr(value_node), kind)
+            if index == len(node.values) - 1:
+                core.br(self.b, Successor(done, [value]))
+                break
+            truth = self._truth(value)
+            following = self._block("boolop")
+            if is_and:
+                core.cond_br(self.b, truth, Successor(following), Successor(done, [value]))
+            else:
+                core.cond_br(self.b, truth, Successor(done, [value]), Successor(following))
             self.b.at_end(following)
         self.b.at_end(done)
         return result
@@ -2217,6 +2633,9 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         compared = self._object_compare(node)
         if compared is not None:
             return compared
+        compared = self._record_compare(node)
+        if compared is not None:
+            return compared
         predicate = _COMPARISONS.get(type(node.ops[0]))
         if predicate is None:
             raise Unsupported("comparison operator has no native lowering")
@@ -2231,13 +2650,37 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         return core.cmp(self.b, predicate, self._coerce(left, kind), self._coerce(right, kind))
 
     def _ifexp(self, node: ast.IfExp) -> Value:
+        """`a if c else b` evaluates only the side `c` picks: the other may divide
+        by zero or convert a NaN, which Python never does. Two sides that cannot
+        fail choose with a `select`, which XLA and vector code can take."""
         condition = self._test(node.test)
+        if self._cannot_fail(node.body) and self._cannot_fail(node.orelse):
+            then_value = self._expr(node.body)
+            else_value = self._expr(node.orelse)
+            kind = self._unify(_kind(then_value.type), _kind(else_value.type))
+            return core.select(
+                self.b, condition, self._coerce(then_value, kind), self._coerce(else_value, kind)
+            )
+        then_block = self._block("ifexp.then")
+        else_block = self._block("ifexp.else")
+        done = self._block("ifexp.end")
+        core.cond_br(self.b, condition, Successor(then_block), Successor(else_block))
+        self.b.at_end(then_block)
         then_value = self._expr(node.body)
+        then_end = self.b.block
+        self.b.at_end(else_block)
         else_value = self._expr(node.orelse)
+        else_end = self.b.block
+        assert then_end is not None and else_end is not None
+        if isinstance(then_value.type, VectorType) or isinstance(else_value.type, VectorType):
+            raise Unsupported("a conditional expression over vectors has no native lowering")
         kind = self._unify(_kind(then_value.type), _kind(else_value.type))
-        return core.select(
-            self.b, condition, self._coerce(then_value, kind), self._coerce(else_value, kind)
-        )
+        result = done.add_argument(_scalar_type(kind), "ifexp")
+        for end, value in ((then_end, then_value), (else_end, else_value)):
+            self.b.at_end(end)
+            core.br(self.b, Successor(done, [self._coerce(value, kind)]))
+        self.b.at_end(done)
+        return result
 
     def _plugin_spec(self, node: ast.Call) -> DialectOperationSpec | None:
         note = self.frontend.analysis.lowerings.get(id(node))
@@ -2333,6 +2776,8 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         )
 
     def _call(self, node: ast.Call, *, discard_result: bool = False) -> Value:
+        if self._calls_value(node):
+            return self._value_call(node, discard_result=discard_result)
         if self._plugin_spec(node) is not None:
             op = self._plugin_call(node)
             if not op.results:
@@ -2381,6 +2826,11 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                 "builtins.print"
             }:
                 return self._standalone_print(node)
+        if target in {"min", "max"} and node.keywords and target not in self.frontend.declared:
+            # `max(xs, key=f)`: the one keyword a reduction takes.
+            reduced = self._reduction(target, node)
+            if reduced is not None:
+                return reduced
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
         if self.frontend.standalone:
@@ -2436,6 +2886,14 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             reduced = self._reduction(target, node)
             if reduced is not None:
                 return reduced
+        if target in {"any", "all", "next"}:
+            consumed = self._generator_consumer(target, node)
+            if consumed is not None:
+                return consumed
+        if target in {"any", "all"}:
+            decided = self._any_all(target, node)
+            if decided is not None:
+                return decided
         if target in {"len", "sum", "min", "max"} and len(node.args) == 1:
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id in self.buffers:
@@ -2474,7 +2932,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             raise Unsupported("keyword arguments have no native ABI")
         function, signature = self.frontend.derivative(qualname, argnums, value)
         arguments = self._call_arguments(signature, node.args, qualname)
-        call = core.call(self.b, function.name, tuple(arguments), function.results)
+        call = self._call_native(function.name, tuple(arguments), function.results)
         return list(call.results)
 
     def _generic_call(
@@ -2513,7 +2971,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             value if parameter.is_handle else self._coerce(value, parameter.kind)
             for value, parameter in zip(values, signature.parameters, strict=True)
         ]
-        found = core.call(self.b, function.name, tuple(converted), function.results)
+        found = self._call_native(function.name, tuple(converted), function.results)
         for handle in temporaries:
             self._release(handle)
         if not function.results:
@@ -3530,6 +3988,10 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                 arguments.append(self._coerce_type(self._expr(argument), parameter.type))
                 continue
             if parameter.is_buffer:
+                view = self._list_view(argument, parameter.element)
+                if view is not None:
+                    arguments.append(view)
+                    continue
                 if not isinstance(argument, ast.Name) or argument.id not in self.buffers:
                     raise Unsupported("a buffer argument must be a buffer this function holds")
                 buffer = self.buffers[argument.id]
@@ -3695,6 +4157,10 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         if listed is not None:
             parts.append(listed)
             return parts
+        shown = self._shown_text(argument)
+        if shown is not None:
+            parts.append((shown, True))
+            return parts
         if isinstance(argument, ast.JoinedStr):
             for item in argument.values:
                 if isinstance(item, ast.FormattedValue):
@@ -3770,14 +4236,14 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         if signature.returns_tuple:
             raise Unsupported("a tuple result cannot be forwarded between native calls yet")
         if not function.results and discard_result:
-            core.call(self.b, function.name, tuple(arguments), ())
+            self._call_native(function.name, tuple(arguments), ())
             for handle in temporaries:
                 self._release(handle)
             # Statement calls discard this internal placeholder; it is not a None value.
             return core.const(self.b, 0, I64)
         if not function.results:
             raise Unsupported(f"`{qualname}` returns nothing a caller can use")
-        result = core.call(self.b, function.name, tuple(arguments), function.results).results[0]
+        result = self._call_native(function.name, tuple(arguments), function.results).results[0]
         for handle in temporaries:
             self._release(handle)
         if discard_result and result.type == HANDLE:
@@ -3949,16 +4415,14 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         and a standalone binary says what CPython would have raised.
         """
         if not self.device:
-            core.guard(
-                self.b,
+            self._guard(
                 core.cmp(self.b, "eq", value, value),
                 "range",
                 "int() of NaN",
                 raises="ValueError: cannot convert float NaN to integer",
             )
             infinity = core.const(self.b, math.inf, F64)
-            core.guard(
-                self.b,
+            self._guard(
                 core.bitwise(
                     self.b,
                     "and",
@@ -3969,8 +4433,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                 "int() of an infinity",
                 raises="OverflowError: cannot convert float infinity to integer",
             )
-            core.guard(
-                self.b,
+            self._guard(
                 core.bitwise(
                     self.b,
                     "and",
@@ -4249,7 +4712,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                     if not isinstance(right.type, StructType)
                     else right
                 )
-                return core.call(self.b, function.name, (left, other), function.results).results[0]
+                return self._call_native(function.name, (left, other), function.results).results[0]
         raise Unsupported(
             f"`{left.type.name}` has no native `{dunder}`; native code never dispatches dynamically"
         )
@@ -4267,15 +4730,13 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             pass
         elif self.frontend.standalone:
             # Python shifts by any count but a negative one; the word does not.
-            core.guard(
-                self.b,
+            self._guard(
                 core.cmp(self.b, "ge", right, zero),
                 "range",
                 "negative shift count",
                 raises=negative_shift(),
             )
-            core.guard(
-                self.b,
+            self._guard(
                 core.cmp(self.b, "le", right, limit),
                 "range",
                 "shift count outside the machine word",
@@ -4294,8 +4755,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         if self.device:
             return
         zero = self._literal(0, _kind(value.type))
-        core.guard(
-            self.b,
+        self._guard(
             core.cmp(self.b, "ne", value, zero),
             "zero_division",
             "division by zero",
@@ -4367,6 +4827,9 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         present = self._object_truth(node)
         if present is not None:
             return present
+        if isinstance(node, ast.BoolOp):
+            # A condition asks only for truth, whatever the operands are.
+            return self._boolop_truth(node)
         return self._truth(self._expr(node))
 
     def _truth(self, value: Value) -> Value:
@@ -4648,3 +5111,9 @@ _COLLECTION_SUFFIX = {"int": "i64", "float": "f64"}
 def _simple(node: ast.expr) -> bool:
     """A key evaluated twice gives the same value and does nothing else."""
     return isinstance(node, (ast.Name, ast.Constant))
+
+
+def _magnitude(lowering: _FunctionLowering, value: Value) -> Value:
+    zero = core.const(lowering.b, 0.0, F64)
+    negative = core.cmp(lowering.b, "lt", value, zero)
+    return core.select(lowering.b, negative, core.sub(lowering.b, zero, value), value)

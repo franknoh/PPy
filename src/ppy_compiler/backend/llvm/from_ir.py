@@ -16,7 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ppy_runtime.abi import SANITIZERS, STATUS_FALLBACK, STATUS_OK, STATUS_SANITIZER_BASE
+from ppy_runtime.abi import (
+    SANITIZERS,
+    STATUS_FALLBACK,
+    STATUS_OK,
+    STATUS_RAISED,
+    STATUS_SANITIZER_BASE,
+)
 
 from ...ir import (
     Block,
@@ -289,6 +295,8 @@ class _FunctionEmitter:
         self._slots = 0
         #: The blocks a failed sanitizer check returns through, by kind.
         self.sanitized: dict[str, object] = {}
+        #: Where an exception leaves the function, once made.
+        self.raised_block = None
         #: A coroutine's resume function returns nothing to no caller.
         self.resume = function.attributes.get("ppy.abi") == "resume"
 
@@ -359,6 +367,17 @@ class _FunctionEmitter:
             )
             self.builder.unreachable()
         return block
+
+    def _raised_exit(self):  # type: ignore[no-untyped-def]
+        """The block that returns the raised status, made once per function.
+
+        Nothing is freed here: what the function held it let go of before
+        raising, and the runtime keeps the exception."""
+        if self.raised_block is None:
+            self.raised_block = self.llvm.append_basic_block("raised")
+            with self.builder.goto_block(self.raised_block):
+                self.builder.ret(self.ir.Constant(self.ir.IntType(32), STATUS_RAISED))
+        return self.raised_block
 
     def _sanitizer_check(self, condition, label: str) -> None:  # type: ignore[no-untyped-def]
         """A sanitizer's check: failing it returns the sanitizer status, never falls back."""
@@ -589,6 +608,8 @@ class _FunctionEmitter:
                 self.set(op.result, b.extract_value(self.value(op.operands[0]), index))
             case "call":
                 self._call(op)
+            case "call_indirect":
+                self._call_indirect(op)
             case "call_extern":
                 self._call_extern(op)
             case "call_intrinsic":
@@ -597,6 +618,11 @@ class _FunctionEmitter:
                 label = str(op.attributes.get("label") or f"{op.attributes['kind']}.ok")
                 if label.startswith("sanitize:"):
                     self._sanitizer_check(self.value(op.operands[0]), label)
+                elif label == "raised":
+                    # An exception leaves the function: the raised status.
+                    keep = self.llvm.append_basic_block("not.raised")
+                    self.builder.cbranch(self.value(op.operands[0]), keep, self._raised_exit())
+                    self.builder.position_at_end(keep)
                 else:
                     self.continue_if(
                         self.value(op.operands[0]),
@@ -764,7 +790,9 @@ class _FunctionEmitter:
         predicate = str(op.attributes["predicate"])
         symbol = {"eq": "==", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}[predicate]
         if isinstance(t, FloatType):
-            self.set(op.result, b.fcmp_ordered(symbol, left, right))
+            # IEEE and Python: every comparison with a NaN is false but `!=`.
+            compare = b.fcmp_unordered if symbol == "!=" else b.fcmp_ordered
+            self.set(op.result, compare(symbol, left, right))
         elif isinstance(t, IntType) and not t.signed:
             self.set(op.result, b.icmp_unsigned(symbol, left, right))
         else:
@@ -795,7 +823,8 @@ class _FunctionEmitter:
         if isinstance(target, BoolType):
             zero = None if isinstance(value.type, ir.VectorType) else 0
             if isinstance(source, FloatType):
-                self.set(op.result, b.fcmp_ordered("!=", value, ir.Constant(value.type, zero)))
+                # `bool(nan)` is true: a NaN is not zero.
+                self.set(op.result, b.fcmp_unordered("!=", value, ir.Constant(value.type, zero)))
             else:
                 self.set(op.result, b.icmp_signed("!=", value, ir.Constant(value.type, zero)))
             return
@@ -853,28 +882,63 @@ class _FunctionEmitter:
         b.ret(ir.Constant(ir.IntType(32), STATUS_OK))
 
     def _call(self, op: Operation) -> None:
-        ir = self.ir
-        b = self.builder
         callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
         callee = self.owner.functions.get(callee_name)
         target = self.owner.module.functions.get(callee_name)
         if callee is None or target is None:
             raise EmitError(f"call to @{callee_name}, which was not emitted")
+        self._call_to(
+            op, callee, op.operands, tuple(t for _n, t in target.params), tuple(target.results)
+        )
+
+    def _call_indirect(self, op: Operation) -> None:
+        """A call through a function value: its native entry's address, cast to
+        the type the arguments and results give it."""
+        ir = self.ir
+        results = list(op.results)
+        if op.attributes.get("capture_status"):
+            results.pop()
+        operands = op.operands[1:]
+        atom_types: list = []
+        for operand in operands:
+            atom_types.extend(self.owner.boundary_atoms(operand.type))
+        for result in results:
+            atom_types.extend(a.as_pointer() for a in self.owner.boundary_atoms(result.type))
+        if not results:
+            atom_types.append(ir.IntType(64).as_pointer())
+        kind = ir.FunctionType(ir.IntType(32), atom_types)
+        callee = self.builder.inttoptr(self.value(op.operands[0]), kind.as_pointer())
+        self._call_to(
+            op, callee, operands, tuple(v.type for v in operands), tuple(r.type for r in results)
+        )
+
+    def _call_to(self, op: Operation, callee, operands, params, target_results) -> None:  # type: ignore[no-untyped-def]
+        """A native call, direct or not: atoms in, result slots out, the status
+        checked or handed back."""
+        ir = self.ir
+        b = self.builder
         arguments: list = []
-        for operand, (_name, t) in zip(op.operands, target.params, strict=True):
+        for operand, t in zip(operands, params, strict=True):
             arguments.extend(self._to_atoms(t, self.value(operand)))
         slots: list[tuple[IRType, list]] = []
-        for t in target.results:
+        for t in target_results:
             atoms = [self.entry_alloca(atom, "callresult") for atom in self.owner.boundary_atoms(t)]
             slots.append((t, atoms))
             arguments.extend(atoms)
-        if not target.results:
+        if not target_results:
             arguments.append(self.entry_alloca(ir.IntType(64), "callvoid"))
         status = b.call(callee, arguments)
         results = list(op.results)
         if op.attributes.get("capture_status"):
-            self.set(results.pop(), b.zext(status, ir.IntType(64)))
+            self.set(results.pop(), b.sext(status, ir.IntType(64)))
         else:
+            if self.owner.module.attributes.get("ppy.exceptions") and not self.resume:
+                # A callee's exception goes on up: this caller has no `try`
+                # around the call, or it would have asked for the status.
+                raised = b.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_RAISED))
+                keep = self.llvm.append_basic_block("call.not.raised")
+                b.cbranch(raised, self._raised_exit(), keep)
+                b.position_at_end(keep)
             ok = b.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_OK))
             self.continue_if(ok, "call.ok")
         for result, (t, atoms) in zip(results, slots, strict=True):
@@ -927,6 +991,13 @@ class _FunctionEmitter:
             callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
             trampoline = _callback(self.owner, callee_name)
             self.set(op.results[0], b.ptrtoint(trampoline, ir.IntType(64)))
+            return
+        if name == "ppy.function_address":
+            callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
+            function = self.owner.functions.get(callee_name)
+            if function is None:
+                raise EmitError(f"the address of @{callee_name}, which was not emitted")
+            self.set(op.results[0], b.ptrtoint(function, ir.IntType(64)))
             return
         if name in {"llvm.smin.i64", "llvm.smax.i64"}:
             word = ir.IntType(64)

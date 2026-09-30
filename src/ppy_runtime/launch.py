@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ctypes
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
@@ -19,9 +18,9 @@ from .binding import bind, remember, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
-from .manifest import Manifest, ManifestError, host_runs, load
+from .manifest import LAUNCH_CACHE, Manifest, ManifestError, host_runs, launch_cache, load
 
-__all__ = ["PrebuiltBinder", "generated_modules", "main"]
+__all__ = ["LIGHT", "PrebuiltBinder", "generated_modules", "main", "write_light"]
 
 
 def _wrapper_module(manifest: Manifest):  # type: ignore[no-untyped-def]
@@ -106,9 +105,12 @@ class PrebuiltBinder(LibraryBinder):
         if types is None:
             return None
         try:
-            getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
+            named = getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
+        if named is not None:
+            # A copy that answers to the function's own name and docstring.
+            return named
         # The entry point bears the function's qualified name in the library
         # `ppy build` writes beside the manifest.
         return getattr(self._wrappers, signature.qualname, None)
@@ -135,10 +137,18 @@ class PrebuiltBinder(LibraryBinder):
 
 
 def generated_modules(manifest: Manifest) -> dict[str, GeneratedModule]:
-    """The generated Python modules a manifest names, read off disk."""
+    """The generated Python modules a manifest names, read off disk, or off the
+    launcher's cache with their compiled code."""
+    cached = launch_cache(manifest.path) or {}
+    payloads = cached.get("generated", {})
+    compiled = cached.get("compiled", {})
     modules: dict[str, GeneratedModule] = {}
     for name, file in manifest.generated.items():
-        payload = json.loads(file.read_text(encoding="utf-8"))
+        payload = payloads.get(name)
+        if payload is None:
+            import json  # pylint: disable=import-outside-toplevel
+
+            payload = json.loads(file.read_text(encoding="utf-8"))
         modules[name] = GeneratedModule(
             name=payload["name"],
             source_path=Path(payload["source"]),
@@ -147,8 +157,100 @@ def generated_modules(manifest: Manifest) -> dict[str, GeneratedModule]:
             key=payload["key"],
             line_map={int(k): v for k, v in payload["line_map"].items()},
             fused_symbols=tuple(payload.get("fused_symbols", ())),
+            compiled=dict(compiled.get(name, {})),
         )
     return modules
+
+
+def _write_launch_cache(manifest: Manifest, modules: dict[str, GeneratedModule]) -> None:
+    """After a run, what it parsed and compiled, marshaled beside the manifest for
+    the next: no `json`, no `ast`, no `compile`. Best effort, and written only
+    when something new was compiled."""
+    cached = launch_cache(manifest.path) or {}
+    old = cached.get("compiled", {})
+    compiled = {name: dict(module.compiled) for name, module in modules.items()}
+    if compiled == old and cached:
+        return
+    import json  # pylint: disable=import-outside-toplevel
+    import marshal  # pylint: disable=import-outside-toplevel
+    import os  # pylint: disable=import-outside-toplevel
+
+    try:
+        stat = os.stat(manifest.path)
+        payload = json.loads(manifest.path.read_text(encoding="utf-8"))
+        generated = {
+            name: json.loads(file.read_text(encoding="utf-8"))
+            for name, file in manifest.generated.items()
+        }
+        blob = marshal.dumps(
+            {
+                "stamp": (stat.st_size, stat.st_mtime_ns, sys.version),
+                "payload": payload,
+                "generated": generated,
+                "compiled": compiled,
+            }
+        )
+        target = manifest.path.with_name(LAUNCH_CACHE)
+        draft = target.with_name(f"{target.name}.{os.getpid()}.part")
+        draft.write_bytes(blob)
+        draft.replace(target)
+    except (OSError, ValueError):
+        pass
+
+
+#: Beside a manifest: what a program whose native code Python never calls needs
+#: to run, precompiled (`write_light`, read by the compiler's `fastrun`).
+LIGHT = "light.marshal"
+
+
+def write_light(manifest_path: Path) -> Path | None:
+    """Write the light plan of a manifest whose program runs as Python alone.
+
+    A manifest with no native entry Python calls, and no wrappers, regions,
+    staged exports, or fused kernels, needs none of the native library: its
+    generated modules run as they are. Their compiled code, the entry, the
+    search paths, and whether the program names `ppy` are marshaled beside
+    the manifest, so a warm run imports neither this module nor `json`,
+    `ctypes`, or `dataclasses`, and compiles nothing. Marshal is tied to this
+    interpreter, which the plan records and the reader checks. Returns the
+    plan, or None when the program needs the launcher.
+    """
+    import marshal  # pylint: disable=import-outside-toplevel
+
+    try:
+        manifest = load(Path(manifest_path))
+    except ManifestError:
+        return None
+    import json  # pylint: disable=import-outside-toplevel
+
+    payload = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    if (
+        manifest.entries
+        or manifest.wrapper_library is not None
+        or manifest.regions
+        or manifest.staged
+        or payload.get("fused_kernels")
+        or payload.get("exports")
+    ):
+        return None
+    modules = generated_modules(manifest)
+    if manifest.entry_module not in modules or any(m.fused_symbols for m in modules.values()):
+        return None
+    compiled = {
+        name: (str(module.source_path), module.compile()) for name, module in modules.items()
+    }
+    plan = {
+        "python": sys.version,
+        "entry": manifest.entry_module,
+        "search_paths": [str(p) for p in manifest.search_paths],
+        "uses_ppy": manifest.uses_ppy,
+        "modules": compiled,
+    }
+    target = Path(manifest_path).with_name(LIGHT)
+    draft = target.with_name(f"{target.name}.part")
+    draft.write_bytes(marshal.dumps(plan))
+    draft.replace(target)
+    return target
 
 
 def main(manifest_path: Path, argv: list[str]) -> int:
@@ -191,7 +293,9 @@ def main(manifest_path: Path, argv: list[str]) -> int:
         search_paths=manifest.search_paths,
         natives=binder,
         entry_name=manifest.entry_module,
+        uses_ppy=manifest.uses_ppy,
     )
+    _write_launch_cache(manifest, modules)
     if result.exception is not None:
         sys.stderr.write(format_traceback(result.exception))
     return result.exit_code

@@ -55,6 +55,8 @@ Python orders code points.
 | `for c in s`, `len(s)`, `if s:` | |
 | `ord`, `chr`, `min` and `max` of strings | |
 | `str(x)`, `repr(x)`, `format(x, spec)` | of an `int`, `float`, `bool`, or `str` |
+| `"...".format(...)` | positional, numbered, and keyword fields, with conversions and specs |
+| `"..." % values` | `%s`, `%r`, `%d`, `%i`, `%x`, `%X`, `%o`, `%e`, `%f`, `%g` and their capitals, `%%`, with flags, width, and precision |
 | `int(s)`, `int(s, base)`, `float(s)` | the grammar CPython reads, underscores and `inf` included |
 | f-strings | fields of numbers, bools, and strings, with `!r`, `!s`, `!a` |
 
@@ -67,6 +69,13 @@ An f-string field or `format` takes fill and alignment (`<`, `>`, `^`, `=`),
 a sign, `z`, `#`, `0`, a width, grouping with `,` or `_`, a precision, and
 the types `d`, `b`, `o`, `x`, `X`, `e`, `E`, `f`, `F`, `g`, `G`, `%`, and
 `s`. A spec with a nested field (`{x:{width}}`) stays in Python.
+
+`str.format` and `%` of a string literal lower as the f-string they mean, so
+they take the same specs. `"%-6s|%05d" % (name, n)` is `f"{name!s:<6}|{n:05d}"`.
+A format string that is not a literal, a `%` whose right side may be a tuple
+or a mapping (`"%s" % t` where `t` is a tuple), a field that reaches into its
+value (`{0.x}`, `{a[0]}`), and arguments read out of order where reading them
+twice would show stay in Python.
 
 ### Methods
 
@@ -113,9 +122,10 @@ without a copy, and a returned string back out as a new Python string.
 A string with a lone surrogate has no UTF-8, and a call with one runs as
 Python.
 
-A `list[str]` parameter or result is passed by handle between native
-functions and does not cross the boundary. A function Python calls with
-one runs its Python body.
+A `list[str]`, `dict[str, V]`, or `set[str]` parameter or result is
+passed by handle between native functions. From Python it crosses by copy
+when the function does more than one pass of work over its strings; see
+[Lists, dicts, and sets](containers.md#between-functions).
 
 ## Reading and printing
 
@@ -139,10 +149,7 @@ separator, `ord` of two characters) is a guard of the same kind.
 
 ## Limitations
 
-- `str.format`, `%` formatting, `encode`, `translate`, `expandtabs`, and
-  `casefold` stay in Python. An f-string does what `str.format` does.
-- A `dict` or `set` of strings stays in Python; `HashMap[str, V]` and
-  `HashSet[str]` are the native ones.
+- `encode`, `translate`, `expandtabs`, and `casefold` stay in Python.
 - The case of text outside ASCII falls back, as above.
 
 Examples: [Strings](../howto/48_strings.md).

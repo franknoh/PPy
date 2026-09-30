@@ -8,9 +8,14 @@ artifact can load its generated code with the compiler uninstalled.
 
 from __future__ import annotations
 
-import ast
-from dataclasses import dataclass
 from pathlib import Path
+
+from ._record import field
+from ._record import record as dataclass
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    import ast
 
 __all__ = [
     "BINDER_NAME",
@@ -36,6 +41,9 @@ class GeneratedModule:
     key: str
     line_map: dict[int, int]
     fused_symbols: tuple[str, ...] = ()
+    #: Compiled code by the names bound into it, filled as the module is
+    #: compiled and carried in the launcher's cache.
+    compiled: dict = field(default_factory=dict)  # type: ignore[type-arg]
 
     @property
     def needs_fused_binder(self) -> bool:
@@ -48,6 +56,16 @@ class GeneratedModule:
         region_names: frozenset[str] = frozenset(),
     ) -> object:
         """Compile with the original `.ppy` filename so tracebacks map back."""
+        key = (
+            tuple(sorted(native_names)),
+            tuple(sorted(exported_names)),
+            tuple(sorted(region_names)),
+        )
+        found = self.compiled.get(key)
+        if found is not None:
+            return found
+        import ast  # pylint: disable=import-outside-toplevel
+
         tree = ast.parse(self.code, filename=str(self.source_path))
         _restore_lines(tree, self.line_map)
         bindings = [
@@ -57,10 +75,14 @@ class GeneratedModule:
         ]
         if any(names for _binder, names in bindings):
             _insert_definition_bindings(tree, bindings)
-        return compile(tree, str(self.source_path), "exec", dont_inherit=True)
+        made = compile(tree, str(self.source_path), "exec", dont_inherit=True)
+        self.compiled[key] = made
+        return made
 
 
 def _restore_lines(tree: ast.Module, line_map: dict[int, int]) -> None:
+    import ast  # pylint: disable=import-outside-toplevel
+
     for node in ast.walk(tree):
         if not hasattr(node, "lineno"):
             continue
@@ -84,6 +106,8 @@ def _insert_definition_bindings(
 def _bind_in(
     body: list[ast.stmt], bindings: list[tuple[str, frozenset[str]]], prefix: str
 ) -> list[ast.stmt]:
+    import ast  # pylint: disable=import-outside-toplevel
+
     rebuilt: list[ast.stmt] = []
     for statement in body:
         if isinstance(statement, ast.ClassDef):

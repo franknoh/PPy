@@ -1,0 +1,15 @@
+# fuzz: path=standalone seed=112 (float != and truth were ordered: false for NaN; a NaN divisor raised ZeroDivisionError)
+def differs(x: float, y: float) -> bool:
+    return x != y
+
+
+def same(x: float, y: float) -> bool:
+    return x == y
+
+
+def main() -> None:
+    nan = float("nan")
+    print(differs(nan, nan), differs(nan, 1.0), same(nan, nan), differs(1.0, 1.0), differs(1.0, 2.0))
+
+
+main()

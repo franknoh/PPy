@@ -7,6 +7,11 @@ numbers, tuples, dataclasses, or other collections, and a function that uses
 them goes native under `ppy run`, in a standalone binary, and in emitted C
 and C++.
 
+Python's own `list`, `dict`, and `set` lower over the same runtime with no
+rewrite; see [Lists, dicts, and sets](containers.md). The types here are for
+what those do not say: a queue, a heap, a linked list, a map kept in key
+order.
+
 ```python
 from ppy import Deque, Vec
 
@@ -250,7 +255,8 @@ rebind the name it came from.
 | `v.sort()`, `v.sort(reverse=True)`, `v.sort(key=f)` | in place; the sort is stable |
 | `v.reverse()`, `v.clear()`, `len(v)`, `for x in v` | |
 
-`sort`'s `key` is a lambda or a function's name. Native code calls it once
+`sort`'s `key` is a lambda, a function's name, or any function value (see
+[Functions as values](closures.md)). Native code calls it once
 per element, as `list.sort` does, and sorts by what it returns: a number, a
 tuple of numbers, or an ordered dataclass.
 
@@ -404,6 +410,10 @@ values (`KeyError: (3, -3)`, `IndexError: index 7 is out of range for
 length 2`), and exits with status 1, as CPython does for an uncaught
 exception. Where only native code can fail, an integer past 64 bits, it
 says `OverflowError: the result does not fit in a 64-bit integer`.
+
+In a module that raises or catches exceptions, these guards are native
+exceptions instead, and a `try` around them catches them; see
+[exceptions and generators](exceptions-and-generators.md).
 
 ### Functions that take or return collections
 

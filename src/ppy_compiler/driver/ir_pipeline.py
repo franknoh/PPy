@@ -83,8 +83,11 @@ def optimize_shared_ir(  # type: ignore[no-untyped-def]
     """
     registry = plugins.dialect_registry() if plugins is not None else None
     verify_or_raise(module, registry)
-    external = (plugins is not None and len(plugins) > 0) or backend is not None
-    ctx = PassContext(registry, verify_after_each=_verify_between_passes() or external)
+    # Every pass is verified when asked (`PPY_IR_VERIFY`); otherwise the passes
+    # plugins and backends add are, each as it runs, and the pipeline's own are
+    # verified once, at the end. Verifying after every one of them cost a
+    # project with a plugin installed a third of its first build.
+    ctx = PassContext(registry, verify_after_each=_verify_between_passes())
     manager = default_pipeline(
         level,
         ctx,
@@ -227,6 +230,23 @@ def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # ty
     return layouts
 
 
+def _builtin_exception(name: str) -> bool:
+    from ..analysis import types as T  # pylint: disable=import-outside-toplevel
+
+    return name == "BaseException" or "BaseException" in T.BUILTIN_MRO.get(name, ())
+
+
+def exception_header(info, classes) -> bool:  # type: ignore[no-untyped-def]
+    """Whether instances of an object class are exceptions: its root derives from
+    a builtin exception. Their record starts with the four words of
+    `ppy_runtime/exceptions.c` (tag, name, `str()` of it, flags), so the
+    exception runtime and the object code read one record."""
+    return (
+        any(_builtin_exception(entry) for entry in info.mro)
+        and object_chain(info, classes) is not None
+    )
+
+
 def object_chain(info, classes):  # type: ignore[no-untyped-def]
     """The classes an object class is made of, its root first, or None.
 
@@ -236,11 +256,17 @@ def object_chain(info, classes):  # type: ignore[no-untyped-def]
     (`class Counted[T](Stack[T])`), its arguments given where it is named.
     """
     chain = []
+    builtin = False
     for entry in info.mro:
         if entry == "object":
             continue
         found = classes.get(entry)
-        if found is None or found.module != info.module:
+        if found is None and _builtin_exception(entry):
+            # `class ParseError(ValueError)`: the builtin exception is the
+            # record's header (see `exception_header`), not a class of its own.
+            builtin = True
+            continue
+        if found is None or found.module != info.module or builtin:
             return None
         if found.is_protocol or found.is_enum or found.is_pydantic:
             return None

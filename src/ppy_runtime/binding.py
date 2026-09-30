@@ -10,12 +10,15 @@ from __future__ import annotations
 import array
 import ctypes
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from typing import Any
 
 from . import _cpu
+from ._record import field
+from ._record import record as dataclass
 from .abi import (
     SANITIZERS,
     STATUS_OK,
+    STATUS_RAISED,
     STATUS_SANITIZER_BASE,
     TEXT,
     NativeParam,
@@ -220,7 +223,12 @@ def bind(
     )
     native = prototype(address)
 
-    if signature.crosses_collections:
+    # A `str` result comes back as text, like any string: only a collection
+    # needs the crossing.
+    text_only = text_result and signature.returned == "str"
+    if signature.crosses_collections and not (
+        text_only and not any(p.is_handle for p in signature.parameters)
+    ):
         return _bind_collections(signature, native, result_types, fallback, owner)
 
     namespace = getattr(fallback, "__globals__", None)
@@ -264,7 +272,10 @@ def bind(
         # choice, the call, and the boxing in C; `NotImplemented` is its signal
         # that a guard failed. While the function is still learning which
         # argument shapes repeat, Python watches alongside.
-        def fast_wrapper(*args: object) -> object:
+        def fast_wrapper(*args: object, **keywords: object) -> object:
+            if keywords:
+                # Python binds keywords; the native code takes its arguments in order.
+                return fallback(*args, **keywords)
             if binding.observing:
                 _watch(binding, signature, args, policy, specializer, info, register)
             result = fast_entry(*args)
@@ -274,17 +285,15 @@ def bind(
             binding.calls += 1
             return result
 
-        fast_wrapper.__name__ = signature.qualname.rpartition(".")[2]
-        fast_wrapper.__qualname__ = signature.qualname
-        fast_wrapper.__doc__ = getattr(fallback, "__doc__", None)
+        _dress(fast_wrapper, signature, fallback)
         fast_wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
         fast_wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
         binding.wrapper = fast_wrapper
         return binding
 
-    def wrapper(*args: object) -> object:
-        if len(args) != len(expanders):
-            return fallback(*args)
+    def wrapper(*args: object, **keywords: object) -> object:
+        if keywords or len(args) != len(expanders):
+            return fallback(*args, **keywords)
         atoms: list[object] = []
         # `borrowed` keeps each unboxed buffer alive for the duration of the call.
         borrowed: list[object] = []
@@ -307,6 +316,8 @@ def bind(
         target = entry or native
         status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
+            if status == STATUS_RAISED:
+                _let_go_of_raised(owner, target)
             if status >= STATUS_SANITIZER_BASE:
                 kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
                 raise SanitizerFailure(
@@ -324,13 +335,21 @@ def bind(
             )
         return finalizers[0](slots[0].value)
 
-    wrapper.__name__ = signature.qualname.rpartition(".")[2]
-    wrapper.__qualname__ = signature.qualname
-    wrapper.__doc__ = getattr(fallback, "__doc__", None)
+    _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
     return binding
+
+
+def _dress(wrapper, signature, fallback) -> None:  # type: ignore[no-untyped-def]
+    """Give a wrapper the function's own name, docstring, and module, so
+    `help`, `doctest`, and `__name__` see what the program wrote."""
+    name = signature.qualname.rpartition(".")[2]
+    wrapper.__name__ = getattr(fallback, "__name__", name)
+    wrapper.__qualname__ = getattr(fallback, "__qualname__", signature.qualname)
+    wrapper.__doc__ = getattr(fallback, "__doc__", None)
+    wrapper.__module__ = getattr(fallback, "__module__", wrapper.__module__)
 
 
 def _text_result(address: int | None, length: int) -> str:
@@ -378,9 +397,9 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         signature=signature, wrapper=lambda *a: None, fallback=fallback, owner=owner
     )
 
-    def wrapper(*args: object) -> object:
-        if len(args) != len(expanders):
-            return fallback(*args)
+    def wrapper(*args: object, **keywords: object) -> object:
+        if keywords or len(args) != len(expanders):
+            return fallback(*args, **keywords)
         boundary = crossing.Boundary(rt)
         try:
             answered, answer = _cross(boundary, args)
@@ -411,6 +430,8 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         slots = [result_type() for result_type in result_types]
         status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
+            if status == STATUS_RAISED:
+                _let_go_of_raised(owner, native)
             if status >= STATUS_SANITIZER_BASE:
                 kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
                 raise SanitizerFailure(
@@ -428,6 +449,8 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             return True, boundary.result(slots[0].value, returned)
         if nothing or not slots:
             return True, None
+        if signature.returns == (TEXT,):
+            return True, _text_result(slots[0].value, slots[1].value)
         if len(slots) > 1:
             return True, tuple(
                 _result_for(atom)(slot.value)
@@ -435,9 +458,7 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             )
         return True, _result_for(signature.returns[0])(slots[0].value)
 
-    wrapper.__name__ = signature.qualname.rpartition(".")[2]
-    wrapper.__qualname__ = signature.qualname
-    wrapper.__doc__ = getattr(fallback, "__doc__", None)
+    _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
@@ -632,11 +653,11 @@ def _observe(
     binding: NativeBinding,
     signature: NativeSignature,
     args: tuple[object, ...],
-    policy,  # type: ignore[no-untyped-def]
-    specializer,
+    policy: Any,
+    specializer: Any,
     info: object,
-    prototype,  # type: ignore[no-untyped-def]
-):
+    prototype: Any,
+) -> Any:
     """Watch the arguments, and compile a specialization once one repeats.
 
     This runs only while learning. Once a specialization exists its matcher
@@ -683,8 +704,8 @@ def _watch(
     binding: NativeBinding,
     signature: NativeSignature,
     args: tuple[object, ...],
-    policy,  # type: ignore[no-untyped-def]
-    specializer,
+    policy: Any,
+    specializer: Any,
     info: object,
     register: Callable[[int, tuple], bool] | None,
 ) -> None:
@@ -723,3 +744,37 @@ def _watch(
     binding.registered += 1
     if binding.specialization_count >= policy.maximum:
         binding.observing = False
+
+
+def _let_go_of_raised(owner: object, native: object) -> None:
+    """A native call ended on an exception nothing native caught: Python runs the
+    call again and raises it. What the native call made, the exception with
+    it, is garbage now; the collections runtime in the native code's own
+    library frees all of it at once."""
+    sweep = getattr(owner, "ppy_coll_sweep", None) if isinstance(owner, ctypes.CDLL) else None
+    if sweep is None:
+        sweep = _sweep_beside(native)
+    if sweep is not None:
+        sweep()
+
+
+def _sweep_beside(native: object):  # type: ignore[no-untyped-def]
+    """`ppy_coll_sweep` of the library `native` was loaded from, if any."""
+
+    class _Found(ctypes.Structure):
+        _fields_ = [
+            ("dli_fname", ctypes.c_char_p),
+            ("dli_fbase", ctypes.c_void_p),
+            ("dli_sname", ctypes.c_char_p),
+            ("dli_saddr", ctypes.c_void_p),
+        ]
+
+    try:
+        libc = ctypes.CDLL(None)
+        found = _Found()
+        address = ctypes.cast(native, ctypes.c_void_p)  # type: ignore[arg-type]
+        if not libc.dladdr(address, ctypes.byref(found)) or not found.dli_fname:
+            return None
+        return getattr(ctypes.CDLL(found.dli_fname.decode()), "ppy_coll_sweep", None)
+    except (OSError, AttributeError, TypeError):
+        return None

@@ -39,6 +39,7 @@ GROUPS = [
             "47_collections",
             "48_strings",
             "49_inheritance",
+            "50_errors_and_generators",
         ],
     ),
     ("Accelerators", ["38_cuda", "44_tile", "39_xla", "45_multi_gpu_jax"]),

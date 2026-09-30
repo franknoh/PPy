@@ -105,6 +105,40 @@ def _is_pure_expr(node: ast.expr) -> bool:
     return True
 
 
+_FRESH = (
+    ast.List,
+    ast.Dict,
+    ast.Set,
+    ast.ListComp,
+    ast.DictComp,
+    ast.SetComp,
+    ast.GeneratorExp,
+    ast.Lambda,
+)
+
+
+def _makes_new_object(node: ast.expr) -> bool:
+    """A display, or an operator over one, makes a new object each time it
+    runs: two evaluations are two objects, and one evaluation shared is one."""
+    return any(isinstance(child, _FRESH) for child in ast.walk(node))
+
+
+#: Operators that raise for some operands of the right type: a zero divisor,
+#: a negative shift, an overflowing float power.
+_RAISING_OPERATORS = (ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.LShift, ast.RShift)
+
+
+def _cannot_raise(node: ast.expr) -> bool:
+    """Pure, and no operator in it can raise: what may be deleted outright, or
+    moved to where it runs when the program would not have run it."""
+    if not _is_pure_expr(node):
+        return False
+    return not any(
+        isinstance(child, ast.BinOp) and isinstance(child.op, _RAISING_OPERATORS)
+        for child in ast.walk(node)
+    )
+
+
 def _assigned_names(nodes: list[ast.stmt]) -> set[str]:
     found: set[str] = set()
     for statement in nodes:
@@ -252,7 +286,7 @@ class BranchFold(Pass):
     def _test_value(self, test: ast.expr) -> bool | None:
         if isinstance(test, ast.Constant):
             return bool(test.value)
-        if has_const(test) and _is_pure_expr(test):
+        if has_const(test) and _cannot_raise(test):
             return bool(const_of(test))
         return None
 
@@ -364,7 +398,7 @@ class Peephole(Pass):
             len(node.body) == 1
             and isinstance(node.body[0], ast.Pass)
             and not node.orelse
-            and _is_pure_expr(node.test)
+            and _cannot_raise(node.test)
         ):
             self.context.count("peepholes")
             return ast.copy_location(ast.Pass(), node)
@@ -452,7 +486,7 @@ class UnusedLocals(Pass):
                 and _single_name_target(statement) is not None
                 and _single_name_target(statement) not in loaded
                 and statement.value is not None
-                and _is_pure_expr(statement.value)
+                and _cannot_raise(statement.value)
             ):
                 self.context.count("unused_locals_removed")
                 continue
@@ -509,10 +543,10 @@ class CommonSubexpression(Pass):
 
     def _repeated(self, root: ast.expr) -> ast.expr | None:
         seen: dict[str, tuple[int, ast.expr]] = {}
-        for node in ast.walk(root):
+        for node in _same_scope(root):
             if not isinstance(node, (ast.BinOp, ast.Compare)):
                 continue
-            if not _is_pure_expr(node):
+            if not _is_pure_expr(node) or _makes_new_object(node):
                 continue
             key = ast.dump(node)
             count, first = seen.get(key, (0, node))
@@ -525,12 +559,32 @@ class CommonSubexpression(Pass):
         return max(candidates, key=lambda pair: pair[0])[1]
 
 
+#: Expressions with a scope of their own: what they read runs later, or with
+#: names of their own, so a temporary of the statement cannot stand for it.
+_SCOPES = (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+
+
+def _same_scope(root: ast.expr) -> list[ast.AST]:
+    """`root` and what it evaluates in its own scope, not inside a lambda or
+    a comprehension."""
+    found: list[ast.AST] = []
+    pending: list[ast.AST] = [root]
+    while pending:
+        node = pending.pop()
+        found.append(node)
+        if not isinstance(node, _SCOPES):
+            pending.extend(ast.iter_child_nodes(node))
+    return found
+
+
 class _ReplaceExpr(ast.NodeTransformer):
     def __init__(self, dump: str, name: str) -> None:
         self.dump = dump
         self.name = name
 
     def visit(self, node: ast.AST) -> ast.AST:
+        if isinstance(node, _SCOPES):
+            return node
         if isinstance(node, ast.expr) and ast.dump(node) == self.dump:
             return ast.copy_location(ast.Name(id=self.name, ctx=ast.Load()), node)
         return super().visit(node)
@@ -592,7 +646,14 @@ class LoopInvariantMotion(Pass):
         # already handles them.
         if isinstance(value, (ast.Constant, ast.Name)):
             return None
-        if not _is_pure_expr(value) or _loaded_names(value) & varying:
+        # Hoisted, it runs before the first pass, and even for a loop that
+        # runs none: only what cannot raise may go.
+        if not _cannot_raise(value) or _loaded_names(value) & varying:
+            return None
+        # A display makes a new object on every pass; hoisted, every pass
+        # would share the one, and `row = []` would keep what the last pass
+        # appended.
+        if _makes_new_object(value):
             return None
         if target.id in _loaded_names(node.iter):
             return None
@@ -642,7 +703,7 @@ class InlineSmallFunctions(Pass):
         params = [p.name for p in info.params]
         if len(params) != len(node.args):
             return node
-        if any(not _is_pure_expr(a) for a in node.args):
+        if any(not _is_pure_expr(a) or _makes_new_object(a) for a in node.args):
             return node
         mapping = dict(zip(params, node.args, strict=False))
         inlined = _Substitute(mapping).visit(copy.deepcopy(body))

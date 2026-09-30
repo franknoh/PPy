@@ -1,0 +1,39 @@
+# fuzz: path=c seed=3212 (a list's length from its display outlived a del, and an if on it was folded)
+def one(a: int) -> int:
+    xs: list[int] = [a, 0]
+    if len(xs) > 1:
+        del xs[0]
+    if len(xs) > 1:
+        del xs[0]
+    return xs.pop() + len(xs)
+
+
+def aliased(a: int) -> int:
+    xs: list[int] = [a, 1, 2]
+    ys = xs
+    ys.pop()
+    return len(xs) * 10 + (1 if len(xs) == 3 else 0)
+
+
+def looped(a: int) -> int:
+    xs: list[int] = [a]
+    for i in range(3):
+        xs.append(i)
+    return len(xs) * 10 + (5 if len(xs) > 1 else 0)
+
+
+def passed(xs: list[int]) -> None:
+    xs.append(9)
+
+
+def through_call(a: int) -> int:
+    xs: list[int] = [a, a]
+    passed(xs)
+    return len(xs) + (100 if len(xs) == 2 else 0)
+
+
+def main() -> None:
+    print(one(3), aliased(4), looped(5), through_call(6))
+
+
+main()

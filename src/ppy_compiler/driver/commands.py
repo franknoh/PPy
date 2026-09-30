@@ -267,7 +267,10 @@ def run_llvm_backend(
     if not file.is_file():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{file} is not a file"))
         return 2
-    warm = locate(file, options)
+    from .fastrun import remember
+
+    # The command line already looked, for its own fast path; the answer holds.
+    warm = getattr(options, "located", None) or locate(file, options)
     project = open_project(file, config_overrides=_overrides(options))
     _answer_removed_road(project, reporter)
     _resolve_safeguards(options, project, "run")
@@ -304,6 +307,10 @@ def run_llvm_backend(
                 opt_level=level,  # type: ignore[arg-type]
             )
             if manifest is not None:
+                if getattr(options, "plain_run", False):
+                    # Checked against what the build read, so an edit made
+                    # while it ran is not remembered as built.
+                    remember(str(file.resolve()), str(manifest))
                 return launch(manifest, program_args)
         return compile_and_run(
             bundle,

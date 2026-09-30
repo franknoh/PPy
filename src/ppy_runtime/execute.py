@@ -9,10 +9,9 @@ from __future__ import annotations
 import builtins
 import sys
 import types
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
+from ._record import record as dataclass
 from .generated import (
     BINDER_NAME,
     EXPORTED_BINDER,
@@ -20,6 +19,12 @@ from .generated import (
     REGION_BINDER,
     GeneratedModule,
 )
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from typing import Protocol
+else:
+    Protocol = object
 
 __all__ = ["ExecutionResult", "NativeBinder", "execute", "install_loader"]
 
@@ -89,11 +94,13 @@ class _GeneratedFinder:
         self.natives = natives
 
     def find_spec(self, fullname: str, path=None, target=None):  # type: ignore[no-untyped-def]
-        from importlib.machinery import ModuleSpec
-
         generated = self.modules.get(fullname)
         if generated is None:
             return None
+        # Imported only for a module of ours: the import itself asks the
+        # finders, this one included, for what it loads.
+        from importlib.machinery import ModuleSpec  # pylint: disable=import-outside-toplevel
+
         spec = ModuleSpec(
             fullname, GeneratedLoader(generated, self.natives), origin=str(generated.source_path)
         )
@@ -122,7 +129,9 @@ class GeneratedLoader:
         return self.generated.source_path.read_text(encoding="utf-8")
 
 
-def install_loader(modules: dict[str, GeneratedModule], natives=None) -> _GeneratedFinder:
+def install_loader(
+    modules: dict[str, GeneratedModule], natives=None, *, uses_ppy: bool = True
+) -> _GeneratedFinder:
     """Put the generated finder ahead of everything, and keep it there.
 
     A program that does `import ppy` installs the runtime's own `.ppy` finder
@@ -131,14 +140,17 @@ def install_loader(modules: dict[str, GeneratedModule], natives=None) -> _Genera
     the program's own `import ppy` finds it already present and leaves the
     order alone.
     """
-    try:
-        import ppy
-        from ppy import _native
+    if uses_ppy:
+        # A program that never names `ppy` never installs its loader either,
+        # and skips the import: a few milliseconds of a short program's run.
+        try:
+            import ppy
+            from ppy import _native
 
-        ppy.install()
-        _native.managed()
-    except ImportError:  # pragma: no cover - the runtime is a hard dependency
-        pass
+            ppy.install()
+            _native.managed()
+        except ImportError:  # pragma: no cover - the runtime is a hard dependency
+            pass
     finder = _GeneratedFinder(modules, natives)
     sys.meta_path.insert(0, finder)
     return finder
@@ -152,9 +164,12 @@ def execute(
     search_paths: list[Path] | None = None,
     natives: NativeBinder | None = None,
     entry_name: str | None = None,
+    uses_ppy: bool = True,
 ) -> ExecutionResult:
     """Run the generated entry module as `__main__`."""
-    finder = install_loader({name: m for name, m in modules.items() if m is not entry}, natives)
+    finder = install_loader(
+        {name: m for name, m in modules.items() if m is not entry}, natives, uses_ppy=uses_ppy
+    )
     saved_argv = sys.argv[:]
     saved_path = sys.path[:]
     for extra in reversed(search_paths or []):

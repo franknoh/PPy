@@ -119,7 +119,8 @@ def _int(args: Sequence[Arg]) -> BuiltinResult:
     if args and args[0].facts.has_constant:
         try:
             value = int(args[0].facts.constant)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # `int(inf)` raises at run time; it is not a constant to fold.
             value = None
         if value is not None:
             return BuiltinResult(
@@ -223,13 +224,40 @@ def _zip(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.instance("Iterator", T.Tuple_(items)), Facts(), _ALLOC)
 
 
+def _plainly_ordered(t: T.Type) -> bool:
+    """Numbers, strings, and tuples of them compare with no method of a class."""
+    base = T.strip_literal(t)
+    if base in (T.INT, T.FLOAT, T.BOOL, T.STR):
+        return True
+    return (
+        isinstance(base, T.Tuple_)
+        and not base.homogeneous
+        and bool(base.items)
+        and all(_plainly_ordered(item) for item in base.items)
+    )
+
+
 def _sorted(args: Sequence[Arg]) -> BuiltinResult:
     element = _element_of(args[0].type) if args else T.UNKNOWN
-    if args and C.is_collection(args[0].type):
+    if args and (C.is_collection(args[0].type) or _plainly_ordered(element)):
         # A `ppy` collection's elements compare as the runtime compares them:
-        # numbers, tuples, and ordered dataclasses, with no hook to call.
+        # numbers, tuples, and ordered dataclasses, with no hook to call; and
+        # numbers, strings, and tuples of them compare so anywhere.
+        return BuiltinResult(T.list_of(element), Facts(), _ALLOC)
+    if _compares_without_hooks(element):
+        # Numbers, strings, and tuples of them order themselves, from any
+        # iterable: no `__lt__` of the program's runs.
         return BuiltinResult(T.list_of(element), Facts(), _ALLOC)
     return BuiltinResult(T.list_of(element), Facts(), _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK))
+
+
+def _compares_without_hooks(t: T.Type) -> bool:
+    base = T.strip_literal(t)
+    if base in (T.INT, T.FLOAT, T.BOOL, T.STR):
+        return True
+    if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
+        return all(_compares_without_hooks(item) for item in base.items)
+    return False
 
 
 def _reversed(args: Sequence[Arg]) -> BuiltinResult:

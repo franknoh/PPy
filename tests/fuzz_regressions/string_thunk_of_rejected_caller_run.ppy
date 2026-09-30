@@ -1,0 +1,23 @@
+# corpus: path=run (TheAlgorithms maths/special_numbers/harshad_numbers.py; a function returning str
+# whose callee stayed in Python kept its string boundary thunk, and `ppy run` failed IR verification)
+def spelled(number: int, base: int) -> str:
+    digits = []
+    while number > 0:
+        digits.append("0123456789abcdefghijklmnopqrstuvwxyz"[number % base])
+        number //= base
+    return "".join(reversed(digits)) or "0"
+
+
+def digit_sum(number: int, base: int) -> str:
+    total = 0
+    while number > 0:
+        total += number % base
+        number //= base
+    return spelled(total, base)
+
+
+def main() -> None:
+    print(digit_sum(1275, 4), digit_sum(6645, 2), spelled(255, 16))
+
+
+main()

@@ -516,8 +516,9 @@ def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
 
 
             def main() -> None:
-                counts: dict[str, int] = {ppy.input[str](): 1}
-                print(len(counts))
+                # A set is walked in CPython's hash order, which stays in Python.
+                for word in {ppy.input[str](), "b"}:
+                    print(word)
 
 
             main()
@@ -1152,3 +1153,16 @@ def test_an_artifact_from_the_previous_abi_is_refused_with_the_remedy(tmp_path: 
     )
     with pytest.raises(ManifestError, match=r"speaks ABI 1; this runtime speaks 2.*ppy build"):
         load(path)
+
+
+def test_a_linked_library_is_keyed_on_the_runtime_compiled_into_it(monkeypatch):
+    """The collections runtime is compiled into the library a build links, so
+    a runtime edit that leaves the objects alone must not reuse the old link."""
+    from ppy_compiler.backend.llvm import _runtime_stamp
+    from ppy_runtime import collections as runtime
+
+    before = _runtime_stamp("ppy_collections")
+    edited = runtime.library_source() + "\n/* edited */\n"
+    monkeypatch.setattr(runtime, "library_source", lambda: edited)
+    assert _runtime_stamp("ppy_collections") != before
+    assert _runtime_stamp("m") == "m"

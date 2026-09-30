@@ -297,7 +297,24 @@ def build_parser() -> argparse.ArgumentParser:
     explain = subparsers.add_parser(
         "explain", help="explain a location, function, or diagnostic code"
     )
-    explain.add_argument("location", help="FILE:LINE, a function qualname, or a diagnostic code")
+    explain.add_argument(
+        "location",
+        nargs="*",
+        help="FILE:LINE, a function qualname, or a diagnostic code; with --summary, the files "
+        "or directories to summarize (default: the current directory)",
+    )
+    explain.add_argument(
+        "--summary",
+        action="store_true",
+        help="how much of the code goes native, and what keeps the rest in Python",
+    )
+    explain.add_argument("--json", action="store_true", help="with --summary: print JSON")
+    explain.add_argument(
+        "--limit", type=int, default=10, help="with --summary: how many reasons to list"
+    )
+    explain.add_argument(
+        "--modules", action="store_true", help="with --summary: add a line per module"
+    )
 
     inspect = subparsers.add_parser("inspect", help="show generated artifacts for a target")
     inspect.add_argument("target", type=Path)
@@ -477,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
         return commands.run_python_backend(file, program_args, options, reporter)
 
     options = parser.parse_args(argv)
+    options.plain_run = _plain_run(argv)
     if options.command == "run":
         # Neither fast path may pay for the compiler's import. A `--prebuilt`
         # manifest runs through the runtime alone, and so does the artifact
@@ -485,7 +503,15 @@ def main(argv: list[str] | None = None) -> int:
         if manifest is None and options.file.is_file() and not options.profile:
             from .warm import locate
 
-            manifest = locate(options.file, options).manifest
+            located = locate(options.file, options)
+            # A miss builds; the build asks the same question and reuses this answer.
+            options.located = located
+            manifest = located.manifest
+            if manifest is not None and options.plain_run:
+                from .fastrun import remember
+
+                # The next `ppy run FILE` finds it without this parser.
+                remember(str(options.file.resolve()), str(manifest))
         if manifest is not None:
             from ppy_runtime.launch import main as launch
 
@@ -550,6 +576,16 @@ def main(argv: list[str] | None = None) -> int:
             return commands.language_server(options, reporter)
     parser.print_help()
     return 2
+
+
+def _plain_run(argv: list[str]) -> bool:
+    """`run FILE` or `run FILE -- ARGS`, with no option: what `fastrun` may serve."""
+    return (
+        len(argv) >= 2
+        and argv[0] == "run"
+        and not argv[1].startswith("-")
+        and (len(argv) == 2 or argv[2] == "--")
+    )
 
 
 def _program_args(rest: list[str]) -> list[str]:

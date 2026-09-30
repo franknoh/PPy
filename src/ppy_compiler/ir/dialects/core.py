@@ -184,6 +184,10 @@ class CoreDialect(Dialect):
         add(OpSpec("core.call", verify=_verify_call, required_attributes=("callee",)))
         add(OpSpec("core.call_extern", verify=_verify_call_extern, required_attributes=("callee",)))
         add(OpSpec("core.call_intrinsic", required_attributes=("intrinsic",)))
+        # A call through a function value: operand 0 is the address of the
+        # callee's native entry (`ppy.function_address`), the rest its
+        # arguments; results and status are a `core.call`'s.
+        add(OpSpec("core.call_indirect"))
         add(
             OpSpec(
                 "core.guard",
@@ -774,6 +778,34 @@ def call(
         attributes["capture_status"] = True
         results = (*results, I64)
     return b.create("core.call", operands, results, attributes, result_names=names)
+
+
+def call_indirect(
+    b: Builder,
+    code: Value,
+    operands: tuple[Value, ...],
+    results: tuple[IRType, ...],
+    *,
+    capture_status: bool = False,
+) -> Operation:
+    """A call through a function value: `code` is the address of a native
+    function with the usual ABI (atoms in, result slots out, a status back).
+    With `capture_status`, the status is the trailing i64 result and the
+    caller decides, as for `core.call`."""
+    attributes: dict[str, Attribute] = {}
+    if capture_status:
+        attributes["capture_status"] = True
+        results = (*results, I64)
+    return b.create("core.call_indirect", (code, *operands), results, attributes)
+
+
+def function_address(b: Builder, callee: str) -> Value:
+    """The address of `@callee`'s native entry, as a word (for a closure)."""
+    attributes: dict[str, Attribute] = {
+        "intrinsic": "ppy.function_address",
+        "callee": SymbolRef(callee),
+    }
+    return b.create("core.call_intrinsic", (), (I64,), attributes).results[0]
 
 
 def call_extern(

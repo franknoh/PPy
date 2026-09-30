@@ -1,0 +1,42 @@
+# corpus: path=run (TheAlgorithms physics/hubble_parameter.py and maths/modular_division.py; the C
+# entry that stood in for a native function refused keyword arguments, and answered to the wrapper
+# module's name with no docstring, so `doctest` skipped it; the replay runs strict, so it prints
+# what doctest reads)
+def hubble_parameter(
+    hubble_constant: float,
+    radiation_density: float,
+    matter_density: float,
+    dark_energy: float,
+    redshift: float,
+) -> float:
+    """
+    >>> hubble_parameter(68.3, 1e-4, 0.3, 0.7, 0.0)
+    68.3
+    """
+    parameters = [redshift, radiation_density, matter_density, dark_energy]
+    if any(p < 0 for p in parameters):
+        raise ValueError("All input parameters must be positive")
+    if any(p > 1 for p in parameters[1:4]):
+        raise ValueError("Relative densities cannot be greater than one")
+    curvature = 1 - (matter_density + radiation_density + dark_energy)
+    e_2 = (
+        radiation_density * (redshift + 1) ** 4
+        + matter_density * (redshift + 1) ** 3
+        + curvature * (redshift + 1) ** 2
+        + dark_energy
+    )
+    return hubble_constant * e_2 ** (1 / 2)
+
+
+if __name__ == "__main__":
+    shown = hubble_parameter
+    print(shown.__name__, shown.__qualname__, shown.__module__, shown.__doc__)
+    print(
+        hubble_parameter(
+            hubble_constant=68.3,
+            radiation_density=1e-4,
+            matter_density=0.3,
+            dark_energy=0.7,
+            redshift=2.0,
+        )
+    )

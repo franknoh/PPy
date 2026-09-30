@@ -39,7 +39,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
 
-from ppy_runtime.abi import SANITIZERS, STATUS_FALLBACK, STATUS_OK, STATUS_SANITIZER_BASE
+from ppy_runtime.abi import (
+    SANITIZERS,
+    STATUS_FALLBACK,
+    STATUS_OK,
+    STATUS_RAISED,
+    STATUS_SANITIZER_BASE,
+)
 
 from ...ir import (
     Block,
@@ -765,8 +771,16 @@ class _ModuleEmitter:
                 self.unit.headers.add("stdio.h")
                 if self.collections:
                     self.shim("ppy_coll_collect")
+                raised = bool(self.module.attributes.get("ppy.exceptions"))
+                if raised:
+                    self.shim("ppy_exc_report")
                 self.unit.exports.append(
-                    program_main(_ident(self.entry), self.std("fputs"), collect=self.collections)
+                    program_main(
+                        _ident(self.entry),
+                        self.std("fputs"),
+                        collect=self.collections,
+                        raised=raised,
+                    )
                 )
         return self.assemble()
 
@@ -2139,6 +2153,11 @@ class _FunctionEmitter:
                     if self.owner.is_main(self.function):
                         for value in op.operands:
                             self.line(f"(void)({self.bare(value)});")
+                        if self.owner.collections:
+                            # What only a cycle keeps (a closure that calls
+                            # itself) goes with one last collection.
+                            self.owner.shim("ppy_coll_collect")
+                            self.line("ppy_coll_collect();")
                         self.line("return 0;")
                     else:
                         self.line(
@@ -2225,13 +2244,25 @@ class _FunctionEmitter:
                 self.fold(op.result, _member(whole, field_name), reads=reads)
             case "call":
                 self.call(op)
+            case "call_indirect":
+                self.call_indirect(op)
             case "call_extern":
                 self.call_extern(op)
             case "call_intrinsic":
                 self.call_intrinsic(op)
             case "guard":
                 label = str(op.attributes.get("label") or f"{op.attributes['kind']}.ok")
-                if label.startswith("sanitize:") and not self.direct:
+                if label == "raised" and not self.direct:
+                    # An exception leaves the function: the raised status.
+                    if self.structured:
+                        failed = self.negated(op.operands[0])
+                        self.line(f"if ({failed}) return {STATUS_RAISED}; /* raised */")
+                    else:
+                        condition = self.bare(op.operands[0])
+                        self.body.append(
+                            f"    if (!({condition})) return {STATUS_RAISED}; /* raised */"
+                        )
+                elif label.startswith("sanitize:") and not self.direct:
                     # A sanitizer's check returns its status; nothing falls back.
                     status = STATUS_SANITIZER_BASE + SANITIZERS.index(label.partition(":")[2])
                     if self.structured:
@@ -2451,11 +2482,35 @@ class _FunctionEmitter:
         width = t.width if isinstance(t, IntType) else 64
         divisor = self.constant(op.operands[1])
         zero, minus_one = ("0", _ATOM), ("-1", _UNARY)
-        if op.attributes.get("overflow", "python") not in {"wrap", "native"} and divisor is None:
+        if divisor == -1:
+            # C leaves `MIN / -1` and `MIN % -1` undefined. Python's remainder
+            # by -1 is always 0, and its quotient is the negation, which only
+            # the minimum overflows.
+            if name == "mod":
+                self.fold(op.result, zero, reads=reads)
+                return
+            unsigned = self.owner.c_type(IntType(width, False))
+            negated = self.cast_text(_infix("-", ("0", _ATOM), self.cast_text(a, unsigned)), t)
+            if op.attributes.get("overflow", "python") not in {"wrap", "native"}:
+                minimum = (f"INT{width}_MIN", _ATOM)
+                self.fail_unless(
+                    _infix("!=", a, minimum)[0],
+                    "div.ok",
+                    failed=_infix("==", a, minimum)[0],
+                    raises=overflow_text(width),
+                )
+            self.fold(op.result, negated, reads=reads)
+            return
+        if divisor is None:
             minimum = (f"INT{width}_MIN", _ATOM)
             held = _infix("&&", _infix("==", a, minimum), _infix("==", b, minus_one))
             failed = _infix("||", _infix("!=", a, minimum), _infix("!=", b, minus_one))
-            self.fail_unless(failed[0], "div.ok", failed=held[0], raises=overflow_text(width))
+            if op.attributes.get("overflow", "python") not in {"wrap", "native"}:
+                self.fail_unless(failed[0], "div.ok", failed=held[0], raises=overflow_text(width))
+            else:
+                # Wrapping still may not divide `MIN` by -1 in C: divide by 1
+                # there instead, which wraps to `MIN` (and a remainder of 0).
+                b = _ternary(held, ("1", _ATOM), b)
         if op.attributes.get("rounding", "floor") == "trunc" or id(op) in self.truncating:
             self.fold(op.result, _infix(symbol, a, b), reads=reads)
             return
@@ -2492,10 +2547,18 @@ class _FunctionEmitter:
         t = op.result.type
         (a, b), reads = self.operands(op)
         if name == "shr":
+            # A shift's type is its left operand's, promoted: a bare literal is
+            # an `int`, and shifting it by 32 or more is undefined.
+            if re.fullmatch(r"-?\d+", a[0]):
+                a = self.cast_text(a, t)
             self.infix(op.result, ">>", a, b, reads)
             return
         unsigned = self.owner.c_type(IntType(t.width if isinstance(t, IntType) else 64, False))
-        wide = _infix("<<", self._unsigned(op.operands[0], unsigned), self.cast_text(b, unsigned))
+        left = self._unsigned(op.operands[0], unsigned)
+        if re.fullmatch(r"\d+u", left[0]):
+            # `9u << 46` shifts an `unsigned int`: the literal takes the width.
+            left = self.cast_text((left[0][:-1], _ATOM), unsigned)
+        wide = _infix("<<", left, self.cast_text(b, unsigned))
         if op.attributes.get("overflow", "wrap") in {"wrap", "native"}:
             text, level = self.cast_text(wide, t)
             if self.fold(op.result, (text, level), reads=reads) == text:
@@ -2514,10 +2577,6 @@ class _FunctionEmitter:
         (a, b), reads = self.operands(op)
         predicate = str(op.attributes["predicate"])
         floating = isinstance(op.operands[0].type, FloatType)
-        if predicate == "ne" and floating:
-            # Ordered, like the LLVM road: NaN compares neither less nor greater.
-            self.fold(op.result, _infix("||", _infix("<", a, b), _infix(">", a, b)), reads=reads)
-            return
         symbol = _CMP[predicate]
         if a[0] == b[0] and (not floating or symbol in {"<", ">"}):
             # A value against itself: settled here, or a C compiler warns about it.
@@ -2568,11 +2627,38 @@ class _FunctionEmitter:
             else:
                 self.line(f"{direct};")
             return
+        self._native_call(op, symbol, arguments, tuple(target.results or ()))
+
+    def call_indirect(self, op: Operation) -> None:
+        """A call through a function value: its native entry's address, cast to
+        the function pointer type its arguments and results give it."""
+        operands = op.operands[1:]
+        results = list(op.results)
+        if op.attributes.get("capture_status"):
+            results.pop()
+        arguments: list[str] = []
+        spelled: list[str] = []
+        for operand in operands:
+            arguments.extend(self.flatten(operand))
+            spelled.extend(self.owner.atoms(operand.type))
+        for result in results:
+            spelled.extend(f"{atom} *" for atom in self.owner.atoms(result.type))
+        if not results:
+            spelled.append("int64_t *")
+        code = self.flatten(op.operands[0])[0]
+        callee = f"((int32_t (*)({', '.join(spelled)}))(intptr_t)({code}))"
+        self._native_call(op, callee, arguments, tuple(r.type for r in results))
+
+    def _native_call(  # pylint: disable=too-many-branches
+        self, op: Operation, symbol: str, arguments: list[str], target_results: tuple
+    ) -> None:
+        """A native call's result slots, status, and results: `symbol` is the
+        callee, a name or a cast function pointer."""
         results = list(op.results)
         captured = op.attributes.get("capture_status")
         status_result = results.pop() if captured else None
         slots: list[list[str]] = []
-        for result, t in zip(results, target.results or (), strict=True):
+        for result, t in zip(results, target_results, strict=True):
             names = []
             atoms = self.owner.atoms(t)
             if atoms == [self.owner.c_type(t)] and result.uses:
@@ -2585,16 +2671,30 @@ class _FunctionEmitter:
                     names.append(slot)
             slots.append(names)
             arguments.extend(f"&{n}" for n in names)
-        if not target.results:
+        if not target_results:
             slot = self.fresh("res")
             self._declare_slot("int64_t", slot)
             arguments.append(f"&{slot}")
         call = f"{symbol}({', '.join(arguments)})"
         if status_result is not None:
             self.define(status_result, self.cast_text((call, _ATOM), "int64_t")[0])
+        elif self.owner.module.attributes.get("ppy.exceptions") and not self.resume:
+            # A callee's exception goes on up: this caller has no `try`
+            # around the call, or it would have asked for the status.
+            status = self.fresh("status")
+            self._declare_slot("int32_t", status)
+            if self.structured:
+                self.line(f"{status} = {call};")
+                self.line(f"if ({status} == {STATUS_RAISED}) return {STATUS_RAISED};")
+            else:
+                self.body.append(f"    {status} = {call};")
+                self.body.append(f"    if ({status} == {STATUS_RAISED}) return {STATUS_RAISED};")
+            self.fail_unless(
+                f"{status} == {STATUS_OK}", "call.ok", failed=f"{status} != {STATUS_OK}"
+            )
         else:
             self.fail_unless(f"{call} == {STATUS_OK}", "call.ok", failed=f"{call} != {STATUS_OK}")
-        for result, t, names in zip(results, target.results, slots, strict=True):
+        for result, t, names in zip(results, target_results, slots, strict=True):
             if isinstance(t, BufferType):
                 self.define_buffer(result, names[0], names[1])
             elif id(result) in self.scalars:
@@ -2695,6 +2795,13 @@ class _FunctionEmitter:
             callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
             trampoline = self.owner.callback(callee_name)
             self.define(op.results[0], f"(int64_t)(intptr_t)&{trampoline}")
+            return
+        if name == "ppy.function_address":
+            callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
+            target = self.owner.module.functions.get(callee_name)
+            if target is None:
+                raise EmitError(f"the address of @{callee_name}, which was not emitted")
+            self.define(op.results[0], f"(int64_t)(intptr_t)&{self.owner.symbol_of(target)}")
             return
         if name == "ppy.string_data":
             if self.owner.readable:

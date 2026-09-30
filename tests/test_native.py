@@ -402,18 +402,28 @@ def test_buffer_loops_become_real_native_loops(write, analyze):
     assert "fmul" in ir or "fadd" in ir
 
 
-def test_a_mutating_function_keeps_its_buffer_boxed(write, analyze):
+def test_a_function_that_writes_its_list_takes_it_by_handle(write, analyze):
+    """A list the function only reads is lent as a buffer; one it writes is the
+    runtime's list, passed by handle and copied back to a Python caller."""
     path = write(
         "mutates.ppy",
         """
         def push(xs: list[int]) -> int:
             xs.append(1)
             return len(xs)
+
+
+        def total(xs: list[int]) -> int:
+            s = 0
+            for x in xs:
+                s += x
+            return s
         """,
     )
     module = _collect(analyze(path, backend="llvm"))["mutates"]
-    assert "mutates.push" in module.rejected
-    assert "mutates" in module.rejected["mutates.push"]
+    written = module.functions["mutates.push"].signature.parameters[0]
+    assert written.is_handle and written.element == "list[int]" and written.written
+    assert module.functions["mutates.total"].signature.parameters[0].is_buffer
 
 
 def test_native_buffer_results_match_python(write, analyze):
@@ -1617,10 +1627,10 @@ def test_a_class_with_a_non_scalar_field_stays_boxed(write, analyze):
 
 
         class Holder:
-            names: dict[str, int]
+            names: dict[bytes, int]
             size: int
 
-            def __init__(self, names: dict[str, int], size: int) -> None:
+            def __init__(self, names: dict[bytes, int], size: int) -> None:
                 self.names = names
                 self.size = size
 
@@ -1631,7 +1641,7 @@ def test_a_class_with_a_non_scalar_field_stays_boxed(write, analyze):
         """,
     )
     bundle = analyze(path, backend="llvm")
-    # No value layout: a `dict` field has no scalar slot to flatten into.
+    # No value layout: a `dict` keyed by bytes has no native form at all.
     assert not _layouts(bundle).get("boxed.Holder")
     assert "boxed.size_of" in _collect(bundle)["boxed"].rejected
 
@@ -1946,14 +1956,14 @@ CALLS_A_BOXED_HELPER = """
 
 
     @ppy.pure
-    def helper(counts: dict[str, int]) -> int:
+    def helper(counts: dict[bytes, int]) -> int:
         return len(counts)
 
 
     @ppy.pure
     @ppy.opt(3)
     def caller(n: int) -> int:
-        return helper({"a": 1, "b": 2}) + n
+        return helper({0.5: 1, 1.5: 2}) + n
     """
 
 
@@ -2485,7 +2495,7 @@ def test_writes_through_a_borrowed_buffer_reach_the_caller(write, analyze):
     ]
 
 
-def test_writing_to_a_copied_list_parameter_stays_boxed(write, analyze):
+def test_writing_to_a_list_parameter_writes_the_callers_list(write, analyze):
     path = write(
         "copied.ppy",
         """
@@ -2495,8 +2505,8 @@ def test_writing_to_a_copied_list_parameter_stays_boxed(write, analyze):
         """,
     )
     module = _collect(analyze(path, backend="llvm"))["copied"]
-    assert "copied.zero" in module.rejected
-    assert "borrowed buffer" in module.rejected["copied.zero"]
+    parameter = module.functions["copied.zero"].signature.parameters[0]
+    assert parameter.is_handle and parameter.written
 
 
 def test_a_mutating_program_matches_plain_cpython(tmp_path: Path):

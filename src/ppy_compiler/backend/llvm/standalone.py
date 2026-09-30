@@ -141,6 +141,7 @@ def standalone_ir(  # type: ignore[no-untyped-def]
     """
     from ...ir.linker import link
     from ...lowering.ast_to_ir import Frontend
+    from ...lowering.exceptions import uses_exceptions
     from .ir_pipeline import optimize
 
     program = _program(bundle, reporter, entry, project_modules=True)
@@ -168,11 +169,15 @@ def standalone_ir(  # type: ignore[no-untyped-def]
         if not _generic(bundle, info)
     }
     modules = []
+    # A check in one module is caught in another: every module's checks are
+    # exceptions where any module raises or catches.
+    catching = uses_exceptions([node for _info, _function, node in functions.values()])
     for name, frontend in frontends.items():
         frontend.imports = signatures.get
+        frontend.native_exceptions = catching
         lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
         for qualname, reason in sorted(lowered.rejected.items()):
-            if qualname in frontend.generics or called_back_only(functions[qualname][0]):
+            if qualname in frontend.generics or _generic(bundle, functions[qualname][0]):
                 continue  # A generic is lowered where a caller instantiates it.
             return _fail(reporter, _chain(reached_from, qualname, reason))
         modules.append(lowered.module)
@@ -259,9 +264,9 @@ def build_standalone(  # type: ignore[no-untyped-def]
     collect = "ppy_collections" in tuple(getattr(result, "libraries", ()))
     main_c.write_text(
         f"#include <stdint.h>\n#include <stdio.h>\n\nint32_t {symbol}(int64_t *out);\n"
-        + ("int64_t ppy_coll_collect(void);\n" if collect else "")
+        + ("int64_t ppy_coll_collect(void);\nvoid ppy_exc_report(void);\n" if collect else "")
         + "\n"
-        + program_main(symbol, collect=collect),
+        + program_main(symbol, collect=collect, raised=collect),
         encoding="utf-8",
     )
     destination = build_directory / entry.stem
@@ -301,13 +306,30 @@ def _binds_a_constant(statement, constants: dict) -> bool:  # type: ignore[no-un
 def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
     """A generic function, or a method of a generic class: lowered per instantiation,
     or an `__eq__(self, other: object)`, lowered with `other` an instance of its
-    class where a collection calls it back."""
+    class where a collection calls it back, a generator, lowered into each
+    loop that consumes it, or a nested function, lowered as a closure where it
+    is defined."""
     owner = bundle.symbols.classes.get(info.owner) if info.owner else None
     return (
-        bool(info.type_params)
+        bool(info.enclosing)
+        or bool(info.type_params)
         or (owner is not None and bool(owner.type_params))
         or called_back_only(info)
+        or info.is_generator
     )
+
+
+#: The annotations a generator is written with.
+#: What a generator's or a function value's annotation names; nothing runs
+#: for it natively.
+_ANNOTATION_NAMES = frozenset({"Iterator", "Iterable", "Generator", "Callable"})
+
+
+def _exception(name: str) -> bool:
+    """A builtin exception a class may derive from: native code raises it."""
+    from ...analysis import types as T
+
+    return "Exception" in T.BUILTIN_MRO.get(name, ())
 
 
 def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool:  # type: ignore[no-untyped-def]
@@ -323,7 +345,8 @@ def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool: 
     # A generic base is named with its arguments: `Stack[int]`, `Stack[T]`.
     named = [base.value if isinstance(base, ast.Subscript) else base for base in statement.bases]
     if len(named) > 1 or any(
-        not isinstance(base, ast.Name) or base.id not in classes for base in named
+        not isinstance(base, ast.Name) or (base.id not in classes and not _exception(base.id))
+        for base in named
     ):
         return False
     decorated = [
@@ -342,7 +365,7 @@ def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool: 
             item.value is None or isinstance(item.value, ast.Constant) or _field_call(item.value)
         )
         method = isinstance(item, ast.FunctionDef)
-        if not (docstring or field or method):
+        if not (docstring or field or method or isinstance(item, ast.Pass)):
             return False
     return True
 
@@ -400,10 +423,14 @@ def _module_shape(
                 continue
             if names == "dataclasses" and set(listed) <= {"dataclass", "field"}:
                 continue
-            # `gc.collect()` is the collections runtime's collector natively.
+            if names in {"collections.abc", "typing"} and set(listed) <= _ANNOTATION_NAMES:
+                continue
+            # `gc.collect()` is the collections runtime's collector natively,
+            # and `math.sqrt` and its kin are machine instructions or libm; a
+            # use that does not lower is refused with its function.
             if (
                 isinstance(statement, ast.Import)
-                and listed == ["gc"]
+                and listed in (["gc"], ["math"])
                 and not statement.names[0].asname
             ):
                 continue

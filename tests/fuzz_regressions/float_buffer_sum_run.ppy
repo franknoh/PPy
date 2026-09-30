@@ -1,0 +1,13 @@
+# gate: path=run (a native `sum` over a `list[float]` argument added plainly, without the
+# compensation CPython 3.12 uses: 0.6000000000000001 for `sum([0.1, 0.2, 0.3])`, and 0.0 for an
+# empty list, which CPython sums to the int 0)
+def add_up(xs: list[float]) -> float:
+    return sum(xs)
+
+
+def main() -> None:
+    print(add_up([0.1, 0.2, 0.3]), add_up([1e100, 1.0, -1e100]), add_up([]))
+    print(add_up([float("inf"), 1.0]), add_up([0.1] * 10))
+
+
+main()

@@ -393,6 +393,16 @@ def infer(pattern: Type, actual: Type, bindings: dict[TypeVar_, Type]) -> bool:
             bindings[pattern] = joined
         return True
     if isinstance(pattern, Instance) and isinstance(actual, Instance):
+        if (
+            pattern.name != actual.name
+            and _abstract(pattern.name) in _ABSTRACT_CONTAINERS
+            and actual.name in _CONCRETE_CONTAINERS
+            and len(pattern.args) == len(actual.args)
+        ):
+            # `Sequence[T]` given a `list[int]`: the list's element is `T`.
+            return all(
+                infer(p, a, bindings) for p, a in zip(pattern.args, actual.args, strict=True)
+            )
         if pattern.name != actual.name or len(pattern.args) != len(actual.args):
             return not pattern.args
         return all(infer(p, a, bindings) for p, a in zip(pattern.args, actual.args, strict=True))
@@ -562,10 +572,73 @@ def join(*types: Type) -> Type:
         return NEVER
     if any(isinstance(t, UnknownType) for t in present):
         return UNKNOWN
+    # An empty display on one path and a filled one on the other is the
+    # filled one: `seen = {}` before a loop that stores into it.
+    filled = {t.name for t in present if isinstance(t, Instance) and not is_empty_container(t)}
+    present = [
+        t
+        for t in present
+        if not (isinstance(t, Instance) and is_empty_container(t) and t.name in filled)
+    ]
     first = present[0]
     if all(t == first for t in present):
         return first
     return union(*present)
+
+
+def is_empty_container(t: Type) -> bool:
+    """The type of an empty `[]`, `{}`, or `set()`: every argument `Never`."""
+    return (
+        isinstance(t, Instance)
+        and bool(t.args)
+        and all(isinstance(arg, NeverType) for arg in t.args)
+    )
+
+
+#: Generic types whose type arguments are only read: covariant.
+_COVARIANT = frozenset(
+    {
+        "tuple",
+        "frozenset",
+        "Sequence",
+        "Iterable",
+        "Iterator",
+        "Collection",
+        "Reversible",
+        "Container",
+        "AbstractSet",
+        "Mapping",
+        "Generator",
+        "typing.Sequence",
+        "collections.abc.Sequence",
+        "collections.abc.Iterable",
+        "collections.abc.Iterator",
+        "collections.abc.Mapping",
+    }
+)
+
+
+#: The abstract containers a concrete one is inferred against by position.
+_ABSTRACT_CONTAINERS = frozenset(
+    {
+        "Sequence",
+        "MutableSequence",
+        "Iterable",
+        "Iterator",
+        "Collection",
+        "Container",
+        "Reversible",
+        "AbstractSet",
+        "MutableSet",
+        "Mapping",
+        "MutableMapping",
+    }
+)
+_CONCRETE_CONTAINERS = frozenset({"list", "tuple", "set", "frozenset", "dict", "collections.deque"})
+
+
+def _abstract(name: str) -> str:
+    return name.rpartition(".")[2]
 
 
 def is_assignable(source: Type, target: Type) -> bool:
@@ -671,9 +744,17 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
         return False
     # Containers are treated invariantly except for immutable ones. An empty
     # display has a `Never` element type, which fits any element type.
-    covariant = source.name in {"tuple", "frozenset", "Sequence", "Iterable", "Iterator", "Mapping"}
-    if covariant:
+    if source.name in _COVARIANT:
         return all(is_assignable(a, b) for a, b in zip(source.args, target.args, strict=False))
+    if target.name in _COVARIANT:
+        # A `list[Dog]` given for a `Sequence[Animal]` is only read, so its
+        # elements need only be assignable. Not by numeric promotion, though: a
+        # `list[int]` for a `Sequence[float]` would be read as doubles
+        # natively and print `9.0` where Python prints `9`.
+        return all(
+            _same_argument(a, b) if numeric_rank(a) is not None else is_assignable(a, b)
+            for a, b in zip(source.args, target.args, strict=False)
+        )
     return all(_same_argument(a, b) for a, b in zip(source.args, target.args, strict=False))
 
 

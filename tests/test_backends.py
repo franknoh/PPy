@@ -77,6 +77,41 @@ def test_constant_branches_are_folded(write, analyze):
     assert "100" not in code
 
 
+def test_a_jump_out_of_a_loop_or_a_raise_keeps_what_it_assigned(write, analyze):
+    path = write(
+        "jumps.ppy",
+        """
+        def skipped(n: int) -> str:
+            bad = 0
+            for i in range(n):
+                if i % 3 == 0:
+                    bad += 1
+                    continue
+            return f"{bad}"
+
+        def found(n: int) -> str:
+            at = 0
+            for i in range(n):
+                if i == 3:
+                    at = 7
+                    break
+            return f"{at}"
+
+        def caught(n: int) -> str:
+            got = 0
+            try:
+                got = 5
+                got = 10 // n
+            except ZeroDivisionError:
+                return f"{got}"
+            return f"{got}"
+        """,
+    )
+    code = _generated(analyze(path), "jumps")
+    assert "{0}" not in code
+    assert "{bad}" in code and "{at}" in code and code.count("{got}") == 2
+
+
 def test_unreachable_code_is_removed(write, analyze):
     path = write(
         "dead.ppy",
@@ -601,6 +636,42 @@ def test_an_invariant_computation_still_moves_out(write, analyze):
     code = _generated(analyze(path, opt_level=3), "invariant")
     header = code.split("def scaled")[1].partition("for i in range(n):")[0]
     assert "_ppy_licm" in header, "the invariant computation was not hoisted"
+
+
+def test_a_new_list_in_a_loop_stays_in_the_loop(write, analyze):
+    """TheAlgorithms project_euler/problem_049: `tmp = []` hoisted out of the
+    loop made every pass append to one list."""
+    path = write(
+        "fresh.ppy",
+        """
+        def rows(n: int) -> list[list[int]]:
+            out: list[list[int]] = []
+            for i in range(n):
+                row = [0]
+                seen = {1: 2}
+                row.append(seen[1] + i)
+                out.append(row)
+            return out
+        """,
+    )
+    code = _generated(analyze(path, opt_level=3), "fresh")
+    assert "_ppy_licm" not in code.split("def rows")[1]
+
+
+def test_two_equal_displays_stay_two_objects(write, analyze):
+    """TheAlgorithms sorts/pigeon_sort.py: `a, b = [0] * n, [0] * n` became
+    one list bound to both names."""
+    path = write(
+        "twins.ppy",
+        """
+        def twins(n: int) -> int:
+            a, b = [0] * n, [0] * n
+            a[0] = 1
+            return b[0]
+        """,
+    )
+    code = _generated(analyze(path, opt_level=3), "twins")
+    assert "_ppy_cse" not in code.split("def twins")[1]
 
 
 STDIN_READING = """

@@ -1,0 +1,22 @@
+# corpus: path=run (TheAlgorithms sorts/pigeon_sort.py; common-subexpression elimination bound
+# `holes, holes_repeat = [0] * n, [0] * n` to one list, so the two names shared it)
+def pigeon_sort(array: list[int]) -> list[int]:
+    if len(array) == 0:
+        return array
+    low, high = min(array), max(array)
+    size = high - low + 1
+    holes, holes_repeat = [0] * size, [0] * size
+    for i in array:
+        holes[i - low] = i
+        holes_repeat[i - low] += 1
+    index = 0
+    for i in range(size):
+        while holes_repeat[i] > 0:
+            array[index] = holes[i]
+            index += 1
+            holes_repeat[i] -= 1
+    return array
+
+
+if __name__ == "__main__":
+    print(pigeon_sort([0, 5, 3, 2, 2]), pigeon_sort([-2, -5, -45]))

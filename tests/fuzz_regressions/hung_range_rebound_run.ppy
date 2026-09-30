@@ -1,0 +1,123 @@
+# fuzz: path=run seed=106 (a range loop whose body rebinds its variable ran forever under ppy run, and outlived the fuzzer's timeout for a day)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: bool) -> bool:
+    n3: int = max(-1, (abs(3) << (-10 % 37)))
+    n3 -= n3
+    n4: int = 5
+    b5: bool = (n3 <= n3)
+    k6: int = 0
+    while k6 < 2:
+        k6 += 1
+        s7: str = 'x-y-z'
+    return (1e-300 >= (7.25 * -0.0))
+
+
+def fn8(a9: int, a10: bool, a11: str) -> str:
+    h12 = Heap[int]()
+    h12.push((-9223372036854775808 + a9))
+    h12.push(a9)
+    h12.push(-4)
+    h12.push((3037000499 if ((a9 - 9223372036854775807) > a9) else -2))
+    h12.push(9223372036854775807)
+    n13: int = 0
+    while h12:
+        n13 = n13 * 5 + h12.pop()
+    b22: bool = (1e-300 == (-0.0 - -2.5))
+    v25 = Vec[int]()
+    v25.push((n13 | -4611686018427387904))
+    v25.sort()
+    n26: int = v25.pop() + len(v25)
+    return "-".join(a11.split())[-1:4:-1]
+
+
+def fn27(a28: bool, a29: int) -> float:
+    a29 %= ((-9223372036854775808 >> (a29 % 9)) if (-9223372036854775808 >> (a29 % 9)) != 0 else 3)
+    a29 *= (10 * a29)
+    return (7.25 + (-0.0 / ((0.5 + a29) if (0.5 + a29) != 0.0 else 2.0)))
+
+
+def fn30(a31: int) -> int:
+    b32: bool = ((0.5 * 0.5) >= (3.0 + 0.5))
+    n34: int = -((len('two  gaps') + (a31 + a31)))
+    return 5
+
+
+def fn35(a36: int, a37: str, a38: int) -> str:
+    n39: int = ((a38 % ((6 * a36) if (6 * a36) != 0 else 5)) - (a36 // (a36 if a36 != 0 else -7)))
+    f40: float = ((1e-300 / 1e308) / ((3.0 + (n39 * n39)) if (3.0 + (n39 * n39)) != 0.0 else 2.0))
+    k41: int = 0
+    if (max(3, -8) >= 3):
+        return str(((0.5 + f40) * (a38 * a38)))
+    return a37
+
+
+def fn43(a44: float, a45: bool) -> int:
+    for i46 in range(2):
+        for i47 in range(5):
+            i46 -= i46
+        i46 -= (i46 // (i46 if i46 != 0 else -7))
+    n48: int = len('x-y-z'.lower().title())
+    h49 = Heap[int]()
+    h49.push(n48)
+    h49.push((n48 if (n48 > n48) else n48))
+    n50: int = 0
+    while h49:
+        n50 = n50 * 5 + h49.pop()
+    n48 //= ((n50 - 1) if (n50 - 1) != 0 else 3)
+    m51 = HashMap[int, int]()
+    m51[(3037000499 >> (10 % 50))] = m51.get((3037000499 >> (10 % 50)), 0) + int(a44)
+    m51[(-6 % (n50 if n50 != 0 else 5))] = m51.get((-6 % (n50 if n50 != 0 else 5)), 0) + (n48 & n48)
+    n52: int = len(m51) * 100
+    for key53 in m51:
+        n52 = n52 * 3 + m51[key53]
+    return n52
+
+
+def main() -> None:
+    print(fn1(True))
+    print(fn1(False))
+    print(fn1(True))
+    print(fn8(10, True, 'MiXeD'))
+    print(fn8(9, False, ' spaced out '))
+    print(fn27(False, 11))
+    print(fn27(True, 12))
+    print(fn27(True, 8))
+    print(fn30(9223372036854775807))
+    print(fn30(-4))
+    print(fn30(9))
+    print(fn35(-4, 'ab', 4))
+    print(fn35(-1, 'two  gaps', 4))
+    print(fn35(7, ' spaced out ', -8))
+    print(fn43(1e-300, True))
+    print(fn43(1e-300, False))
+
+
+main()

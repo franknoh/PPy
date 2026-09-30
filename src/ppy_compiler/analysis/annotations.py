@@ -283,6 +283,11 @@ class AnnotationResolver:
             )
         if qualname in _ABSTRACT:
             return Resolved(T.instance(_ABSTRACT[qualname]))
+        if qualname in {"typing.Callable", "collections.abc.Callable"}:
+            # A bare `Callable` is `Callable[..., Any]`, reported as any bare
+            # generic is.
+            self._bare_generic("Callable", expr)
+            return Resolved(T.Callable_((), T.ANY))
         found = self.resolver.class_instance(qualname, ())
         if found is not None:
             return Resolved(found)
