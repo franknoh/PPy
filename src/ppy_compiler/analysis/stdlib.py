@@ -607,6 +607,17 @@ MODULE_ATTRIBUTES.update(
 )
 
 
+# `T = TypeVar("T", ...)` at module level declares a type parameter; the value
+# is the library's business, and making it has no effect a program sees.
+_TYPE_VAR = T.Instance("typing.TypeVar", (), ("typing.TypeVar", "object"))
+_opaque("typing", ("TypeVar",))
+for _module in ("typing", "typing_extensions"):
+    _FUNCTIONS[f"{_module}.TypeVar"] = (
+        T.Callable_((), _TYPE_VAR, f"{_module}.TypeVar"),
+        _NO_EFFECTS,
+    )
+
+
 def lookup(qualname: str) -> tuple[T.Type, EffectSet] | None:
     return _FUNCTIONS.get(qualname)
 

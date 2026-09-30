@@ -867,7 +867,10 @@ class _Checker:
         # A generic function's body may name its type parameters, as its
         # signature does: `s: T = v[0]`; a method's body, its class's too.
         outer_params = self.annotations.type_params
+        outer_self = self.annotations.self_type
         owner = self.project.classes.get(info.owner) if info.owner else None
+        if owner is not None:
+            self.annotations.self_type = owner.instance(owner.type_params)
         self.annotations.type_params = {
             **outer_params,
             **{variable.name: variable for variable in (owner.type_params if owner else ())},
@@ -876,6 +879,7 @@ class _Checker:
         for stmt in info.node.body:
             self._stmt(stmt, env)
         self.annotations.type_params = outer_params
+        self.annotations.self_type = outer_self
 
         result = self._finish_function(info, env)
         (
