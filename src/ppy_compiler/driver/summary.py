@@ -210,8 +210,7 @@ _SHAPES: tuple[_Shape, ...] = (
     _shape(
         r"can follow `[^`]+\(\)`|can follow `print\(flush=True\)`|can follow a call into Python",
         "something that may fall back follows an effect native code cannot take back",
-        "do the reading or the call into Python first, and the arithmetic in a function "
-        "of its own",
+        "do the reading or the call into Python first, and the arithmetic in a function of its own",
         "guide/native-effects/",
     ),
     _shape(
