@@ -30,6 +30,7 @@ from .annotations import (
     vector_type,
 )
 from .binding import bind_ast_call, bind_call, positional_values
+from .closures import captured_names, free_names, rebound_by_closures
 from .effects import Effect, EffectSet
 from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
@@ -443,6 +444,14 @@ def _is_negative(facts: Facts) -> bool:
 _WIDTHS = {"int": 8, "float": 8, "bool": 1, "i8": 1, "u8": 1}
 
 
+def _is_byte_pointer(t: T.Type) -> bool:
+    """A `native.ptr[ppy.u8]`, or its `const_ptr` twin."""
+    base = T.strip_literal(t)
+    return (
+        _is_pointer(base) and isinstance(base, T.Instance) and _scalar_name_of(base.args[0]) == "u8"
+    )
+
+
 def _is_pointer(t: T.Type) -> bool:
     base = T.strip_literal(t)
     return (
@@ -669,6 +678,8 @@ class _Checker:
         #: What the next lambda's parameters are, where its use says: a
         #: collection's `sort(key=...)` hands it an element.
         self._lambda_parameters: tuple[T.Type, ...] | None = None
+        #: Lambdas written where a `Callable` is declared: their parameter types.
+        self._lambda_expected: dict[int, tuple[T.Type, ...]] = {}
         #: `ppy.grad(f)` calls whose `f` is checked for effects once its body is.
         self._derivative_checks: list[tuple[str, str, ast.AST]] = []
         self._escaping: set[str] = set()
@@ -697,6 +708,10 @@ class _Checker:
         self._attribute_owners: dict[int, T.Type] = {}
         #: Source annotations remain contracts after flow-sensitive rebinding.
         self._declarations: dict[str, Binding] = {}
+        self._unsettled: set[str] = set()
+        #: Names a nested function or lambda shares, with their types where it
+        #: is made: a name bound in one branch only is still a local there.
+        self._closure_seen: dict[str, T.Type] = {}
 
     def check_module(self) -> ModuleAnalysis:
         env = Env()
@@ -733,7 +748,9 @@ class _Checker:
         return found
 
     def _nested_functions(self) -> list[FunctionInfo]:
-        return []
+        """Functions defined inside this module's functions, each after the one
+        it is in, so the enclosing function's locals are known when it is checked."""
+        return list(self.symbols.nested.values())
 
     def _extern_stub(self, info: FunctionInfo) -> FunctionAnalysis | None:
         """`@ppy.native.extern(...)`: the signature is the whole function.
@@ -791,6 +808,8 @@ class _Checker:
             self._external_writes,
             self._aliases,
             self._declarations,
+            self._unsettled,
+            self._closure_seen,
         )
         self._effects = EffectSet()
         self._unknown = []
@@ -810,6 +829,7 @@ class _Checker:
         self._returned_names = set()
         self._external_writes = False
         self._declarations = {}
+        self._closure_seen = {}
         # Names are not objects: everything below that asks "what does this
         # mutate or share?" resolves the name through the alias map first.
         # The map depends on the body and on which parameters are immutable,
@@ -834,6 +854,15 @@ class _Checker:
             if isinstance(param.type, T.UnknownType) and not param.annotated:
                 self._implicit_any(info, param.name)
             env.set(param.name, Binding(param.type, facts))
+        # Names a closure can rebind: a read knows their type, not their value.
+        self._unsettled = rebound_by_closures(info.node)
+        if info.enclosing is not None:
+            # A closure reads the enclosing function's names as they are when
+            # it runs; their types are the ones that function settled on.
+            for name, seen in captured_names(info, self.module.functions).items():
+                env.set(name, Binding(seen))
+                self._function_locals.add(name)
+                self._unsettled.add(name)
 
         # A generic function's body may name its type parameters, as its
         # signature does: `s: T = v[0]`; a method's body, its class's too.
@@ -871,6 +900,8 @@ class _Checker:
             self._external_writes,
             self._aliases,
             self._declarations,
+            self._unsettled,
+            self._closure_seen,
         ) = previous
         return result
 
@@ -957,9 +988,12 @@ class _Checker:
             inferred_ret=inferred,
             ret_facts=ret_facts,
             locals={
-                name: (env.get(name).type if env.get(name) else T.UNKNOWN)
-                for name in env.names()
-                if "." not in name and "[" not in name  # a narrowed path is not a local
+                **{
+                    name: (env.get(name).type if env.get(name) else T.UNKNOWN)
+                    for name in env.names()
+                    if "." not in name and "[" not in name  # a narrowed path is not a local
+                },
+                **self._shared_locals(info, env),
             },
             dynamic=info.dynamic or self._dynamic_seen,
             unknown_callees=tuple(dict.fromkeys(self._unknown)),
@@ -1092,6 +1126,8 @@ class _Checker:
 
     def _expr_expecting(self, node: ast.expr, env: Env, expected: T.Type | None) -> Binding:
         """`node`, going where a value of `expected` is wanted."""
+        if expected is not None:
+            self._expect_lambdas(node, expected)
         if expected is None or not isinstance(node, ast.Call):
             return self._expr(node, env)
         self._expected[id(node)] = expected
@@ -1099,6 +1135,27 @@ class _Checker:
             return self._expr(node, env)
         finally:
             self._expected.pop(id(node), None)
+
+    def _expect_lambdas(self, node: ast.expr, expected: T.Type) -> None:
+        """A lambda written where a `Callable` is declared takes its parameter
+        types from there: `f: Callable[[int], int] = lambda x: x + 1`, and a
+        list or dict of them written out in place."""
+        wanted = T.strip_literal(expected)
+        if isinstance(node, ast.Lambda) and isinstance(wanted, T.Callable_):
+            self._lambda_expected[id(node)] = tuple(p.type for p in wanted.params)
+        elif (
+            isinstance(node, (ast.List, ast.Set)) and isinstance(wanted, T.Instance) and wanted.args
+        ):
+            for element in node.elts:
+                self._expect_lambdas(element, wanted.args[0])
+        elif (
+            isinstance(node, ast.Dict) and isinstance(wanted, T.Instance) and len(wanted.args) == 2
+        ):
+            for value in node.values:
+                self._expect_lambdas(value, wanted.args[1])
+        elif isinstance(node, ast.IfExp):
+            self._expect_lambdas(node.body, expected)
+            self._expect_lambdas(node.orelse, expected)
 
     def _target_type(self, target: ast.expr, env: Env) -> T.Type | None:
         """The declared type of what an assignment binds: a field of a project
@@ -1115,10 +1172,24 @@ class _Checker:
                 info = self.project.classes.get(owner.name)
                 if info is not None:
                     declared = info.lookup(target.attr, self.project)
-                    if declared is not None and not isinstance(declared[0], T.Callable_):
+                    # A method is not a target; a field holding a function is.
+                    field = target.attr in info.fields
+                    if declared is not None and (field or not isinstance(declared[0], T.Callable_)):
                         return T.substitute(
                             declared[0], receiver_bindings(info, owner, self.project.classes)
                         )
+        if isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name):
+            # `ops["add"] = lambda a, b: a + b`: only a function element is
+            # asked for, which is what types a lambda.
+            bound = env.get(target.value.id)
+            owner = T.strip_literal(bound.type) if bound is not None else None
+            element = None
+            if isinstance(owner, T.Instance) and owner.name == "dict" and len(owner.args) == 2:
+                element = owner.args[1]
+            elif isinstance(owner, T.Instance) and owner.name == "list" and owner.args:
+                element = owner.args[0]
+            if element is not None and isinstance(T.strip_literal(element), T.Callable_):
+                return element
         return None
 
     def _stmt_TypeAlias(self, node: ast.TypeAlias, env: Env) -> None:
@@ -1200,13 +1271,24 @@ class _Checker:
             current = self._current
             returned = current.ret if current is not None and current.ret_annotated else None
             value = self._expr_expecting(node.value, env, returned)
+            if returned is not None and _display_fits(node.value, value.type, returned):
+                # A display returned in place is of the declared type, as one
+                # assigned beside its annotation is.
+                value = Binding(returned, value.facts)
             self._returns.append(value)
             self._provisional_returns.append(self._is_provisional(node.value, value, env))
             if isinstance(node.value, ast.Name):
                 self._returned_names.update(self._roots(node.value, node.value.id))
             self._mark_escape(node.value, env)
             info = self._current
-            if info is not None and info.ret_annotated:
+            declines = (
+                isinstance(node.value, ast.Name)
+                and node.value.id == "NotImplemented"
+                and info is not None
+                and info.name.startswith("__")
+                and info.name.endswith("__")
+            )
+            if info is not None and info.ret_annotated and not declines:
                 fact_mismatch = self._fact_mismatch(info.ret_facts, value.facts)
                 if not T.is_assignable(value.type, info.ret) or fact_mismatch:
                     self._mismatch(
@@ -1436,10 +1518,49 @@ class _Checker:
     def _stmt_FunctionDef(self, node: ast.FunctionDef, env: Env) -> None:
         self._check_decorators(node, env)
         qualname = f"{self.symbols.name}.{node.name}"
+        if self._current is not None:
+            # A function defined inside this one: a closure over its names.
+            qualname = f"{self._current.qualname}.<locals>.{node.name}"
         info = self.project.functions.get(qualname)
         env.set(node.name, Binding(info.signature() if info else T.UNKNOWN))
+        if self._current is not None:
+            # After the name is bound: a nested function may call itself.
+            self._see_shared(node, env)
 
     _stmt_AsyncFunctionDef = _stmt_FunctionDef
+
+    def _shared_locals(self, info: FunctionInfo, env: Env) -> dict[str, T.Type]:
+        """The types closures see the names they share as. A name bound once
+        is what it was where each closure was made (narrowed there, say, past
+        a `None` check); one bound again is anything it is ever bound to."""
+        stores: dict[str, int] = {p.name: 1 for p in info.params}
+        for child in ast.walk(info.node):
+            if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
+                stores[child.id] = stores.get(child.id, 0) + 1
+            elif (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and child is not info.node
+            ):
+                stores[child.name] = stores.get(child.name, 0) + 1
+        shared: dict[str, T.Type] = {}
+        for name, seen in self._closure_seen.items():
+            final = env.get(name)
+            if stores.get(name, 0) <= 1 or final is None:
+                shared[name] = seen
+            else:
+                shared[name] = T.join(seen, T.strip_literal(final.type))
+        return shared
+
+    def _see_shared(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, env: Env
+    ) -> None:
+        for name in free_names(node):
+            bound = env.get(name)
+            if bound is None or name not in self._function_locals:
+                continue
+            seen = T.strip_literal(bound.type)
+            known = self._closure_seen.get(name)
+            self._closure_seen[name] = seen if known is None else T.join(known, seen)
 
     def _stmt_ClassDef(self, node: ast.ClassDef, env: Env) -> None:
         self._check_class_construction(node)
@@ -1846,6 +1967,13 @@ class _Checker:
     def _expr_Name(self, node: ast.Name, env: Env) -> Binding:
         binding = env.get(node.id)
         if binding is not None:
+            named = binding.type
+            if isinstance(named, T.Callable_) and named.qualname in self.project.functions:
+                # A function named as a value may be called wherever the value
+                # goes: native code and a standalone build need it.
+                self._calls.add(named.qualname)
+            if node.id in self._unsettled and self._current is not None:
+                return Binding(T.strip_literal(binding.type))
             if self._is_module_global(node.id) and self._current is not None:
                 self._effects = self._effects.add(Effect.READ_GLOBAL)
                 self._blockers.append(f"reads mutable global `{node.id}`")
@@ -2073,12 +2201,12 @@ class _Checker:
         if dialect is not None:
             return dialect
         callee = self._expr(node.func, env)
-        args = [
-            self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args
-        ]
+        args = self._call_arguments(node, callee, env)
         keywords: dict[str | None, Binding] = {}
         for keyword in node.keywords:
             self._lambda_parameters = self._sort_key_context(callee, keyword)
+            if self._lambda_parameters is None:
+                self._lambda_parameters = self._builtin_key_context(node, keyword, args, env)
             value = self._expr(keyword.value, env)
             self._lambda_parameters = None
             if keyword.arg is not None:
@@ -2093,6 +2221,19 @@ class _Checker:
                 self._calls.add(value.type.qualname)
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
+            if result is not None and self._calls_native_function(node, args):
+                # `map(f, xs)` and `filter(f, xs)` with `f` a function of this
+                # program: what runs is `f`, whose effects are its own.
+                called = T.strip_literal(args[0].type)
+                qualname = called.qualname if isinstance(called, T.Callable_) else ""
+                own = self.project.functions.get(qualname)
+                result = B.BuiltinResult(
+                    result.type,
+                    result.facts,
+                    EffectSet.of(Effect.ALLOC) | (own.effects if own is not None else EffectSet()),
+                )
+                if own is not None:
+                    self._calls.add(own.qualname)
             if result is not None:
                 self._mark_call_arguments(node, env, retains=not _is_inspecting_builtin(node, env))
                 self._effects = self._effects | result.effects
@@ -3281,6 +3422,93 @@ class _Checker:
         self._bind_target(node.target, value, env)
         return value
 
+    def _call_arguments(self, node: ast.Call, callee: Binding, env: Env) -> list[Binding]:
+        """The positional arguments, a lambda among them typed by the parameter
+        it is passed as: `apply(lambda x: x + 1, xs)` against `f: Callable[[int], int]`,
+        and `map(lambda x: ..., xs)` / `filter(...)` by what `xs` yields."""
+        values = [arg.value if isinstance(arg, ast.Starred) else arg for arg in node.args]
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in {"map", "filter"}
+            and node.func.id not in env
+            and len(values) >= 2
+            and isinstance(values[0], ast.Lambda)
+        ):
+            rest = [self._expr(value, env) for value in values[1:]]
+            self._lambda_parameters = tuple(
+                self._iteration_element(given, spelled).type
+                for given, spelled in zip(rest, values[1:], strict=True)
+            )
+            first = self._expr(values[0], env)
+            self._lambda_parameters = None
+            return [first, *rest]
+        wanted = T.strip_literal(callee.type)
+        params = (
+            [p.type for p in wanted.params if p.kind not in {"keyword_only", "var_keyword"}]
+            if isinstance(wanted, T.Callable_)
+            else self._constructor_params(wanted)
+        )
+        found: list[Binding] = []
+        for index, value in enumerate(values):
+            expected = T.strip_literal(params[index]) if index < len(params) else None
+            if isinstance(value, ast.Lambda) and isinstance(expected, T.Callable_):
+                self._lambda_parameters = tuple(p.type for p in expected.params)
+            found.append(self._expr(value, env))
+            self._lambda_parameters = None
+        return found
+
+    def _constructor_params(self, wanted: T.Type) -> list[T.Type]:
+        """What a project class's constructor takes, positionally: its
+        `__init__`'s parameters after `self`, or a dataclass's fields."""
+        if not isinstance(wanted, T.ClassObject):
+            return []
+        info = self.project.classes.get(wanted.name)
+        if info is None:
+            return []
+        for entry in info.mro:
+            base = self.project.classes.get(entry)
+            init = base.methods.get("__init__") if base is not None else None
+            if init is not None:
+                return [p.type for p in init.params[1:] if p.kind == "positional_or_keyword"]
+        if info.is_dataclass:
+            return list(self._constructor(info)[0].values())
+        return []
+
+    def _calls_native_function(self, node: ast.Call, args: list[Binding]) -> bool:
+        """`map`/`filter` whose function is the program's own: a lambda, a
+        function of this project, or a value typed as a `Callable`."""
+        if not isinstance(node.func, ast.Name) or node.func.id not in {"map", "filter"}:
+            return False
+        if len(args) != 2:
+            return False
+        first = node.args[0]
+        if node.func.id == "filter" and isinstance(first, ast.Constant) and first.value is None:
+            return True
+        called = T.strip_literal(args[0].type)
+        if not isinstance(called, T.Callable_):
+            return False
+        return (
+            isinstance(node.args[0], ast.Lambda)
+            or called.qualname in self.project.functions
+            or not called.qualname
+        )
+
+    def _builtin_key_context(
+        self, node: ast.Call, keyword: ast.keyword, args: list[Binding], env: Env
+    ) -> tuple[T.Type, ...] | None:
+        """`sorted(xs, key=lambda x: ...)`, `min`/`max` too: the key's parameter
+        is an element of `xs`."""
+        if (
+            keyword.arg != "key"
+            or not isinstance(keyword.value, ast.Lambda)
+            or not isinstance(node.func, ast.Name)
+            or node.func.id not in {"sorted", "min", "max"}
+            or node.func.id in env
+            or len(args) != 1
+        ):
+            return None
+        return (self._iteration_element(args[0], node.args[0]).type,)
+
     def _sort_key_context(self, callee: Binding, keyword: ast.keyword) -> tuple[T.Type, ...] | None:
         """A collection's or a list's `sort(key=lambda x: ...)`: the lambda's parameter
         is an element."""
@@ -3299,17 +3527,27 @@ class _Checker:
     def _expr_Lambda(self, node: ast.Lambda, env: Env) -> Binding:
         known = self._lambda_parameters
         self._lambda_parameters = None
+        if known is None:
+            known = self._lambda_expected.get(id(node))
         simple = not (node.args.posonlyargs or node.args.kwonlyargs or node.args.vararg)
         typed = known is not None and simple and len(known) == len(node.args.args)
         inner = env.fork()
+        if self._current is not None:
+            self._see_shared(node, env)
+        # The lambda reads the names it shares as they are when it runs, which
+        # is later: what is known of their values here does not hold there.
+        for name in free_names(node):
+            shared = env.get(name)
+            if shared is not None and name in self._function_locals:
+                inner.set(name, Binding(T.strip_literal(shared.type)))
         types = known if typed and known is not None else (T.UNKNOWN,) * len(node.args.args)
         for arg, given in zip(node.args.args, types, strict=True):
             inner.set(arg.arg, Binding(given))
         body = self._expr(node.body, inner)
         if not typed:
-            # A sort key is lowered where it is used; any other lambda is a
-            # function value, which native code has no form for.
-            self._native_blockers.append("contains a lambda")
+            # A lambda typed by where it goes is a native function value; one
+            # nothing types has no native form.
+            self._native_blockers.append("contains a lambda whose parameters nothing types")
         return Binding(
             T.Callable_(
                 tuple(
@@ -3587,6 +3825,9 @@ class _Checker:
         rank = max(T.numeric_rank(left_base) or 0, T.numeric_rank(right_base) or 0)
         result_type: T.Type = [T.INT, T.INT, T.FLOAT, T.COMPLEX][rank]
 
+        if op in {ast.BitOr, ast.BitAnd, ast.BitXor} and left_base == right_base == T.BOOL:
+            # `bool.__or__` and its kin keep a bool a bool.
+            return Binding(T.BOOL)
         if op in {ast.LShift, ast.RShift, ast.BitOr, ast.BitAnd, ast.BitXor}:
             if rank > 1:
                 self._error("E1302", f"`{_ARITH_OPS[op]}` requires integer operands", node)
@@ -4812,10 +5053,7 @@ class _Checker:
                 elif shape == "str" and base != T.STR:
                     self._mismatch("E1301", "a `str` is expected, not", arg_node, argument.type)
                     ok = False
-                elif shape == "bytes" and not (
-                    _is_pointer(argument.type)
-                    and _scalar_name_of(T.strip_literal(argument.type).args[0]) == "u8"  # type: ignore[attr-defined]
-                ):
+                elif shape == "bytes" and not _is_byte_pointer(argument.type):
                     self._error(
                         "E1645", f"`{spelled}` moves bytes through a `native.ptr[ppy.u8]`", arg_node
                     )
