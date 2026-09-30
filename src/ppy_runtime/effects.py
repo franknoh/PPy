@@ -310,6 +310,7 @@ class Effects:
 
 
 def _mismatch(name: str, wanted: str, result: object) -> TypeError:
+    name = name.rpartition(":")[2]
     return TypeError(
         f"`{name}` returned {type(result).__name__}, where the compiled caller expects {wanted}"
     )

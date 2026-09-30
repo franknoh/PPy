@@ -3008,7 +3008,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 return self._native_call(
                     function, signature, imported, node, discard_result=discard_result
                 )
-        if target.startswith("math."):
+        if target.startswith("math.") and (
+            target.removeprefix("math.") in _MATH_INTRINSICS or not self._effects_on()
+        ):
             return self._math_call(target.removeprefix("math."), node)
         if target.startswith(("ppy.native.", "native.")):
             return self._native_op(target.rpartition("native.")[2], node)

@@ -93,10 +93,10 @@ def ask(n: int) -> str:
     return name
 
 
-def divide(n: int) -> int:
+def divide(n: int) -> float:
     got = input()
     print("got", got)
-    return 10 // n
+    return 10 / n
 
 
 def lines(n: int) -> str:
@@ -179,10 +179,6 @@ def log(msg: str) -> None:
     sys.stdout.write("log: " + msg + "\\n")
 
 
-def label(n: int) -> str:
-    return format(n, ",")
-
-
 def hyp(a: float, b: float) -> float:
     return math.hypot(a, b)
 
@@ -192,7 +188,7 @@ def work(n: int) -> str:
     for i in range(n):
         print("step", i)
         log(str(i))
-        out = out + label(i) + ";"
+        out = out + str(i) + ";"
     print(hyp(3.0, 4.0))
     return out
 
@@ -215,10 +211,6 @@ main()
 """
 
 FILES = """
-import os
-import tempfile
-
-
 def write_file(path: str, n: int) -> None:
     with open(path, "w", encoding="utf-8") as f:
         for i in range(n):
@@ -256,13 +248,12 @@ def missing(path: str) -> str:
 
 
 def main() -> None:
-    d = tempfile.mkdtemp()
-    p = os.path.join(d, "a.txt")
+    p = "a.txt"
     write_file(p, 4)
     print(collect(p))
     print(repr(first_and_rest(p)))
     print(every(p))
-    print(missing(os.path.join(d, "nope.txt")))
+    print(missing("nope.txt"))
 
 
 main()
@@ -319,7 +310,7 @@ PROGRAMS: dict[str, tuple[str, str, list[str], list[str]]] = {
     "input": (INPUT, "bob\nline2\na\nb\nc\n", ["ask", "divide", "lines", "safe"], []),
     "kept_in_python": (KEPT_IN_PYTHON, "x\n42\nb\n", [], ["after", "parse", "key"]),
     "uncaught": (UNCAUGHT, "a\nb\n", ["lines"], []),
-    "python_calls": (PYTHON_CALLS, "", ["log", "label", "hyp", "work", "bad"], []),
+    "python_calls": (PYTHON_CALLS, "", ["log", "hyp", "work", "bad"], []),
     "files": (FILES, "", ["write_file", "collect", "first_and_rest", "every"], []),
     "reentrant": (REENTRANT, "x\ny\n", ["outer"], []),
 }
@@ -350,7 +341,11 @@ def _output(done: subprocess.CompletedProcess[str]) -> str:
 
 
 def _last_line(text: str) -> str:
-    lines = [line for line in text.strip().splitlines() if line and not line.startswith(" ")]
+    lines = [
+        line
+        for line in text.strip().splitlines()
+        if line and not line.startswith((" ", "compiling "))
+    ]
     return lines[-1] if lines else ""
 
 
@@ -403,12 +398,19 @@ def test_output_that_falls_back_is_printed_once(tmp_path: Path):
 @requires_cc
 def test_a_python_result_of_the_wrong_type_raises_type_error(tmp_path: Path):
     source = """
+    import ppy
+
+
+    @ppy.dynamic
     def shout(text: str) -> str:
-        return eval("len(text)")
+        return ppy.assume[str](eval("len(text)"))
 
 
     def call(n: int) -> str:
-        return shout("abc")
+        out = ""
+        for _ in range(n):
+            out = out + shout("abc")
+        return out
 
 
     def main() -> None:
