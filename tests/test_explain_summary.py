@@ -168,3 +168,21 @@ def test_explain_without_summary_still_takes_one_location(tmp_path: Path):
     )
     assert done.returncode == 2
     assert "one location" in done.stdout + done.stderr
+
+
+def test_a_bare_callable_is_a_gradual_callable_not_an_unknown_type(write, codes):
+    """TheAlgorithms other/pipeline.py: `f: Callable` was E1101 ("not a type
+    the project can analyze") in either mode; it is `Callable[..., Any]`,
+    reported as a bare generic is."""
+    path = write(
+        "calls.ppy",
+        """
+        from collections.abc import Callable
+
+
+        def twice(f: Callable, x: int) -> int:
+            return f(f(x))
+        """,
+    )
+    assert "E1101" not in codes(path, strict=False)
+    assert "E1101" not in codes(path)

@@ -1206,7 +1206,17 @@ class _Checker:
                 self._returned_names.update(self._roots(node.value, node.value.id))
             self._mark_escape(node.value, env)
             info = self._current
-            if info is not None and info.ret_annotated:
+            declines = (
+                isinstance(node.value, ast.Name)
+                and node.value.id == "NotImplemented"
+                and info is not None
+                and info.name.startswith("__")
+                and info.name.endswith("__")
+            )
+            if info is not None and info.ret_annotated and not declines:
+                # `return NotImplemented` is how an operator method declines,
+                # whatever it is declared to return; Python's type checkers
+                # take it the same way.
                 fact_mismatch = self._fact_mismatch(info.ret_facts, value.facts)
                 if not T.is_assignable(value.type, info.ret) or fact_mismatch:
                     self._mismatch(
