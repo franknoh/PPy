@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/39_xla/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/native-effects/">
       
       
-        <link rel="prev" href="../44_tile/">
+        <link rel="prev" href="../effects/">
       
       
-        <link rel="next" href="../45_multi_gpu_jax/">
+        <link rel="next" href="../input/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>XLA - PPy</title>
+        <title>Effects in native code - PPy</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#xla" class="md-skip">
+        <a href="#effects-in-native-code" class="md-skip">
           Skip to content
         </a>
       
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              XLA
+              Effects in native code
             
           </span>
         </div>
@@ -270,11 +270,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../guide/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -292,13 +294,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../howto/" class="md-tabs__link">
           
   
   
@@ -578,6 +578,8 @@
       
   
   
+    
+  
   
   
     
@@ -637,20 +639,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../guide/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -668,13 +673,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -694,7 +699,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/subset/" class="md-nav__link">
+      <a href="../subset/" class="md-nav__link">
         
   
   
@@ -722,7 +727,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/directives/" class="md-nav__link">
+      <a href="../directives/" class="md-nav__link">
         
   
   
@@ -750,7 +755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/strings/" class="md-nav__link">
+      <a href="../strings/" class="md-nav__link">
         
   
   
@@ -778,7 +783,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/containers/" class="md-nav__link">
+      <a href="../containers/" class="md-nav__link">
         
   
   
@@ -806,7 +811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/collections/" class="md-nav__link">
+      <a href="../collections/" class="md-nav__link">
         
   
   
@@ -834,7 +839,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/classes/" class="md-nav__link">
+      <a href="../classes/" class="md-nav__link">
         
   
   
@@ -862,7 +867,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/exceptions-and-generators/" class="md-nav__link">
+      <a href="../exceptions-and-generators/" class="md-nav__link">
         
   
   
@@ -890,7 +895,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/closures/" class="md-nav__link">
+      <a href="../closures/" class="md-nav__link">
         
   
   
@@ -918,7 +923,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/native/" class="md-nav__link">
+      <a href="../native/" class="md-nav__link">
         
   
   
@@ -946,7 +951,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/simd-cpu/" class="md-nav__link">
+      <a href="../simd-cpu/" class="md-nav__link">
         
   
   
@@ -974,7 +979,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/concurrency/" class="md-nav__link">
+      <a href="../concurrency/" class="md-nav__link">
         
   
   
@@ -1002,7 +1007,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/parallel/" class="md-nav__link">
+      <a href="../parallel/" class="md-nav__link">
         
   
   
@@ -1030,7 +1035,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/autodiff/" class="md-nav__link">
+      <a href="../autodiff/" class="md-nav__link">
         
   
   
@@ -1058,7 +1063,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/aio/" class="md-nav__link">
+      <a href="../aio/" class="md-nav__link">
         
   
   
@@ -1086,7 +1091,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/gpu/" class="md-nav__link">
+      <a href="../gpu/" class="md-nav__link">
         
   
   
@@ -1114,7 +1119,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/tensors/" class="md-nav__link">
+      <a href="../tensors/" class="md-nav__link">
         
   
   
@@ -1142,7 +1147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/xla/" class="md-nav__link">
+      <a href="../xla/" class="md-nav__link">
         
   
   
@@ -1170,7 +1175,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/generics/" class="md-nav__link">
+      <a href="../generics/" class="md-nav__link">
         
   
   
@@ -1198,7 +1203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/effects/" class="md-nav__link">
+      <a href="../effects/" class="md-nav__link">
         
   
   
@@ -1223,10 +1228,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../guide/native-effects/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effects in native code
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1242,6 +1274,103 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-is-held" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output is held
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#barriers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Barriers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calls-into-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calls into Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#text-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-ppy-explain-says" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What ppy explain says
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#standalone-binaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standalone binaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1254,7 +1383,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/input/" class="md-nav__link">
+      <a href="../input/" class="md-nav__link">
         
   
   
@@ -1282,7 +1411,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/native-lowering/" class="md-nav__link">
+      <a href="../native-lowering/" class="md-nav__link">
         
   
   
@@ -1310,7 +1439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/regex/" class="md-nav__link">
+      <a href="../regex/" class="md-nav__link">
         
   
   
@@ -1342,8 +1471,6 @@
       
   
   
-    
-  
   
   
     
@@ -1369,23 +1496,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../howto/" class="md-nav__link ">
               
   
   
@@ -1403,13 +1527,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1429,7 +1553,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../comparisons/" class="md-nav__link">
+      <a href="../../howto/comparisons/" class="md-nav__link">
         
   
   
@@ -1491,20 +1615,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
             
   
   
@@ -1540,7 +1661,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../01_basics/" class="md-nav__link">
+      <a href="../../howto/01_basics/" class="md-nav__link">
         
   
   
@@ -1568,7 +1689,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../02_arbitrary_precision/" class="md-nav__link">
+      <a href="../../howto/02_arbitrary_precision/" class="md-nav__link">
         
   
   
@@ -1596,7 +1717,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../03_effects_and_contracts/" class="md-nav__link">
+      <a href="../../howto/03_effects_and_contracts/" class="md-nav__link">
         
   
   
@@ -1624,7 +1745,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../04_classes/" class="md-nav__link">
+      <a href="../../howto/04_classes/" class="md-nav__link">
         
   
   
@@ -1652,7 +1773,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../08_native_data/" class="md-nav__link">
+      <a href="../../howto/08_native_data/" class="md-nav__link">
         
   
   
@@ -1680,7 +1801,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../10_narrowing/" class="md-nav__link">
+      <a href="../../howto/10_narrowing/" class="md-nav__link">
         
   
   
@@ -1708,7 +1829,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../11_numerics/" class="md-nav__link">
+      <a href="../../howto/11_numerics/" class="md-nav__link">
         
   
   
@@ -1736,7 +1857,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../13_value_classes/" class="md-nav__link">
+      <a href="../../howto/13_value_classes/" class="md-nav__link">
         
   
   
@@ -1764,7 +1885,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../14_tuples/" class="md-nav__link">
+      <a href="../../howto/14_tuples/" class="md-nav__link">
         
   
   
@@ -1792,7 +1913,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../16_dynamic/" class="md-nav__link">
+      <a href="../../howto/16_dynamic/" class="md-nav__link">
         
   
   
@@ -1820,7 +1941,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../17_containers/" class="md-nav__link">
+      <a href="../../howto/17_containers/" class="md-nav__link">
         
   
   
@@ -1848,7 +1969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../18_errors/" class="md-nav__link">
+      <a href="../../howto/18_errors/" class="md-nav__link">
         
   
   
@@ -1876,7 +1997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../19_strings/" class="md-nav__link">
+      <a href="../../howto/19_strings/" class="md-nav__link">
         
   
   
@@ -1952,20 +2073,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
             
   
   
@@ -2001,7 +2119,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../12_buffers_and_jit/" class="md-nav__link">
+      <a href="../../howto/12_buffers_and_jit/" class="md-nav__link">
         
   
   
@@ -2029,7 +2147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../15_algorithms/" class="md-nav__link">
+      <a href="../../howto/15_algorithms/" class="md-nav__link">
         
   
   
@@ -2057,7 +2175,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../28_threads/" class="md-nav__link">
+      <a href="../../howto/28_threads/" class="md-nav__link">
         
   
   
@@ -2085,7 +2203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../32_native_memory/" class="md-nav__link">
+      <a href="../../howto/32_native_memory/" class="md-nav__link">
         
   
   
@@ -2113,7 +2231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../33_simd_and_cpu/" class="md-nav__link">
+      <a href="../../howto/33_simd_and_cpu/" class="md-nav__link">
         
   
   
@@ -2141,7 +2259,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../34_atomics_and_threads/" class="md-nav__link">
+      <a href="../../howto/34_atomics_and_threads/" class="md-nav__link">
         
   
   
@@ -2169,7 +2287,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../35_parallel_range/" class="md-nav__link">
+      <a href="../../howto/35_parallel_range/" class="md-nav__link">
         
   
   
@@ -2197,7 +2315,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../36_autodiff/" class="md-nav__link">
+      <a href="../../howto/36_autodiff/" class="md-nav__link">
         
   
   
@@ -2225,7 +2343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../37_aio/" class="md-nav__link">
+      <a href="../../howto/37_aio/" class="md-nav__link">
         
   
   
@@ -2253,7 +2371,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../40_generics/" class="md-nav__link">
+      <a href="../../howto/40_generics/" class="md-nav__link">
         
   
   
@@ -2281,7 +2399,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../42_toolbox/" class="md-nav__link">
+      <a href="../../howto/42_toolbox/" class="md-nav__link">
         
   
   
@@ -2309,7 +2427,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../43_regex/" class="md-nav__link">
+      <a href="../../howto/43_regex/" class="md-nav__link">
         
   
   
@@ -2337,7 +2455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../47_collections/" class="md-nav__link">
+      <a href="../../howto/47_collections/" class="md-nav__link">
         
   
   
@@ -2365,7 +2483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../48_strings/" class="md-nav__link">
+      <a href="../../howto/48_strings/" class="md-nav__link">
         
   
   
@@ -2393,7 +2511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../49_inheritance/" class="md-nav__link">
+      <a href="../../howto/49_inheritance/" class="md-nav__link">
         
   
   
@@ -2421,7 +2539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../50_errors_and_generators/" class="md-nav__link">
+      <a href="../../howto/50_errors_and_generators/" class="md-nav__link">
         
   
   
@@ -2454,10 +2572,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -2474,21 +2590,18 @@
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
             
   
   
@@ -2506,7 +2619,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2524,7 +2637,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../38_cuda/" class="md-nav__link">
+      <a href="../../howto/38_cuda/" class="md-nav__link">
         
   
   
@@ -2552,7 +2665,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../44_tile/" class="md-nav__link">
+      <a href="../../howto/44_tile/" class="md-nav__link">
         
   
   
@@ -2577,37 +2690,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    XLA
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../howto/39_xla/" class="md-nav__link">
         
   
   
@@ -2623,81 +2709,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run it
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-xla-takes-today" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What XLA takes today
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#devices-and-the-last-bits" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Devices and the last bits
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#39_xladevice_mathppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        39_xla/device_math.ppy
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2710,7 +2721,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../45_multi_gpu_jax/" class="md-nav__link">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
         
   
   
@@ -2778,20 +2789,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
             
   
   
@@ -2827,7 +2835,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../05_numpy/" class="md-nav__link">
+      <a href="../../howto/05_numpy/" class="md-nav__link">
         
   
   
@@ -2855,7 +2863,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../06_pydantic/" class="md-nav__link">
+      <a href="../../howto/06_pydantic/" class="md-nav__link">
         
   
   
@@ -2883,7 +2891,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../07_parallel/" class="md-nav__link">
+      <a href="../../howto/07_parallel/" class="md-nav__link">
         
   
   
@@ -2911,7 +2919,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../09_torch/" class="md-nav__link">
+      <a href="../../howto/09_torch/" class="md-nav__link">
         
   
   
@@ -2939,7 +2947,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../46_gpt2/" class="md-nav__link">
+      <a href="../../howto/46_gpt2/" class="md-nav__link">
         
   
   
@@ -2967,7 +2975,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../21_training_torch/" class="md-nav__link">
+      <a href="../../howto/21_training_torch/" class="md-nav__link">
         
   
   
@@ -2995,7 +3003,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../22_training_jax/" class="md-nav__link">
+      <a href="../../howto/22_training_jax/" class="md-nav__link">
         
   
   
@@ -3023,7 +3031,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../25_jax_export/" class="md-nav__link">
+      <a href="../../howto/25_jax_export/" class="md-nav__link">
         
   
   
@@ -3051,7 +3059,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../27_uvicorn/" class="md-nav__link">
+      <a href="../../howto/27_uvicorn/" class="md-nav__link">
         
   
   
@@ -3079,7 +3087,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../29_flax/" class="md-nav__link">
+      <a href="../../howto/29_flax/" class="md-nav__link">
         
   
   
@@ -3107,7 +3115,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../31_torchrun/" class="md-nav__link">
+      <a href="../../howto/31_torchrun/" class="md-nav__link">
         
   
   
@@ -3135,7 +3143,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../41_columnar/" class="md-nav__link">
+      <a href="../../howto/41_columnar/" class="md-nav__link">
         
   
   
@@ -3189,20 +3197,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
             
   
   
@@ -3238,7 +3243,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../20_inventory/" class="md-nav__link">
+      <a href="../../howto/20_inventory/" class="md-nav__link">
         
   
   
@@ -3266,7 +3271,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../23_inference/" class="md-nav__link">
+      <a href="../../howto/23_inference/" class="md-nav__link">
         
   
   
@@ -3294,7 +3299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../24_interop/" class="md-nav__link">
+      <a href="../../howto/24_interop/" class="md-nav__link">
         
   
   
@@ -3322,7 +3327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../26_project/" class="md-nav__link">
+      <a href="../../howto/26_project/" class="md-nav__link">
         
   
   
@@ -3350,7 +3355,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../30_migrate/" class="md-nav__link">
+      <a href="../../howto/30_migrate/" class="md-nav__link">
         
   
   
@@ -4265,10 +4270,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
+  <a href="#the-problem" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Run it
+        The problem
       
     </span>
   </a>
@@ -4276,10 +4281,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-xla-takes-today" class="md-nav__link">
+  <a href="#output-is-held" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What XLA takes today
+        Output is held
       
     </span>
   </a>
@@ -4287,10 +4292,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#devices-and-the-last-bits" class="md-nav__link">
+  <a href="#barriers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Devices and the last bits
+        Barriers
       
     </span>
   </a>
@@ -4298,10 +4303,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
+  <a href="#calls-into-python" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it prints
+        Calls into Python
       
     </span>
   </a>
@@ -4309,10 +4314,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#39_xladevice_mathppy" class="md-nav__link">
+  <a href="#text-files" class="md-nav__link">
     <span class="md-ellipsis">
       
-        39_xla/device_math.ppy
+        Text files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-ppy-explain-says" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What ppy explain says
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#standalone-binaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standalone binaries
       
     </span>
   </a>
@@ -4339,98 +4366,154 @@
   
 
 
-<h1 id="xla">XLA<a class="headerlink" href="#xla" title="Permanent link">&para;</a></h1>
-<p><code>@xla.jit</code> compiles a function of floats, ints, and bools to StableHLO and
-runs each call on an XLA device. The function's body must be one block of
-arithmetic and math.</p>
-<p>PPy lowers the function to its IR and emits the StableHLO itself. Nothing is
-traced, and the compiler does not use JAX. The PJRT bridge compiles the
-module once and runs each call on a device.</p>
-<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>device_math.ppy
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>device_math.ppy
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>device_math.ppy
+<h1 id="effects-in-native-code">Effects in native code<a class="headerlink" href="#effects-in-native-code" title="Permanent link">&para;</a></h1>
+<p>Under <code>ppy run</code>, a function that prints, reads input, reads or writes a
+text file, or calls a Python function can still compile. This page says
+how that stays correct, what goes native, and what stays in Python and why.</p>
+<h2 id="the-problem">The problem<a class="headerlink" href="#the-problem" title="Permanent link">&para;</a></h2>
+<p>A native function checks what it cannot handle: an integer past 64 bits, a
+list changed under it, a value of the wrong type. When a check fails, the
+call falls back: Python runs the same call again from the start.</p>
+<p>That is only safe while nothing the native call did can be seen. If it had
+already printed a line, the second run would print it again.</p>
+<p>PPy solves this in two ways, depending on whether the effect can be taken
+back.</p>
+<h2 id="output-is-held">Output is held<a class="headerlink" href="#output-is-held" title="Permanent link">&para;</a></h2>
+<p><code>print</code> writes into a buffer the thread keeps, not to the terminal. When
+the call returns, the boundary writes the buffer through <code>sys.stdout</code> (or
+<code>sys.stderr</code>) in one piece. When the call falls back, the buffer is dropped,
+and Python prints the same lines as it runs the call again.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">grow</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">"i"</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="mi">1000</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="n">x</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">grow</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">grow</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
 </code></pre></div>
-<p><code>ppy emit stablehlo</code> prints the module. <code>ppy inspect --stage stablehlo</code>
-prints the same.</p>
-<h2 id="what-xla-takes-today">What XLA takes today<a class="headerlink" href="#what-xla-takes-today" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">product</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">y</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">product</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="k">if</span> <span class="n">product</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="o">-</span><span class="n">x</span><span class="p">))</span> <span class="o">/</span> <span class="mf">2.0</span>
+<p><code>grow(3)</code> runs natively and prints <code>i 0</code> to <code>i 2</code>, then <code>1000000000</code>. In
+<code>grow(10)</code>, <code>x</code> passes 64 bits at <code>i = 6</code>: the call falls back, the lines it
+held are dropped, and Python prints <code>i 0</code> to <code>i 9</code> once.</p>
+<p>So a function that only prints keeps every check it had. The output goes
+through Python's own <code>sys.stdout</code>, so it interleaves with what Python
+prints, and redirection, <code>contextlib.redirect_stdout</code>, and pytest's capture
+all see it.</p>
+<p>What <code>print</code> takes natively:</p>
+<ul>
+<li>positional arguments of any type an f-string field takes: numbers, bools,
+  strings, lists, dicts, sets, tuples, <code>None</code>, and project classes (their
+  <code>__str__</code> or <code>__repr__</code>);</li>
+<li><code>sep=</code> and <code>end=</code> as string literals or <code>None</code>;</li>
+<li><code>file=sys.stdout</code> or <code>file=sys.stderr</code>;</li>
+<li><code>flush=True</code> or <code>flush=False</code>.</li>
+</ul>
+<p>Python evaluates every argument before it writes any. PPy writes each
+argument as it evaluates it, which gives the same output as long as the
+arguments after the first have no effect of their own. A later argument
+that calls something that could print or change what an earlier one shows
+keeps the function in Python.</p>
+<p>The output of a native call appears when the call returns, or at the next
+barrier (below). A long native loop that prints progress shows it at the
+end, where CPython would show it as it goes. Use <code>flush=True</code> where the
+timing matters.</p>
+<h2 id="barriers">Barriers<a class="headerlink" href="#barriers" title="Permanent link">&para;</a></h2>
+<p>Some effects cannot be taken back:</p>
+<ul>
+<li><code>input()</code>, which consumes a line of stdin;</li>
+<li><code>print(..., flush=True)</code>;</li>
+<li>a call into Python;</li>
+<li>opening, reading, or writing a file.</li>
+</ul>
+<p>Each of these is a barrier. It first writes out what the call has held, so
+output keeps its order, and then does its work with the GIL held. From the
+first barrier on, the call must never fall back. The compiler proves that
+over the whole function before it lets the function go native:</p>
+<ul>
+<li>a check CPython itself raises for (an index out of range, a missing key, a
+  division by zero) raises the same exception natively, with CPython's text.
+  A module with a barrier is compiled in exception mode for this. A check
+  whose text native code only approximates (<code>int()</code> of a bad string, which
+  CPython follows with the string) cannot follow a barrier;</li>
+<li>a check that stands for a limit of native code (an integer past 64 bits)
+  must be proven away by the prover, or the function stays in Python;</li>
+<li>a call to a function that may fall back, or may raise an exception PPy
+  cannot give CPython's exact text for, keeps the caller in Python when it
+  can follow a barrier;</li>
+<li>a loop counts: a check in a loop body after a barrier, or before it, in
+  the next iteration, follows it;</li>
+<li>a function called from Python that takes a list, a dict, a set, or an
+  object by copy stays in Python if it has a barrier. Python code that runs
+  at the barrier would read or change the caller's object, not the copy.</li>
+</ul>
+<p>The same holds across calls. A caller that calls a function with a barrier
+has crossed one when the call returns, and the rule applies to what follows
+the call.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">ask</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"asking"</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">name</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">"name? "</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"hello"</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">return</span> <span class="n">name</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">after</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">s</span> <span class="o">=</span> <span class="nb">input</span><span class="p">()</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="k">return</span> <span class="n">n</span> <span class="o">*</span> <span class="n">n</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
 </code></pre></div>
-<p><code>f</code> uses arithmetic, <code>math.sin</code>, and a conditional expression that lowers to
-a <code>select</code>. That is what the StableHLO backend accepts.</p>
-<p><code>branchy</code> is not accepted yet, because an <code>if</code> statement is control flow.
-The compiler reports <code>W2007</code> and the function runs as written.</p>
-<h2 id="devices-and-the-last-bits">Devices and the last bits<a class="headerlink" href="#devices-and-the-last-bits" title="Permanent link">&para;</a></h2>
-<p>Under plain CPython, and wherever no device is present, each function runs
-as written.</p>
-<p>XLA computes <code>sin</code> with its own library, so the last bits of a result can
-differ from CPython's <code>math</code>. The example rounds the printed digits so the
-three paths compare equal where they should.</p>
-<p><code>xla.devices()</code> is what the bridge sees. The line that prints it starts with
-<code>#</code>, the mark for output that may differ between machines.</p>
-<p>The bridge needs JAX installed to place arrays on a device. The compiler
-that wrote the StableHLO does not.</p>
-<!-- outputs:start -->
-<h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>python  device_math.ppy</code></strong>, <strong><code>ppy run device_math.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>0.445520207 0.387753845 -4.485479898
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2.0 1.5
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a># devices: ['cpu:0']
+<p><code>ask</code> is native: "asking 1" is written before the prompt. In <code>after</code>, <code>n * n</code> may pass 64 bits after the barrier, so
+<code>after</code> stays in Python.</p>
+<p>A native exception after a barrier is raised by the boundary as it is,
+rather than by running the call again: a builtin exception is rebuilt from
+its class and its text, and an exception Python raised inside the call (an
+<code>EOFError</code> from <code>input()</code>, a <code>FileNotFoundError</code> from <code>open</code>) is raised as
+that very object, with its traceback. Native code can catch either with
+<code>try</code>/<code>except</code>.</p>
+<h2 id="calls-into-python">Calls into Python<a class="headerlink" href="#calls-into-python" title="Permanent link">&para;</a></h2>
+<p>A native function can call a function that stays in Python: another
+function of the module that did not compile, a function of an imported
+module, or a builtin. The call goes through Python with the GIL held:</p>
+<ul>
+<li>arguments are numbers, bools, strings, and <code>None</code>, boxed;</li>
+<li>the result is unboxed by the type the checker gave the call: a <code>float</code>, a
+  <code>bool</code>, a <code>str</code>, or nothing. A value of another type raises <code>TypeError</code>;</li>
+<li>what the callee raises is raised natively.</li>
+</ul>
+<p>An <code>int</code> result is not taken back: a Python function may return an integer
+no word holds, and after the call there is no falling back. A call whose
+result is an <code>int</code> keeps its caller in Python.</p>
+<p>A function that calls into Python holds the GIL where it does so. It is
+native, but not free-threaded.</p>
+<h2 id="text-files">Text files<a class="headerlink" href="#text-files" title="Permanent link">&para;</a></h2>
+<p><code>with open(path, ...) as f:</code> compiles when the mode is a text mode:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">count</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">found</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"line"</span><span class="p">):</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>                <span class="n">found</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="k">return</span> <span class="n">found</span>
 </code></pre></div>
-<p><strong><code>ppy emit stablehlo device_math.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>module @device_math {
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  func.func public @device_math_f(%x: tensor&lt;f64&gt;, %y: tensor&lt;f64&gt;) -&gt; (tensor&lt;f64&gt;) {
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    %1 = stablehlo.sine %x : tensor&lt;f64&gt;
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    %2 = stablehlo.multiply %1, %y : tensor&lt;f64&gt;
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    %3 = stablehlo.constant dense&lt;0.00000000000000000e+00&gt; : tensor&lt;f64&gt;
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    %4 = stablehlo.compare GT, %2, %3, FLOAT : (tensor&lt;f64&gt;, tensor&lt;f64&gt;) -&gt; tensor&lt;i1&gt;
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    %5 = stablehlo.negate %x : tensor&lt;f64&gt;
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    %6 = stablehlo.select %4, %x, %5 : tensor&lt;i1&gt;, tensor&lt;f64&gt;
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    %7 = stablehlo.add %2, %6 : tensor&lt;f64&gt;
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    %8 = stablehlo.constant dense&lt;2.00000000000000000e+00&gt; : tensor&lt;f64&gt;
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    %9 = stablehlo.divide %7, %8 : tensor&lt;f64&gt;
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    return %9 : tensor&lt;f64&gt;
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>  }
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>}
+<p>The file is Python's own: <code>open</code>, <code>read</code>, <code>readline</code>, <code>readlines</code>, <code>write</code>,
+iteration, and <code>close</code> go through <code>io</code>, so encodings, newline translation,
+and errors are CPython's exactly. The file is closed on every way out of
+the block, as its <code>__exit__</code> does.</p>
+<h2 id="what-ppy-explain-says">What <code>ppy explain</code> says<a class="headerlink" href="#what-ppy-explain-says" title="Permanent link">&para;</a></h2>
+<p><code>ppy explain</code> names the rule each native function with effects runs under:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>llvm backend: native; effects: output is held until the call returns, and dropped if it falls back
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>llvm backend: native; effects: output is written at each barrier and when the call returns; nothing falls back after the first barrier (`input()`)
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>llvm backend: boxed: integer arithmetic that may not fit 64 bits can follow `input()`
 </code></pre></div>
-<!-- outputs:end -->
-
-<p>Read on: <a href="../../guide/xla/">XLA</a> ·
-<a href="../25_jax_export/">JAX export</a></p>
-<p><code>device_math.ppy</code> is hand-written; there is no <code>.py</code> source and no
-conversion
-step.</p>
-<h2 id="39_xladevice_mathppy"><code>39_xla/device_math.ppy</code><a class="headerlink" href="#39_xladevice_mathppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">xla</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">product</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">y</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">product</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="k">if</span> <span class="n">product</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="o">-</span><span class="n">x</span><span class="p">))</span> <span class="o">/</span> <span class="mf">2.0</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">def</span><span class="w"> </span><span class="nf">branchy</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>        <span class="k">return</span> <span class="n">x</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="k">return</span> <span class="o">-</span><span class="n">x</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">),</span> <span class="mi">9</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="o">-</span><span class="mf">1.25</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="mi">9</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mf">7.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.0</span><span class="p">),</span> <span class="mi">9</span><span class="p">))</span>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">branchy</span><span class="p">(</span><span class="o">-</span><span class="mf">2.0</span><span class="p">),</span> <span class="n">branchy</span><span class="p">(</span><span class="mf">1.5</span><span class="p">))</span>
-<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# devices: </span><span class="si">{</span><span class="n">xla</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>
-<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="n">main</span><span class="p">()</span>
-</code></pre></div>
-<p>Source: <a href="https://github.com/franknoh/PPy/blob/main/examples/39_xla"><code>examples/39_xla</code></a>.</p>
+<p><code>ppy explain --summary</code> counts functions kept in Python this way under
+"something that may fall back follows an effect native code cannot take
+back".</p>
+<h2 id="standalone-binaries">Standalone binaries<a class="headerlink" href="#standalone-binaries" title="Permanent link">&para;</a></h2>
+<p>A standalone binary has no Python to fall back to, so none of this applies
+there: <code>print</code> and <code>input</code> go to native shims, and a failed check prints
+what CPython would and exits.</p>
+<p>See also: <a href="../effects/">Effects and the three paths</a>,
+<a href="../native-lowering/">Native lowering</a>.</p>
 
 
 
@@ -4468,7 +4551,7 @@ step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../44_tile/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Tile kernels">
+          <a href="../effects/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Effects and the three paths">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4478,20 +4561,20 @@ step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Tile kernels
+                Effects and the three paths
               </div>
             </div>
           </a>
         
         
           
-          <a href="../45_multi_gpu_jax/" class="md-footer__link md-footer__link--next" aria-label="Next: Multi-GPU JAX training">
+          <a href="../input/" class="md-footer__link md-footer__link--next" aria-label="Next: Reading input">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Multi-GPU JAX training
+                Reading input
               </div>
             </div>
             <div class="md-footer__button md-icon">

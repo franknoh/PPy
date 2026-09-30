@@ -16,7 +16,7 @@
         <link rel="prev" href="../generics/">
       
       
-        <link rel="next" href="../input/">
+        <link rel="next" href="../native-effects/">
       
       
         
@@ -587,6 +587,8 @@
       
         
           
+        
+      
         
       
         
@@ -1319,6 +1321,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../native-effects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effects in native code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -4357,6 +4387,12 @@ inside, for programs whose reachable graph is entirely native.</p>
 cannot keep a promise runs the Python body.</p>
 <p>One exception stands above that rule. A check <code>--sanitize</code> inserted does not
 fall back but raises <code>SanitizerFailure</code> (<a href="../../cli/">CLI</a>).</p>
+<p>A fallback runs the whole call again, so it must not repeat what the call
+already did. Under <code>ppy run</code>, what a native function prints is held until the
+call returns and dropped when it falls back. An effect that cannot be taken
+back (<code>input()</code>, <code>print(flush=True)</code>, a file, a call into Python) is a
+barrier: the compiler proves nothing falls back after one, or the function
+stays in Python. <a href="../native-effects/">Effects in native code</a> has the rules.</p>
 <p>Examples: <a href="../../howto/03_effects_and_contracts/">Effects and contracts</a>,
 <a href="../../howto/18_errors/">Errors</a>.</p>
 
@@ -4413,13 +4449,13 @@ fall back but raises <code>SanitizerFailure</code> (<a href="../../cli/">CLI</a>
         
         
           
-          <a href="../input/" class="md-footer__link md-footer__link--next" aria-label="Next: Reading input">
+          <a href="../native-effects/" class="md-footer__link md-footer__link--next" aria-label="Next: Effects in native code">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Reading input
+                Effects in native code
               </div>
             </div>
             <div class="md-footer__button md-icon">

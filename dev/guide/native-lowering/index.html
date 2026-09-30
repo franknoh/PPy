@@ -633,6 +633,8 @@
       
         
       
+        
+      
     
     
     
@@ -1209,6 +1211,34 @@
     
   
     Effects and the three paths
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../native-effects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effects in native code
   
 
     
@@ -4446,7 +4476,10 @@ over the <code>sorts</code> folder of TheAlgorithms/Python, trimmed:</p>
 dashboard. See <a href="../../cli/#ppy-explain">the command</a>.</p>
 <h2 id="threads">Threads<a class="headerlink" href="#threads" title="Permanent link">&para;</a></h2>
 <p>The generated wrapper releases the GIL around the native call, so
-<code>@ppy.native</code> functions scale across threads.</p>
+<code>@ppy.native</code> functions scale across threads. A function that prints, reads,
+or calls into Python is bound through the Python boundary instead, which
+writes out its held output, and takes the GIL where it reaches Python
+(<a href="../native-effects/">Effects in native code</a>).</p>
 <p>Reading input is its own guide: <a href="../input/">Reading input</a>.</p>
 <p>Examples: <a href="../../howto/15_algorithms/">Algorithms</a>,
 <a href="../../howto/12_buffers_and_jit/">Buffers and JIT</a>.</p>
