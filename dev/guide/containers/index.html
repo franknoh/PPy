@@ -631,6 +631,8 @@
       
         
       
+        
+      
     
     
     
@@ -984,6 +986,34 @@
     
   
     Exceptions and generators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../closures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Functions as values
   
 
     
@@ -4382,7 +4412,10 @@ their quotes, tuples, nested containers, and dataclasses shown as
   equals.</li>
 <li><code>d.get(k)</code> with no default, which may give <code>None</code>, stays in Python; with a
   default it is native.</li>
-<li><code>sort(key=...)</code> natively takes a key giving numbers or tuples of them.</li>
+<li><code>sort(key=...)</code>, <code>sorted(key=...)</code>, <code>min(key=...)</code>, and <code>max(key=...)</code>
+  natively take a key giving numbers or tuples of them, and <code>min</code> and <code>max</code>
+  with a key pick among numbers. <a href="../closures/">Functions as values</a> has the
+  rest.</li>
 <li><code>any</code> and <code>all</code> of a generator stay in Python, because they stop at the
   first answer and a list built first would not; of a list they are native.</li>
 <li>A standalone binary's <code>KeyError</code> for a string key says <code>KeyError</code> without

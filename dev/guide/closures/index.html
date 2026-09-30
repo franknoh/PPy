@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/22_training_jax/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/closures/">
       
       
-        <link rel="prev" href="../21_training_torch/">
+        <link rel="prev" href="../exceptions-and-generators/">
       
       
-        <link rel="next" href="../25_jax_export/">
+        <link rel="next" href="../native/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Training a JAX MLP - PPy</title>
+        <title>Functions as values - PPy</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#training-a-jax-mlp" class="md-skip">
+        <a href="#functions-as-values" class="md-skip">
           Skip to content
         </a>
       
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Training a JAX MLP
+              Functions as values
             
           </span>
         </div>
@@ -270,11 +270,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../guide/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -292,13 +294,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../howto/" class="md-tabs__link">
           
   
   
@@ -578,6 +578,8 @@
       
   
   
+    
+  
   
   
     
@@ -635,20 +637,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../guide/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -666,13 +671,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -692,7 +697,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/subset/" class="md-nav__link">
+      <a href="../subset/" class="md-nav__link">
         
   
   
@@ -720,7 +725,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/directives/" class="md-nav__link">
+      <a href="../directives/" class="md-nav__link">
         
   
   
@@ -748,7 +753,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/strings/" class="md-nav__link">
+      <a href="../strings/" class="md-nav__link">
         
   
   
@@ -776,7 +781,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/containers/" class="md-nav__link">
+      <a href="../containers/" class="md-nav__link">
         
   
   
@@ -804,7 +809,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/collections/" class="md-nav__link">
+      <a href="../collections/" class="md-nav__link">
         
   
   
@@ -832,7 +837,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/classes/" class="md-nav__link">
+      <a href="../classes/" class="md-nav__link">
         
   
   
@@ -860,7 +865,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/exceptions-and-generators/" class="md-nav__link">
+      <a href="../exceptions-and-generators/" class="md-nav__link">
         
   
   
@@ -885,10 +890,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../guide/closures/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Functions as values
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -904,6 +936,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-lowers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What lowers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-closure-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a closure works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-python-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Python boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-stays-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -916,7 +1012,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/native/" class="md-nav__link">
+      <a href="../native/" class="md-nav__link">
         
   
   
@@ -944,7 +1040,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/simd-cpu/" class="md-nav__link">
+      <a href="../simd-cpu/" class="md-nav__link">
         
   
   
@@ -972,7 +1068,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/concurrency/" class="md-nav__link">
+      <a href="../concurrency/" class="md-nav__link">
         
   
   
@@ -1000,7 +1096,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/parallel/" class="md-nav__link">
+      <a href="../parallel/" class="md-nav__link">
         
   
   
@@ -1028,7 +1124,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/autodiff/" class="md-nav__link">
+      <a href="../autodiff/" class="md-nav__link">
         
   
   
@@ -1056,7 +1152,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/aio/" class="md-nav__link">
+      <a href="../aio/" class="md-nav__link">
         
   
   
@@ -1084,7 +1180,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/gpu/" class="md-nav__link">
+      <a href="../gpu/" class="md-nav__link">
         
   
   
@@ -1112,7 +1208,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/tensors/" class="md-nav__link">
+      <a href="../tensors/" class="md-nav__link">
         
   
   
@@ -1140,7 +1236,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/xla/" class="md-nav__link">
+      <a href="../xla/" class="md-nav__link">
         
   
   
@@ -1168,7 +1264,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/generics/" class="md-nav__link">
+      <a href="../generics/" class="md-nav__link">
         
   
   
@@ -1196,7 +1292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/effects/" class="md-nav__link">
+      <a href="../effects/" class="md-nav__link">
         
   
   
@@ -1224,7 +1320,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/input/" class="md-nav__link">
+      <a href="../input/" class="md-nav__link">
         
   
   
@@ -1252,7 +1348,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/native-lowering/" class="md-nav__link">
+      <a href="../native-lowering/" class="md-nav__link">
         
   
   
@@ -1280,7 +1376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/regex/" class="md-nav__link">
+      <a href="../regex/" class="md-nav__link">
         
   
   
@@ -1312,8 +1408,6 @@
       
   
   
-    
-  
   
   
     
@@ -1339,23 +1433,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../howto/" class="md-nav__link ">
               
   
   
@@ -1373,13 +1464,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1399,7 +1490,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../comparisons/" class="md-nav__link">
+      <a href="../../howto/comparisons/" class="md-nav__link">
         
   
   
@@ -1461,20 +1552,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
             
   
   
@@ -1510,7 +1598,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../01_basics/" class="md-nav__link">
+      <a href="../../howto/01_basics/" class="md-nav__link">
         
   
   
@@ -1538,7 +1626,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../02_arbitrary_precision/" class="md-nav__link">
+      <a href="../../howto/02_arbitrary_precision/" class="md-nav__link">
         
   
   
@@ -1566,7 +1654,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../03_effects_and_contracts/" class="md-nav__link">
+      <a href="../../howto/03_effects_and_contracts/" class="md-nav__link">
         
   
   
@@ -1594,7 +1682,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../04_classes/" class="md-nav__link">
+      <a href="../../howto/04_classes/" class="md-nav__link">
         
   
   
@@ -1622,7 +1710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../08_native_data/" class="md-nav__link">
+      <a href="../../howto/08_native_data/" class="md-nav__link">
         
   
   
@@ -1650,7 +1738,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../10_narrowing/" class="md-nav__link">
+      <a href="../../howto/10_narrowing/" class="md-nav__link">
         
   
   
@@ -1678,7 +1766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../11_numerics/" class="md-nav__link">
+      <a href="../../howto/11_numerics/" class="md-nav__link">
         
   
   
@@ -1706,7 +1794,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../13_value_classes/" class="md-nav__link">
+      <a href="../../howto/13_value_classes/" class="md-nav__link">
         
   
   
@@ -1734,7 +1822,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../14_tuples/" class="md-nav__link">
+      <a href="../../howto/14_tuples/" class="md-nav__link">
         
   
   
@@ -1762,7 +1850,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../16_dynamic/" class="md-nav__link">
+      <a href="../../howto/16_dynamic/" class="md-nav__link">
         
   
   
@@ -1790,7 +1878,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../17_containers/" class="md-nav__link">
+      <a href="../../howto/17_containers/" class="md-nav__link">
         
   
   
@@ -1818,7 +1906,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../18_errors/" class="md-nav__link">
+      <a href="../../howto/18_errors/" class="md-nav__link">
         
   
   
@@ -1846,7 +1934,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../19_strings/" class="md-nav__link">
+      <a href="../../howto/19_strings/" class="md-nav__link">
         
   
   
@@ -1922,20 +2010,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
             
   
   
@@ -1971,7 +2056,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../12_buffers_and_jit/" class="md-nav__link">
+      <a href="../../howto/12_buffers_and_jit/" class="md-nav__link">
         
   
   
@@ -1999,7 +2084,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../15_algorithms/" class="md-nav__link">
+      <a href="../../howto/15_algorithms/" class="md-nav__link">
         
   
   
@@ -2027,7 +2112,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../28_threads/" class="md-nav__link">
+      <a href="../../howto/28_threads/" class="md-nav__link">
         
   
   
@@ -2055,7 +2140,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../32_native_memory/" class="md-nav__link">
+      <a href="../../howto/32_native_memory/" class="md-nav__link">
         
   
   
@@ -2083,7 +2168,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../33_simd_and_cpu/" class="md-nav__link">
+      <a href="../../howto/33_simd_and_cpu/" class="md-nav__link">
         
   
   
@@ -2111,7 +2196,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../34_atomics_and_threads/" class="md-nav__link">
+      <a href="../../howto/34_atomics_and_threads/" class="md-nav__link">
         
   
   
@@ -2139,7 +2224,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../35_parallel_range/" class="md-nav__link">
+      <a href="../../howto/35_parallel_range/" class="md-nav__link">
         
   
   
@@ -2167,7 +2252,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../36_autodiff/" class="md-nav__link">
+      <a href="../../howto/36_autodiff/" class="md-nav__link">
         
   
   
@@ -2195,7 +2280,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../37_aio/" class="md-nav__link">
+      <a href="../../howto/37_aio/" class="md-nav__link">
         
   
   
@@ -2223,7 +2308,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../40_generics/" class="md-nav__link">
+      <a href="../../howto/40_generics/" class="md-nav__link">
         
   
   
@@ -2251,7 +2336,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../42_toolbox/" class="md-nav__link">
+      <a href="../../howto/42_toolbox/" class="md-nav__link">
         
   
   
@@ -2279,7 +2364,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../43_regex/" class="md-nav__link">
+      <a href="../../howto/43_regex/" class="md-nav__link">
         
   
   
@@ -2307,7 +2392,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../47_collections/" class="md-nav__link">
+      <a href="../../howto/47_collections/" class="md-nav__link">
         
   
   
@@ -2335,7 +2420,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../48_strings/" class="md-nav__link">
+      <a href="../../howto/48_strings/" class="md-nav__link">
         
   
   
@@ -2363,7 +2448,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../49_inheritance/" class="md-nav__link">
+      <a href="../../howto/49_inheritance/" class="md-nav__link">
         
   
   
@@ -2391,7 +2476,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../50_errors_and_generators/" class="md-nav__link">
+      <a href="../../howto/50_errors_and_generators/" class="md-nav__link">
         
   
   
@@ -2443,20 +2528,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
             
   
   
@@ -2492,7 +2574,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../38_cuda/" class="md-nav__link">
+      <a href="../../howto/38_cuda/" class="md-nav__link">
         
   
   
@@ -2520,7 +2602,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../44_tile/" class="md-nav__link">
+      <a href="../../howto/44_tile/" class="md-nav__link">
         
   
   
@@ -2548,7 +2630,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../39_xla/" class="md-nav__link">
+      <a href="../../howto/39_xla/" class="md-nav__link">
         
   
   
@@ -2576,7 +2658,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../45_multi_gpu_jax/" class="md-nav__link">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
         
   
   
@@ -2609,10 +2691,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -2645,21 +2725,18 @@
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
             
   
   
@@ -2677,7 +2754,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2695,7 +2772,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../05_numpy/" class="md-nav__link">
+      <a href="../../howto/05_numpy/" class="md-nav__link">
         
   
   
@@ -2723,7 +2800,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../06_pydantic/" class="md-nav__link">
+      <a href="../../howto/06_pydantic/" class="md-nav__link">
         
   
   
@@ -2751,7 +2828,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../07_parallel/" class="md-nav__link">
+      <a href="../../howto/07_parallel/" class="md-nav__link">
         
   
   
@@ -2779,7 +2856,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../09_torch/" class="md-nav__link">
+      <a href="../../howto/09_torch/" class="md-nav__link">
         
   
   
@@ -2807,7 +2884,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../46_gpt2/" class="md-nav__link">
+      <a href="../../howto/46_gpt2/" class="md-nav__link">
         
   
   
@@ -2835,7 +2912,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../21_training_torch/" class="md-nav__link">
+      <a href="../../howto/21_training_torch/" class="md-nav__link">
         
   
   
@@ -2860,37 +2937,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Training a JAX MLP
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../howto/22_training_jax/" class="md-nav__link">
         
   
   
@@ -2906,103 +2956,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run it
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#borrowed-buffers-again" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Borrowed buffers, again
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#jaxjit-is-already-the-fast-path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        @jax.jit is already the fast path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-the-input-had-to-get-right" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What the input had to get right
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-the-code-comes-from" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where the code comes from
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#22_training_jaxtrainppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        22_training_jax/train.ppy
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -3015,7 +2968,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../25_jax_export/" class="md-nav__link">
+      <a href="../../howto/25_jax_export/" class="md-nav__link">
         
   
   
@@ -3043,7 +2996,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../27_uvicorn/" class="md-nav__link">
+      <a href="../../howto/27_uvicorn/" class="md-nav__link">
         
   
   
@@ -3071,7 +3024,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../29_flax/" class="md-nav__link">
+      <a href="../../howto/29_flax/" class="md-nav__link">
         
   
   
@@ -3099,7 +3052,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../31_torchrun/" class="md-nav__link">
+      <a href="../../howto/31_torchrun/" class="md-nav__link">
         
   
   
@@ -3127,7 +3080,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../41_columnar/" class="md-nav__link">
+      <a href="../../howto/41_columnar/" class="md-nav__link">
         
   
   
@@ -3181,20 +3134,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
             
   
   
@@ -3230,7 +3180,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../20_inventory/" class="md-nav__link">
+      <a href="../../howto/20_inventory/" class="md-nav__link">
         
   
   
@@ -3258,7 +3208,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../23_inference/" class="md-nav__link">
+      <a href="../../howto/23_inference/" class="md-nav__link">
         
   
   
@@ -3286,7 +3236,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../24_interop/" class="md-nav__link">
+      <a href="../../howto/24_interop/" class="md-nav__link">
         
   
   
@@ -3314,7 +3264,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../26_project/" class="md-nav__link">
+      <a href="../../howto/26_project/" class="md-nav__link">
         
   
   
@@ -3342,7 +3292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../30_migrate/" class="md-nav__link">
+      <a href="../../howto/30_migrate/" class="md-nav__link">
         
   
   
@@ -4227,10 +4177,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
+  <a href="#what-lowers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Run it
+        What lowers
       
     </span>
   </a>
@@ -4238,10 +4188,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
+  <a href="#how-a-closure-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it prints
+        How a closure works
       
     </span>
   </a>
@@ -4249,10 +4199,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#borrowed-buffers-again" class="md-nav__link">
+  <a href="#the-python-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Borrowed buffers, again
+        The Python boundary
       
     </span>
   </a>
@@ -4260,43 +4210,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#jaxjit-is-already-the-fast-path" class="md-nav__link">
+  <a href="#what-stays-in-python" class="md-nav__link">
     <span class="md-ellipsis">
       
-        @jax.jit is already the fast path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-the-input-had-to-get-right" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What the input had to get right
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-the-code-comes-from" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where the code comes from
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#22_training_jaxtrainppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        22_training_jax/train.ppy
+        What stays in Python
       
     </span>
   </a>
@@ -4323,182 +4240,123 @@
   
 
 
-<h1 id="training-a-jax-mlp">Training a JAX MLP<a class="headerlink" href="#training-a-jax-mlp" title="Permanent link">&para;</a></h1>
-<p>The same trainer as <a href="../21_training_torch/">21_training_torch</a>
-with JAX, converted by <code>ppy convert</code> with no hand editing. Preprocessing
-goes from about 63 ms to under 1 ms. The training step stays where it was,
-about 25 ms for 100 steps either way, because XLA compiled it on its first
-call and there is no per-operator Python overhead left to remove.</p>
-<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>train.ppy
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>train.ppy
+<h1 id="functions-as-values">Functions as values<a class="headerlink" href="#functions-as-values" title="Permanent link">&para;</a></h1>
+<p>Nested functions, <code>lambda</code>, and functions passed, returned, and stored as
+values lower to native code. A function that makes or calls one goes native
+under <code>ppy run</code>, in a standalone binary, and in emitted C and C++, and gives
+CPython's answer on every path.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_scale</span><span class="p">(</span><span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="k">return</span> <span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">v</span> <span class="o">*</span> <span class="n">k</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">compose</span><span class="p">(</span><span class="n">f</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">],</span> <span class="n">g</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="k">return</span> <span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">f</span><span class="p">(</span><span class="n">g</span><span class="p">(</span><span class="n">v</span><span class="p">))</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">total</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">bump</span><span class="p">(</span><span class="n">by</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="k">nonlocal</span> <span class="n">count</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="n">count</span> <span class="o">+=</span> <span class="n">by</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">twice</span> <span class="o">=</span> <span class="n">compose</span><span class="p">(</span><span class="n">make_scale</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">v</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>        <span class="n">bump</span><span class="p">(</span><span class="n">twice</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">37</span> <span class="o">%</span> <span class="mi">11</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)]</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">best</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="p">(</span><span class="n">v</span> <span class="o">%</span> <span class="mi">4</span><span class="p">,</span> <span class="n">v</span><span class="p">))</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="k">return</span> <span class="n">count</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">v</span> <span class="o">*</span> <span class="n">v</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)))</span> <span class="o">+</span> <span class="n">best</span>
 </code></pre></div>
-<!-- outputs:start -->
-<h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>python  train.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># device: cpu
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a># native prep: False
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>prep      67.9 ms   checksum=-21433.891867
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>train     94.8 ms   loss 1.0663 -&gt; 1.0109
+<h2 id="what-lowers">What lowers<a class="headerlink" href="#what-lowers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>def</code> inside a function</td>
+<td>reads the enclosing function's variables, and writes them with <code>nonlocal</code></td>
+</tr>
+<tr>
+<td><code>lambda</code></td>
+<td>typed by where it goes: a <code>Callable</code> parameter, a declared local or field, a sort key, <code>map</code> or <code>filter</code></td>
+</tr>
+<tr>
+<td>a function of the module used as a value</td>
+<td><code>apply(double, xs)</code>, <code>ops = [add, sub]</code></td>
+</tr>
+<tr>
+<td><code>Callable[[A, B], R]</code></td>
+<td>a parameter, a result, a local, a list or dict element, an object's field</td>
+</tr>
+<tr>
+<td><code>f(x)</code> where <code>f</code> is a value</td>
+<td>a local, a parameter, <code>ops[i](x)</code>, <code>self.f(x)</code>, <code>make()(x)</code></td>
+</tr>
+<tr>
+<td><code>xs.sort(key=f)</code>, <code>sorted(xs, key=f)</code></td>
+<td>with <code>reverse=</code>; a stable sort</td>
+</tr>
+<tr>
+<td><code>min(xs, key=f)</code>, <code>max(xs, key=f)</code></td>
+<td>the first element whose key no later one beats</td>
+</tr>
+<tr>
+<td><code>map(f, xs)</code>, <code>filter(f, xs)</code>, <code>filter(None, xs)</code></td>
+<td>where a <code>for</code> loop, <code>sum</code>, <code>min</code>, <code>max</code>, <code>sorted</code>, or a comprehension consumes it</td>
+</tr>
+</tbody>
+</table>
+<p>A key or a <code>map</code> function is a lambda, a function's name, or any expression
+giving a function value. <code>len</code> is a key too.</p>
+<h2 id="how-a-closure-works">How a closure works<a class="headerlink" href="#how-a-closure-works" title="Permanent link">&para;</a></h2>
+<p>A function value is a closure: a handle, reference counted like a list,
+holding the address of the function's native entry and a cell for each
+variable it shares with the function that made it. A shared variable lives
+in its cell for its whole life, and both functions read and write it there.</p>
+<p>So a closure sees a variable as it is when the closure runs, not as it was
+when the closure was made, which is CPython's late binding:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">late</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="k">return</span> <span class="n">x</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">n</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">first</span> <span class="o">=</span> <span class="n">get</span><span class="p">()</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">n</span> <span class="o">*</span> <span class="mi">2</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="k">return</span> <span class="n">first</span> <span class="o">+</span> <span class="n">get</span><span class="p">()</span>  <span class="c1"># n + 2 * n</span>
 </code></pre></div>
-<p><strong><code>ppy run train.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a># device: cpu
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a># native prep: True
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>prep       0.9 ms   checksum=-21433.891867
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>train    111.2 ms   loss 1.0663 -&gt; 1.0109
-</code></pre></div>
-<!-- outputs:end -->
-
-<h2 id="borrowed-buffers-again">Borrowed buffers, again<a class="headerlink" href="#borrowed-buffers-again" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-</code></pre></div>
-<p>The converter declared both parameters <code>Buffer[float]</code> because the body
-indexes them and never slices, and the values feeding them became
-<code>array.array</code>. The loop lowers natively.</p>
-<h2 id="jaxjit-is-already-the-fast-path"><code>@jax.jit</code> is already the fast path<a class="headerlink" href="#jaxjit-is-already-the-fast-path" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">,</span> <span class="n">rate</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">]:</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">grads</span> <span class="o">=</span> <span class="n">gradients_of</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">w1</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b1</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">w2</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">b2</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
-</code></pre></div>
-<p><code>ppy build</code> can export a <code>@jax.jit</code> function whose inputs carry <code>ppy.Shape</code>
-and <code>ppy.DType</code> to StableHLO ahead of time, which saves the trace rather
-than the kernel (<a href="../25_jax_export/">JAX export</a>).</p>
-<p>It declines to export a function that is differentiated, and says why: a
-serialized <code>jax.export</code> artifact carries no VJP. Routing <code>forward_loss</code>
-through one would break <code>jax.grad</code> on a program that runs correctly under
-plain CPython.</p>
-<h2 id="what-the-input-had-to-get-right">What the input had to get right<a class="headerlink" href="#what-the-input-had-to-get-right" title="Permanent link">&para;</a></h2>
+<p>A loop variable is one variable too: after <code>for i in range(3):
+fs.append(lambda: i)</code>, every closure in <code>fs</code> gives 2, in CPython and natively.</p>
+<p>A call through a value is an indirect call of the entry, with the same
+arguments and result a direct call has. A closure that raises raises through
+the call, and one that falls back takes its caller with it. A closure that
+refers to itself, such as a nested recursive function, is a cycle the
+collector frees.</p>
+<h2 id="the-python-boundary">The Python boundary<a class="headerlink" href="#the-python-boundary" title="Permanent link">&para;</a></h2>
+<p>A function value never crosses to Python. A function that takes or returns
+one runs as Python when Python calls it, and natively when native code calls
+it. A function that only makes and calls closures inside itself crosses as
+usual: Python calls it natively and gets back what it returns.</p>
+<h2 id="what-stays-in-python">What stays in Python<a class="headerlink" href="#what-stays-in-python" title="Permanent link">&para;</a></h2>
+<p>A function using any of these runs as Python:</p>
 <ul>
-<li><code>standardize</code> indexes rather than slices, as in the torch example.</li>
-<li><code>train_step</code> takes and returns the parameters positionally rather than
-  rebinding one list. Rebinding a variable from the return value of the
-  function it is passed to makes its type self-referential, and inference
-  gives up.</li>
-<li><code>forward_loss</code> is called directly as well as through <code>jax.grad</code>. A
-  function only ever reached through a higher-order transform has no call
-  site to infer from.</li>
+<li>a lambda nothing types, such as <code>f = lambda v: v + 1</code> with no annotation</li>
+<li>a nested function or lambda with defaults, <code>*args</code>, keyword-only
+  parameters, or a decorator</li>
+<li>calling a function value with keyword arguments</li>
+<li>a closure sharing a tuple, a buffer, or a value class</li>
+<li><code>min</code> and <code>max</code> with a key over strings or objects; a key giving a string</li>
+<li><code>map</code> over several iterables</li>
+<li>a function of another module used as a value, or a method bound to its
+  object (<code>f = obj.method</code>)</li>
 </ul>
-<h2 id="where-the-code-comes-from">Where the code comes from<a class="headerlink" href="#where-the-code-comes-from" title="Permanent link">&para;</a></h2>
-<p>Generated, not hand-written: <code>train.ppy</code> is exactly what
-<code>ppy convert train.py --promote-buffers</code> writes, and
-<code>examples/verify_conversions.py</code> checks that on every run.</p>
-<p>Read on: <a href="../../internals/plugins/">Plugins: JAX</a> ·
-<a href="../29_flax/">Flax</a></p>
-<h2 id="22_training_jaxtrainppy"><code>22_training_jax/train.ppy</code><a class="headerlink" href="#22_training_jaxtrainppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">array</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffer</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>        <span class="n">base</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>        <span class="n">target</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span>
-<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
-<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>        <span class="n">sum_</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>            <span class="n">sum_</span> <span class="o">+=</span> <span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span>
-<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>        <span class="n">mean</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">sum_</span> <span class="o">/</span> <span class="n">cols</span>
-<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>
-<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>        <span class="n">spread</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>            <span class="n">spread</span> <span class="o">+=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span>
-<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>        <span class="n">deviation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">spread</span> <span class="o">/</span> <span class="n">cols</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-8</span>
-<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>
-<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>            <span class="n">value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="n">deviation</span>
-<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">value</span>
-<a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a>            <span class="n">interaction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">cols</span><span class="p">]</span>
-<a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">cols</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">interaction</span>
-<a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">interaction</span>
-<a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a>    <span class="k">return</span> <span class="n">total</span>
-<a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a>
-<a id="__codelineno-5-37" name="__codelineno-5-37" href="#__codelineno-5-37"></a>
-<a id="__codelineno-5-38" name="__codelineno-5-38" href="#__codelineno-5-38"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-5-39" name="__codelineno-5-39" href="#__codelineno-5-39"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward_loss</span><span class="p">(</span>
-<a id="__codelineno-5-40" name="__codelineno-5-40" href="#__codelineno-5-40"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a>    <span class="n">w1</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a>    <span class="n">b1</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-44" name="__codelineno-5-44" href="#__codelineno-5-44"></a>    <span class="n">w2</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-45" name="__codelineno-5-45" href="#__codelineno-5-45"></a>    <span class="n">b2</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-46" name="__codelineno-5-46" href="#__codelineno-5-46"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
-<a id="__codelineno-5-47" name="__codelineno-5-47" href="#__codelineno-5-47"></a>    <span class="n">hidden</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w1</span><span class="p">)</span> <span class="o">+</span> <span class="n">b1</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-<a id="__codelineno-5-48" name="__codelineno-5-48" href="#__codelineno-5-48"></a>    <span class="n">predicted</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="n">w2</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
-<a id="__codelineno-5-49" name="__codelineno-5-49" href="#__codelineno-5-49"></a>    <span class="n">residual</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">predicted</span> <span class="o">-</span> <span class="n">y</span>
-<a id="__codelineno-5-50" name="__codelineno-5-50" href="#__codelineno-5-50"></a>    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">residual</span> <span class="o">*</span> <span class="n">residual</span><span class="p">)</span>
-<a id="__codelineno-5-51" name="__codelineno-5-51" href="#__codelineno-5-51"></a>
-<a id="__codelineno-5-52" name="__codelineno-5-52" href="#__codelineno-5-52"></a>
-<a id="__codelineno-5-53" name="__codelineno-5-53" href="#__codelineno-5-53"></a><span class="n">gradients_of</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">forward_loss</span><span class="p">,</span> <span class="n">argnums</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<a id="__codelineno-5-54" name="__codelineno-5-54" href="#__codelineno-5-54"></a>
-<a id="__codelineno-5-55" name="__codelineno-5-55" href="#__codelineno-5-55"></a>
-<a id="__codelineno-5-56" name="__codelineno-5-56" href="#__codelineno-5-56"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-5-57" name="__codelineno-5-57" href="#__codelineno-5-57"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span>
-<a id="__codelineno-5-58" name="__codelineno-5-58" href="#__codelineno-5-58"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-59" name="__codelineno-5-59" href="#__codelineno-5-59"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-60" name="__codelineno-5-60" href="#__codelineno-5-60"></a>    <span class="n">w1</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-61" name="__codelineno-5-61" href="#__codelineno-5-61"></a>    <span class="n">b1</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-62" name="__codelineno-5-62" href="#__codelineno-5-62"></a>    <span class="n">w2</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-63" name="__codelineno-5-63" href="#__codelineno-5-63"></a>    <span class="n">b2</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
-<a id="__codelineno-5-64" name="__codelineno-5-64" href="#__codelineno-5-64"></a>    <span class="n">rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-5-65" name="__codelineno-5-65" href="#__codelineno-5-65"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">]:</span>
-<a id="__codelineno-5-66" name="__codelineno-5-66" href="#__codelineno-5-66"></a>    <span class="n">grads</span> <span class="o">=</span> <span class="n">gradients_of</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">)</span>
-<a id="__codelineno-5-67" name="__codelineno-5-67" href="#__codelineno-5-67"></a>    <span class="k">return</span> <span class="p">(</span>
-<a id="__codelineno-5-68" name="__codelineno-5-68" href="#__codelineno-5-68"></a>        <span class="n">w1</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-<a id="__codelineno-5-69" name="__codelineno-5-69" href="#__codelineno-5-69"></a>        <span class="n">b1</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
-<a id="__codelineno-5-70" name="__codelineno-5-70" href="#__codelineno-5-70"></a>        <span class="n">w2</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
-<a id="__codelineno-5-71" name="__codelineno-5-71" href="#__codelineno-5-71"></a>        <span class="n">b2</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span>
-<a id="__codelineno-5-72" name="__codelineno-5-72" href="#__codelineno-5-72"></a>    <span class="p">)</span>
-<a id="__codelineno-5-73" name="__codelineno-5-73" href="#__codelineno-5-73"></a>
-<a id="__codelineno-5-74" name="__codelineno-5-74" href="#__codelineno-5-74"></a>
-<a id="__codelineno-5-75" name="__codelineno-5-75" href="#__codelineno-5-75"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-5-76" name="__codelineno-5-76" href="#__codelineno-5-76"></a>    <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20000</span>
-<a id="__codelineno-5-77" name="__codelineno-5-77" href="#__codelineno-5-77"></a>    <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span>
-<a id="__codelineno-5-78" name="__codelineno-5-78" href="#__codelineno-5-78"></a>
-<a id="__codelineno-5-79" name="__codelineno-5-79" href="#__codelineno-5-79"></a>    <span class="n">key</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<a id="__codelineno-5-80" name="__codelineno-5-80" href="#__codelineno-5-80"></a>    <span class="n">k1</span><span class="p">,</span> <span class="n">k2</span><span class="p">,</span> <span class="n">k3</span><span class="p">,</span> <span class="n">k4</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
-<a id="__codelineno-5-81" name="__codelineno-5-81" href="#__codelineno-5-81"></a>    <span class="n">raw</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k1</span><span class="p">,</span> <span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span><span class="p">,))</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
-<a id="__codelineno-5-82" name="__codelineno-5-82" href="#__codelineno-5-82"></a>    <span class="n">features</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span>
-<a id="__codelineno-5-83" name="__codelineno-5-83" href="#__codelineno-5-83"></a>
-<a id="__codelineno-5-84" name="__codelineno-5-84" href="#__codelineno-5-84"></a>    <span class="n">started</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
-<a id="__codelineno-5-85" name="__codelineno-5-85" href="#__codelineno-5-85"></a>    <span class="n">checksum</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
-<a id="__codelineno-5-86" name="__codelineno-5-86" href="#__codelineno-5-86"></a>    <span class="n">prep_ms</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
-<a id="__codelineno-5-87" name="__codelineno-5-87" href="#__codelineno-5-87"></a>
-<a id="__codelineno-5-88" name="__codelineno-5-88" href="#__codelineno-5-88"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-5-89" name="__codelineno-5-89" href="#__codelineno-5-89"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k2</span><span class="p">,</span> <span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
-<a id="__codelineno-5-90" name="__codelineno-5-90" href="#__codelineno-5-90"></a>    <span class="n">w1</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k3</span><span class="p">,</span> <span class="p">(</span><span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">32</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.1</span>
-<a id="__codelineno-5-91" name="__codelineno-5-91" href="#__codelineno-5-91"></a>    <span class="n">b1</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">32</span><span class="p">,))</span>
-<a id="__codelineno-5-92" name="__codelineno-5-92" href="#__codelineno-5-92"></a>    <span class="n">w2</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k4</span><span class="p">,</span> <span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.1</span>
-<a id="__codelineno-5-93" name="__codelineno-5-93" href="#__codelineno-5-93"></a>    <span class="n">b2</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,))</span>
-<a id="__codelineno-5-94" name="__codelineno-5-94" href="#__codelineno-5-94"></a>
-<a id="__codelineno-5-95" name="__codelineno-5-95" href="#__codelineno-5-95"></a>    <span class="n">first</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">forward_loss</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">))</span>
-<a id="__codelineno-5-96" name="__codelineno-5-96" href="#__codelineno-5-96"></a>    <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span> <span class="o">=</span> <span class="n">train_step</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">)</span>
-<a id="__codelineno-5-97" name="__codelineno-5-97" href="#__codelineno-5-97"></a>    <span class="n">w1</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
-<a id="__codelineno-5-98" name="__codelineno-5-98" href="#__codelineno-5-98"></a>
-<a id="__codelineno-5-99" name="__codelineno-5-99" href="#__codelineno-5-99"></a>    <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
-<a id="__codelineno-5-100" name="__codelineno-5-100" href="#__codelineno-5-100"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
-<a id="__codelineno-5-101" name="__codelineno-5-101" href="#__codelineno-5-101"></a>        <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span> <span class="o">=</span> <span class="n">train_step</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">)</span>
-<a id="__codelineno-5-102" name="__codelineno-5-102" href="#__codelineno-5-102"></a>    <span class="n">last</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">forward_loss</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">))</span>
-<a id="__codelineno-5-103" name="__codelineno-5-103" href="#__codelineno-5-103"></a>    <span class="n">train_ms</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
-<a id="__codelineno-5-104" name="__codelineno-5-104" href="#__codelineno-5-104"></a>
-<a id="__codelineno-5-105" name="__codelineno-5-105" href="#__codelineno-5-105"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# device: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">platform</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-5-106" name="__codelineno-5-106" href="#__codelineno-5-106"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# native prep: </span><span class="si">{</span><span class="n">ppy</span><span class="o">.</span><span class="n">native</span><span class="o">.</span><span class="n">compiled</span><span class="p">(</span><span class="n">standardize</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-5-107" name="__codelineno-5-107" href="#__codelineno-5-107"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"prep  </span><span class="si">{</span><span class="n">prep_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   checksum=</span><span class="si">{</span><span class="n">checksum</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-5-108" name="__codelineno-5-108" href="#__codelineno-5-108"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"train </span><span class="si">{</span><span class="n">train_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   loss </span><span class="si">{</span><span class="n">first</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">last</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-5-109" name="__codelineno-5-109" href="#__codelineno-5-109"></a>
-<a id="__codelineno-5-110" name="__codelineno-5-110" href="#__codelineno-5-110"></a>
-<a id="__codelineno-5-111" name="__codelineno-5-111" href="#__codelineno-5-111"></a><span class="n">main</span><span class="p">()</span>
-</code></pre></div>
-<p>Source: <a href="https://github.com/franknoh/PPy/blob/main/examples/22_training_jax"><code>examples/22_training_jax</code></a>.</p>
+<p><code>tests/test_closures.py</code> holds each form in the table to CPython on every path.</p>
 
 
 
@@ -4536,7 +4394,7 @@ plain CPython.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../21_training_torch/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Training a torch MLP">
+          <a href="../exceptions-and-generators/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Exceptions and generators">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4546,20 +4404,20 @@ plain CPython.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Training a torch MLP
+                Exceptions and generators
               </div>
             </div>
           </a>
         
         
           
-          <a href="../25_jax_export/" class="md-footer__link md-footer__link--next" aria-label="Next: JAX export">
+          <a href="../native/" class="md-footer__link md-footer__link--next" aria-label="Next: Native memory and FFI">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                JAX export
+                Native memory and FFI
               </div>
             </div>
             <div class="md-footer__button md-icon">
