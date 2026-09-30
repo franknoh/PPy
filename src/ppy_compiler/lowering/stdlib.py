@@ -181,7 +181,7 @@ class StdlibLowering:
             if renamed is None:
                 raise Unsupported(f"`deque.{attr}` has no native lowering")
             if attr in {"pop", "popleft"}:
-                kind, handle, owned = self._receiver(receiver)  # type: ignore[attr-defined]
+                _, handle, owned = self._receiver(receiver)  # type: ignore[attr-defined]
                 self._require(  # type: ignore[attr-defined]
                     core.cmp(
                         self.b,  # type: ignore[attr-defined]
