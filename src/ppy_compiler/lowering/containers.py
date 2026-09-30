@@ -27,7 +27,7 @@ from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, BufferType, PtrType, Successor, Value
 from ..ir.dialects import core
 from .collection_api import CollectionApiLowering, _called
-from .collections import BUILTINS, HANDLE, Kind, Shape, pyset_kind
+from .collections import BUILTINS, HANDLE, Kind, Shape, pyset_kind, shape_of
 
 __all__ = ["ContainerLowering"]
 
@@ -345,7 +345,34 @@ class ContainerLowering(CollectionApiLowering):
         self._done_with(handle, owned)
         return self._rt("ppy_str_finish", (builder,), HANDLE), True
 
+    def _shown_text(self, node: ast.expr) -> Value | None:
+        shape = self._object_of(node)
+        record = shape_of(self._type_of(node), self._records())
+        plain = record is not None and record.kind == "record"
+        if (shape is None or self._is_exception(shape)) and not plain:
+            return super()._shown_text(node)  # type: ignore[misc]
+        builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)
+        self._add_formatted(builder, node, -1, "")
+        return self._rt("ppy_str_finish", (builder,), HANDLE)
+
     def _add_formatted(self, builder: Value, node: ast.expr, conversion: int, spec: str) -> None:
+        shape = self._object_of(node)
+        if shape is not None and not self._is_exception(shape):
+            if spec:
+                raise Unsupported("a format spec over an object has no native lowering")
+            handle, owned = self._handle(node)
+            self._add_object_text(builder, shape, handle, conversion in {ord("r"), ord("a")})
+            self._done_with(handle, owned)
+            return None
+        record = shape_of(self._type_of(node), self._records())
+        if record is not None and record.kind == "record" and not spec:
+            if not self._plain_dataclass(record.record):
+                raise Unsupported(f"`{record.record}` is shown by its own method, in Python")
+            value = self._record_value(node)
+            if value is None:
+                raise Unsupported(f"`{ast.unparse(node)}` has no native struct")
+            self._add_item_repr(builder, record, value)
+            return None
         empty = _empty_display(node)
         if empty is not None and not spec:
             self._add_text(builder, empty)
@@ -440,6 +467,8 @@ class ContainerLowering(CollectionApiLowering):
             if shape.collection.name not in _ALIASES:
                 raise Unsupported("a `ppy` collection inside a list is shown by Python")
             self._add_container_repr(builder, shape.collection, value)
+        elif shape.kind == "object":
+            self._add_object_text(builder, shape, value, True)
         elif shape.kind == "record" and self._plain_dataclass(shape.record):
             name = shape.record.rpartition(".")[2]
             self._add_text(builder, f"{name}(")

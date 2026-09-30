@@ -2393,6 +2393,9 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         compared = self._object_compare(node)
         if compared is not None:
             return compared
+        compared = self._record_compare(node)
+        if compared is not None:
+            return compared
         predicate = _COMPARISONS.get(type(node.ops[0]))
         if predicate is None:
             raise Unsupported("comparison operator has no native lowering")
