@@ -8,27 +8,33 @@ found. It is input for choosing what 0.6.0 lowers next.
 
 [TheAlgorithms/Python](https://github.com/TheAlgorithms/Python) (MIT), commit
 `0a72d14` of 2026-09-28, shallow-cloned outside the repository: 1,603 `.py`
-files in 46 folders, 4,585 functions, 36,972 statements. It is a good test of
-code nobody wrote for PPy: mostly annotated, heavy on lists, dicts, and
-doctests, with some NumPy, Matplotlib, and network code at the edges.
+files in 46 folders, 4,686 functions (101 of them nested), 36,969 statements.
+It is a good test of code nobody wrote for PPy: mostly annotated, heavy on
+lists, dicts, and doctests, with some NumPy, Matplotlib, and network code at
+the edges.
 
 The summary runs over the whole tree as one project, with `[tool.ppy]
-strict = false`. Cold, it takes 45 seconds, because every module is analyzed
-and lowered once. Warm, from the analysis and lowering cache, it takes 21
-seconds. Both peak under 500 MB. A module whose lowering raises is reported under "could not be
-analyzed" and the rest of the report still comes out.
+strict = false`. It takes 30 to 50 seconds whether the project's cache is
+cold or warm, and peaks under 500 MB. A module whose lowering raises is
+reported under "could not be analyzed" and the rest of the report still
+comes out. On the current tree no module fails.
 
 ## How much goes native
 
 | tier | functions | statements |
 |---|---:|---:|
-| native, called from Python | 224 (5%) | 2,233 (6%) |
-| native, called from native code | 410 (9%) | 1,620 (4%) |
-| Python | 3,951 (86%) | 33,119 (90%) |
+| native, called from Python | 230 (5%) | 2,269 (6%) |
+| native, called from native code | 420 (9%) | 1,698 (5%) |
+| Python | 4,036 (86%) | 33,002 (89%) |
 
 247 of the Python functions are generic. They have no entry point of their
 own, and each native caller compiles its own instance, so the report does not
 count them as blocked.
+
+A nested function counts its own body. The function around it counts its
+`def` as one statement, so no statement is counted twice. A nested function
+has no entry point of its own either: it runs where the function around it
+runs.
 
 "Called from native code" means the function compiled, but a call from Python
 runs its Python body. The reasons, by count:
@@ -36,11 +42,12 @@ runs its Python body. The reasons, by count:
 | functions | why its boundary is not used |
 |---:|---|
 | 155 | the boundary crossing costs more than the body saves |
-| 114 | returns nothing, which has no Python boundary |
-| 90 | takes an object, which native callers pass by handle |
+| 115 | returns nothing, which has no Python boundary |
+| 94 | takes an object, which native callers pass by handle |
 | 22 | returns an object, which native callers receive by handle |
 | 20 | copying the collections in costs more than the body does with them |
 | 9 | copying its strings across costs what one pass over them saves |
+| 5 | a closure, lowered inside the function around it |
 
 ## What keeps the rest in Python
 
@@ -49,24 +56,35 @@ the rows add up to more than the Python total.
 
 | statements | functions | reason |
 |---:|---:|---|
-| 9,310 | 902 | calls code whose effects are unknown |
-| 3,865 | 355 | does I/O |
-| 2,453 | 247 | writes to a parameter native code copies |
-| 2,069 | 216 | reads a module global that can change |
-| 1,777 | 135 | writes to an object native code does not own |
+| 8,213 | 840 | calls code whose effects are unknown |
+| 3,755 | 355 | does I/O |
+| 2,466 | 249 | writes to a parameter native code copies |
+| 2,027 | 217 | reads a module global that can change |
+| 1,800 | 140 | writes to an object native code does not own |
 | 1,554 | 154 | calls `isinstance` |
-| 1,395 | 138 | draws random numbers |
-| 1,158 | 240 | a parameter or result with no annotation the checker could infer |
-| 1,013 | 74 | writes through a name the compiler cannot follow |
-| 765 | 92 | calls back into Python |
-| 560 | 72 | a generator that is stored, returned, or stepped by hand |
+| 1,388 | 138 | draws random numbers |
+| 1,156 | 241 | a parameter or result with no annotation the checker could infer |
+| 1,002 | 74 | writes through a name the compiler cannot follow |
+| 747 | 92 | calls back into Python |
+| 641 | 96 | a nested function whose enclosing function stays in Python |
+| 539 | 72 | a generator that is stored, returned, or stepped by hand |
+| 535 | 55 | a `for` over something native code does not walk |
 | 530 | 102 | a `numpy.ndarray` parameter |
-| 520 | 54 | a `for` over something native code does not walk |
 | 443 | 48 | a chained comparison |
-| 399 | 55 | a `list[Any]` parameter |
-| 313 | 26 | `in` or `is` against a tuple, a range, or a string |
-| 235 | 33 | `**` between two integers |
-| 187 | 14 | an empty `[]` or `{}` whose element type is never told |
+| 407 | 56 | a `list[Any]` parameter |
+| 348 | 27 | `in` or `is` against a tuple, a range, or a string |
+| 294 | 36 | `**` between two integers |
+| 213 | 16 | an empty `[]` or `{}` whose element type is never told |
+
+Closures lower now, and they are not a blocker of their own. Of the 101
+nested functions, 96 stay in Python only because the function around them
+does, for one of the other reasons in this table. Among the reasons that are
+about closures themselves: four closures share a variable of a type native
+code has no cell for (a `set[Any]`, a `defaultdict`, a list of lists of
+`float | int`), three functions define a nested function with defaults or a
+decorator, and one function value returns a tuple of four values. No function
+in the corpus stays in Python for an untyped lambda or for a keyword argument
+through a function value.
 
 The unknown-effect calls spread thinly. The most frequent callees are
 `pytest.raises` (40), `httpx2.get` (39), `np.random.default_rng` (23),
@@ -79,12 +97,12 @@ What this suggests for 0.6.0, in order of statements freed per unit of work:
    builtin type, as input validation, where the checker already knows the
    answer or the check is one type tag.
 2. **Chained comparisons, `in` on a tuple or range, integer `**`, and `for`
-   over a tuple** (about 1,500 statements together). Each is small in the
+   over a tuple** (about 1,600 statements together). Each is small in the
    lowering.
-3. **Module globals that can change** (2,069). Most are never written after
+3. **Module globals that can change** (2,027). Most are never written after
    import. Reading them as constants once the module has finished loading
    would free most of the row.
-4. **Parameter writes** (2,453) and **writes to unowned objects** (1,777).
+4. **Parameter writes** (2,466) and **writes to unowned objects** (1,800).
    These need the copy-back that lists already have, extended to the other
    shapes.
 5. I/O, random numbers, and callbacks are working as intended: those

@@ -65,6 +65,7 @@ def test_what_keeps_a_closure_in_python_has_a_hint_and_the_closures_page():
     for reason in (
         "a lambda whose type native code does not know",
         "a lambda with defaults or special parameters",
+        "a nested `a` with decorators, defaults, or special parameters has no native lowering",
         "a function value takes positional arguments natively",
         "`self.step` is not a function native code can call",
     ):

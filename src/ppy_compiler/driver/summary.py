@@ -122,7 +122,8 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/closures/",
     ),
     _shape(
-        r"a lambda with defaults or special parameters|is not a function a closure can hold",
+        r"a lambda with defaults or special parameters|is not a function a closure can hold"
+        r"|a nested `[^`]+` with decorators, defaults, or special parameters",
         "a nested function or lambda with defaults, `*args`, or a decorator",
         "take the value as an ordinary parameter, or define it at module level",
         "guide/closures/",
