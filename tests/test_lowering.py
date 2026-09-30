@@ -269,8 +269,8 @@ def test_what_the_subset_excludes_is_refused_with_the_reason(write, analyze):
 
 
         def looped(a: int, b: int, c: int) -> bool:
-            for _ in range(a):
-                pass
+            while a > 0:
+                a -= 1
             else:
                 return b < c
             return False
@@ -292,9 +292,7 @@ def test_what_the_subset_excludes_is_refused_with_the_reason(write, analyze):
     lowered = lower_module_to_ir(analysis, candidates)
     assert not lowered.functions
     assert "no native ABI" in lowered.rejected["kernels.words"]
-    assert lowered.rejected["kernels.looped"] == (
-        "only `for NAME in range(...)` or over a list parameter is lowered"
-    )
+    assert lowered.rejected["kernels.looped"] == "`while ... else` has no native lowering"
     assert "`kernels.looped` has no native lowering" in lowered.rejected["kernels.caller"]
     assert not verify(lowered.module), "dropped functions leave no half-built bodies behind"
 

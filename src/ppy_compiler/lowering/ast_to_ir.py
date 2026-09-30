@@ -2049,7 +2049,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
     def _for(self, node: ast.For) -> None:
         if self._for_generator(node):
             return
-        if self._is_walk(node.iter):
+        if self._is_walk(node.iter) or (node.orelse and self._counted_kind(node.iter)):
             self._for_collection(node)
             return
         if node.orelse or not isinstance(node.target, ast.Name):

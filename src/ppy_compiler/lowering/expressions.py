@@ -143,6 +143,8 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
         """`x in (a, b)`, `x in {a, b}`, `x in [a, b]`, `x in t` for a tuple `t`,
         and `x in range(...)`; `not in` is its negation."""
         operator = node.ops[0]
+        if isinstance(operator, (ast.Is, ast.IsNot)):
+            return self._bool_identity(node)
         if not isinstance(operator, (ast.In, ast.NotIn)):
             return None
         container = node.comparators[0]
@@ -158,6 +160,16 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
         if found is None:
             return None
         return self._negated(found) if isinstance(operator, ast.NotIn) else found
+
+    def _bool_identity(self, node: ast.Compare) -> Value | None:
+        """`flag is True`, `a is not b` of two bools: there is one `True` and one
+        `False`, so identity is equality. An `int` may be a `bool` or not, so
+        only values the checker says are bools compare this way."""
+        left, right = node.left, node.comparators[0]
+        if self._plain_type(left) != T.BOOL or self._plain_type(right) != T.BOOL:
+            return None
+        found = self._pair(left, ast.Eq(), right, node)
+        return self._negated(found) if isinstance(node.ops[0], ast.IsNot) else found
 
     def _is_range(self, node: ast.Call) -> bool:
         t = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
@@ -545,7 +557,15 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
         the later ones reading it back from the first, a name."""
         first = node.targets[0]
         if not isinstance(first, ast.Name):
-            raise Unsupported("a chained assignment binds a name first")
+            if self._plain_type(node.value) not in (T.INT, T.FLOAT, T.BOOL):
+                raise Unsupported("a chained assignment binds a name first")
+            # A number, made once, then bound to each target in turn.
+            read = self._once(node.value)
+            for target in node.targets:
+                each = ast.copy_location(ast.Assign([target], read), node)
+                self.__dict__.setdefault("_made_nodes", []).append(each)
+                self._assign(each)  # type: ignore[attr-defined]
+            return
         head = ast.copy_location(ast.Assign([first], node.value), node)
         self._assign(head)  # type: ignore[attr-defined]
         for target in node.targets[1:]:

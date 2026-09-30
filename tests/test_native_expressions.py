@@ -579,7 +579,72 @@ def main() -> None:
 main()
 """
 
+IDENTITY = """
+def sieve(num: int) -> list[int]:
+    marks = [True] * (num + 1)
+    marks[0] = marks[1] = False
+    primes: list[int] = []
+    for start in range(2, num + 1):
+        if marks[start] is True:
+            primes.append(start)
+            for i in range(start * start, num + 1, start):
+                if marks[i] is not False:
+                    marks[i] = False
+    return primes
+
+
+def both(a: bool, b: bool) -> int:
+    return (a is b) + 2 * (a is not True) + 4 * (b is False)
+
+
+def main() -> None:
+    print(sieve(30), both(True, True), both(False, True), both(True, False))
+
+
+main()
+"""
+
+FOR_ELSE = """
+def first_factor(n: int) -> int:
+    for d in range(2, n):
+        if n % d == 0:
+            break
+    else:
+        return n
+    return d
+
+
+def find(words: list[str], want: str) -> int:
+    for i, w in enumerate(words):
+        if w == want:
+            break
+    else:
+        i = -1
+    return i
+
+
+def letters(s: str) -> str:
+    out = ""
+    for ch in s:
+        if ch == "!":
+            break
+        out += ch
+    else:
+        out += "?"
+    return out
+
+
+def main() -> None:
+    ws = ["a", "b", "c"]
+    print(first_factor(15), first_factor(13), find(ws, "b"), find(ws, "z"), letters("hi!x"), letters("yo"))
+
+
+main()
+"""
+
 PROGRAMS = {
+    "for_else": (FOR_ELSE, ["first_factor", "find", "letters"]),
+    "identity": (IDENTITY, ["sieve", "both"]),
     "recursive": (RECURSIVE, ["preorder", "build", "walk"]),
     "expressions": (EXPRESSIONS, ["kinds", "nodes", "chains", "members", "powers", "float_powers"]),
     "loops": (LOOPS, ["counted", "tupled", "stepped", "chained", "picked"]),
