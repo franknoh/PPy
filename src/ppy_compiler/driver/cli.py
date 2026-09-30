@@ -297,7 +297,24 @@ def build_parser() -> argparse.ArgumentParser:
     explain = subparsers.add_parser(
         "explain", help="explain a location, function, or diagnostic code"
     )
-    explain.add_argument("location", help="FILE:LINE, a function qualname, or a diagnostic code")
+    explain.add_argument(
+        "location",
+        nargs="*",
+        help="FILE:LINE, a function qualname, or a diagnostic code; with --summary, the files "
+        "or directories to summarize (default: the current directory)",
+    )
+    explain.add_argument(
+        "--summary",
+        action="store_true",
+        help="how much of the code goes native, and what keeps the rest in Python",
+    )
+    explain.add_argument("--json", action="store_true", help="with --summary: print JSON")
+    explain.add_argument(
+        "--limit", type=int, default=10, help="with --summary: how many reasons to list"
+    )
+    explain.add_argument(
+        "--modules", action="store_true", help="with --summary: add a line per module"
+    )
 
     inspect = subparsers.add_parser("inspect", help="show generated artifacts for a target")
     inspect.add_argument("target", type=Path)
