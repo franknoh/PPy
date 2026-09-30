@@ -142,9 +142,18 @@ def key(d: dict[str, int]) -> int:
     return d[s]
 
 
+def copied(xs: list[int], k: int) -> int:
+    for i in range(k):
+        xs.append(i)
+    xs.append(len(input()))
+    return len(xs)
+
+
 def main() -> None:
     print(after(3))
     print(parse())
+    data = [1, 2]
+    print(copied(data, 2), data)
     try:
         print(key({"a": 1}))
     except KeyError as e:
@@ -308,7 +317,12 @@ PROGRAMS: dict[str, tuple[str, str, list[str], list[str]]] = {
     "falls_back": (FALLS_BACK, "", ["grow"], []),
     "flushes": (FLUSHES, "", ["ticks"], []),
     "input": (INPUT, "bob\nline2\na\nb\nc\n", ["ask", "divide", "lines", "safe"], []),
-    "kept_in_python": (KEPT_IN_PYTHON, "x\n42\nb\n", [], ["after", "parse", "key"]),
+    "kept_in_python": (
+        KEPT_IN_PYTHON,
+        "x\n42\nzz\nb\n",
+        [],
+        ["after", "parse", "key", "copied"],
+    ),
     "uncaught": (UNCAUGHT, "a\nb\n", ["lines"], []),
     "python_calls": (PYTHON_CALLS, "", ["log", "hyp", "work", "bad"], []),
     "files": (FILES, "", ["write_file", "collect", "first_and_rest", "every"], []),
@@ -382,6 +396,8 @@ def test_explain_names_the_rule(tmp_path: Path):
     assert "integer arithmetic that may not fit 64 bits can follow `input()`" in kept.stdout
     kept = _run(tmp_path, "", "-m", "ppy_compiler", "explain", "prog.parse")
     assert "can follow `input()`" in kept.stdout
+    kept = _run(tmp_path, "", "-m", "ppy_compiler", "explain", "prog.copied")
+    assert "takes `xs` by copy, which Python could read or change at `input()`" in kept.stdout
 
 
 @requires_llvm

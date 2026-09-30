@@ -1256,6 +1256,27 @@ class Frontend:
         left = frozenset(self.declared[q][0].name for q in lowered.rejected if q in self.declared)
         broken, summaries = check_effects(self.module, self.native_exceptions, left)
         names = {self.declared[q][0].name: q for q in lowered.functions}
+        for qualname, entry in lowered.functions.items():
+            function = self.declared[qualname][0]
+            summary = summaries.get(function.name)
+            native = entry.signature.native
+            if summary is None or not summary.barrier or native is None or not entry.exposed:
+                continue
+            copied = next(
+                (
+                    p.name
+                    for p in native.parameters
+                    if p.kind in {"list", "sequence", "object", "handle"}
+                ),
+                None,
+            )
+            if copied is not None and function.name not in broken:
+                # The boundary copies it in and back out; Python that runs at
+                # the barrier would see, or change, the object and not the copy.
+                broken[function.name] = (
+                    f"takes `{copied}` by copy, which Python could read or change at "
+                    f"{summary.why.get('barrier', 'a barrier')}"
+                )
         for name, why in broken.items():
             qualname = names.get(name)
             if qualname is not None:
