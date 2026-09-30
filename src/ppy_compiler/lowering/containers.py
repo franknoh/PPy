@@ -315,9 +315,7 @@ class ContainerLowering(CollectionApiLowering):
                 "a set of anything but ints or tuples of ints is walked in CPython's hash"
                 " order, which stays in Python"
             )
-        if not hasattr(self, "_shown_orders"):
-            self._shown_orders: set[int] = set()
-        self._shown_orders.add(id(node))
+        self.__dict__.setdefault("_shown_orders", set()).add(id(node))
 
     def _for_collection(self, node: ast.For) -> None:
         iterables = [node.iter]

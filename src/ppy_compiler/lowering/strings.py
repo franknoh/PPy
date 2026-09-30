@@ -1206,7 +1206,7 @@ class StringLowering:
 
     # -- printing and reading --------------------------------------------------------
 
-    def _shown_text(self, node: ast.expr) -> Value | None:
+    def _shown_text(self, node: ast.expr) -> Value | None:  # pylint: disable=useless-return
         """`str()` of a value that is not a string, a number, or a list, as an
         owned string: an exception, an object with `__str__` or `__repr__`. None
         where there is no such text natively."""
