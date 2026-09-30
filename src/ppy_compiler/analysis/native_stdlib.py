@@ -67,6 +67,14 @@ MODELS: dict[str, tuple[T.Type, EffectSet]] = {
         T.FLOAT,
         EffectSet.of(Effect.RANDOM, raises=("ZeroDivisionError",)),
     ),
+    "random.gammavariate": _fn("random.gammavariate", T.FLOAT, _RANDOM_RAISES),
+    "random.betavariate": _fn("random.betavariate", T.FLOAT, _RANDOM_RAISES),
+    # Typed, and left to Python: no native lowering.
+    "random.vonmisesvariate": _fn("random.vonmisesvariate", T.FLOAT, _RANDOM),
+    "random.binomialvariate": _fn("random.binomialvariate", T.INT, _RANDOM_RAISES),
+    "random.randbytes": _fn("random.randbytes", T.BYTES, _RANDOM),
+    "random.getstate": _fn("random.getstate", T.ANY, _RANDOM),
+    "random.setstate": _fn("random.setstate", T.NONE, _RANDOM_RAISES),
     "heapq.heappush": _fn("heapq.heappush", T.NONE, _HEAP_WRITE),
     "heapq.heappop": _fn("heapq.heappop", T.ANY, _HEAP_WRITE),
     "heapq.heapify": _fn("heapq.heapify", T.NONE, _HEAP_WRITE),
@@ -204,8 +212,8 @@ def _random(name: str, args: list[_Argument], keywords: dict[str, _Argument]) ->
         return T.FLOAT
     if name == "paretovariate" and count == 1 and _number(args[0]):
         return T.FLOAT
-    if name == "weibullvariate" and count == 2 and all(map(_number, args)):
-        return T.FLOAT
+    if name in {"weibullvariate", "gammavariate", "betavariate"} and count == 2:
+        return T.FLOAT if all(map(_number, args)) else None
     return None
 
 

@@ -462,9 +462,11 @@ double ppy_random_triangular(int8_t *state, double low, double high, double mode
     return low + (high - low) * sqrt(u * c);
 }
 
-/* `expovariate(lambd)`, lambd nonzero. */
+/* `expovariate(lambd)`. It draws before it divides, as Python does: with
+   `lambd` zero the caller raises after the draw. */
 double ppy_random_expo(int8_t *state, double lambd) {
-    return -log(1.0 - ppy_random_double(state)) / lambd;
+    double drawn = -log(1.0 - ppy_random_double(state));
+    return lambd != 0.0 ? drawn / lambd : 0.0;
 }
 
 /* `gauss(mu, sigma)`, with the value it holds back, in a standalone binary. */
@@ -485,14 +487,76 @@ double ppy_random_gauss(int8_t *state, double mu, double sigma) {
     return mu + z * sigma;
 }
 
-/* `paretovariate(alpha)`, alpha nonzero: `(1 - random()) ** (-1 / alpha)`. */
+/* `paretovariate(alpha)`: `(1 - random()) ** (-1 / alpha)`, drawn before the
+   division as `ppy_random_expo` is. */
 double ppy_random_pareto(int8_t *state, double alpha) {
     double u = 1.0 - ppy_random_double(state);
-    return pow(u, -1.0 / alpha);
+    return alpha != 0.0 ? pow(u, -1.0 / alpha) : 0.0;
 }
 
-/* `weibullvariate(alpha, beta)`, beta nonzero. */
+/* `weibullvariate(alpha, beta)`, drawn before the division. */
 double ppy_random_weibull(int8_t *state, double alpha, double beta) {
     double u = 1.0 - ppy_random_double(state);
-    return alpha * pow(-log(u), 1.0 / beta);
+    return beta != 0.0 ? alpha * pow(-log(u), 1.0 / beta) : 0.0;
+}
+
+/* `gammavariate(alpha, beta)`, both above zero: `random.py`'s three cases. */
+double ppy_random_gamma(int8_t *state, double alpha, double beta) {
+    if (alpha > 1.0) {
+        double ainv = sqrt(2.0 * alpha - 1.0);
+        double bbb = alpha - log(4.0);
+        double ccc = alpha + ainv;
+        double sg_magic = 1.0 + log(4.5);
+        for (;;) {
+            double u1 = ppy_random_double(state);
+            if (!(1e-7 < u1 && u1 < 0.9999999)) {
+                continue;
+            }
+            double u2 = 1.0 - ppy_random_double(state);
+            double v = log(u1 / (1.0 - u1)) / ainv;
+            double x = alpha * exp(v);
+            double z = u1 * u1 * u2;
+            double r = bbb + ccc * v - x;
+            if (r + sg_magic - 4.5 * z >= 0.0 || r >= log(z)) {
+                return x * beta;
+            }
+        }
+    }
+    if (alpha == 1.0) {
+        return -log(1.0 - ppy_random_double(state)) * beta;
+    }
+    double e = 2.718281828459045;
+    double x;
+    for (;;) {
+        double u = ppy_random_double(state);
+        double b = (e + alpha) / e;
+        double p = b * u;
+        if (p <= 1.0) {
+            x = pow(p, 1.0 / alpha);
+        } else {
+            x = -log((b - p) / alpha);
+        }
+        double u1 = ppy_random_double(state);
+        if (p > 1.0) {
+            if (u1 <= pow(x, alpha - 1.0)) {
+                break;
+            }
+        } else if (u1 <= exp(-x)) {
+            break;
+        }
+    }
+    return x * beta;
+}
+
+/* `betavariate(alpha, beta)`, alpha above zero. A NaN where the second
+   `gammavariate` would raise, after the first one drew. */
+double ppy_random_beta(int8_t *state, double alpha, double beta) {
+    double y = ppy_random_gamma(state, alpha, 1.0);
+    if (y != 0.0) {
+        if (!(beta > 0.0)) {
+            return NAN;
+        }
+        return y / (y + ppy_random_gamma(state, beta, 1.0));
+    }
+    return 0.0;
 }

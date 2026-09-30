@@ -11,6 +11,8 @@ in CPython; what CPython raises for is a guard, with its message.
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
+from functools import cache
 
 from ..analysis.native_stdlib import MODELS
 from ..backend.llvm.lowering import Unsupported
@@ -18,6 +20,7 @@ from ..analysis.lexical import LexicalBindings
 from ..ir import F64, I64, Value
 from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
+from ..ir.raising import said
 from .collections import HANDLE, Kind, _pointer
 
 __all__ = ["StdlibLowering"]
@@ -31,6 +34,8 @@ _FLOAT_ARGUMENTS = {
     "expovariate": 1,
     "paretovariate": 1,
     "weibullvariate": 2,
+    "gammavariate": 2,
+    "betavariate": 2,
 }
 
 
@@ -107,7 +112,7 @@ class StdlibLowering:
             require(
                 core.cmp(b, "ge", k, word(0)),
                 "getrandbits of a negative count",
-                "ValueError: number of bits must be non-negative",
+                _text("bits"),
             )
             self._guard(  # type: ignore[attr-defined]
                 core.cmp(b, "le", k, word(63)),
@@ -142,37 +147,39 @@ class StdlibLowering:
             require(
                 core.cmp(b, "gt", stop, word(0)),
                 "empty range for randrange()",
-                "ValueError: empty range for randrange()",
+                _text("randrange1"),
             )
             return self._rt("ppy_random_below", (self._state(), stop))  # type: ignore[attr-defined,no-any-return]
         if name == "randint":
             start, last = values
             stop = self._checked_binary(last, word(1), "add")  # type: ignore[attr-defined]
             step = word(1)
-            spelled = (start, stop)
+            spelled = (start, stop if _randint_shows_stop() else last)
+            empty = _text("randint")
         else:
             start, stop = values[0], values[1]
             step = values[2] if len(values) == 3 else word(1)
             spelled = (start, stop)
+            empty = _text("randrange2")
         width = self._checked_binary(stop, start, "sub")  # type: ignore[attr-defined]
         one = core.cmp(b, "eq", step, word(1))
         require(
             core.bitwise(b, "or", core.cmp(b, "ne", step, word(1)), core.cmp(b, "gt", width, word(0))),
             "empty range in randrange()",
-            "ValueError: empty range in randrange({0}, {1})",
+            empty,
             spelled,
         )
         if len(values) == 3:
             require(
                 core.bitwise(b, "or", one, core.cmp(b, "ne", step, word(0))),
                 "zero step for randrange()",
-                "ValueError: zero step for randrange()",
+                _text("zero_step"),
             )
             count = self._rt("ppy_random_range_count", (width, step))  # type: ignore[attr-defined]
             require(
                 core.bitwise(b, "or", one, core.cmp(b, "gt", count, word(0))),
                 "empty range in randrange()",
-                "ValueError: empty range in randrange({0}, {1}, {2})",
+                _text("randrange3"),
                 (start, stop, step),
             )
             count = core.select(b, one, width, count)
@@ -190,7 +197,7 @@ class StdlibLowering:
         self._require(  # type: ignore[attr-defined]
             core.cmp(self.b, "gt", length, self._word(0)),  # type: ignore[attr-defined]
             "choice from an empty sequence",
-            "IndexError: Cannot choose from an empty sequence",
+            _text("choice"),
         )
         at = self._rt("ppy_random_below", (self._state(), length))  # type: ignore[attr-defined]
         found = self._read(self._rt("ppy_seq_at", (handle, at), HANDLE), shape)  # type: ignore[attr-defined]
@@ -212,14 +219,14 @@ class StdlibLowering:
             self._require(  # type: ignore[attr-defined]
                 core.cmp(b, "ne", step, word(0)),
                 "range() arg 3 must not be zero",
-                "ValueError: range() arg 3 must not be zero",
+                _text("range_step"),
             )
             size = self._rt("ppy_random_range_len", (start, stop, step))  # type: ignore[attr-defined]
         k = self._int_argument(count)
         self._require(  # type: ignore[attr-defined]
             core.bitwise(b, "and", core.cmp(b, "ge", k, word(0)), core.cmp(b, "le", k, size)),
             "sample larger than population or negative",
-            "ValueError: Sample larger than population or is negative",
+            _text("sample"),
         )
         positions = self._rt("ppy_random_sample_positions", (self._state(), size, k), HANDLE)  # type: ignore[attr-defined]
         if bounds is not None:
@@ -257,19 +264,19 @@ class StdlibLowering:
             require(
                 core.bitwise(b, "or", core.cmp(b, "gt", size, word(0)), core.cmp(b, "le", k, word(0))),
                 "choices from an empty population",
-                "IndexError: list index out of range",
+                _text("choices_empty"),
             )
             positions = rt("ppy_random_choice_positions", (state, size, k), HANDLE)
         else:
             require(
                 core.cmp(b, "eq", rt("ppy_coll_len", (weighed,)), size),
                 "weights do not match the population",
-                "ValueError: The number of weights does not match the population",
+                _text("weights_count"),
             )
             require(
                 core.cmp(b, "gt", size, word(0)),
                 "choices from empty weights",
-                "IndexError: list index out of range",
+                _text("weights_empty"),
             )
             flags = (word(int(cumulative is not None)), word(int(integers)))
             total = rt("ppy_random_weights_total", (weighed, *flags), F64)
@@ -277,12 +284,12 @@ class StdlibLowering:
             require(
                 core.cmp(b, "ne", fault, word(1)),
                 "weights total not above zero",
-                "ValueError: Total of weights must be greater than zero",
+                _text("weights_zero"),
             )
             require(
                 core.cmp(b, "ne", fault, word(2)),
                 "weights total not finite",
-                "ValueError: Total of weights must be finite",
+                _text("weights_infinite"),
             )
             positions = rt("ppy_random_weighted_positions", (state, weighed, *flags, k, total), HANDLE)
             self._done_with(weighed, weighed_owned)  # type: ignore[attr-defined]
@@ -324,18 +331,40 @@ class StdlibLowering:
             if name == "lognormvariate":
                 return self._math("exp", drawn)
             return drawn  # type: ignore[no-any-return]
+        if name in {"gammavariate", "betavariate"}:
+            alpha, beta = floats
+            zero = self._float(0.0)
+            first = core.cmp(b, "gt", alpha, zero)
+            if name == "gammavariate":
+                first = core.bitwise(b, "and", first, core.cmp(b, "gt", beta, zero))
+            self._require(  # type: ignore[attr-defined]
+                first, "gammavariate: alpha and beta must be > 0.0", _text("gamma")
+            )
+            if name == "gammavariate":
+                return rt("ppy_random_gamma", (self._state(), alpha, beta), F64)  # type: ignore[no-any-return]
+            drawn = rt("ppy_random_beta", (self._state(), alpha, beta), F64)
+            # The second draw's check comes after the first draw, as in Python.
+            self._require(  # type: ignore[attr-defined]
+                core.cmp(b, "eq", drawn, drawn),
+                "gammavariate: alpha and beta must be > 0.0",
+                _text("gamma"),
+            )
+            return drawn  # type: ignore[no-any-return]
+        # Each of these draws before it divides, as Python does.
         divisor = floats[-1] if floats else self._float(1.0)
-        self._require(  # type: ignore[attr-defined]
-            core.cmp(b, "ne", divisor, self._float(0.0)),
-            "float division by zero",
-            "ZeroDivisionError: float division by zero",
-        )
         if name == "expovariate":
-            return rt("ppy_random_expo", (self._state(), divisor), F64)  # type: ignore[no-any-return]
-        if name == "paretovariate":
+            drawn = rt("ppy_random_expo", (self._state(), divisor), F64)
+        elif name == "paretovariate":
             drawn = rt("ppy_random_pareto", (self._state(), divisor), F64)
         else:
             drawn = rt("ppy_random_weibull", (self._state(), floats[0], divisor), F64)
+        self._require(  # type: ignore[attr-defined]
+            core.cmp(b, "ne", divisor, self._float(0.0)),
+            "float division by zero",
+            _text("divide"),
+        )
+        if name == "expovariate":
+            return drawn  # type: ignore[no-any-return]
         # A power past the doubles, or zero to a negative power, is an
         # exception in Python and not a number here.
         magnitude = self._math("abs", drawn)
@@ -377,7 +406,7 @@ class StdlibLowering:
             self._require(  # type: ignore[attr-defined]
                 core.cmp(b, "gt", rt("ppy_coll_len", (handle,)), word(0)),
                 "heappop from an empty heap",
-                "IndexError: index out of range",
+                _text("heap_empty"),
             )
             return self._read(rt("ppy_heapq_pop", (handle,), HANDLE), shape)  # type: ignore[attr-defined,no-any-return]
         if name == "heapreplace":
@@ -386,7 +415,7 @@ class StdlibLowering:
             self._require(  # type: ignore[attr-defined]
                 core.cmp(b, "gt", rt("ppy_coll_len", (handle,)), word(0)),
                 "heapreplace on an empty heap",
-                "IndexError: index out of range",
+                _text("heap_empty"),
             )
             self._write(rt("ppy_seq_push_back", (handle,), HANDLE), shape, value)  # type: ignore[attr-defined]
             return self._read(rt("ppy_heapq_replace", (handle,), HANDLE), shape)  # type: ignore[attr-defined,no-any-return]
@@ -414,7 +443,7 @@ class StdlibLowering:
         self._require(  # type: ignore[attr-defined]
             core.cmp(b, "ge", lo, word(0)),
             "lo must be non-negative",
-            "ValueError: lo must be non-negative",
+            _text("lo"),
         )
         length = rt("ppy_coll_len", (handle,))
         if len(args) > 3:
@@ -423,7 +452,7 @@ class StdlibLowering:
             self._require(  # type: ignore[attr-defined]
                 core.cmp(b, "le", hi, length),
                 "bisect past the end of the list",
-                "IndexError: list index out of range",
+                _text("hi"),
             )
         else:
             hi = length
@@ -455,3 +484,55 @@ def _range_bounds(node: ast.expr) -> tuple[ast.expr | None, ast.expr, ast.expr |
     step = node.args[2] if len(node.args) == 3 else None
     return node.args[0], node.args[1], step
 
+
+#: What CPython raises for each check here, asked of the interpreter running
+#: the compiler (3.14 says `randint(a, b)` and "division by zero" where 3.12
+#: said `randrange(a, b + 1)` and "float division by zero"). Distinct
+#: sentinels stand for the values a message carries, which become `{0}`...
+_A, _B, _S = 1234567, 7654, 99991
+
+
+def _raising() -> dict[str, Callable[[], object]]:
+    import bisect  # pylint: disable=import-outside-toplevel
+    import heapq  # pylint: disable=import-outside-toplevel
+    import random  # pylint: disable=import-outside-toplevel
+
+    r = random.Random(0)
+    return {
+        "randrange1": lambda: r.randrange(0),
+        "randrange2": lambda: r.randrange(_A, _B),
+        "randrange3": lambda: r.randrange(_A, _B, _S),
+        "zero_step": lambda: r.randrange(1, 5, 0),
+        "randint": lambda: r.randint(_A, _B),
+        "choice": lambda: r.choice([]),
+        "sample": lambda: r.sample([], 1),
+        "choices_empty": lambda: r.choices([], k=1),
+        "weights_count": lambda: r.choices([1, 2], [1], k=1),
+        "weights_empty": lambda: r.choices([], [], k=1),
+        "weights_zero": lambda: r.choices([1], [0], k=1),
+        "weights_infinite": lambda: r.choices([1, 2], [1.0, float("inf")], k=1),
+        "bits": lambda: r.getrandbits(-1),
+        "divide": lambda: r.expovariate(0.0),
+        "gamma": lambda: r.gammavariate(0.0, 1.0),
+        "range_step": lambda: range(1, 5, 0),
+        "heap_empty": lambda: heapq.heappop([]),
+        "lo": lambda: bisect.bisect_left([1], 1, -1),
+        "hi": lambda: bisect.bisect_left([1, 2], 5, 0, 9),
+    }
+
+
+@cache
+def _text(key: str) -> str:
+    """The traceback's last line for check `key`, `{0}` and on where it
+    carries the values the check reports (the start, the stop, the step:
+    for `randint`, `a` and whichever of `b` and `b + 1` the message shows)."""
+    text = said(_raising()[key])
+    for value, slot in ((_A, "{0}"), (_B + 1, "{1}"), (_B, "{1}"), (_S, "{2}")):
+        text = text.replace(str(value), slot)
+    return text
+
+
+@cache
+def _randint_shows_stop() -> bool:
+    """Whether `randint(a, b)` says `randrange(a, b + 1)` (before 3.14)."""
+    return str(_B + 1) in said(_raising()["randint"])

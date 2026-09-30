@@ -127,8 +127,13 @@ class PrebuiltBinder(LibraryBinder):
         if not address:
             return fallback
         # A coroutine's future needs the Python-side wrapping; the C wrapper
-        # would hand back the bare handle.
-        entry = None if signature.future else self._fast_entry(signature, address, fallback)
+        # would hand back the bare handle. A function that draws needs
+        # `random`'s state saved around it, which the Python side does.
+        entry = (
+            None
+            if signature.future or signature.draws
+            else self._fast_entry(signature, address, fallback)
+        )
         if entry is not None:
             remember(entry, signature)
             return entry
