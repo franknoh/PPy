@@ -118,7 +118,10 @@ their quotes, tuples, nested containers, and dataclasses shown as
   equals.
 - `d.get(k)` with no default, which may give `None`, stays in Python; with a
   default it is native.
-- `sort(key=...)` natively takes a key giving numbers or tuples of them.
+- `sort(key=...)`, `sorted(key=...)`, `min(key=...)`, and `max(key=...)`
+  natively take a key giving numbers or tuples of them, and `min` and `max`
+  with a key pick among numbers. [Functions as values](closures.md) has the
+  rest.
 - `any` and `all` of a generator stay in Python, because they stop at the
   first answer and a list built first would not; of a list they are native.
 - A standalone binary's `KeyError` for a string key says `KeyError` without

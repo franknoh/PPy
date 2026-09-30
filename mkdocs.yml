@@ -110,6 +110,7 @@ nav:
       - Collections: guide/collections.md
       - Classes: guide/classes.md
       - Exceptions and generators: guide/exceptions-and-generators.md
+      - Functions as values: guide/closures.md
       - Native memory and FFI: guide/native.md
       - Lanes and the machine: guide/simd-cpu.md
       - Atomics and threads: guide/concurrency.md

@@ -143,6 +143,9 @@ class FunctionInfo:
     is_classmethod: bool = False
     is_property: bool = False
     owner: str | None = None
+    #: A function defined inside another: the qualname of the one it is in.
+    #: It is a closure: the names it uses of that function's are shared cells.
+    enclosing: str | None = None
     effects: EffectSet = field(default_factory=EffectSet)
     verified_pure: bool = False
     dynamic: bool = False
@@ -262,6 +265,9 @@ class ModuleSymbols:
     imports: dict[str, ImportBinding] = field(default_factory=dict)
     classes: dict[str, ClassInfo] = field(default_factory=dict)
     functions: dict[str, FunctionInfo] = field(default_factory=dict)
+    #: Functions defined inside functions, by qualname
+    #: (`mod.outer.<locals>.inner`), each after the one it is in.
+    nested: dict[str, FunctionInfo] = field(default_factory=dict)
     globals: dict[str, T.Type] = field(default_factory=dict)
     global_facts: dict[str, Facts] = field(default_factory=dict)
     constant_globals: dict[str, object] = field(default_factory=dict)
@@ -914,7 +920,40 @@ class ProjectSymbols:
         if owner is None:
             symbols.functions[node.name] = info
         self.functions[qualname] = info
+        self._declare_nested(symbols, info)
         return info
+
+    def _declare_nested(self, symbols: ModuleSymbols, outer: FunctionInfo) -> None:
+        """The functions `outer`'s body defines, at any depth of blocks but not
+        inside a class or another function (those are declared from there)."""
+        resolver = self.resolver(symbols)
+        pending: list[ast.AST] = list(outer.node.body)
+        while pending:
+            node = pending.pop(0)
+            if isinstance(node, ast.ClassDef):
+                continue
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                decorators = tuple(resolver.decorator_identity(d) for d in node.decorator_list)
+                info = FunctionInfo(
+                    name=node.name,
+                    qualname=f"{outer.qualname}.<locals>.{node.name}",
+                    module=symbols.name,
+                    node=node,
+                    path=symbols.path,
+                    directives=directives_from(node.decorator_list, resolver),
+                    decorators=decorators,
+                    enclosing=outer.qualname,
+                )
+                info.dynamic = info.directive("dynamic") is not None
+                symbols.nested[info.qualname] = info
+                self.functions[info.qualname] = info
+                self._declare_nested(symbols, info)
+                continue
+            pending.extend(
+                child
+                for child in ast.iter_child_nodes(node)
+                if isinstance(child, (ast.stmt, ast.excepthandler, ast.match_case))
+            )
 
     def _compute_mro(self, symbols: ModuleSymbols) -> None:
         for info in symbols.classes.values():
@@ -983,6 +1022,8 @@ class ProjectSymbols:
         for info in symbols.classes.values():
             for method in info.methods.values():
                 self._resolve_function(symbols, method, annotations, owner=info)
+        for info in symbols.nested.values():
+            self._resolve_function(symbols, info, annotations)
         self._resolve_module_globals(symbols, annotations)
 
     def _resolve_class_fields(

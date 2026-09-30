@@ -154,18 +154,24 @@ class CollectionApiLowering(CollectionLowering):
         return _Source(kind, self._hold(kind, handle, owned))
 
     def _sorted_source(self, node: ast.Call) -> _Source:
-        """`sorted(c)`: the elements (or keys) copied into a new `Vec` and sorted there."""
-        if len(node.args) != 1 or any(k.arg != "reverse" for k in node.keywords):
-            raise Unsupported("`sorted` takes one collection and `reverse=` natively")
+        """`sorted(c)`: the elements (or keys) copied into a new `Vec` and sorted there,
+        by a `key=` function's keys when it has one."""
+        if len(node.args) != 1 or any(k.arg not in {"reverse", "key"} for k in node.keywords):
+            raise Unsupported("`sorted` takes one collection, `key=`, and `reverse=` natively")
         inner = self._source(node.args[0])
         if inner is None:
             raise Unsupported("`sorted` sorts a collection natively")
         shape = self._part(inner, "values" if inner.mode == "values" else "keys")
-        if inner.mode == "items" or not self._orders(shape):
+        keyed = any(k.arg == "key" for k in node.keywords)
+        if inner.mode == "items" or not (keyed or self._orders(shape)):
             raise Unsupported("these elements have no order to sort by")
         kind = Kind("Vec", shape)
         made = self._new(kind)
         self._walk(inner, lambda items: self._add_value(kind, made, items[0][1]))
+        if any(k.arg == "key" for k in node.keywords):
+            # What `sort` does in place, on the copy: the same stable sort.
+            self._sort(kind, made, ast.Call(node.func, [], node.keywords))
+            return _Source(kind, self._hold(kind, made, owned=True))
         descending = self._word(0)
         for keyword in node.keywords:
             descending = core.cast(self.b, self._test(keyword.value), I64)  # type: ignore[attr-defined]
@@ -1061,20 +1067,34 @@ class CollectionApiLowering(CollectionLowering):
             name = arguments.args[0].arg
             body: ast.expr = key.body
             found = self._type_of(body)
-        elif isinstance(key, ast.Name):
+        else:
             self._walks += 1
             name = f".key{self._walks}"
-            body = ast.Call(func=key, args=[ast.Name(id=name, ctx=ast.Load())], keywords=[])
+            function = key
+            made = self._reference_of(key) if not isinstance(key, ast.Name) else None
+            if made is not None:
+                # A function value made by an expression is made once, and
+                # held under a hidden name for the sort's calls.
+                held = f".keyfn{self._walks}"
+                handle, owned = self._handle(key)  # type: ignore[attr-defined]
+                self._bind(held, made, handle, owned)
+                function = ast.Name(id=held, ctx=ast.Load())
+            elif not isinstance(key, ast.Name):
+                raise Unsupported("a sort key is a lambda or a function")
+            body = ast.Call(func=function, args=[ast.Name(id=name, ctx=ast.Load())], keywords=[])
             ast.copy_location(body, key)
             ast.fix_missing_locations(body)
             called = T.strip_literal(self._type_of(key))
             if not isinstance(called, T.Callable_):
-                raise Unsupported(f"`{key.id}` is not a function native code can call")
+                raise Unsupported(f"`{ast.unparse(key)}` is not a function native code can call")
             found = called.ret
-        else:
-            raise Unsupported("a sort key is a lambda or a function's name")
-        if self._is_local(name):
+            if isinstance(key, ast.Name) and key.id == "len" and called.qualname == "len":
+                found = T.INT
+        # A name an earlier key bound is that key's, not a local of the code.
+        keys: set[str] = self.__dict__.setdefault("_key_names", set())
+        if self._is_local(name) and name not in keys:
             raise Unsupported(f"the sort key's `{name}` would stand for a local")
+        keys.add(name)
         key_shape = shape_of(found, self._records())
         if key_shape is None:
             raise Unsupported(f"a sort key giving `{found}` has no native form")
@@ -1099,8 +1119,12 @@ class CollectionApiLowering(CollectionLowering):
     # -- reductions ----------------------------------------------------------------------
 
     def _reduction(self, operation: str, node: ast.Call) -> Value | None:
-        """`sum(c)`, `min(c)`, `max(c)` of a collection or one of its walks."""
-        if len(node.args) != 1 or node.keywords or not self._is_walk(node.args[0]):
+        """`sum(c)`, `min(c)`, `max(c)` of a collection or one of its walks, and
+        `min(c, key=f)`, `max(c, key=f)`."""
+        keyed = operation != "sum" and [k.arg for k in node.keywords] == ["key"]
+        if len(node.args) != 1 or (node.keywords and not keyed):
+            return None
+        if not self._is_walk(node.args[0]):
             return None
         source = self._source(node.args[0])
         if source is None:
@@ -1110,6 +1134,8 @@ class CollectionApiLowering(CollectionLowering):
         shape = self._part(source, "values" if source.mode == "values" else "keys")
         if operation == "sum":
             return self._sum(source, shape)
+        if keyed:
+            return self._keyed_extremum(source, shape, operation, node.keywords[0].value)
         if shape.reference or not shape.comparable:
             raise Unsupported(f"`{operation}` compares numbers, tuples, and ordered dataclasses")
         return self._extremum_of(source, shape, operation)
@@ -1165,6 +1191,61 @@ class CollectionApiLowering(CollectionLowering):
         nonzero = core.cmp(self.b, "ne", c, zero)
         compensated = core.bitwise(self.b, "and", finite, nonzero)
         return core.select(self.b, compensated, core.add(self.b, f, c), f)
+
+    def _keyed_extremum(
+        self, source: _Source, shape: Shape, operation: str, key: ast.expr
+    ) -> Value:
+        """`min(c, key=f)` and `max(c, key=f)`: the first element whose key no later
+        one's beats, each element's key computed once, as CPython does."""
+        if shape.reference:
+            raise Unsupported(f"`{operation}` with a key picks among numbers natively")
+        evaluate, key_shape = self._key_function(key, shape)
+        if key_shape.reference or not key_shape.comparable:
+            raise Unsupported("a key is a number, a tuple of numbers, or an ordered dataclass")
+        best = self._alloca(shape.ir_type(), f"{operation}.best")  # type: ignore[attr-defined]
+        best_key = self._alloca(key_shape.ir_type(), f"{operation}.best_key")  # type: ignore[attr-defined]
+        candidate = self._alloca(key_shape.ir_type(), f"{operation}.key")  # type: ignore[attr-defined]
+        seen = self._alloca(BOOL, f"{operation}.seen")  # type: ignore[attr-defined]
+        core.store(self.b, core.const(self.b, False, BOOL), seen)
+        best_address = core.cast(self.b, best, _pointer(best, HANDLE.pointee))
+        best_key_address = core.cast(self.b, best_key, _pointer(best_key, HANDLE.pointee))
+        candidate_address = core.cast(self.b, candidate, _pointer(candidate, HANDLE.pointee))
+
+        def keep(items: list[tuple[Shape, Value]]) -> None:
+            element = items[0][1]
+            self._write(candidate_address, key_shape, evaluate(element))
+            ordered = (
+                (candidate_address, best_key_address)
+                if operation == "min"
+                else (best_key_address, candidate_address)
+            )
+            widths = (
+                self._word(key_shape.words),
+                self._word(key_shape.floats),
+                self._word(key_shape.handles),
+            )
+            chosen = self._block(f"{operation}.take")  # type: ignore[attr-defined]
+            compare = self._block(f"{operation}.compare")  # type: ignore[attr-defined]
+            after = self._block(f"{operation}.next")  # type: ignore[attr-defined]
+            core.cond_br(self.b, core.load(self.b, seen), Successor(compare), Successor(chosen))
+            self.b.at_end(compare)  # type: ignore[attr-defined]
+            beats = self._rt("ppy_coll_before", (*ordered, *widths))
+            take = core.cmp(self.b, "ne", beats, self._word(0))
+            core.cond_br(self.b, take, Successor(chosen), Successor(after))
+            self.b.at_end(chosen)  # type: ignore[attr-defined]
+            self._write(best_address, shape, element)
+            self._write(best_key_address, key_shape, self._read(candidate_address, key_shape))
+            core.store(self.b, core.const(self.b, True, BOOL), seen)
+            core.br(self.b, Successor(after))
+            self.b.at_end(after)  # type: ignore[attr-defined]
+
+        self._walk(source, keep)
+        self._require(
+            core.load(self.b, seen),
+            f"{operation}() arg is an empty sequence",
+            f"ValueError: {operation}() iterable argument is empty",
+        )
+        return self._read(best_address, shape)
 
     def _extremum_of(self, source: _Source, shape: Shape, operation: str) -> Value:
         """`min(c)` and `max(c)`: the first element no later one beats, as CPython keeps it."""

@@ -183,7 +183,7 @@ def _parse_jsonc(text: str) -> dict | None:
     import json
 
     def strip(match: re.Match) -> str:
-        piece = match.group(0)
+        piece = str(match.group(0))
         return piece if piece.startswith('"') else ""
 
     # Strings first, so a `//` inside one survives.

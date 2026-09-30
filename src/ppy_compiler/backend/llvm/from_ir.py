@@ -608,6 +608,8 @@ class _FunctionEmitter:
                 self.set(op.result, b.extract_value(self.value(op.operands[0]), index))
             case "call":
                 self._call(op)
+            case "call_indirect":
+                self._call_indirect(op)
             case "call_extern":
                 self._call_extern(op)
             case "call_intrinsic":
@@ -880,22 +882,50 @@ class _FunctionEmitter:
         b.ret(ir.Constant(ir.IntType(32), STATUS_OK))
 
     def _call(self, op: Operation) -> None:
-        ir = self.ir
-        b = self.builder
         callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
         callee = self.owner.functions.get(callee_name)
         target = self.owner.module.functions.get(callee_name)
         if callee is None or target is None:
             raise EmitError(f"call to @{callee_name}, which was not emitted")
+        self._call_to(
+            op, callee, op.operands, tuple(t for _n, t in target.params), tuple(target.results)
+        )
+
+    def _call_indirect(self, op: Operation) -> None:
+        """A call through a function value: its native entry's address, cast to
+        the type the arguments and results give it."""
+        ir = self.ir
+        results = list(op.results)
+        if op.attributes.get("capture_status"):
+            results.pop()
+        operands = op.operands[1:]
+        atom_types: list = []
+        for operand in operands:
+            atom_types.extend(self.owner.boundary_atoms(operand.type))
+        for result in results:
+            atom_types.extend(a.as_pointer() for a in self.owner.boundary_atoms(result.type))
+        if not results:
+            atom_types.append(ir.IntType(64).as_pointer())
+        kind = ir.FunctionType(ir.IntType(32), atom_types)
+        callee = self.builder.inttoptr(self.value(op.operands[0]), kind.as_pointer())
+        self._call_to(
+            op, callee, operands, tuple(v.type for v in operands), tuple(r.type for r in results)
+        )
+
+    def _call_to(self, op: Operation, callee, operands, params, target_results) -> None:  # type: ignore[no-untyped-def]
+        """A native call, direct or not: atoms in, result slots out, the status
+        checked or handed back."""
+        ir = self.ir
+        b = self.builder
         arguments: list = []
-        for operand, (_name, t) in zip(op.operands, target.params, strict=True):
+        for operand, t in zip(operands, params, strict=True):
             arguments.extend(self._to_atoms(t, self.value(operand)))
         slots: list[tuple[IRType, list]] = []
-        for t in target.results:
+        for t in target_results:
             atoms = [self.entry_alloca(atom, "callresult") for atom in self.owner.boundary_atoms(t)]
             slots.append((t, atoms))
             arguments.extend(atoms)
-        if not target.results:
+        if not target_results:
             arguments.append(self.entry_alloca(ir.IntType(64), "callvoid"))
         status = b.call(callee, arguments)
         results = list(op.results)
@@ -961,6 +991,13 @@ class _FunctionEmitter:
             callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
             trampoline = _callback(self.owner, callee_name)
             self.set(op.results[0], b.ptrtoint(trampoline, ir.IntType(64)))
+            return
+        if name == "ppy.function_address":
+            callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
+            function = self.owner.functions.get(callee_name)
+            if function is None:
+                raise EmitError(f"the address of @{callee_name}, which was not emitted")
+            self.set(op.results[0], b.ptrtoint(function, ir.IntType(64)))
             return
         if name in {"llvm.smin.i64", "llvm.smax.i64"}:
             word = ir.IntType(64)
