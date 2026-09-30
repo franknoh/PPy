@@ -457,7 +457,9 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     described = {c.qualname: c for c in signature.classes}
     classes = crossing.Classes(signature.classes, _class_finder(fallback)) if described else None
     specs = [
-        crossing.parse(p.element, described) if p.is_handle else None
+        crossing.parse(p.element + ("?" if p.nullable else ""), described)
+        if p.is_handle
+        else None
         for p in signature.parameters
     ]
     parameters = signature.parameters

@@ -79,6 +79,7 @@ def _signature(payload: dict) -> NativeSignature:
             class_name=parameter.get("class_name", ""),
             written=bool(parameter.get("written", False)),
             source=parameter.get("source", ""),
+            nullable=bool(parameter.get("nullable", False)),
         )
         for parameter in abi["parameters"]
     )

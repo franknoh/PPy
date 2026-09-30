@@ -330,6 +330,7 @@ def _collection_param(
         if not _held_natively(base, layouts):
             return None
         return NativeParam(name, "handle", str(base), class_name=base.name)
+    nullable = False
     if isinstance(base, T.Union_):
         members = [m for m in base.members if m != T.NONE]
         if len(members) != 1 or len(members) == len(base.members):
@@ -337,12 +338,15 @@ def _collection_param(
         base = T.strip_literal(members[0])
         if not isinstance(base, T.Instance) or base.name in _COLLECTIONS:
             return None
+        nullable = True
     if not isinstance(base, T.Instance):
         return None
     if base.name in _COLLECTIONS and base.args:
         return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
     if layouts is not None and layouts.get(base.name) == ():
-        return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
+        return NativeParam(
+            name, "handle", collection_spelled(base), class_name=base.name, nullable=nullable
+        )
     return None
 
 

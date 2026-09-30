@@ -70,6 +70,8 @@ class NativeParam:
     #: `module:name`. Python does not pass it; the boundary reads the global
     #: when the function is called.
     source: str = ""
+    #: An object parameter that may be `None`, the null handle.
+    nullable: bool = False
 
     @property
     def is_buffer(self) -> bool:
