@@ -166,6 +166,10 @@ class NativeSignature:
     #: before the call and puts it back when the call falls back to Python,
     #: so the rerun draws the same numbers.
     draws: bool = False
+    #: The body prints, reads, or calls into Python (`ppy_runtime/effects.py`):
+    #: the boundary holds its output until it answers, and raises what it
+    #: raised after an effect it cannot take back.
+    effects: bool = False
 
     @property
     def crosses_collections(self) -> bool:

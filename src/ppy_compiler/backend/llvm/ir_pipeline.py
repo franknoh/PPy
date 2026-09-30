@@ -113,6 +113,7 @@ def lower_module_via_ir(
         libraries=tuple(str(lib) for lib in libraries),  # type: ignore[union-attr]
         exports=exports,
         remarks=(*lowered.remarks, *ctx.remarks),
+        effects=dict(lowered.effects),
     )
 
 

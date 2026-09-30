@@ -2268,6 +2268,8 @@ class _Checker:
                 return Binding(T.STR)
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
+            if result is not None and node.func.id == "open" and B.opens_text(node):
+                result = B.BuiltinResult(B.TEXT_STREAM, result.facts, result.effects)
             if result is not None and self._calls_native_function(node, args):
                 # `map(f, xs)` and `filter(f, xs)` with `f` a function of this
                 # program: what runs is `f`, whose effects are its own.
@@ -6062,6 +6064,9 @@ class _Checker:
 
     def _enter_type(self, t: T.Type) -> T.Type:
         base = T.strip_literal(t)
+        if base == B.TEXT_STREAM:
+            # A file's `__enter__` gives the file.
+            return base
         if isinstance(base, T.Instance):
             info = self.project.classes.get(base.name)
             if info is not None:
