@@ -1409,6 +1409,7 @@ class _Checker:
                 # AST nodes that happens to hold a statement, not a
                 # `list[ast.stmt]` being narrowed. Each element is held to the
                 # declared element type instead.
+                self._record_empty_display(node.value, value.type, resolved.type)
                 value = Binding(resolved.type, value.facts)
             fact_mismatch = self._fact_mismatch(resolved.facts, value.facts)
             if not T.is_assignable(value.type, resolved.type) or fact_mismatch:
@@ -1489,6 +1490,7 @@ class _Checker:
             if returned is not None and _display_fits(node.value, value.type, returned):
                 # A display returned in place is of the declared type, as one
                 # assigned beside its annotation is.
+                self._record_empty_display(node.value, value.type, returned)
                 value = Binding(returned, value.facts)
             self._returns.append(value)
             self._provisional_returns.append(self._is_provisional(node.value, value, env))
@@ -2185,6 +2187,18 @@ class _Checker:
         binding = Binding(T.UNKNOWN) if method is None else method(node, env)
         self._record(node, binding)
         return binding
+
+    def _record_empty_display(self, node: ast.expr, actual: T.Type, declared: T.Type) -> None:
+        """`return []` from a `-> list[int]`: the empty display is a `list[int]`,
+        and native code makes it one."""
+        base = T.strip_literal(actual)
+        if (
+            isinstance(node, (ast.List, ast.Dict, ast.Set))
+            and isinstance(base, T.Instance)
+            and base.args
+            and all(isinstance(a, T.NeverType) for a in base.args)
+        ):
+            self._record(node, Binding(declared))
 
     def _record(self, node: ast.AST, binding: Binding) -> None:
         if self.record:

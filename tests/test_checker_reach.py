@@ -9,6 +9,7 @@ checker accepts each in strict mode, still refuses the matching mistake, and
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -365,7 +366,34 @@ def main() -> None:
 main()
 """
 
+EMPTY_RETURNS = """
+def firsts(limit: int) -> list[int]:
+    if limit <= 0:
+        return []
+    out = []
+    for i in range(limit):
+        out.append(i * i)
+    return out
+
+
+def table(n: int) -> dict[int, int]:
+    if n == 0:
+        return {}
+    d: dict[int, int] = {}
+    for i in range(n):
+        d[i] = i + 1
+    return d
+
+
+def main() -> None:
+    print(firsts(0), firsts(4), table(0), table(3))
+
+
+main()
+"""
+
 PROGRAMS = {
+    "empty_returns": EMPTY_RETURNS,
     "generators": GENERATORS,
     "generic_static": GENERIC_STATIC,
     "setattr": SETATTR,
@@ -636,3 +664,21 @@ def test_a_helper_used_as_a_value_is_not_inferred(write, analyze):
     )
     bundle = analyze(path, strict=False)
     assert not bundle.symbols.functions["prog._double"].params[0].inferred
+
+
+def test_an_empty_display_returned_in_place_goes_native(project_dir: Path, write):
+    """`return []` from a `-> list[int]` is a `list[int]`: the function is
+    native, not held back for an element type nobody told."""
+    write("prog.py", EMPTY_RETURNS)
+    done = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "explain", "--summary", "--json", "prog.py"],
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+        env=_env(),
+        timeout=600,
+        check=True,
+    )
+    tiers = {f["qualname"]: f["tier"] for f in json.loads(done.stdout)["functions"]}
+    assert tiers["prog.firsts"] != "python"
+    assert tiers["prog.table"] != "python"
