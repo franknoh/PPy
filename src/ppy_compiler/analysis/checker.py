@@ -6313,6 +6313,28 @@ class _Checker:
             else:
                 self._external_writes = True
             return
+        # A write through a field or an element of a name the checker could not
+        # type still lands in something that name reaches: what its roots hold.
+        root = node
+        while isinstance(root, (ast.Attribute, ast.Subscript)):
+            root = root.value
+        if (
+            root is not node
+            and isinstance(root, ast.Name)
+            and self._aliases is not None
+            and self._super_receiver(root) is None
+        ):
+            roots = self._roots(root, root.id)
+            params = self._aliases.param_roots(roots)
+            if params:
+                self._mutated.update(params)
+                for name in sorted(params):
+                    self._blockers.append(f"mutates parameter `{name}`")
+                self._external_writes = True
+                return
+            if self._aliases.only_local(roots):
+                self._local_writes.update(roots)
+                return
         # The target is an expression, so which object it reached is unknown.
         self._foreign_writes = True
         self._external_writes = True
