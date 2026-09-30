@@ -116,6 +116,43 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/native-lowering/",
     ),
     _shape(
+        r"chained comparison",
+        "a chained comparison (`a < b < c`)",
+        "write it as `a < b and b < c` for now",
+        "guide/native-lowering/",
+    ),
+    _shape(
+        r"comparison operator has no native lowering",
+        "`in` or `is` against a value that is not a collection (a tuple, a range, a string)",
+        "test membership in a list, dict, set, or string, or compare with `==`",
+        "guide/native-lowering/",
+    ),
+    _shape(
+        r"integer operator has no native lowering",
+        "`**` between two integers",
+        "use `pow(a, b)` with a float, or a loop, until integer powers lower",
+        "guide/native-lowering/",
+    ),
+    _shape(
+        r"only `for NAME in range",
+        "a `for` loop over something native code does not walk (a tuple, a string of names, an "
+        "object)",
+        "loop over a range, a list, a dict, a set, a string, or a ppy collection",
+        "guide/native-lowering/",
+    ),
+    _shape(
+        r"`\[\]` has no native collection form|`\{\}` has no native collection form",
+        "an empty `[]` or `{{}}` whose element type is never told",
+        "annotate it (`out: list[int] = []`)",
+        "guide/containers/",
+    ),
+    _shape(
+        r"is not a native local",
+        "reads a module-level name native code does not hold",
+        "make it a constant, or pass it in",
+        "guide/effects/",
+    ),
+    _shape(
         r"the module did not lower",
         "the module failed to lower (a compiler bug; please report it)",
         "run `ppy run` on the file to see the error, and open an issue with it",
@@ -142,12 +179,9 @@ _SHAPES: tuple[_Shape, ...] = (
     ),
 )
 
-#: Not blockers: the function is fine where it is.
-_DESIGNED = (
-    "a generic function",
-    "a C binding",
-    "device code",
-)
+#: Not blockers: the function is fine where it is (a generic is compiled
+#: where a native caller names its types).
+_DESIGNED = ("a generic function", "a C binding", "device code")
 
 
 def _normal(text: str) -> str:
@@ -197,6 +231,15 @@ def categorize(reason: str) -> list[tuple[str, str, str]]:
     return [_categorize_one(reason)]
 
 
+def _callee(spelled: str) -> str:
+    """A call as its category name: a method on a local is the method
+    (`self.graph.add` is `.add`); a module function keeps its module."""
+    head, _, attr = spelled.rpartition(".")
+    if head and not head.split(".")[0][:1].isupper() and head.split(".")[0] in {"self", "cls"}:
+        return f".{attr}"
+    return spelled
+
+
 def _categorize_one(reason: str) -> tuple[str, str, str]:
     for shape in _SHAPES:
         found = shape.pattern.search(reason)
@@ -229,6 +272,8 @@ class FunctionOutcome:
     tier: str
     #: Why it stays in Python, or why its boundary is not used.
     reason: str = ""
+    #: The calls whose effects the checker could not see.
+    unknown: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -239,6 +284,8 @@ class Blocker:
     functions: int = 0
     statements: int = 0
     where: list[str] = field(default_factory=list)
+    #: For calls whose effects are unknown: which calls, by how many functions.
+    callees: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -266,11 +313,16 @@ class Summary:
             if outcome.tier != tier:
                 continue
             for category, hint, page in categorize(outcome.reason or "no reason given"):
+                if category.startswith(_DESIGNED):
+                    continue
                 entry = grouped.setdefault(category, Blocker(category, hint, page))
                 entry.functions += 1
                 entry.statements += outcome.statements
                 if len(entry.where) < 3:
                     entry.where.append(f"{outcome.path}:{outcome.line} {outcome.qualname}")
+                if category == _EFFECTS["ExternalUnknown"][0]:
+                    for callee in dict.fromkeys(_callee(c) for c in outcome.unknown):
+                        entry.callees[callee] = entry.callees.get(callee, 0) + 1
         return sorted(grouped.values(), key=lambda b: (-b.statements, -b.functions, b.category))
 
 
@@ -304,6 +356,7 @@ def summarize(bundle, lowered, sources=None, failures=None) -> Summary:  # type:
                 line=info.node.lineno,
                 statements=max(_statements(info.node), 1),
                 tier="python",
+                unknown=tuple(getattr(analysis, "unknown_callees", ())),
             )
             native = result.functions.get(qualname) if result is not None else None
             if failures and name in failures:
@@ -366,6 +419,16 @@ def render_summary(summary: Summary, *, limit: int = 10, modules: bool = False) 
             f"({_share(counts['functions'], every):>4})  "
             f"{counts['statements']:>7} statements ({_share(counts['statements'], weight):>4})"
         )
+    generics = sum(
+        1
+        for o in summary.outcomes
+        if o.tier == "python" and "generic function is specialized" in o.reason
+    )
+    if generics:
+        lines.append(
+            f"  ({generics} of the Python functions are generic: each native caller compiles "
+            "its own instance)"
+        )
     blockers = summary.blockers()
     if blockers:
         lines.append("")
@@ -380,6 +443,12 @@ def render_summary(summary: Summary, *, limit: int = 10, modules: bool = False) 
             )
             if blocker.hint:
                 lines.append(f"      {blocker.hint}")
+            if blocker.callees:
+                common = sorted(blocker.callees.items(), key=lambda item: (-item[1], item[0]))
+                lines.append(
+                    "      most often: "
+                    + ", ".join(f"`{name}` ({count})" for name, count in common[:6])
+                )
             if blocker.page:
                 lines.append(f"      see {blocker.page}")
             lines.extend(f"      {where}" for where in blocker.where)
@@ -429,6 +498,7 @@ def summary_json(summary: Summary) -> str:
                 "functions": b.functions,
                 "statements": b.statements,
                 "where": b.where,
+                "callees": b.callees,
             }
             for b in summary.blockers()
         ],
