@@ -17,7 +17,7 @@ from .lowering import NativeParam, NativeSignature
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 class CachedLowering:
@@ -77,6 +77,7 @@ def _param(p: NativeParam) -> dict:
         "fields": [list(f) for f in p.fields],
         "class_name": p.class_name,
         "written": p.written,
+        "exact": p.exact,
     }
 
 
@@ -89,6 +90,7 @@ def _read_param(raw: dict) -> NativeParam:
         fields=tuple(tuple(f) for f in raw["fields"]),
         class_name=raw["class_name"],
         written=bool(raw.get("written", False)),
+        exact=bool(raw.get("exact", False)),
     )
 
 

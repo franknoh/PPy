@@ -1,0 +1,441 @@
+"""Which `float` parameters show whether they were given an `int`.
+
+Python lets an `int` stand where a `float` is declared, and keeps it an
+`int`: `f(0)` of `def f(x: float) -> float: return x` is `0`, not `0.0`.
+Native code converts the `int` to a double at the boundary, which is only
+right where nothing the function does lets the difference show. It shows
+where the value, or a value computed from it the way an `int` would stay an
+`int`, is returned, printed or formatted, stored where the caller sees it,
+asked its class, or read for an attribute a `float` has and an `int` spells
+differently.
+
+`exact_params` follows each float-carrying parameter through the body,
+flow-insensitively (a name is tainted if any assignment taints it), and
+names the parameters that reach one of those places. The boundary then
+takes only a real `float` for them: an `int` keeps the call in Python.
+Every other `float` parameter still takes an `int`, converted.
+"""
+
+from __future__ import annotations
+
+import ast
+from collections.abc import Callable, Iterable
+
+from ..analysis import types as T
+
+#: Calls whose result is an `int`'s kind when their argument is: `abs(x)` of
+#: an `int` is an `int`.
+_PASSING = frozenset({"abs", "min", "max", "sum", "sorted", "list", "tuple", "reversed"})
+#: Calls that show the value as text or ask its class.
+_SHOWING = frozenset(
+    {"print", "str", "repr", "format", "isinstance", "type", "ascii", "id", "divmod"}
+)
+#: Calls whose result is the same for an `int` and the `float` it converts to.
+_HIDING = frozenset(
+    {"float", "int", "bool", "len", "round", "hash", "math", "range", "enumerate", "zip"}
+)
+
+
+def _carries_float(t: T.Type) -> bool:
+    t = T.strip_literal(t)
+    if t == T.FLOAT:
+        return True
+    if isinstance(t, T.Tuple_):
+        return any(_carries_float(item) for item in t.items)
+    if isinstance(t, T.Instance):
+        return any(_carries_float(arg) for arg in t.args)
+    if isinstance(t, T.Union_):
+        return any(_carries_float(member) for member in t.members)
+    return False
+
+
+def gives_int(t: T.Type) -> bool:
+    """Whether a value of type `t` may hold an int where a float is taken."""
+    t = T.strip_literal(t)
+    if t in (T.INT, T.BOOL):
+        return True
+    if isinstance(t, T.Tuple_):
+        return any(gives_int(item) for item in t.items)
+    if isinstance(t, T.Instance):
+        return any(gives_int(arg) for arg in t.args)
+    if isinstance(t, T.Union_):
+        return any(gives_int(member) for member in t.members)
+    return False
+
+
+def _is_text(t: T.Type) -> bool:
+    return T.strip_literal(t) in (T.STR, T.BYTES)
+
+
+def _is_float(t: T.Type) -> bool:
+    return T.strip_literal(t) == T.FLOAT
+
+
+def _names(target: ast.expr) -> Iterable[str]:
+    if isinstance(target, ast.Name):
+        yield target.id
+    elif isinstance(target, (ast.Tuple, ast.List)):
+        for element in target.elts:
+            yield from _names(element)
+    elif isinstance(target, ast.Starred):
+        yield from _names(target.value)
+
+
+def _root(node: ast.expr) -> str | None:
+    """The name a subscript or attribute place is reached from."""
+    while isinstance(node, (ast.Subscript, ast.Attribute)):
+        node = node.value
+    return node.id if isinstance(node, ast.Name) else None
+
+
+class _Taint:
+    """One parameter followed through one function body."""
+
+    def __init__(
+        self,
+        function: ast.FunctionDef | ast.AsyncFunctionDef,
+        types: dict[int, T.Type],
+        params: set[str],
+        start: set[str],
+        callee: Callable[[ast.Call], tuple[list[str], frozenset[str]] | None],
+        ambient: _Taint | None = None,
+    ) -> None:
+        self.callee = callee
+        #: Every float parameter followed at once: what may be an int at all.
+        self.ambient = ambient
+        self.function = function
+        self.types = types
+        self.params = params
+        self.tainted = set(start)
+        self.shown = False
+        #: Types of the nodes this walk spells itself, kept alive with them.
+        self.extra: dict[int, T.Type] = {}
+        self.made: list[ast.AST] = []
+        self.catches = any(isinstance(n, ast.Try) for n in ast.walk(function))
+
+    def type_of(self, node: ast.expr) -> T.Type:
+        found = self.extra.get(id(node))
+        return found if found is not None else self.types.get(id(node), T.UNKNOWN)
+
+    # -- expressions ---------------------------------------------------------------
+
+    def carries(self, node: ast.expr | None) -> bool:
+        """Whether `node`'s value may be an `int` where native code has a `float`."""
+        if node is None:
+            return False
+        match node:
+            case ast.Name():
+                return node.id in self.tainted
+            case ast.Constant():
+                return False
+            case ast.BinOp():
+                left, right = self.carries(node.left), self.carries(node.right)
+                division = isinstance(node.op, (ast.Div, ast.FloorDiv, ast.Mod))
+                if division and (left or right) and self.catches:
+                    # `0 / x` raises with words that name `float` for one and
+                    # not the other, which a handler can print.
+                    self.shown = True
+                if isinstance(node.op, ast.Mod) and _is_text(self.type_of(node.left)):
+                    self.shown = self.shown or right  # `"%s" % x` formats it
+                    return False
+                if isinstance(node.op, ast.Div) or not (left or right):
+                    return False
+                # A real float on the other side makes the result a float in Python too.
+                other = node.right if left else node.left
+                return (left and right) or not self.real_float(other)
+            case ast.UnaryOp():
+                inner = self.carries(node.operand)
+                return inner and not isinstance(node.op, ast.Not)
+            case ast.BoolOp():
+                return self.any_of(node.values)
+            case ast.IfExp():
+                self.visit(node.test)
+                return self.any_of([node.body, node.orelse])
+            case ast.Compare():
+                for part in (node.left, *node.comparators):
+                    self.visit(part)
+                return False
+            case ast.Tuple() | ast.List() | ast.Set():
+                return self.any_of(node.elts)
+            case ast.Dict():
+                keys = self.any_of([k for k in node.keys if k is not None])
+                values = self.any_of(node.values)
+                return keys or values
+            case ast.Starred():
+                return self.carries(node.value)
+            case ast.Subscript():
+                self.visit(node.slice)
+                return self.carries(node.value)
+            case ast.Attribute():
+                if self.carries(node.value):
+                    # `x.real`, `x.is_integer()`, `p.x` of a tainted tuple or object.
+                    if _is_float(self.type_of(node.value)):
+                        self.shown = True
+                        return False
+                    return True
+                return False
+            case ast.NamedExpr():
+                value = self.carries(node.value)
+                if value:
+                    self.tainted.add(node.target.id)
+                return value
+            case ast.JoinedStr():
+                if self.any_of(node.values):
+                    self.shown = True
+                return False
+            case ast.FormattedValue():
+                return self.carries(node.value)
+            case ast.Call():
+                return self.call(node)
+            case ast.ListComp() | ast.SetComp() | ast.GeneratorExp():
+                self.comprehension(node.generators)
+                return self.carries(node.elt)
+            case ast.DictComp():
+                self.comprehension(node.generators)
+                return self.any_of([node.key, node.value])
+            case ast.Lambda():
+                if self.mentions(node.body):
+                    self.shown = True
+                return False
+            case ast.Await() | ast.Yield() | ast.YieldFrom():
+                if self.carries(node.value):
+                    self.shown = True
+                return False
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.expr) and self.carries(child):
+                self.shown = True
+        return False
+
+    def real_float(self, node: ast.expr) -> bool:
+        """A float in Python too: typed `float`, and not from a float parameter."""
+        if not _is_float(self.type_of(node)):
+            return False
+        return self.ambient is None or not self.ambient.carries(node)
+
+    def any_of(self, nodes: list[ast.expr]) -> bool:
+        """Whether any carries it, having looked at every one."""
+        found = False
+        for node in nodes:
+            found = self.carries(node) or found
+        return found
+
+    def visit(self, node: ast.expr | None) -> None:
+        self.carries(node)
+
+    def mentions(self, node: ast.AST) -> bool:
+        return any(isinstance(n, ast.Name) and n.id in self.tainted for n in ast.walk(node))
+
+    def comprehension(self, generators: list[ast.comprehension]) -> None:
+        for generator in generators:
+            if self.carries(generator.iter):
+                self.tainted.update(_names(generator.target))
+            for condition in generator.ifs:
+                self.visit(condition)
+
+    def call(self, node: ast.Call) -> bool:
+        arguments = [*node.args, *(k.value for k in node.keywords)]
+        carried = [self.carries(a) for a in arguments]
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else ""
+        if isinstance(func, ast.Attribute):
+            receiver = self.carries(func.value)
+            root = _root(func.value)
+            if isinstance(func.value, ast.Name) and func.value.id in {"math", "cmath"}:
+                return False
+            if receiver and _is_float(self.type_of(func.value)):
+                self.shown = True  # `x.is_integer()`, `x.hex()`
+                return False
+            if any(carried):
+                # `xs.append(x)`: the collection now carries it; a parameter's
+                # is the caller's.
+                if root is not None:
+                    if root in self.params:
+                        self.shown = True
+                    self.tainted.add(root)
+                else:
+                    self.shown = True
+            if receiver and func.attr in {"pop", "copy", "get", "popleft", "values", "items"}:
+                return True
+            return receiver and func.attr not in {"index", "count", "__len__"}
+        if name in _SHOWING and any(carried):
+            self.shown = True
+            return False
+        if name in _HIDING:
+            # `round(x, 2)` of an int is an int.
+            return name == "round" and len(arguments) > 1 and carried[0]
+        if name in _PASSING:
+            return any(carried)
+        if any(carried):
+            # Another function of the module given it shows it where that
+            # function's own parameter does, which includes returning it; any
+            # other callee may do anything with it.
+            known = self.callee(node)
+            if known is None:
+                self.shown = True
+                return False
+            names, exact = known
+            given = [n for n, c in zip(names, carried[: len(node.args)], strict=False) if c]
+            given += [k.arg for k in node.keywords if k.arg is not None and self.carries(k.value)]
+            if len(node.args) > len(names) or any(n in exact for n in given):
+                self.shown = True
+        return False
+
+    # -- statements ------------------------------------------------------------------------
+
+    def body(self, statements: list[ast.stmt]) -> None:
+        for statement in statements:
+            self.statement(statement)
+
+    def assign(self, target: ast.expr, carried: bool) -> None:
+        if not carried:
+            if not isinstance(target, ast.Name):
+                self.place(target)
+            return
+        if isinstance(target, (ast.Subscript, ast.Attribute)):
+            root = _root(target)
+            if root is None or root in self.params or isinstance(target, ast.Attribute):
+                self.shown = True
+            else:
+                self.tainted.add(root)
+            self.place(target)
+            return
+        self.tainted.update(_names(target))
+
+    def place(self, target: ast.expr) -> None:
+        if isinstance(target, ast.Subscript):
+            self.visit(target.slice)
+            self.place(target.value)
+        elif isinstance(target, ast.Attribute):
+            self.place(target.value)
+
+    def statement(self, node: ast.stmt) -> None:
+        match node:
+            case ast.Assign():
+                carried = self.carries(node.value)
+                for target in node.targets:
+                    self.assign(target, carried)
+            case ast.AnnAssign():
+                self.assign(node.target, self.carries(node.value))
+            case ast.AugAssign():
+                spelled = ast.BinOp(node.target, node.op, node.value)
+                ast.copy_location(spelled, node)
+                self.made.append(spelled)
+                self.extra[id(spelled)] = self.type_of(node.target)
+                self.assign(node.target, self.carries(spelled))
+            case ast.Return():
+                if self.carries(node.value):
+                    self.shown = True
+            case ast.Expr():
+                self.visit(node.value)
+            case ast.If() | ast.While():
+                self.visit(node.test)
+                self.body(node.body)
+                self.body(node.orelse)
+            case ast.For() | ast.AsyncFor():
+                if self.carries(node.iter):
+                    self.tainted.update(_names(node.target))
+                self.body(node.body)
+                self.body(node.orelse)
+            case ast.Raise():
+                if self.carries(node.exc) or self.carries(node.cause):
+                    self.shown = True
+            case ast.Assert():
+                self.visit(node.test)
+                if self.carries(node.msg):
+                    self.shown = True
+            case ast.Try():
+                self.body(node.body)
+                for handler in node.handlers:
+                    self.body(handler.body)
+                self.body(node.orelse)
+                self.body(node.finalbody)
+            case ast.With() | ast.AsyncWith():
+                for item in node.items:
+                    self.visit(item.context_expr)
+                self.body(node.body)
+            case ast.Match():
+                if self.carries(node.subject):
+                    self.shown = True
+                for case in node.cases:
+                    self.body(case.body)
+            case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
+                if self.mentions(node):
+                    self.shown = True
+            case ast.Global() | ast.Nonlocal():
+                if any(name in self.tainted for name in node.names):
+                    self.shown = True
+            case ast.Delete() | ast.Pass() | ast.Break() | ast.Continue() | ast.Import():
+                pass
+            case _:
+                if self.mentions(node):
+                    self.shown = True
+
+    def run(self, to_fixpoint: bool = False) -> bool:
+        """Whether the parameter shows, to a fixed point over the body."""
+        while True:
+            before = len(self.tainted)
+            self.body(self.function.body)
+            if self.shown and not to_fixpoint:
+                return True
+            if len(self.tainted) == before:
+                return self.shown
+
+
+class ModuleIntness:
+    """The exact parameters of every function of one module, to a fixed point
+    over the calls between them: a function that passes a parameter to one
+    whose parameter shows shows it too."""
+
+    def __init__(self, functions: dict[str, object], types: dict[int, T.Type]) -> None:
+        self.functions = functions
+        self.types = types
+        self._exact: dict[str, frozenset[str]] | None = None
+
+    def exact(self, qualname: str) -> frozenset[str]:
+        if self._exact is None:
+            self._exact = self._solve()
+        return self._exact.get(qualname, frozenset())
+
+    def _params(self, qualname: str) -> list[str] | None:
+        analysis = self.functions.get(qualname)
+        if analysis is None:
+            return None
+        info = analysis.info  # type: ignore[attr-defined]
+        if any(p.kind in {"var_positional", "var_keyword"} for p in info.params):
+            return None
+        return [p.name for p in info.params]
+
+    def _solve(self) -> dict[str, frozenset[str]]:
+        exact: dict[str, frozenset[str]] = {q: frozenset() for q in self.functions}
+
+        def callee(call: ast.Call) -> tuple[list[str], frozenset[str]] | None:
+            typed = T.strip_literal(self.types.get(id(call.func), T.UNKNOWN))
+            qualname = typed.qualname if isinstance(typed, T.Callable_) else ""
+            names = self._params(qualname) if qualname else None
+            if names is None:
+                return None
+            if isinstance(call.func, ast.Attribute) and names and names[0] in {"self", "cls"}:
+                names = names[1:]
+            return names, exact[qualname]
+
+        while True:
+            changed = False
+            for qualname, analysis in self.functions.items():
+                info = analysis.info  # type: ignore[attr-defined]
+                node = getattr(info, "node", None)
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                params = {p.name: p.type for p in info.params}
+                carrying = {name for name, t in params.items() if _carries_float(t)}
+                ambient = _Taint(node, self.types, set(params), carrying, callee)
+                ambient.run(to_fixpoint=True)
+                found = frozenset(
+                    name
+                    for name in carrying
+                    if _Taint(node, self.types, set(params), {name}, callee, ambient).run()
+                )
+                if found != exact[qualname]:
+                    exact[qualname] = found | exact[qualname]
+                    changed = True
+            if not changed:
+                return exact

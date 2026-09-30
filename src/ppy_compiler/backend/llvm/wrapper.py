@@ -475,7 +475,11 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
                 lines.append("    {")
                 lines.append(f"        PyObject *member = PyObject_GetAttr({source}, {interned});")
                 lines.append("        if (member == NULL) PPY_GUARD_FAIL();")
-                lines.extend(_scalar_lines(scalar, "member", name, "        ", release=True))
+                lines.extend(
+                    _scalar_lines(
+                        scalar, "member", name, "        ", release=True, exact=parameter.exact
+                    )
+                )
                 lines.append("        Py_DECREF(member);")
                 lines.append("    }")
                 arguments.append(name)
@@ -490,7 +494,13 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
                 name = f"a{position}_{offset}"
                 declarations.append(f"    {C_TYPES[_abi(scalar)]} {name} = 0;")
                 lines.extend(
-                    _scalar_lines(scalar, f"PyTuple_GET_ITEM({source}, {offset})", name, "    ")
+                    _scalar_lines(
+                        scalar,
+                        f"PyTuple_GET_ITEM({source}, {offset})",
+                        name,
+                        "    ",
+                        exact=parameter.exact,
+                    )
                 )
                 arguments.append(name)
             continue
@@ -558,7 +568,14 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
             lines.append(f"    for (Py_ssize_t i = 0; i < {count}; i++) {{")
             lines.append(f"        PyObject *item = {item};")
             lines.extend(
-                _scalar_lines(parameter.element, "item", f"{data}[i]", "        ", declare=False)
+                _scalar_lines(
+                    parameter.element,
+                    "item",
+                    f"{data}[i]",
+                    "        ",
+                    declare=False,
+                    exact=parameter.exact,
+                )
             )
             lines.append("    }")
             cleanup.append(f"    PyMem_Free({data});")
@@ -568,10 +585,14 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
 
         name = f"a{position}"
         declarations.append(f"    {C_TYPES[_abi(parameter.kind)]} {name} = 0;")
-        lines.extend(_scalar_lines(parameter.kind, source, name, "    "))
+        lines.extend(_scalar_lines(parameter.kind, source, name, "    ", exact=parameter.exact))
         arguments.append(name)
 
     return "\n".join(declarations), "\n".join(lines), "\n".join(cleanup), arguments
+
+
+#: The largest int a double holds exactly, and every int below it: 2**53.
+_EXACT = "9007199254740992LL"
 
 
 def _scalar_lines(
@@ -582,18 +603,35 @@ def _scalar_lines(
     *,
     declare: bool = True,
     release: bool = False,
+    exact: bool = False,
 ) -> list[str]:
-    """Parse one Python object into a machine scalar, or fail the guard."""
+    """Parse one Python object into a machine scalar, or fail the guard.
+
+    A `float` takes an `int` a double holds exactly, unless it is `exact`:
+    then an `int` stays in Python, where it stays an `int`.
+    """
     undo = f"{indent}    Py_DECREF({source});\n" if release else ""
+    if scalar == "float" and exact:
+        return [
+            f"{indent}if (PyFloat_CheckExact({source})) {{",
+            f"{indent}    {target} = PyFloat_AS_DOUBLE({source});",
+            f"{indent}}} else {{",
+            f"{undo}{indent}    PPY_GUARD_FAIL();",
+            f"{indent}}}",
+        ]
     if scalar == "float":
         return [
             f"{indent}if (PyFloat_CheckExact({source})) {{",
             f"{indent}    {target} = PyFloat_AS_DOUBLE({source});",
             f"{indent}}} else if (PyLong_CheckExact({source})) {{",
-            f"{indent}    {target} = PyLong_AsDouble({source});",
-            f"{indent}    if ({target} == -1.0 && PyErr_Occurred()) {{",
+            f"{indent}    long long whole = PyLong_AsLongLong({source});",
+            (
+                f"{indent}    if ((whole == -1 && PyErr_Occurred())"
+                f" || whole > {_EXACT} || whole < -{_EXACT}) {{"
+            ),
             f"{undo}{indent}        PPY_GUARD_FAIL();",
             f"{indent}    }}",
+            f"{indent}    {target} = (double)whole;",
             f"{indent}}} else {{",
             f"{undo}{indent}    PPY_GUARD_FAIL();",
             f"{indent}}}",

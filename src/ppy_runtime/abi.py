@@ -65,6 +65,10 @@ class NativeParam:
     #: A collection the function writes through: the boundary copies its
     #: contents back into the caller's object after the call.
     written: bool = False
+    #: A `float` (or a tuple, list, or value class holding floats) whose
+    #: int-ness the body would show: an `int` given for it keeps the call in
+    #: Python, where it stays an `int`.
+    exact: bool = False
 
     @property
     def is_buffer(self) -> bool:

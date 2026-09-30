@@ -35,7 +35,7 @@ from ..ir import BOOL, I64, Block, IRType, Successor, Value
 from ..ir.dialects import core
 from .collections import HANDLE, STR, Shape, class_tag
 
-__all__ = ["ExceptionLowering", "exception_tag", "uses_exceptions"]
+__all__ = ["ARGS_NONE", "ARGS_ONE_TEXT", "ExceptionLowering", "exception_tag", "uses_exceptions"]
 
 #: Checks that stand for what only native code cannot do: never an exception
 #: here, since CPython would answer where native code stops.
@@ -56,6 +56,11 @@ _INEXACT = (
 )
 
 _PLACE = re.compile(r"\{(\d+)\}")
+
+#: The flags word of an exception object (its fourth) says, past whether `str()`
+#: of it is CPython's (bit 0), what `args` is: `(str(e),)`, or `()`.
+ARGS_ONE_TEXT = 2
+ARGS_NONE = 4
 
 
 def exception_tag(name: str) -> int:
@@ -199,7 +204,9 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
         self._add_text(builder, rest[position:])
         message = self._rt("ppy_str_finish", (builder,), HANDLE)  # type: ignore[attr-defined]
         exact = not raises.startswith(_INEXACT) and not (name == "KeyError" and not rest)
-        self._raise_made(name, exception_tag(name), message, self._word(int(exact)))  # type: ignore[attr-defined]
+        # `args` is `(message,)` where the message is all of CPython's and not a key's repr.
+        flags = int(exact) | (ARGS_ONE_TEXT if exact and name != "KeyError" and rest else 0)
+        self._raise_made(name, exception_tag(name), message, self._word(flags))  # type: ignore[attr-defined]
 
     def _add_text(self, builder: Value, text: str) -> None:
         if text:
@@ -407,7 +414,7 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
         """`str()` of `name(argument)`, and whether it is CPython's."""
         one = self._word(1)  # type: ignore[attr-defined]
         if argument is None:
-            return self._string_literal(""), one  # type: ignore[attr-defined]
+            return self._string_literal(""), self._word(1 | ARGS_NONE)  # type: ignore[attr-defined]
         builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)  # type: ignore[attr-defined]
         keyed = name == "KeyError"
         known = one
@@ -418,6 +425,7 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
                 known = self._rt("ppy_str_add_repr", (builder, text))  # type: ignore[attr-defined]
             else:
                 self._rt("ppy_str_add", (builder, text), None)  # type: ignore[attr-defined]
+                known = self._word(1 | ARGS_ONE_TEXT)  # type: ignore[attr-defined]
             self._release(text)  # type: ignore[attr-defined]
         else:
             value = self._expr(argument)  # type: ignore[attr-defined]

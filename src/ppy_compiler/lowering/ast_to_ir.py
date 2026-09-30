@@ -96,6 +96,7 @@ from .containers import ContainerLowering
 from .exceptions import ExceptionLowering, uses_exceptions
 from .expressions import ExpressionLowering
 from .generators import GeneratorLowering
+from .intness import ModuleIntness, gives_int
 from .strings import StringLowering
 from .walks import WalkLowering
 
@@ -594,7 +595,7 @@ class Frontend:
             and (_return_atoms(info.ret, self.layouts) is not None or info.ret == T.NONE)
             and results == _result_types(info, self.layouts)
         ):
-            native = _signature(info, self.layouts, analysis)
+            native = self._exact_signature(info, _signature(info, self.layouts, analysis))
         if self.cpu_compatible and native is None:
             raise Unsupported("canonical signature has no CPU native ABI")
         return IRSignature(
@@ -641,6 +642,25 @@ class Frontend:
                 described["noalias"] = True
             kinds.append(described)
         return kinds
+
+    def exact_params(self, qualname: str) -> frozenset[str]:
+        """The float parameters of a function of this module whose int-ness shows."""
+        found = self.__dict__.get("_intness")
+        if found is None:
+            found = ModuleIntness(self.analysis.functions, self.analysis.node_types)
+            self.__dict__["_intness"] = found
+        return found.exact(qualname)
+
+    def _exact_signature(self, info: FunctionInfo, native: NativeSignature) -> NativeSignature:
+        exact = self.exact_params(info.qualname)
+        if not exact:
+            return native
+        return replace(
+            native,
+            parameters=tuple(
+                replace(p, exact=True) if p.name in exact else p for p in native.parameters
+            ),
+        )
 
     def _text_boundary(self, info: FunctionInfo, signature: IRSignature) -> NativeSignature | None:
         """A thunk for Python to call a function that takes or gives strings.
@@ -4003,7 +4023,12 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if len(spelled) != len(signature.parameters):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         arguments: list[Value] = []
+        exact = self.frontend.exact_params(qualname)
         for argument, parameter in zip(spelled, signature.parameters, strict=True):
+            if parameter.name in exact and gives_int(self._type_of(argument)):
+                raise Unsupported(
+                    f"`{qualname}` shows whether `{parameter.name}` is an int, and is given one"
+                )
             if isinstance(parameter, IRParameter) and parameter.native is None:
                 arguments.append(self._coerce_type(self._expr(argument), parameter.type))
                 continue

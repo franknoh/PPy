@@ -410,6 +410,7 @@ def write_manifest(
                             "fields": [list(pair) for pair in parameter.fields],
                             "class_name": parameter.class_name,
                             "written": parameter.written,
+                            "exact": parameter.exact,
                         }
                         for parameter in signature.parameters
                     ],

@@ -15,6 +15,8 @@ from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, Successor, Value
 from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
+from .collections import HANDLE, Shape
+from .exceptions import ARGS_NONE, ARGS_ONE_TEXT
 
 #: The builtin classes `isinstance` is asked of, by the name a program spells.
 _BUILTIN_CLASSES = frozenset(
@@ -567,3 +569,115 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
         self.__dict__.setdefault("_made_nodes", []).append(choice)
         self._if(choice)  # type: ignore[attr-defined]
         return True
+
+    # -- a caught exception's `args` ----------------------------------------------------
+
+    def _args_of(self, node: ast.expr) -> Value | None:
+        """The slot of the caught exception whose `args` `node` reads."""
+        if isinstance(node, ast.Attribute) and node.attr == "args":
+            return self._caught_of(node.value)  # type: ignore[attr-defined]
+        return None
+
+    def _args_flags(self, slot: Value, wanted: int) -> Value:
+        """The exception's flags, where `args` is one of the shapes `wanted`
+        names; any other shape falls back."""
+        exception = core.load(self.b, slot)  # type: ignore[attr-defined]
+        address = self._field_address(exception, 3)  # type: ignore[attr-defined]
+        flags = self._read(address, Shape("int"))  # type: ignore[attr-defined]
+        b = self.b  # type: ignore[attr-defined]
+        shaped = core.bitwise(b, "and", flags, self._word(wanted))  # type: ignore[attr-defined]
+        core.guard(
+            b,
+            core.cmp(b, "ne", shaped, self._word(0)),  # type: ignore[attr-defined]
+            "contract",
+            "an exception's `args` beyond one string",
+        )
+        return flags
+
+    def _first_arg(self, node: ast.expr) -> Value | None:
+        """`e.args[0]` of an exception raised with one string: that string, owned."""
+        if not (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.slice, ast.Constant)
+            and node.slice.value in (0, -1)
+            and type(node.slice.value) is int
+        ):
+            return None
+        slot = self._args_of(node.value)
+        if slot is None:
+            return None
+        self._args_flags(slot, ARGS_ONE_TEXT)
+        return self._rt("ppy_exc_str", (core.load(self.b, slot),), HANDLE)  # type: ignore[attr-defined]
+
+    def _args_shown(self, node: ast.expr) -> Value | None:
+        """`str(e.args)`: `()` or `('message',)`."""
+        slot = self._args_of(node)
+        if slot is None:
+            return None
+        flags = self._args_flags(slot, ARGS_ONE_TEXT | ARGS_NONE)
+        b = self.b  # type: ignore[attr-defined]
+        builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)  # type: ignore[attr-defined]
+        none = core.cmp(
+            b, "ne", core.bitwise(b, "and", flags, self._word(ARGS_NONE)), self._word(0)
+        )  # type: ignore[attr-defined]
+        empty = self._block("args.empty")  # type: ignore[attr-defined]
+        one = self._block("args.one")  # type: ignore[attr-defined]
+        done = self._block("args.done")  # type: ignore[attr-defined]
+        core.cond_br(b, none, Successor(empty), Successor(one))
+        b.at_end(empty)
+        self._add_text(builder, "()")  # type: ignore[attr-defined]
+        core.br(b, Successor(done))
+        b.at_end(one)
+        self._add_text(builder, "(")  # type: ignore[attr-defined]
+        text = self._rt("ppy_exc_str", (core.load(b, slot),), HANDLE)  # type: ignore[attr-defined]
+        self._rt("ppy_str_add_repr", (builder, text))  # type: ignore[attr-defined]
+        self._release(text)  # type: ignore[attr-defined]
+        self._add_text(builder, ",)")  # type: ignore[attr-defined]
+        core.br(b, Successor(done))
+        b.at_end(done)
+        return self._rt("ppy_str_finish", (builder,), HANDLE)  # type: ignore[attr-defined]
+
+    def _shown_text(self, node: ast.expr) -> Value | None:
+        found = self._first_arg(node)
+        if found is None:
+            found = self._args_shown(node)
+        if found is not None:
+            return found
+        return super()._shown_text(node)  # type: ignore[misc]
+
+    def _string_call(self, node: ast.Call, discard: bool) -> Value | None:
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "str"
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            found = self._first_arg(node.args[0])
+            if found is None:
+                found = self._args_shown(node.args[0])
+            if found is not None:
+                return self._keep_or_drop(found, discard)  # type: ignore[attr-defined]
+        return super()._string_call(node, discard)  # type: ignore[misc]
+
+    def _add_formatted(self, builder: Value, node: ast.expr, conversion: int, spec: str) -> None:
+        if conversion in {-1, ord("s")} and not spec:
+            found = self._first_arg(node)
+            if found is None:
+                found = self._args_shown(node)
+            if found is not None:
+                self._rt("ppy_str_add", (builder, found), None)  # type: ignore[attr-defined]
+                self._release(found)  # type: ignore[attr-defined]
+                return
+        super()._add_formatted(builder, node, conversion, spec)  # type: ignore[misc]
+
+    def _object_length(self, node: ast.expr) -> Value | None:
+        """`len(e.args)`: 0 or 1."""
+        slot = self._args_of(node)
+        if slot is None:
+            return super()._object_length(node)  # type: ignore[misc]
+        flags = self._args_flags(slot, ARGS_ONE_TEXT | ARGS_NONE)
+        b = self.b  # type: ignore[attr-defined]
+        none = core.cmp(
+            b, "ne", core.bitwise(b, "and", flags, self._word(ARGS_NONE)), self._word(0)
+        )  # type: ignore[attr-defined]
+        return core.select(b, none, self._word(0), self._word(1))  # type: ignore[attr-defined]
