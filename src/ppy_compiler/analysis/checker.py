@@ -1155,10 +1155,24 @@ class _Checker:
                 info = self.project.classes.get(owner.name)
                 if info is not None:
                     declared = info.lookup(target.attr, self.project)
-                    if declared is not None and not isinstance(declared[0], T.Callable_):
+                    # A method is not a target; a field holding a function is.
+                    field = target.attr in info.fields
+                    if declared is not None and (field or not isinstance(declared[0], T.Callable_)):
                         return T.substitute(
                             declared[0], receiver_bindings(info, owner, self.project.classes)
                         )
+        if isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name):
+            # `ops["add"] = lambda a, b: a + b`: only a function element is
+            # asked for, which is what types a lambda.
+            bound = env.get(target.value.id)
+            owner = T.strip_literal(bound.type) if bound is not None else None
+            element = None
+            if isinstance(owner, T.Instance) and owner.name == "dict" and len(owner.args) == 2:
+                element = owner.args[1]
+            elif isinstance(owner, T.Instance) and owner.name == "list" and owner.args:
+                element = owner.args[0]
+            if element is not None and isinstance(T.strip_literal(element), T.Callable_):
+                return element
         return None
 
     def _stmt_TypeAlias(self, node: ast.TypeAlias, env: Env) -> None:

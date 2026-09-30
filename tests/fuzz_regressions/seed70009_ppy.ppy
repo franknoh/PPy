@@ -1,0 +1,115 @@
+# fuzz: path=ppy seed=70009 (stdout differs)
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+def countdown(n: int) -> Iterator[int]:
+    pass
+
+
+def pairs(n: int) -> Iterator[int]:
+    yield from countdown(n)
+
+
+def fn1(a2: str, a3: str, a4: str) -> str:
+    if ((4611686018427387903 + 9223372036854775807) >= (3037000499 if (len(a2) != (1 + 1)) else 3)):
+        if ((-1 + 10) != (4611686018427387903 + 10)):
+            pass
+        else:
+            n9: int = (6 * 4611686018427387904)
+            bump10((7 - -11))
+            bump10(-12)
+        xs12: list[int] = [(6 - -2), -1]
+        xs12.extend([(-2 if (abs(-9) == max(-9, 11)) else 12), 5])
+        n11: int = xs12.pop() + len(xs12)
+    else:
+        n13: int = 4
+    def make15(k: int) -> Callable[[int], int]:
+        return lambda v: v * k + (10 - -2)
+    h16 = make15((-8 * 2))
+    n14: int = h16(4611686018427387903) + h16(-11)
+    return a2
+
+
+def fn17(a18: int) -> str:
+    xs25: list[int] = [(a18 - -6), (a18 << (a18 % 26)), (a18 if ((-3 - a18) <= abs(a18)) else a18), abs(a18)]
+    xs25.sort(key=lambda v: v * (a18 % (a18 if a18 != 0 else 5)))
+    n24: int = xs25[0] * 7 + max(xs25, key=lambda v: v * (a18 % (a18 if a18 != 0 else 5)))
+    m26 = HashMap[int, int]()
+    m26[(n24 & a18)] = m26.get((n24 & a18), 0) + (n24 % (n24 if n24 != 0 else 3))
+    n27: int = len(m26) * 100
+    s29: str = (' spaced out ' + ('MiXeD' + 'MiXeD'.replace('MiXeD', '')))
+    def make31(k: int) -> Callable[[int], int]:
+        return lambda v: v * k + n27
+    h32 = make31((n27 + a18))
+    n30: int = h32(12) + h32(8)
+    return (s29.swapcase() * 0)
+
+
+def fn33(a34: float, a35: bool, a36: str) -> bool:
+    def make38(k: int) -> Callable[[int], int]:
+        return lambda v: v * k + (-6 ^ -10)
+    h39 = make38((4611686018427387903 - -11))
+    n37: int = h39(-10) + h39(-1)
+    n40: int = len("-".join(a36.split())[2:2:2])
+    sa42: set[int] = {(n40 >> (n40 % 59))}
+    sb43: set[int] = {x % 5 for x in range(2)}
+    sa42.add(max(n37, n40))
+    sa42.discard(2)
+    n41: int = len(sa42 & sb43) * 10 + (1 if 3 in sb43 else 0)
+    return (a36 < "-".join('ab'.split()))
+
+
+def fn44(a45: int, a46: float, a47: int) -> float:
+    n48: int = a45
+    n49: int = int(7.25)
+    def bump50(by: int) -> None:
+        nonlocal n49
+        n49 = n49 * 2 + by
+    bump50(max(a45, a47))
+    bump50(10)
+    return (-0.0 - (a46 * a46))
+
+
+def main() -> None:
+    print(fn1('two  gaps', 'ab', '123'))
+    print(fn1('x-y-z', 'MiXeD', '123'))
+    print(fn17(-2))
+    print(fn17(-12))
+    print(fn33(-0.0, False, 'a'))
+    print(fn33(-0.0, True, 'a'))
+    print(fn33(1e-300, False, ' spaced out '))
+    print(fn44(-8, 3.0, -6))
+
+
+main()

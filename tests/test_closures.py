@@ -270,7 +270,50 @@ def main() -> None:
 main()
 """
 
+HELD = """
+from collections.abc import Callable
+from dataclasses import dataclass
+
+
+@dataclass
+class Rule:
+    name: str
+    test: Callable[[int], bool]
+
+
+def dispatch(n: int) -> int:
+    ops: dict[str, Callable[[int, int], int]] = {
+        "add": lambda a, b: a + b,
+        "mul": lambda a, b: a * b,
+    }
+    ops["sub"] = lambda a, b: a - b
+    total = 0
+    for name in ["add", "mul", "sub", "add"]:
+        total = ops[name](total, n)
+    return total
+
+
+def rules(n: int) -> int:
+    limit = 5
+    checks = [Rule("small", lambda v: v < limit), Rule("even", lambda v: v % 2 == 0)]
+    limit = 7
+    hits = 0
+    for v in range(n):
+        for rule in checks:
+            if rule.test(v):
+                hits += len(rule.name)
+    return hits
+
+
+def main() -> None:
+    print(dispatch(3), rules(10))
+
+
+main()
+"""
+
 PROGRAMS = {
+    "held": (HELD, ["dispatch", "rules"]),
     "basics": (BASICS, ["apply", "use_named", "use_lambda", "counter", "make_adder", "adders"]),
     "keys": (KEYS, ["keyed", "mapped", "keyed_value"]),
     "values": (
