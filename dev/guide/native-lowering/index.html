@@ -1388,6 +1388,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What the body may contain">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#expressions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expressions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-float-given-an-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A float given an int
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4300,6 +4339,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What the body may contain">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#expressions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expressions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-float-given-an-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A float given an int
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4388,9 +4466,61 @@ is made of.</p>
 <li>the bitwise operators, including <code>~</code></li>
 <li><code>raise</code>, <code>try</code> with its handlers, <code>else</code>, and <code>finally</code>, and <code>assert</code></li>
 <li>a generator consumed where it is made: by <code>for</code>, <code>next</code>, <code>sum</code>, <code>min</code>,
-  <code>max</code>, a comprehension, or a collection built from it</li>
+  <code>max</code>, a comprehension, or a collection built from it; and one that is
+  returned, passed on, stepped in a loop, or made by <code>__iter__</code>, which gets a
+  frame of its own</li>
 </ul>
 <p><a href="../exceptions-and-generators/">Exceptions and generators</a> has the details.</p>
+<h3 id="expressions">Expressions<a class="headerlink" href="#expressions" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>isinstance(x, T)</code> and <code>isinstance(x, (A, B))</code> with builtin classes
+  (<code>int</code>, <code>float</code>, <code>bool</code>, <code>str</code>, <code>list</code>, <code>dict</code>, <code>set</code>, <code>tuple</code>,
+  <code>type(None)</code>) fold to a constant where the checker's type of <code>x</code> decides
+  the answer. An <code>int</code> may be a <code>bool</code> and a <code>float</code> may be an <code>int</code>, so
+  <code>isinstance(n, bool)</code> of an <code>n: int</code> stays in Python. Object classes are
+  tested by the class tag the instance carries.</li>
+<li>A chained comparison, <code>0 &lt;= i &lt; n</code>, is its comparisons joined by <code>and</code>,
+  each operand evaluated once and the ones after a false comparison not at
+  all.</li>
+<li><code>x in (a, b)</code>, <code>x in {a, b}</code>, and <code>x in [a, b]</code> are <code>x == a or x == b</code>.
+  <code>x in range(start, stop, step)</code> is a bounds check and a remainder, with no
+  range made. <code>not in</code> is the negation. A NaN on the left falls back,
+  since CPython matches it by identity.</li>
+<li><code>a ** b</code> and <code>pow(a, b)</code> of ints multiply by squaring. A product past 64
+  bits falls back, and so does a negative exponent, whose result is a float.
+  <code>pow(a, b, m)</code> reduces as it goes, and <code>pow(a, b, 0)</code> raises CPython's
+  <code>ValueError</code>.</li>
+<li><code>a = b = value</code> evaluates the value once and binds each name.
+  <code>r, c = (x, y) if flag else (y, x)</code> makes and unpacks only the chosen side.</li>
+</ul>
+<h3 id="loops">Loops<a class="headerlink" href="#loops" title="Permanent link">&para;</a></h3>
+<p>A <code>for</code> walks:</p>
+<ul>
+<li><code>range</code> with any step, including one known only at run time; a zero step
+  raises <code>ValueError</code></li>
+<li><code>reversed(range(...))</code>, from its last value</li>
+<li>a string's characters, a tuple display (<code>for dx, dy in ((0, 1), (1, 0))</code>),
+  and a tuple local</li>
+<li>a list parameter lent as a buffer</li>
+</ul>
+<p>Each of these also works under <code>enumerate</code> (with <code>start=</code>), <code>zip</code>, and, for
+ranges, buffers, and tuples, <code>reversed</code>, alone or mixed with the
+collections. A <code>for</code> over any of them, or over a collection, may have an
+<code>else</code>, which runs when the loop ends without <code>break</code>. Identity between two
+values the checker types <code>bool</code> (<code>flag is True</code>) is equality, since there is
+one <code>True</code> and one <code>False</code>.</p>
+<h3 id="a-float-given-an-int">A <code>float</code> given an <code>int</code><a class="headerlink" href="#a-float-given-an-int" title="Permanent link">&para;</a></h3>
+<p>CPython lets an <code>int</code> stand where a <code>float</code> is declared and keeps it an
+<code>int</code>: <code>f(0)</code> of <code>def f(x: float) -&gt; float: return x</code> is <code>0</code>. Native code
+converts at the boundary, which is only right where the difference cannot
+show. The compiler follows each <code>float</code> parameter (and each tuple, list, or
+value class holding floats) through the body. Where the value, or something
+computed from it the way an <code>int</code> stays an <code>int</code>, is returned, printed or
+formatted, stored where the caller sees it, or asked its class, the boundary
+takes only a <code>float</code> for it and an <code>int</code> keeps the call in Python. A native
+caller that passes an <code>int</code> to such a parameter stays in Python too, and so
+does one that builds a value class with an <code>int</code> for a <code>float</code> field. Every
+other <code>float</code> parameter takes an <code>int</code> up to 2**53, converted exactly.</p>
 <p>A module constant written as an expression, such as <code>MOD = 10**9 + 7</code> or
 <code>LIMIT = 1 &lt;&lt; 20</code>, folds into the code rather than staying a global read.</p>
 <p>A function whose writes all happen inside a callee it handed a buffer to

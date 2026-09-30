@@ -4077,6 +4077,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#generators-with-a-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generators with a frame
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4985,6 +4996,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#generators-with-a-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generators with a frame
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5635,7 +5657,7 @@ the span of every group (start and end of group 0, of group 1, and so on),
 with -1 for a group that took no part. The pattern is read by CPython's own
 parser, so its syntax and its meaning are <code>re</code>'s.</p>
 <h3 id="lowering">Lowering<a class="headerlink" href="#lowering" title="Permanent link">&para;</a></h3>
-<p>The <code>lower-regex</code> pass runs right after <code>lower-async</code>. It compiles each
+<p>The <code>lower-regex</code> pass runs right after <code>lower-async</code> and <code>lower-generators</code>. It compiles each
 distinct pattern into one private function of core operations and turns the
 operation into a call.</p>
 <p>The matcher backtracks the way CPython's does, on an explicit stack rather
@@ -5776,6 +5798,17 @@ running coroutine has no Python to fall back to.</p>
 spilled to one. The LLVM and C backends lower the low-level operations to
 calls into the runtime (<code>ppy_runtime/aio/ppy_aio.c</code>); a future is an <code>i64</code>
 handle.</p>
+<h3 id="generators-with-a-frame">Generators with a frame<a class="headerlink" href="#generators-with-a-frame" title="Permanent link">&para;</a></h3>
+<p><code>lower-generators</code>, right after, does the same for a generator function the
+lowering marks <code>ppy.generator</code>, whose <code>yield</code>s are <code>ppy.gen_yield</code>
+intrinsics. The starter makes the frame with <code>ppy_gen_new</code>, a runtime
+collection of one record, stores the arguments (taking a reference to each
+handle), and returns the frame's handle. The resume function takes that
+handle and returns 1 with the yielded value in the frame, or 0 once the body
+has ended. Guards and exceptions stay as they are: a consumer calls the
+resume function through the address in the frame's first word, like any
+native call. The slots that own a reference (<code>ppy.owns</code>) come first in the
+frame and its handle mask names them, so freeing the frame lets go of them.</p>
 <h2 id="the-parallel-dialect">The parallel dialect<a class="headerlink" href="#the-parallel-dialect" title="Permanent link">&para;</a></h2>
 <p>Three operations run a function over a range:</p>
 <ul>
@@ -6213,6 +6246,10 @@ verifies the module after every pass and names the pass that broke it.</p>
 <tr>
 <td><code>lower-tensor</code></td>
 <td>tensors to memory and loops</td>
+</tr>
+<tr>
+<td><code>lower-generators</code></td>
+<td>a generator function with a frame to a starter and a resume function</td>
 </tr>
 <tr>
 <td><code>lower-regex</code></td>

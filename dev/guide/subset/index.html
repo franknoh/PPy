@@ -4478,8 +4478,10 @@ through reflection or <code>doctest</code>, runs the function's Python body.</p>
 <li>A container passed where a wider element type is declared. <code>list[int]</code>
   goes where <code>Sequence[float]</code> is declared, and where <code>list[int | float]</code> is
   declared if the callee only reads the list. A function that appends a
-  float to it is still refused (<code>E1301</code>). Calls like these run on CPython,
-  since native code would convert the ints.</li>
+  float to it is still refused (<code>E1301</code>). Native code converts the ints
+  only where the callee cannot show the difference, and otherwise runs the
+  call on CPython (see
+  <a href="../native-lowering/#a-float-given-an-int">A <code>float</code> given an <code>int</code></a>).</li>
 <li>A list written in place with narrower elements than declared:
   <code>m: list[list[float]] = [[0] * n for _ in range(n)]</code>.</li>
 <li>A generator expression where a <code>Generator[T, None, None]</code> is declared.</li>
