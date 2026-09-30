@@ -1720,7 +1720,8 @@ class _Checker:
                 env.set(path, Binding(declared_type or value.type, value.facts))
         elif isinstance(target, ast.Subscript):
             container = T.strip_literal(self._expr(target.value, env).type)
-            self._expr(target.slice, env)
+            key = self._expr(target.slice, env)
+            container = self._widen_empty_dict(target.value, container, key, value, env)
             written = target.value
             if isinstance(container, T.Instance) and container.name in C.COLLECTIONS:
                 self._store_element(container, value, target)
@@ -2229,6 +2230,27 @@ class _Checker:
             return
         if base.name in {"list", "set"} and isinstance(base.args[0], T.NeverType):
             env.set(func.value.id, Binding(T.instance(base.name, element), binding.facts))
+
+    def _widen_empty_dict(
+        self, owner: ast.expr, container: T.Type, key: Binding, value: Binding, env: Env
+    ) -> T.Type:
+        """`seen = {}` followed by `seen[k] = v` gives `seen` its key and value
+        types, as `append` does for a list."""
+        if not (
+            isinstance(owner, ast.Name)
+            and isinstance(container, T.Instance)
+            and container.name == "dict"
+            and len(container.args) == 2
+            and all(isinstance(arg, T.NeverType) for arg in container.args)
+        ):
+            return container
+        written = [T.strip_literal(key.type), T.strip_literal(value.type)]
+        if any(isinstance(t, (T.UnknownType, T.AnyType, T.NeverType)) for t in written):
+            return container
+        binding = env.get(owner.id)
+        widened = T.instance("dict", *written)
+        env.set(owner.id, Binding(widened, binding.facts if binding else Facts()))
+        return widened
 
     def _construct(
         self,
@@ -3457,6 +3479,22 @@ class _Checker:
             if isinstance(left_base, T.DynamicType) or isinstance(right_base, T.DynamicType):
                 return Binding(T.DYNAMIC)
             return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
+
+        if isinstance(left_base, T.NeverType) or isinstance(right_base, T.NeverType):
+            # An element of a container still empty here, as `seen[k] += 1` is
+            # on the first pass of a loop whose other branch fills `seen`:
+            # there is no such value yet, and the next pass checks the real one.
+            return Binding(T.NEVER)
+        if (
+            op is ast.Add
+            and isinstance(left_base, T.Instance)
+            and isinstance(right_base, T.Instance)
+            and left_base.name == right_base.name
+            and T.is_empty_container(left_base)
+        ):
+            # `[] + names`: the empty list takes the other's element type.
+            self._effects = self._effects.add(Effect.ALLOC)
+            return Binding(right_base)
 
         if op is ast.BitOr and _is_class_value(left_base) and _is_class_value(right_base):
             # `list | dict` in an `isinstance` is a type made of types.

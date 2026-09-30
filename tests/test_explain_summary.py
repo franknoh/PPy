@@ -186,3 +186,27 @@ def test_a_bare_callable_is_a_gradual_callable_not_an_unknown_type(write, codes)
     )
     assert "E1101" not in codes(path, strict=False)
     assert "E1101" not in codes(path)
+
+
+def test_an_empty_display_takes_the_type_of_what_fills_it(write, codes):
+    """TheAlgorithms strings/min_window_substring.py and ciphers/des_ecb.py:
+    `seen = {}` filled by `seen[ch] = 1` in one branch refused `seen[ch] += 1`
+    in the other as `Never + 1`, and `[] + names` as `list[Never] + list[str]`."""
+    path = write(
+        "fills.ppy",
+        """
+        def counts(text: str) -> int:
+            seen = {}
+            for ch in text:
+                if ch not in seen:
+                    seen[ch] = 1
+                else:
+                    seen[ch] += 1
+            return len(seen)
+
+
+        def padded(names: list[str]) -> list[str]:
+            return [] + names
+        """,
+    )
+    assert "E1302" not in codes(path, strict=False)

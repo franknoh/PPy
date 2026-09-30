@@ -572,10 +572,27 @@ def join(*types: Type) -> Type:
         return NEVER
     if any(isinstance(t, UnknownType) for t in present):
         return UNKNOWN
+    # An empty display on one path and a filled one on the other is the
+    # filled one: `seen = {}` before a loop that stores into it.
+    filled = {t.name for t in present if isinstance(t, Instance) and not is_empty_container(t)}
+    present = [
+        t
+        for t in present
+        if not (isinstance(t, Instance) and is_empty_container(t) and t.name in filled)
+    ]
     first = present[0]
     if all(t == first for t in present):
         return first
     return union(*present)
+
+
+def is_empty_container(t: Type) -> bool:
+    """The type of an empty `[]`, `{}`, or `set()`: every argument `Never`."""
+    return (
+        isinstance(t, Instance)
+        and bool(t.args)
+        and all(isinstance(arg, NeverType) for arg in t.args)
+    )
 
 
 #: Generic types whose type arguments are only read: covariant.
