@@ -80,9 +80,9 @@ _SHAPES: tuple[_Shape, ...] = (
     ),
     _shape(
         r"generators use the boxed runtime",
-        "a generator that is stored, returned, or stepped by hand",
-        "consume the generator where it is made: in a `for`, `sum`, `min`, `max`, `sorted`, or "
-        "a comprehension",
+        "a generator that is returned, passed on, or stepped inside a loop or a branch",
+        "consume it where it is made, in a `for`, a builtin like `sum`, a comprehension, or "
+        "`next` steps at the top level of the function",
         "guide/exceptions-and-generators/",
     ),
     _shape(
