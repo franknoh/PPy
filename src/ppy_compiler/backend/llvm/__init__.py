@@ -62,7 +62,8 @@ __all__ = [
 @dataclass(slots=True)
 class NativeModule:
     name: str
-    ir: str
+    #: The module's own LLVM IR once emitted; `ir` emits it on first read.
+    llvm: str = ""
     #: The module's PPy IR as text, for the linker; empty for a module with nothing native.
     ppyir: str = ""
     functions: dict[str, LoweredFunction] = field(default_factory=dict)
@@ -79,6 +80,26 @@ class NativeModule:
     exports: dict[str, str] = field(default_factory=dict)
     #: What the lowering and the passes said, as remarks; cached with the module.
     remarks: tuple[str, ...] = ()
+    #: Makes `llvm` from `ppyir` when it is first read; None once it has.
+    emitter: object = None
+
+    @property
+    def ir(self) -> str:
+        """The module's own LLVM IR, emitted the first time it is read.
+
+        Lowering does not emit it: the usual build links every module's PPy
+        IR into one program and emits that, so a module's own LLVM IR is only
+        for a build that cannot link, the JIT, and `ppy inspect --ir`.
+        """
+        if self.emitter is not None:
+            emit, self.emitter = self.emitter, None
+            self.llvm = emit()  # type: ignore[operator]
+        return self.llvm
+
+    @ir.setter
+    def ir(self, text: str) -> None:
+        self.llvm = text
+        self.emitter = None
 
 
 #: Members that make attribute reads observable, so the class stays boxed.
@@ -131,6 +152,8 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         reused = _cached_lowering(bundle, module.name, opt_level)
         if reused is not None:
             modules[module.name] = _module_from_cache(module.name, reused, candidates, layouts)
+            if not modules[module.name].llvm:
+                modules[module.name].emitter = _emitter(bundle, modules[module.name])
             _offer(available, modules[module.name])
             continue
 
@@ -142,7 +165,6 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         )
         native = NativeModule(
             name=module.name,
-            ir="",
             ppyir=result.ppyir,
             functions=result.functions,
             rejected=result.rejected,
@@ -159,6 +181,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
             libraries=result.libraries,
             exports=result.exports,
         )
+        native.emitter = _emitter(bundle, native)
         modules[module.name] = native
         _offer(available, native)
         _store_lowering(bundle, module.name, opt_level, native)
@@ -197,17 +220,17 @@ def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # t
     )
 
 
-def module_llvm(bundle, native: NativeModule) -> str:  # type: ignore[no-untyped-def]
-    """A module's own LLVM IR, emitted from its `.ppyir` the first time it is asked
-    for and kept on the module.
+def _emitter(bundle, native: NativeModule):  # type: ignore[no-untyped-def]
+    """What `native.ir` runs when first read: its `.ppyir` emitted as LLVM IR,
+    with any fused loops after it."""
 
-    Lowering no longer emits it: the usual build links every module's PPy IR
-    into one program and emits that, so a module's own LLVM IR is only for a
-    build that cannot link (a cache from before linking), the JIT, and
-    `ppy inspect --ir`.
-    """
-    if native.ir or not (native.ppyir or native.fused):
-        return native.ir
+    def emit() -> str:
+        return _module_llvm(bundle, native)
+
+    return emit if native.ppyir or native.fused else None
+
+
+def _module_llvm(bundle, native: NativeModule) -> str:  # type: ignore[no-untyped-def]
     text = ""
     if native.ppyir:
         from ...ir import decode
@@ -219,7 +242,6 @@ def module_llvm(bundle, native: NativeModule) -> str:  # type: ignore[no-untyped
         )
     if native.fused:
         text = _append_fused(text, native.name, native.fused)
-    native.ir = text
     return text
 
 
@@ -267,7 +289,7 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         entry = candidates.get(qualname)
         if entry is None:
             # The cached module no longer matches the source in front of us.
-            return NativeModule(name=name, ir="")
+            return NativeModule(name=name)
         info, _analysis, node = entry
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
@@ -282,7 +304,7 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         sources[qualname] = (info, node)
     return NativeModule(
         name=name,
-        ir=reused.ir,
+        llvm=reused.ir,
         ppyir=reused.ppyir,
         functions=functions,
         rejected=dict(reused.rejected),
@@ -462,7 +484,7 @@ def emit_ir(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
         raise LlvmUnavailable("llvmlite is not installed, so no LLVM IR can be produced")
     engine = JitEngine(opt_level=bundle.project.config.opt_level)
     return {
-        name: engine.optimized_ir(module_llvm(bundle, module))
+        name: engine.optimized_ir(module.ir)
         for name, module in _collect(bundle).items()
     }
 
@@ -587,7 +609,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             if store.get(key) is None:
                 store.put(
                     key,
-                    engine().optimized_ir(module_llvm(bundle, native)),
+                    engine().optimized_ir(native.ir),
                     kind="llvm",
                     source=name,
                     suffix=".ll",
@@ -613,7 +635,7 @@ def compile_project(  # type: ignore[no-untyped-def]
                 try:
                     emitted = emit_object(
                         engine(),
-                        module_llvm(bundle, native),
+                        native.ir,
                         destination,
                         host_cpu=for_host,
                         target=target,
@@ -984,7 +1006,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 continue
             engine.load_library(library)
         if native.functions or native.fused:
-            engine.add(module_llvm(bundle, native))
+            engine.add(native.ir)
     engine.finalize()
 
     collector = None
