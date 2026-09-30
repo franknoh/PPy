@@ -2147,8 +2147,8 @@ class _Checker:
                 # `map(f, xs)` and `filter(f, xs)` with `f` a function of this
                 # program: what runs is `f`, whose effects are its own.
                 called = T.strip_literal(args[0].type)
-                assert isinstance(called, T.Callable_)
-                own = self.project.functions.get(called.qualname)
+                qualname = called.qualname if isinstance(called, T.Callable_) else ""
+                own = self.project.functions.get(qualname)
                 result = B.BuiltinResult(
                     result.type,
                     result.facts,
@@ -3403,6 +3403,9 @@ class _Checker:
             return False
         if len(args) != 2:
             return False
+        first = node.args[0]
+        if node.func.id == "filter" and isinstance(first, ast.Constant) and first.value is None:
+            return True
         called = T.strip_literal(args[0].type)
         if not isinstance(called, T.Callable_):
             return False

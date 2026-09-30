@@ -257,8 +257,14 @@ def words(n: int) -> str:
     return out
 
 
+def comprehended(n: int) -> int:
+    xs = [v for v in map(lambda v: v * 3, range(n))]
+    ys = [v for v in filter(None, [0, 1, 2, 0, 3])]
+    return sum(xs) + len(ys)
+
+
 def main() -> None:
-    print(checked(10), late(5), words(12))
+    print(checked(10), late(5), words(12), comprehended(5))
 
 
 main()
@@ -271,7 +277,7 @@ PROGRAMS = {
         VALUES,
         ["table", "objects", "composed", "fib_closure", "counters", "strings", "compose"],
     ),
-    "edges": (EDGES, ["checked", "late", "words"]),
+    "edges": (EDGES, ["checked", "late", "words", "comprehended"]),
 }
 
 

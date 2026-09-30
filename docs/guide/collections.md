@@ -255,7 +255,8 @@ rebind the name it came from.
 | `v.sort()`, `v.sort(reverse=True)`, `v.sort(key=f)` | in place; the sort is stable |
 | `v.reverse()`, `v.clear()`, `len(v)`, `for x in v` | |
 
-`sort`'s `key` is a lambda or a function's name. Native code calls it once
+`sort`'s `key` is a lambda, a function's name, or any function value (see
+[Functions as values](closures.md)). Native code calls it once
 per element, as `list.sort` does, and sorts by what it returns: a number, a
 tuple of numbers, or an ordered dataclass.
 
