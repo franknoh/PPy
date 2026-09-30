@@ -282,9 +282,13 @@ def _builtin_kind(base: T.Instance, records: Records) -> Kind | None:
         return Kind("List", shapes[0])
     key = shapes[0]
     assert key is not None
-    # A float key hashes by value across `0.0 == -0.0` and NaN, and a bool key
-    # is the int it equals: neither is a word native code can hash alike.
-    if not (key.integral or key.kind in {"str", "object", "record"}) or key.kind == "bool":
+    # A float key hashes as the number: `-0.0` and `0.0` are one key, and a NaN
+    # key, which only its own object finds, falls back where it is used.
+    numbers = key.parts if key.kind == "tuple" else (key.kind,)
+    if not (
+        all(part in {"int", "float", "bool"} for part in numbers)
+        or key.kind in {"str", "object", "record"}
+    ):
         return None
     if name == "Dict":
         return Kind("Dict", shapes[1], key)
@@ -1261,6 +1265,8 @@ class CollectionLowering:
         if kind.key.text:
             self._rt("ppy_coll_text_keys", (made, self._word(kind.key.text)), None)
         self._install_methods(made, kind)
+        if kind.key.floats and kind.key.kind != "record":
+            self._rt("ppy_coll_float_keys", (made, self._word(kind.key.floats)), None)
         tuples = pyset_kind(kind)
         if tuples is not None:
             # A set walks in CPython's order: the runtime keeps a copy of its table.
@@ -1667,15 +1673,37 @@ class CollectionLowering:
         """A key's words in a stack buffer, and the buffer's address."""
         key = kind.key
         assert key is not None
-        buffer = self._alloca(key.ir_type(), "key")  # type: ignore[attr-defined]
+        if key.kind in {"int", "float"} and key.kind != _scalar_name(self._type_of(node)):
+            given = _scalar_name(self._type_of(node))
+            if given in {"int", "bool"}:
+                # `d[1]` in a dict of floats, `d[True]` in one of ints: CPython
+                # keeps the key object as it came, and shows it so.
+                raise Unsupported(f"a `{given}` key in a dict or set of `{key.kind}` keeps its type")
+        # A bool key is a word in the collection, as an element is.
+        stored = I64 if key.kind == "bool" else key.ir_type()
+        if key.kind == "tuple" and "bool" in key.parts:
+            stored = TupleType(tuple(I64 if p == "bool" else _SCALARS[p] for p in key.parts))
+        buffer = self._alloca(stored, "key")  # type: ignore[attr-defined]
         address = core.cast(self.b, buffer, _pointer(buffer, I8))
         value, owned = self._value(node, key)
         self._write(address, key, value)
+        if key.floats and key.kind != "record":
+            self._nan_key(address, key)
         if owned:
             # A key made for the lookup: the collection takes its own
             # reference when it keeps one, so this one goes after the call.
             self.__dict__.setdefault("_keys_made", []).append(value)
         return address
+
+    def _nan_key(self, address: Value, key: Shape) -> None:
+        """A NaN key is found only by its own object, which a float word has not:
+        where one is used, the call falls back."""
+        for index, part in enumerate(_kinds(key)):
+            if part == "float":
+                word = self._read_word(address, index, "float")
+                core.guard(
+                    self.b, core.cmp(self.b, "eq", word, word), "contract", "a NaN key"
+                )
 
     def _keys_done(self) -> None:
         """Let go of the keys made for the runtime calls just emitted."""
@@ -2224,6 +2252,15 @@ def pyset_kind(kind: Kind) -> int | None:
     if key.kind == "tuple" and all(part in {"int", "bool"} for part in key.parts):
         return 1
     return None
+
+
+def _scalar_name(t: T.Type | None) -> str:
+    """`int`, `float`, or `bool` where the checker's type is one of them."""
+    base = T.strip_literal(t) if t is not None else None
+    for name, scalar in (("bool", T.BOOL), ("int", T.INT), ("float", T.FLOAT)):
+        if base == scalar:
+            return name
+    return ""
 
 
 def _kinds(shape: Shape) -> tuple[str, ...]:

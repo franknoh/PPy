@@ -254,7 +254,28 @@ int64_t ppy_coll_held_keys(int8_t *handle) {
     if (header[12] != 2 && header[12] != 3) {
         return 0; /* only maps and sets have keys; a string's header is shorter */
     }
-    return ppy_coll_key_text(handle) | header[24];
+    return ppy_coll_key_text(handle) | (header[24] & 0xFFFFFFFF);
+}
+
+/* The key words that are floats (bits 32-47 of word 24): `-0.0` and `0.0` are
+   one key there, so they hash and compare as the numbers. A NaN key never
+   gets here; the caller falls back first. */
+void ppy_coll_float_keys(int8_t *handle, int64_t mask) {
+    ((int64_t *)handle)[24] |= mask << 32;
+}
+
+/* `key` with each float word's `-0.0` made `0.0`, in `out`; `key` itself
+   where no word is a float. */
+int64_t *ppy_coll_float_normal(int8_t *handle, const int64_t *key, int64_t *out) {
+    int64_t floats = (int64_t)(((uint64_t)((int64_t *)handle)[24] >> 32) & 0xFFFF);
+    if (floats == 0) {
+        return (int64_t *)(intptr_t)key;
+    }
+    int64_t keys = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    for (int64_t w = 0; w < keys; w++) {
+        out[w] = ((floats >> w) & 1) && key[w] == INT64_MIN ? 0 : key[w];
+    }
+    return out;
 }
 
 /* Take (1) or drop (-1) a reference to each string or object word of a key. */
@@ -815,6 +836,8 @@ int64_t ppy_map_hash(int8_t *handle, const int64_t *key, int64_t mask) {
         return (int64_t)(h & (uint64_t)mask);
     }
     int64_t keys = header[13] & 0xFFFFFFFF;
+    int64_t normal[16];
+    key = ppy_coll_float_normal(handle, key, normal);
     return ppy_str_key_hash(key, keys, ppy_coll_key_text(handle)) & mask;
 }
 
@@ -2304,5 +2327,8 @@ int64_t ppy_coll_same_key(int8_t *handle, const int64_t *a, const int64_t *b, in
         return a[0] == b[0] ||
                ((int64_t (*)(int64_t, int64_t))(intptr_t)header[23])(a[0], b[0]) != 0;
     }
+    int64_t left[16], right[16];
+    a = ppy_coll_float_normal(handle, a, left);
+    b = ppy_coll_float_normal(handle, b, right);
     return ppy_str_key_order(a, b, keys, text) == 0;
 }
