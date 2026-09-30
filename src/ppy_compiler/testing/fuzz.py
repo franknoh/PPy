@@ -405,7 +405,7 @@ class _Generator:
         before = self.name("n")
         w.put(f"{before}: int = {self.int_expr(scope, 1)}")
         scope.ints.append(before)
-        tag = self.name("p")
+        tag = f"<{self.name('p')}>"
         kind = rng.choice(("int", "float", "str", "bool"))
         options = ""
         if self.chance(0.3):
@@ -902,7 +902,7 @@ def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
     """Every path on which a tagged line (`print_statement`) shows up more often
     than under CPython: output a fallback printed a second time."""
     expected = results["python"]
-    tags = re.compile(r"\bp\d+\b")
+    tags = re.compile(r"<p\d+>")
 
     def counts(text: str) -> dict[str, int]:
         found: dict[str, int] = {}
@@ -1096,8 +1096,8 @@ def _overflow_allowed(expected: Result, found: Result) -> bool:
     word, having printed what CPython printed up to there."""
     if found.status != 1 or found.last_error != OVERFLOW_64:
         return False
-    printed = found.stdout.splitlines()
-    return expected.stdout.splitlines()[: len(printed)] == printed
+    # Up to the character: a print with `end=""` leaves a line open.
+    return expected.stdout.startswith(found.stdout)
 
 
 def compare(results: dict[str, Result]) -> list[Mismatch]:
