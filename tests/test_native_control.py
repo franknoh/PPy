@@ -478,14 +478,17 @@ def arguments(n: int) -> int:
 
 def chained(n: int) -> int:
     try:
-        raise ValueError("inner") from KeyError(n)
+        raise ValueError("inner") from KeyError(n + 1 if n else n)
     except ValueError:
         return 1
 
 
 def stepped(n: int) -> int:
     made = numbers(n)
-    return next(made) + next(made)
+    total = 0
+    while total < 3:
+        total += next(made)
+    return total
 
 
 def main() -> None:
@@ -499,8 +502,8 @@ main()
 @requires_llvm
 @requires_cc
 def test_what_native_code_does_not_take_stays_in_python(tmp_path: Path):
-    """`e.args`, `raise ... from ...`, and a generator stepped twice keep the
-    function on its Python body, which answers."""
+    """`e.args`, a cause made from an expression, and a generator stepped in a loop keep
+    the function on its Python body, which answers."""
     expected = _expected(tmp_path, PYTHON_ONLY)
     done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
     assert done.returncode == 0, done.stderr
