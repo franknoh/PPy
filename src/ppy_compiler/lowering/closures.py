@@ -360,6 +360,9 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
             )
         if isinstance(func, ast.Lambda):
             return True
+        if isinstance(func, ast.Call) and self._derivative_spec(func) is not None:  # type: ignore[attr-defined]
+            # `ppy.grad(f)(x)` is a derivative, lowered where it is called.
+            return False
         if isinstance(func, (ast.Call, ast.Subscript, ast.Attribute)):
             return self._function_shape(func) is not None
         return False
