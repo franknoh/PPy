@@ -94,7 +94,10 @@ A `for` walks:
 
 Each of these also works under `enumerate` (with `start=`), `zip`, and, for
 ranges, buffers, and tuples, `reversed`, alone or mixed with the
-collections.
+collections. A `for` over any of them, or over a collection, may have an
+`else`, which runs when the loop ends without `break`. Identity between two
+values the checker types `bool` (`flag is True`) is equality, since there is
+one `True` and one `False`.
 
 ### A `float` given an `int`
 

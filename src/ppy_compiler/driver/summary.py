@@ -181,10 +181,9 @@ _SHAPES: tuple[_Shape, ...] = (
     ),
     _shape(
         r"only `for NAME in range",
-        "a `for` loop native code does not walk (a `for`-`else`, an object without a "
-        "generator `__iter__`)",
+        "a `for` loop native code does not walk (an object without a generator `__iter__`)",
         "loop over a range, a list, a dict, a set, a string, a tuple, a generator, or a ppy "
-        "collection, without `else`",
+        "collection",
         "guide/native-lowering/",
     ),
     _shape(
