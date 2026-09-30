@@ -278,7 +278,16 @@ class FrameLowering:  # pylint: disable=attribute-defined-outside-init
         return found is not None and found.info.qualname in self.frontend.declared  # type: ignore[attr-defined]
 
     def _frame_value(self, node: ast.expr) -> Shape | None:
-        """The generator shape of a value native code holds as a frame."""
+        """The generator shape of a value native code holds as a frame: a name,
+        a field, or a call to a function of this program (not `reversed(xs)`,
+        whose type says `Iterator` too)."""
+        if isinstance(node, ast.Call):
+            typed = T.strip_literal(self._type_of(node.func))  # type: ignore[attr-defined]
+            qualname = typed.qualname if isinstance(typed, T.Callable_) else ""
+            if qualname not in self.frontend.analysis.functions:  # type: ignore[attr-defined]
+                return None
+        elif not isinstance(node, (ast.Name, ast.Attribute)):
+            return None
         shape = shape_of(self._type_of(node), self._records())  # type: ignore[attr-defined]
         if shape is None or shape.kind != "generator":
             return None

@@ -82,7 +82,7 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
             return node
         t = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
         if t not in (T.INT, T.FLOAT, T.BOOL):
-            raise Unsupported("a chained comparison's middle operand is a name or a number")
+            raise Unsupported("a chained comparison's operand is a name or a number here")
         value = self._expr(node)  # type: ignore[attr-defined]
         self._hidden_count += 1
         name = f".t{self._hidden_count}"
@@ -189,11 +189,14 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
         if T.STR in kinds and len(kinds) > 1:
             # `1 in ("a", 1)` compares across types, which stays in Python.
             return None
-        if not all(_cheap(e) for e in elements):
-            return None
-        left = self._once(item) if T.STR not in kinds else item
-        if not _cheap(left):
-            return None
+        if T.STR in kinds:
+            if not (_cheap(item) and all(_cheap(e) for e in elements)):
+                return None
+            left = item
+        else:
+            # The item, then each element, as CPython makes the display.
+            left = self._once(item)
+            elements = [self._once(e) for e in elements]
         if item_type == T.FLOAT:
             self._not_nan(left)
         tests = [

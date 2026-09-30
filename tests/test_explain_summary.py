@@ -53,9 +53,9 @@ def test_an_unknown_reason_keeps_its_words_without_the_names():
 
 
 def test_opaque_operator_reasons_name_the_code_they_come_from():
-    assert categorize("a chained comparison's middle operand is a name or a number")[0][
-        0
-    ].startswith("a chained comparison")
+    assert categorize("a chained comparison's operand is a name or a number here")[0][0].startswith(
+        "a chained comparison"
+    )
     assert categorize("integer operator has no native lowering")[0][0].startswith(
         "an integer operator"
     )

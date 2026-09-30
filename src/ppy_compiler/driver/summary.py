@@ -162,8 +162,8 @@ _SHAPES: tuple[_Shape, ...] = (
     ),
     _shape(
         r"chained comparison",
-        "a chained comparison with a middle operand that is not a number or a name",
-        "give the middle operand a name first",
+        "a chained comparison or a membership test over values that are not numbers or names",
+        "give the operand a name first",
         "guide/native-lowering/",
     ),
     _shape(

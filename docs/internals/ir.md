@@ -142,7 +142,7 @@ parser, so its syntax and its meaning are `re`'s.
 
 ### Lowering
 
-The `lower-regex` pass runs right after `lower-async`. It compiles each
+The `lower-regex` pass runs right after `lower-async` and `lower-generators`. It compiles each
 distinct pattern into one private function of core operations and turns the
 operation into a call.
 
@@ -267,6 +267,19 @@ Stack slots become words of the frame, and a value read across an await is
 spilled to one. The LLVM and C backends lower the low-level operations to
 calls into the runtime (`ppy_runtime/aio/ppy_aio.c`); a future is an `i64`
 handle.
+
+### Generators with a frame
+
+`lower-generators`, right after, does the same for a generator function the
+lowering marks `ppy.generator`, whose `yield`s are `ppy.gen_yield`
+intrinsics. The starter makes the frame with `ppy_gen_new`, a runtime
+collection of one record, stores the arguments (taking a reference to each
+handle), and returns the frame's handle. The resume function takes that
+handle and returns 1 with the yielded value in the frame, or 0 once the body
+has ended. Guards and exceptions stay as they are: a consumer calls the
+resume function through the address in the frame's first word, like any
+native call. The slots that own a reference (`ppy.owns`) come first in the
+frame and its handle mask names them, so freeing the frame lets go of them.
 
 ## The parallel dialect
 
@@ -734,6 +747,7 @@ The shared passes:
 | `tensor-canonicalize` | the tensor dialect's own patterns: views that change nothing go away, two transposes or reshapes are one, arithmetic over `fill`s is a `fill`, `x * fill 1` is `x` |
 | `tensor-fusion` | a chain of elementwise tensor operations whose intermediates have one reader, and a `reduce` at its root, become one `tensor.fused` (a region computing one element from one element of each input), so `lower-tensor` makes one loop of them with no temporaries |
 | `lower-tensor` | tensors to memory and loops |
+| `lower-generators` | a generator function with a frame to a starter and a resume function |
 | `lower-regex` | patterns to matcher functions |
 | `lower-parallel` | parallel operations to chunks |
 
