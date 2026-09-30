@@ -395,7 +395,8 @@ class Frontend:
         #: Lambdas and functions used as values, with the nodes made for them.
         self._lambdas: dict[int, tuple[FunctionInfo, ast.FunctionDef]] = {}
         self._adapters: dict[str, tuple[FunctionInfo, ast.FunctionDef]] = {}
-        self.nested_sources: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
+        #: Nodes lowering made and gave types to, kept alive with their types.
+        self.synthetic: list[ast.AST] = []
         self.instances: dict[
             tuple[str, tuple[str, ...]], tuple[IRFunction, NativeSignature | IRSignature]
         ] = {}
@@ -423,11 +424,6 @@ class Frontend:
         candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.sources = functions
-        #: Functions defined inside functions: lowered as closures where they
-        #: are defined, never on their own.
-        self.nested_sources = {
-            qualname: entry for qualname, entry in functions.items() if entry[0].enclosing
-        }
         if uses_exceptions([node for _info, _analysis, node in functions.values()]):
             self.native_exceptions = True
         if self.native_exceptions:
@@ -435,6 +431,7 @@ class Frontend:
             self.module.attributes["ppy.exceptions"] = True
         for qualname, (info, analysis, node) in functions.items():
             if info.enclosing is not None:
+                # Lowered as a closure where it is defined, never on its own.
                 lowered.rejected[qualname] = (
                     "a function defined inside another is lowered as a closure where it is defined"
                 )
@@ -2760,6 +2757,11 @@ class _FunctionLowering(
                 "builtins.print"
             }:
                 return self._standalone_print(node)
+        if target in {"min", "max"} and node.keywords and target not in self.frontend.declared:
+            # `max(xs, key=f)`: the one keyword a reduction takes.
+            reduced = self._reduction(target, node)
+            if reduced is not None:
+                return reduced
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
         if self.frontend.standalone:

@@ -411,3 +411,67 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
         self._go_raise()  # type: ignore[attr-defined]
         self.b.at_end(answered)
         return tuple(values)
+
+    # -- map and filter ----------------------------------------------------------------
+
+    def _map_filter(self, node: ast.expr) -> tuple[str, ast.expr, ast.expr] | None:
+        """`map(f, xs)` or `filter(f, xs)` with the builtin: which, `f`, and `xs`."""
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in {"map", "filter"}
+            and len(node.args) == 2
+            and not node.keywords
+        ):
+            return None
+        name = node.func.id
+        if name in self.collections or name in self.slots or self._is_cell(name):  # type: ignore[attr-defined]
+            return None
+        if not isinstance(T.strip_literal(self._type_of(node)), T.Instance):  # type: ignore[attr-defined]
+            return None
+        return name, node.args[0], node.args[1]
+
+    def _is_generator(self, node: ast.expr) -> bool:
+        return self._map_filter(node) is not None or super()._is_generator(node)  # type: ignore[misc]
+
+    def _inline(self, node: ast.expr, *args: object, **kwargs: object) -> None:
+        """`map` and `filter` are generator expressions over their iterable:
+        `map(f, xs)` is `(f(x) for x in xs)` with `f` taken once, first."""
+        found = self._map_filter(node)
+        if found is None:
+            super()._inline(node, *args, **kwargs)  # type: ignore[misc]
+            return
+        which, function, iterable = found
+        self._walks_made = getattr(self, "_walks_made", 0) + 1
+        item = ast.Name(id=f".each{self._walks_made}", ctx=ast.Load())
+        if isinstance(function, ast.Lambda):
+            if len(function.args.args) != 1 or function.args.vararg or function.args.defaults:
+                raise Unsupported(f"`{which}` calls a function of one argument natively")
+            item = ast.Name(id=function.args.args[0].arg, ctx=ast.Load())
+            applied = function.body
+        elif which == "filter" and isinstance(function, ast.Constant) and function.value is None:
+            applied = item
+        else:
+            shape = self._reference_of(function)
+            if not isinstance(shape, Shape) or shape.kind != "function":
+                raise Unsupported(f"`{ast.unparse(function)}` is not a function native code holds")
+            held = f".fn{self._walks_made}"
+            handle, owned = self._handle(function)
+            self._bind(held, shape, handle, owned)  # type: ignore[attr-defined]
+            applied = ast.Call(ast.Name(id=held, ctx=ast.Load()), [item], [])
+            typed = shape.class_args[0]
+            assert isinstance(typed, T.Callable_)
+            self.frontend.analysis.node_types[id(applied)] = typed.ret  # type: ignore[attr-defined]
+        target = ast.Name(id=item.id, ctx=ast.Store())
+        if which == "map":
+            made = ast.GeneratorExp(applied, [ast.comprehension(target, iterable, [], 0)])
+        else:
+            element = ast.Name(id=item.id, ctx=ast.Load())
+            made = ast.GeneratorExp(element, [ast.comprehension(target, iterable, [applied], 0)])
+        ast.copy_location(made, node)
+        ast.fix_missing_locations(made)
+        types = self.frontend.analysis.node_types  # type: ignore[attr-defined]
+        types[id(made)] = self._type_of(node)  # type: ignore[attr-defined]
+        # Types are kept by node identity: the nodes live as long as the types.
+        self.frontend.synthetic.append(made)  # type: ignore[attr-defined]
+        super()._inline(made, *args, **kwargs)  # type: ignore[misc]

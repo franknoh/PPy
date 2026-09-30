@@ -30,7 +30,7 @@ from .annotations import (
     vector_type,
 )
 from .binding import bind_ast_call, bind_call, positional_values
-from .closures import captured_names, rebound_by_closures
+from .closures import captured_names, free_names, rebound_by_closures
 from .effects import Effect, EffectSet
 from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
@@ -670,6 +670,8 @@ class _Checker:
         #: What the next lambda's parameters are, where its use says: a
         #: collection's `sort(key=...)` hands it an element.
         self._lambda_parameters: tuple[T.Type, ...] | None = None
+        #: Lambdas written where a `Callable` is declared: their parameter types.
+        self._lambda_expected: dict[int, tuple[T.Type, ...]] = {}
         #: `ppy.grad(f)` calls whose `f` is checked for effects once its body is.
         self._derivative_checks: list[tuple[str, str, ast.AST]] = []
         self._escaping: set[str] = set()
@@ -1107,6 +1109,8 @@ class _Checker:
 
     def _expr_expecting(self, node: ast.expr, env: Env, expected: T.Type | None) -> Binding:
         """`node`, going where a value of `expected` is wanted."""
+        if expected is not None:
+            self._expect_lambdas(node, expected)
         if expected is None or not isinstance(node, ast.Call):
             return self._expr(node, env)
         self._expected[id(node)] = expected
@@ -1114,6 +1118,27 @@ class _Checker:
             return self._expr(node, env)
         finally:
             self._expected.pop(id(node), None)
+
+    def _expect_lambdas(self, node: ast.expr, expected: T.Type) -> None:
+        """A lambda written where a `Callable` is declared takes its parameter
+        types from there: `f: Callable[[int], int] = lambda x: x + 1`, and a
+        list or dict of them written out in place."""
+        wanted = T.strip_literal(expected)
+        if isinstance(node, ast.Lambda) and isinstance(wanted, T.Callable_):
+            self._lambda_expected[id(node)] = tuple(p.type for p in wanted.params)
+        elif (
+            isinstance(node, (ast.List, ast.Set)) and isinstance(wanted, T.Instance) and wanted.args
+        ):
+            for element in node.elts:
+                self._expect_lambdas(element, wanted.args[0])
+        elif (
+            isinstance(node, ast.Dict) and isinstance(wanted, T.Instance) and len(wanted.args) == 2
+        ):
+            for value in node.values:
+                self._expect_lambdas(value, wanted.args[1])
+        elif isinstance(node, ast.IfExp):
+            self._expect_lambdas(node.body, expected)
+            self._expect_lambdas(node.orelse, expected)
 
     def _target_type(self, target: ast.expr, env: Env) -> T.Type | None:
         """The declared type of what an assignment binds: a field of a project
@@ -3404,9 +3429,17 @@ class _Checker:
     def _expr_Lambda(self, node: ast.Lambda, env: Env) -> Binding:
         known = self._lambda_parameters
         self._lambda_parameters = None
+        if known is None:
+            known = self._lambda_expected.get(id(node))
         simple = not (node.args.posonlyargs or node.args.kwonlyargs or node.args.vararg)
         typed = known is not None and simple and len(known) == len(node.args.args)
         inner = env.fork()
+        # The lambda reads the names it shares as they are when it runs, which
+        # is later: what is known of their values here does not hold there.
+        for name in free_names(node):
+            shared = env.get(name)
+            if shared is not None and name in self._function_locals:
+                inner.set(name, Binding(T.strip_literal(shared.type)))
         types = known if typed and known is not None else (T.UNKNOWN,) * len(node.args.args)
         for arg, given in zip(node.args.args, types, strict=True):
             inner.set(arg.arg, Binding(given))
