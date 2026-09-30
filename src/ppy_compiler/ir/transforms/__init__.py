@@ -56,6 +56,7 @@ __all__ = [
     "differentiate",
     "internalize",
     "lower_async",
+    "lower_generators",
     "promote_slots",
     "sanitize",
     "sanitizer_kinds",

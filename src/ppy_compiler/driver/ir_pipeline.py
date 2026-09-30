@@ -261,6 +261,10 @@ def object_chain(info, classes):  # type: ignore[no-untyped-def]
         if entry == "object":
             continue
         found = classes.get(entry)
+        if found is None and entry == "Iterable" and entry not in info.base_names:
+            # The checker says a class with `__iter__` is `Iterable`; nothing
+            # of it is in the record.
+            continue
         if found is None and _builtin_exception(entry):
             # `class ParseError(ValueError)`: the builtin exception is the
             # record's header (see `exception_header`), not a class of its own.

@@ -2268,6 +2268,10 @@ class _Checker:
                 return Binding(T.STR)
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
+            if result is not None and node.func.id == "iter" and len(args) == 1:
+                own = self._own_iterator(args[0].type)
+                if own is not None:
+                    result = B.BuiltinResult(own, result.facts, result.effects)
             if result is not None and self._calls_native_function(node, args):
                 # `map(f, xs)` and `filter(f, xs)` with `f` a function of this
                 # program: what runs is `f`, whose effects are its own.
@@ -6008,6 +6012,9 @@ class _Checker:
             return Binding(C.element_of(base))
         element = B.element_type(base)
         if isinstance(element, T.UnknownType):
+            own = self._own_iterator(base)
+            if own is not None:
+                return Binding(B.element_type(own))
             if isinstance(base, T.Instance) and base.name == "range":
                 return Binding(T.INT, self._range_facts(node))
             if T.is_exact_builtin(base):
@@ -6042,6 +6049,26 @@ class _Checker:
             case [start, stop, step] if step < 0:
                 return Facts(int_range=IntRange(min(start, stop + 1), start))
         return Facts(int_range=IntRange())
+
+    def _own_iterator(self, t: T.Type) -> T.Type | None:
+        """What `iter()` of an instance of a project class gives: its `__iter__`'s
+        annotated result, an `Iterator[T]` or a `Generator[T]`."""
+        base = T.strip_literal(t)
+        if not isinstance(base, T.Instance):
+            return None
+        info = self.project.classes.get(base.name)
+        method = None
+        for entry in info.mro if info is not None else ():
+            owner = self.project.classes.get(entry)
+            method = owner.methods.get("__iter__") if owner is not None else None
+            if method is not None:
+                break
+        if method is None:
+            return None
+        returned = T.strip_literal(method.ret)
+        if isinstance(returned, T.Instance) and returned.name in {"Iterator", "Generator"}:
+            return returned
+        return None
 
     def _enter_type(self, t: T.Type) -> T.Type:
         base = T.strip_literal(t)

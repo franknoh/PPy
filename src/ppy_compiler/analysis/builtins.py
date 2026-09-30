@@ -68,6 +68,7 @@ def _element_storage(t: T.Type) -> T.Type:
                 "Sequence",
                 "Iterable",
                 "Iterator",
+                "Generator",
                 "Buffer",
                 "memoryview",
                 "array",

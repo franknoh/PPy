@@ -67,6 +67,24 @@ def frame_shape(info: object, records: dict) -> Shape:
     return shape
 
 
+def check_frame(function: object, value_words: int) -> None:
+    """Refuse a generator whose frame cannot hold what it keeps across a `yield`:
+    a buffer or a vector, or more references than the frame's mask names."""
+    from ..ir import BufferType, VectorType  # pylint: disable=import-outside-toplevel
+
+    kept = [a.type for a in function.body.blocks[0].arguments]  # type: ignore[attr-defined]
+    owning = sum(1 for t in kept if t == HANDLE)
+    for op in function.operations():  # type: ignore[attr-defined]
+        if op.name != "core.alloca":
+            continue
+        kept.append(op.results[0].type.pointee)
+        owning += bool(op.attributes.get("ppy.owns"))
+    if any(isinstance(t, (BufferType, VectorType)) for t in kept):
+        raise Unsupported("a generator holds a buffer or a vector, which its frame cannot")
+    if owning > HANDLE_WORDS - SLOT_VALUE - value_words:
+        raise Unsupported("a generator holds more references than its frame names")
+
+
 def frame_words(shape: Shape) -> int:
     """How many words of the frame the yielded value takes."""
     return shape.words
@@ -127,6 +145,16 @@ class FrameLowering:  # pylint: disable=attribute-defined-outside-init
 
     def _release_collections(self) -> None:
         super()._release_collections()  # type: ignore[misc]
+        done = {id(held.slot) for held in self.collections.values()}  # type: ignore[attr-defined]
+        for scope in self.__dict__.get("_suspended", ()):
+            # An inlined generator a `return` leaves in the middle of: its own
+            # locals, not the ones a generator expression sees of its consumer.
+            for held in scope.values():
+                if id(held.slot) in done:
+                    continue
+                done.add(id(held.slot))
+                self._release(core.load(self.b, held.slot))  # type: ignore[attr-defined]
+                core.store(self.b, self._rt("ppy_coll_none", (), HANDLE), held.slot)  # type: ignore[attr-defined]
         if self._frame() is None:
             return
         # The frame lets go of what its slots hold when it is freed: a slot let
@@ -204,6 +232,38 @@ class FrameLowering:  # pylint: disable=attribute-defined-outside-init
                 return False
             raise
         return super()._stepped_generator(statement, rest)  # type: ignore[misc]
+
+    def _reference_of(self, node: ast.expr):  # type: ignore[no-untyped-def]
+        found = super()._reference_of(node)  # type: ignore[misc]
+        if found is not None:
+            return found
+        return self._frame_value(node)
+
+    def _handle(self, node: ast.expr) -> tuple[Value, bool]:
+        """A call to a generator function, as a value: its starter makes the frame."""
+        if (
+            isinstance(node, ast.Call)
+            and _called(node, "next")
+            and node.args
+            and self._counted_kind(node.args[0]) == "frame"
+        ):
+            # The yielded reference is the expression's own.
+            self.__dict__["_next_owned"] = True
+            try:
+                value = self._generator_consumer("next", node)
+            finally:
+                self.__dict__["_next_owned"] = False
+            assert value is not None
+            return value, True
+        if isinstance(node, ast.Call) and _called(node, "iter") and len(node.args) == 1:
+            made = self._frame_of(node)
+            if made is not None:
+                return made[1], made[2]
+        if isinstance(node, ast.Call) and self._frame_value(node) is not None:
+            found = self._generator_function(node)  # type: ignore[attr-defined]
+            if found is not None and self._has_frame(node):
+                return self._call(node), True  # type: ignore[attr-defined]
+        return super()._handle(node)  # type: ignore[misc]
 
     def _has_frame(self, node: ast.expr) -> bool:
         """Whether the generator function a call names is lowered with a frame."""
@@ -344,7 +404,8 @@ class FrameLowering:  # pylint: disable=attribute-defined-outside-init
         b.at_end(done)
         self._done_with(handle, owned)  # type: ignore[attr-defined]
         value = core.load(b, got)
-        self._take_yielded(node, element, value)
+        if not self.__dict__.get("_next_owned"):
+            self._take_yielded(node, element, value)
         return value
 
 

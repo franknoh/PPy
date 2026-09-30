@@ -95,7 +95,7 @@ from .collections import HANDLE, Held, records_of
 from .containers import ContainerLowering
 from .exceptions import ExceptionLowering, uses_exceptions
 from .expressions import ExpressionLowering
-from .frames import FrameLowering, frame_shape, frame_words
+from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
 from .intness import ModuleIntness, gives_int
 from .strings import StringLowering
@@ -567,8 +567,13 @@ class Frontend:
         written = written_params(analysis)
         for parameter in info.params:
             ir_type = self.lower_type(parameter.type, parameter.facts)
+            # A generator's frame outlives the call: a list it takes is held by
+            # handle, never lent as a buffer.
             native_param = _native_param(
-                parameter.name, parameter.type, self.layouts, parameter.name in written
+                parameter.name,
+                parameter.type,
+                self.layouts,
+                parameter.name in written or info.is_generator,
             )
             if native_param is not None and native_param.is_handle:
                 # A list of numbers the function writes is held by handle, not lent.
@@ -872,6 +877,8 @@ class Frontend:
             function.attributes["ppy.generator"] = True
             function.attributes["ppy.generator.value_words"] = frame_words(shape)
         lowering.run(node)
+        if info.is_generator:
+            check_frame(function, frame_words(lowering.__dict__["_frame_shape"]))
         return lowering.proved
 
     def define_once(self, qualname: str) -> list[str]:
