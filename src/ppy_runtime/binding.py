@@ -238,7 +238,7 @@ def bind(
     ):
         return _bind_collections(signature, native, result_types, fallback, owner)
 
-    namespace = getattr(fallback, "__globals__", None)
+    namespace = _namespace(fallback)
     expanders = [
         _expander_for(p, (lambda: namespace) if namespace is not None else None)
         for p in signature.parameters
@@ -349,22 +349,10 @@ def bind(
     return binding
 
 
-class _Spelled:
-    """The Python function called with the arguments Python spelled: the
-    globals the native entry takes after them are left off."""
-
-    __slots__ = ("count", "function")
-
-    def __init__(self, function: Callable[..., object], count: int) -> None:
-        self.function = function
-        self.count = count
-
-    def __call__(self, *args: object, **keywords: object) -> object:
-        return self.function(*args[: self.count], **keywords)
-
-    @property
-    def __globals__(self) -> dict | None:
-        return getattr(self.function, "__globals__", None)
+def _namespace(function: object) -> dict | None:
+    """The globals a Python function reads: its module's, or, for the one
+    `_bind_globals` makes, those of the function it stands for."""
+    return getattr(function, "__ppy_globals__", None) or getattr(function, "__globals__", None)
 
 
 def _bind_globals(  # type: ignore[no-untyped-def]
@@ -378,12 +366,19 @@ def _bind_globals(  # type: ignore[no-untyped-def]
     """
     count = sum(1 for p in signature.parameters if not p.source)
     own = signature.qualname.rpartition(".")[0]
-    namespace = getattr(fallback, "__globals__", None)
+    namespace = _namespace(fallback)
     places: list[tuple[str, str]] = []
     for parameter in signature.parameters[count:]:
         module, _, name = parameter.source.rpartition(":")
         places.append((module, name))
-    inner = bind(signature, address, _Spelled(fallback, count), owner=owner, globals_read=True)
+
+    def spelled(*args: object, **keywords: object) -> object:
+        # The Python function takes the arguments Python spelled; the globals
+        # the native entry takes after them are left off.
+        return fallback(*args[:count], **keywords)
+
+    spelled.__ppy_globals__ = namespace  # type: ignore[attr-defined]
+    inner = bind(signature, address, spelled, owner=owner, globals_read=True)
     if inner.wrapper is inner.fallback:
         # No native entry here after all: the Python function is the function.
         inner.wrapper = inner.fallback = fallback
@@ -548,7 +543,7 @@ def _bind_collections(  # type: ignore[no-untyped-def]
 def _class_finder(fallback: Callable[..., object]) -> Callable[[object], object]:
     """How the boundary finds a described class: in the function's own module's
     namespace, where the program defines it, else in its module."""
-    namespace = getattr(fallback, "__globals__", None)
+    namespace = _namespace(fallback)
 
     def find(described):  # type: ignore[no-untyped-def]
         if namespace is not None:

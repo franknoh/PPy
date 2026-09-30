@@ -253,16 +253,17 @@ class Classes:
 
     def python(self, qualname: str) -> type | None:
         """The Python class of `qualname`, or None where the module has none."""
-        found = self._python.get(qualname)
-        if found is None:
-            described = self.by_name.get(qualname)
-            if described is None or self._resolve is None:
-                return None
-            found = self._resolve(described)
-            if not isinstance(found, type):
-                return None
-            self._python[qualname] = found
-        return found
+        known = self._python.get(qualname)
+        if known is not None:
+            return known
+        described = self.by_name.get(qualname)
+        if described is None or self._resolve is None:
+            return None
+        resolved = self._resolve(described)
+        if not isinstance(resolved, type):
+            return None
+        self._python[qualname] = resolved
+        return resolved
 
     def of(self, value: Any) -> CrossingClass | None:
         """The class `value` is an instance of, exactly, among those described."""
