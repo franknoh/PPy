@@ -180,7 +180,60 @@ def main() -> None:
 main()
 """
 
+NAMED_TUPLES = """
+from collections import namedtuple
+from typing import NamedTuple
+
+Particle = namedtuple("Particle", "x y z mass")
+Pair = namedtuple("Pair", ["a", "b"], defaults=[0])
+Point = NamedTuple("Point", [("x", int), ("y", int)])
+
+
+def weight(ps: list[Particle]) -> float:
+    return sum(p.mass for p in ps)
+
+
+def dist(p: Point) -> int:
+    x, y = p
+    return abs(x) + abs(p[1])
+
+
+def main() -> None:
+    ps = [Particle(1, 2, 3, 4.5), Particle(0, 0, 0, 1)]
+    print(weight(ps), Pair(1), Pair(1, 2).b, dist(Point(3, -4)), ps[0]._replace(mass=1))
+
+
+main()
+"""
+
+NAMED_TUPLE_CLASS = """
+from typing import NamedTuple
+
+
+class P(NamedTuple):
+    x: int
+    y: float = 0.0
+
+
+def f(p: P) -> float:
+    a, b = p
+    s = 0.0
+    for v in p:
+        s += v
+    return p.x + p.y + p[0] + a + b + s
+
+
+def main() -> None:
+    p = P(1, 2.5)
+    print(f(p), p, p._replace(x=3), len(p), p == P(1, 2.5), p._asdict(), P._fields)
+
+
+main()
+"""
+
 PROGRAMS = {
+    "named_tuples": NAMED_TUPLES,
+    "named_tuple_class": NAMED_TUPLE_CLASS,
     "class_state": CLASS_STATE,
     "old_style_generics": OLD_STYLE_GENERICS,
     "self": SELF,

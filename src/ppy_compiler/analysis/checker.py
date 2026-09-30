@@ -267,6 +267,19 @@ def _is_place(node: ast.expr) -> bool:
     return isinstance(node, (ast.Attribute, ast.Subscript))
 
 
+def _named_tuple_attribute(base: T.Instance, attr: str) -> T.Type | None:
+    """What `NamedTuple` gives every instance: `_replace`, `_asdict`, `_fields`."""
+    if "typing.NamedTuple" not in base.resolved_mro:
+        return None
+    if attr == "_replace":
+        return T.Callable_((), base, f"{base.name}._replace")
+    if attr == "_asdict":
+        return T.Callable_((), T.dict_of(T.STR, T.ANY), f"{base.name}._asdict")
+    if attr == "_fields":
+        return T.Tuple_((T.STR,), homogeneous=True)
+    return None
+
+
 def _is_class_value(t: T.Type) -> bool:
     if isinstance(t, T.ClassObject) or t == T.NONE:
         return True
@@ -727,12 +740,23 @@ class _Checker:
         self._seed_module_env(env)
         self._effects = EffectSet()
         for stmt in self.symbols.module.tree.body:
+            if self._declares_named_tuple(stmt):
+                continue
             self._stmt(stmt, env)
         self.module.module_effects = self._effects
         for info in self._all_functions():
             self.module.functions[info.qualname] = self._check_function(info)
         self._check_derivative_effects()
         return self.module
+
+    def _declares_named_tuple(self, stmt: ast.stmt) -> bool:
+        """`P = namedtuple("P", "x y")`, which the symbols declared as a class."""
+        return (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Name)
+            and f"{self.symbols.name}.{stmt.targets[0].id}" in self.symbols.untyped_fields
+        )
 
     def _check_derivative_effects(self) -> None:
         """`E1662`: a differentiated function has an effect no derivative follows."""
@@ -1896,8 +1920,24 @@ class _Checker:
         elif isinstance(target, ast.Starred):
             self._bind_target(target.value, Binding(T.list_of(value.type)), env)
 
+    def _named_tuple_view(self, t: T.Type) -> T.Tuple_ | None:
+        """A `NamedTuple` instance as the tuple it is: `p[0]`, `x, y = p`,
+        and `for v in p` read its fields in order."""
+        if not isinstance(t, T.Instance) or "typing.NamedTuple" not in t.resolved_mro:
+            return None
+        info = self.project.classes.get(t.name)
+        if info is None:
+            return None
+        items = tuple(
+            declared
+            for name, declared in info.fields.items()
+            if name not in info.class_vars and not name.startswith("_")
+        )
+        return T.Tuple_(items)
+
     def _unpack(self, target: ast.Tuple | ast.List, value: Binding, env: Env) -> None:
         base = T.strip_literal(value.type)
+        base = self._named_tuple_view(base) or base
         elements: list[T.Type] = []
         members = [T.strip_literal(m) for m in T.members_of(base)]
         tuples = [m for m in members if isinstance(m, T.Tuple_) and not m.homogeneous]
@@ -3014,6 +3054,9 @@ class _Checker:
             method = self._builtin_method(base, node.attr)
             if method is not None:
                 return Binding(method)
+            named = _named_tuple_attribute(base, node.attr)
+            if named is not None:
+                return Binding(named)
             if info is not None and not self._dynamic_depth:
                 self._strictly("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
                 return Binding(T.UNKNOWN)
@@ -3441,6 +3484,7 @@ class _Checker:
             return narrowed
         base = T.strip_literal(owner.type)
         is_slice = isinstance(node.slice, ast.Slice)
+        base = self._named_tuple_view(base) or base
 
         if isinstance(base, T.Tuple_):
             self._effects = self._effects.add(raises=("IndexError",))
@@ -6102,6 +6146,7 @@ class _Checker:
 
     def _iteration_element(self, iterable: Binding, node: ast.expr) -> Binding:
         base = T.strip_literal(iterable.type)
+        base = self._named_tuple_view(base) or base
         if isinstance(base, (T.AnyType, T.UnknownType)):
             if isinstance(base, T.DynamicType):
                 return Binding(T.DYNAMIC)

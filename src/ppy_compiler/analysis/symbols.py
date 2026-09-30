@@ -282,6 +282,8 @@ class ModuleSymbols:
     type_aliases: dict[str, ast.expr] = field(default_factory=dict)
     #: Module-level `T = TypeVar("T", ...)`: name -> the call that declares it.
     type_vars: dict[str, ast.Call] = field(default_factory=dict)
+    #: The fields of each `namedtuple("P", "x y")` class, which have no type.
+    untyped_fields: dict[str, tuple[str, ...]] = field(default_factory=dict)
     all_exports: tuple[str, ...] | None = None
     #: Point-sensitive lexical bindings for this module's tree.
     lexical: object | None = None
@@ -873,6 +875,11 @@ class ProjectSymbols:
 
     def _collect_declarations(self, symbols: ModuleSymbols) -> None:
         for node in symbols.module.tree.body:
+            named = _functional_named_tuple(self.resolver(symbols), node)
+            if named is not None:
+                info = self._declare_class(symbols, named[0])
+                symbols.untyped_fields[info.qualname] = named[1]
+                continue
             if isinstance(node, ast.ClassDef):
                 self._declare_class(symbols, node)
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -996,6 +1003,8 @@ class ProjectSymbols:
             qualname = resolver.canonical(base.value if isinstance(base, ast.Subscript) else base)
             if qualname is None:
                 continue
+            if qualname == "collections.namedtuple":
+                qualname = "typing.NamedTuple"  # the class `namedtuple(...)` made
             parent = self.classes.get(qualname)
             if parent is not None:
                 parent_symbols = self.modules.get(parent.module)
@@ -1034,6 +1043,10 @@ class ProjectSymbols:
             annotations.type_params = {v.name: v for v in info.type_params}
             annotations.self_type = info.instance(info.type_params)
             self._resolve_class_fields(symbols, info, annotations)
+            for name in symbols.untyped_fields.get(info.qualname, ()):
+                # `namedtuple("P", "x y")` says nothing of what `x` holds.
+                info.fields[name] = T.ANY
+                info.declared_fields.add(name)
             for base in info.node.bases:
                 if isinstance(base, ast.Subscript) and not _generic_marker(
                     annotations.resolver, base
@@ -1262,6 +1275,71 @@ class ProjectSymbols:
                 resolved = annotations.resolve(node.annotation)
                 symbols.globals[node.target.id] = resolved.type
                 symbols.global_facts[node.target.id] = resolved.facts
+
+
+_NAMED_TUPLE_CALLS = {"collections.namedtuple", "typing.NamedTuple", "typing_extensions.NamedTuple"}
+
+
+def _functional_named_tuple(
+    resolver: object, node: ast.stmt
+) -> tuple[ast.ClassDef, tuple[str, ...]] | None:
+    """`P = namedtuple("P", "x y")` or `P = NamedTuple("P", [("x", int)])`
+    as the class statement it amounts to, with the fields that have no type."""
+    if not (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and isinstance(node.value, ast.Call)
+        and len(node.value.args) == 2
+    ):
+        return None
+    call = node.value
+    if resolver.canonical(call.func) not in _NAMED_TUPLE_CALLS:  # type: ignore[attr-defined]
+        return None
+    name, spec = call.args
+    if not isinstance(name, ast.Constant) or name.value != node.targets[0].id:
+        return None
+    body: list[ast.stmt] = []
+    untyped: list[str] = []
+    if isinstance(spec, ast.Constant) and isinstance(spec.value, str):
+        untyped = spec.value.replace(",", " ").split()
+    elif isinstance(spec, (ast.List, ast.Tuple)):
+        for element in spec.elts:
+            if isinstance(element, ast.Constant) and isinstance(element.value, str):
+                untyped.append(element.value)
+            elif (
+                isinstance(element, ast.Tuple)
+                and len(element.elts) == 2
+                and isinstance(element.elts[0], ast.Constant)
+                and isinstance(element.elts[0].value, str)
+            ):
+                target = ast.Name(element.elts[0].value, ast.Store())
+                body.append(ast.AnnAssign(target, element.elts[1], None, 1))
+            else:
+                return None
+    else:
+        return None
+    if not untyped and not body:
+        body.append(ast.Pass())
+    # Defaults cover the last fields: `namedtuple("P", "x y", defaults=[0])`.
+    defaults = next((k.value for k in call.keywords if k.arg == "defaults"), None)
+    count = len(defaults.elts) if isinstance(defaults, (ast.List, ast.Tuple)) else 0
+    for index, field_name in enumerate(untyped):
+        value = ast.Constant(None) if index >= len(untyped) - count else None
+        target = ast.Name(field_name, ast.Store())
+        # The annotation is never read: the field's type is set to `Any`.
+        body.append(ast.AnnAssign(target, ast.Constant("object"), value, 1))
+    cls = ast.ClassDef(
+        name=node.targets[0].id,
+        bases=[call.func],
+        keywords=[],
+        body=body,
+        decorator_list=[],
+        type_params=[],
+    )
+    ast.copy_location(cls, node)
+    ast.fix_missing_locations(cls)
+    return cls, tuple(untyped)
 
 
 def class_level(info: ClassInfo, name: str) -> bool:
