@@ -566,7 +566,8 @@ class CollectionLowering:
             self._method_call(shape, "__init__", made, node.args, node.keywords, discard=True)
             return made
         if not info.is_dataclass:
-            if node.args or node.keywords:
+            # An exception's arguments are `BaseException.__init__`'s, in its header.
+            if node.keywords or (node.args and not self._is_exception(shape)):
                 raise Unsupported(f"`{info.name}` takes no arguments without an `__init__`")
             return made
         given: dict[str, ast.expr] = {}
@@ -1085,8 +1086,12 @@ class CollectionLowering:
         less: list[Value] = []
         for _, offset, field in fields:
             for index, kind in enumerate(_kinds(field)):
-                x = self._read_word(self._field_address(left, offset), index, kind)
-                y = self._read_word(self._field_address(right, offset), index, kind)
+                if kind == "str":
+                    x = self._read(self._field_address(left, offset), field)
+                    y = self._read(self._field_address(right, offset), field)
+                else:
+                    x = self._read_word(self._field_address(left, offset), index, kind)
+                    y = self._read_word(self._field_address(right, offset), index, kind)
                 if kind == "str":
                     equal.append(
                         core.cmp(b, "ne", self._rt("ppy_str_equal", (x, y)), self._word(0))

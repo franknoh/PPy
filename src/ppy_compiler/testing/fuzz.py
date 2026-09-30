@@ -551,11 +551,14 @@ class _Generator:
         elif roll < 0.85:
             name, it = self.name("n"), self.name("it")
             w.put(f"{it} = countdown(({self.int_expr(scope, 2)}) % 9)")
-            w.put(f"{name}: int = next({it}, -1) * 100")
+            w.put(f"{name}: int = next({it}, -1)")
+            w.put(f"{name} *= 100")
             item = self.name("x")
             w.put(f"for {item} in {it}:")
             w.put(f"    {name} += {item}")
-            w.put(f"{name} += next({it}, {rng.randint(0, 9)})")
+            last = self.name("n")
+            w.put(f"{last}: int = next({it}, {rng.randint(0, 9)})")
+            w.put(f"{name} += {last}")
             scope.ints.append(name)
         else:
             text = self.name("s")
