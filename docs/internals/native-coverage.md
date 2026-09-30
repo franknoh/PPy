@@ -13,9 +13,9 @@ code nobody wrote for PPy: mostly annotated, heavy on lists, dicts, and
 doctests, with some NumPy, Matplotlib, and network code at the edges.
 
 The summary runs over the whole tree as one project, with `[tool.ppy]
-strict = false`. Cold, it takes about 11 minutes, because every module is
-analyzed and lowered once. Warm, from the analysis and lowering cache, it takes
-24 seconds. A module whose lowering raises is reported under "could not be
+strict = false`. Cold, it takes 45 seconds, because every module is analyzed
+and lowered once. Warm, from the analysis and lowering cache, it takes 21
+seconds. Both peak under 500 MB. A module whose lowering raises is reported under "could not be
 analyzed" and the rest of the report still comes out.
 
 ## How much goes native
