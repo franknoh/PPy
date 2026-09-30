@@ -166,6 +166,10 @@ class NativeSignature:
     #: A returned collection's type, spelled (`ppy.Vec[int]`), for the boundary
     #: to build the Python object from the handle.
     returned: str = ""
+    #: The body prints, reads, or calls into Python (`ppy_runtime/effects.py`):
+    #: the boundary holds its output until it answers, and raises what it
+    #: raised after an effect it cannot take back.
+    effects: bool = False
 
     @property
     def crosses_collections(self) -> bool:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from . import types as T
 from .binding import bind_ast_call
@@ -22,9 +23,11 @@ __all__ = [
     "callee_qualname",
     "has_source_annotation",
     "infer_fields",
+    "infer_private_parameters",
     "is_self_attribute",
     "modules_with_unannotated_fields",
     "observed_arguments",
+    "private_candidates",
     "refine_with_call_sites",
 ]
 
@@ -557,3 +560,103 @@ def _accepts(call: ast.Call, argument: ast.expr, protocol, callees) -> bool:  # 
 
 def _is_name(node, name: str) -> bool:  # type: ignore[no-untyped-def]
     return isinstance(node, ast.Name) and node.id == name
+
+
+def private_candidates(symbols) -> dict[str, list[int]]:  # type: ignore[no-untyped-def]
+    """Module-private functions (`def _scale(xs, k)`) with parameters that have
+    no annotation, whose every use is a direct call in their own module.
+
+    Their call sites are then all the evidence there is: nothing else can
+    reach them with a value of another type, short of reflection, and a value
+    of another type from there still runs, since the native boundary hands a
+    call it cannot convert to the Python body.
+    """
+    found: dict[str, list[int]] = {}
+    for module in symbols.modules.values():
+        for name, info in module.functions.items():
+            if not name.startswith("_") or name.startswith("__") or info.node.decorator_list:
+                continue
+            unknown = [
+                index
+                for index, param in enumerate(info.params)
+                if not param.annotated
+                and param.kind in {"positional_only", "positional_or_keyword"}
+                and not param.has_default
+                and not param.inferred
+                and isinstance(param.type, T.UnknownType)
+            ]
+            if unknown and _only_called(module.module.tree, name):
+                found[info.qualname] = unknown
+    if not found:
+        return found
+    # A name another module mentions may be imported and called from there.
+    for module in symbols.modules.values():
+        mentioned = _mentioned_names(module.module.tree)
+        for qualname in list(found):
+            owner, _, name = qualname.rpartition(".")
+            if owner != module.name and name in mentioned:
+                del found[qualname]
+    return found
+
+
+def infer_private_parameters(symbols, analysis, candidates: dict[str, list[int]]) -> bool:  # type: ignore[no-untyped-def]
+    """Type each candidate parameter by what its call sites pass, joined.
+    True if any parameter took a type."""
+
+    observed = observed_arguments(SimpleNamespace(symbols=symbols, analysis=analysis))
+    changed = False
+    for qualname, indices in candidates.items():
+        info = symbols.functions.get(qualname)
+        if info is None:
+            continue
+        for index in indices:
+            seen = observed.get((qualname, index))
+            param = info.params[index]
+            if seen is None or isinstance(seen, (T.UnknownType, T.AnyType, T.NeverType)):
+                continue
+            if param.type != seen:
+                param.type = seen
+                param.inferred = True
+                changed = True
+    return changed
+
+
+def _only_called(tree: ast.Module, name: str) -> bool:
+    """Is every mention of `name` in the module a call of it, or its `def`?"""
+    called: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name:
+            if any(isinstance(a, ast.Starred) for a in node.args) or any(
+                k.arg is None for k in node.keywords
+            ):
+                return False
+            called.add(id(node.func))
+        elif isinstance(node, (ast.Global, ast.Nonlocal)) and name in node.names:
+            return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == name and id(node) not in called:
+            return False
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and node.name == name
+            and node not in tree.body
+        ):
+            return False  # a second definition somewhere else
+    defined = [
+        n
+        for n in tree.body
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name
+    ]
+    return len(defined) == 1
+
+
+def _mentioned_names(tree: ast.Module) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.alias):
+            names.add(node.name.rpartition(".")[2])
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            names.add(node.value)
+    return names

@@ -419,6 +419,7 @@ def write_manifest(
                     "cpu_features": list(signature.cpu_features),
                     "future": signature.future,
                     "returned": signature.returned,
+                    "effects": signature.effects,
                 },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)

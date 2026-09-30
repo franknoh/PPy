@@ -29,7 +29,7 @@ requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not
 def test_an_effect_list_is_one_category_per_effect_in_plain_words():
     found = categorize("has effects that must run on CPython: IO, ReadGlobal")
     assert [category for category, _, _ in found] == [
-        "does I/O (`print`, `input`, files)",
+        "does I/O natively out of reach (sockets, `os`, binary files)",
         "reads a module global that can change",
     ]
     assert all(page.endswith("/guide/effects/") for _, _, page in found)

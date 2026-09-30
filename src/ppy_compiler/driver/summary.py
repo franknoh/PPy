@@ -217,6 +217,24 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/generics/",
     ),
     _shape(
+        r"can follow `[^`]+\(\)`|can follow `print\(flush=True\)`|can follow a call into Python",
+        "something that may fall back follows an effect native code cannot take back",
+        "do the reading or the call into Python first, and the arithmetic in a function of its own",
+        "guide/native-effects/",
+    ),
+    _shape(
+        r"stays in Python and gives `([^`]+)`",
+        "calls a Python function whose `{0}` result native code cannot take back",
+        "return a float, a bool, a str, or nothing, or keep the call out of the hot function",
+        "guide/native-effects/",
+    ),
+    _shape(
+        r"`print` whose later argument|`print\(|`print` takes",
+        "a `print` native code does not write",
+        "print strings and numbers, with `sep`, `end`, `file`, and `flush` as literals",
+        "guide/native-effects/",
+    ),
+    _shape(
         r"a caller of a function that did not lower|calls .* which did not lower|"
         r"has no native lowering, so this call",
         "calls a function that stays in Python",
@@ -237,7 +255,10 @@ def _normal(text: str) -> str:
 
 #: Each effect that keeps a function on CPython, in a user's words, and what to do.
 _EFFECTS = {
-    "IO": ("does I/O (`print`, `input`, files)", "read and print in `main`; pass the data in"),
+    "IO": (
+        "does I/O natively out of reach (sockets, `os`, binary files)",
+        "`print`, `input`, and text files go native; keep the rest out of the hot function",
+    ),
     "ReadGlobal": (
         "reads a module global that can change",
         "pass the value in, or make it a constant (`X: Final = ...`)",

@@ -858,3 +858,56 @@ def test_the_python_binding_refuses_an_int_for_an_exact_float_and_a_bool_for_an_
     for expand, value in ((exact, 3), (whole, True), (loose, 1 << 60)):
         with pytest.raises(GuardFailed):
             expand(value, [], [])
+
+
+WIDENED = """
+from collections.abc import Sequence
+
+
+def total(xs: Sequence[float]) -> float:
+    t = 0.0
+    for x in xs:
+        t = t + x
+    return t
+
+
+def biggest(xs: Sequence[float]) -> float:
+    best = xs[0]
+    for x in xs:
+        if x > best:
+            best = x
+    return best
+
+
+def mean(xs: Sequence[float]) -> float:
+    t = 0.0
+    for x in xs:
+        t += x
+    return t / len(xs)
+
+
+def main() -> None:
+    ints = [3, 1, 4]
+    floats = [1.5, 2.5]
+    print(total(ints), biggest(ints), mean(ints), total(floats), biggest(floats), mean(floats))
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_list_of_ints_for_a_sequence_of_floats_keeps_its_ints(tmp_path: Path):
+    """`biggest([3, 1, 4])` of a `Sequence[float]` is `4` in CPython: the element
+    is returned, so the boundary refuses the ints there; `total` and `mean`
+    make floats of them either way, and take them, converted."""
+    expected = _expected(tmp_path, WIDENED)
+    assert expected == "8.0 4 2.6666666666666665 4.0 2.5 2.0"
+    for args in (["-m", "ppy_compiler", "prog.ppy"], ["-m", "ppy_compiler", "run", "prog.ppy"]):
+        done = _run(tmp_path, *args)
+        assert done.returncode == 0, done.stderr
+        assert _output(done).strip() == expected, args
+    for function in ("total", "biggest", "mean"):
+        explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
+        assert "llvm backend: native" in explained.stdout, (function, explained.stdout)

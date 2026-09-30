@@ -185,7 +185,10 @@ dashboard. See [the command](../cli.md#ppy-explain).
 ## Threads
 
 The generated wrapper releases the GIL around the native call, so
-`@ppy.native` functions scale across threads.
+`@ppy.native` functions scale across threads. A function that prints, reads,
+or calls into Python is bound through the Python boundary instead, which
+writes out its held output, and takes the GIL where it reaches Python
+([Effects in native code](native-effects.md)).
 
 Reading input is its own guide: [Reading input](input.md).
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import math
 from dataclasses import dataclass, field
 
 # The LLVM backend injects this name to supply a fused kernel to a module.
@@ -217,6 +218,23 @@ class StripDirectives(Pass):
         return node.body  # type: ignore[return-value]
 
 
+def _literal(value: object, where: ast.AST) -> ast.expr:
+    """`value` as source writes it. A negative number is `-2`, the negation
+    of a literal: a bare `Constant(-2)` unparses as `-2`, so `(-2) ** c`
+    would come out as `-2 ** c`, which is `-(2 ** c)`."""
+    negative = (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and (value < 0 or (value == 0 and math.copysign(1.0, value) < 0))
+    )
+    if negative:
+        literal: ast.expr = ast.UnaryOp(ast.USub(), ast.Constant(value=-value))
+        ast.copy_location(literal.operand, where)  # type: ignore[attr-defined]
+    else:
+        literal = ast.Constant(value=value)
+    return ast.copy_location(literal, where)
+
+
 class ConstantFold(Pass):
     """Replace provably constant pure expressions with their value."""
 
@@ -234,8 +252,7 @@ class ConstantFold(Pass):
         ):
             value = const_of(node)
             if isinstance(value, (int, float, complex, str, bytes, bool, type(None))):
-                replacement = ast.Constant(value=value)
-                ast.copy_location(replacement, node)
+                replacement = _literal(value, node)
                 self.context.count("constants_folded")
                 return replacement
         return node
@@ -244,8 +261,7 @@ class ConstantFold(Pass):
         if isinstance(node.ctx, ast.Load) and has_const(node):
             value = const_of(node)
             if isinstance(value, (int, float, str, bytes, bool, type(None))):
-                replacement = ast.Constant(value=value)
-                ast.copy_location(replacement, node)
+                replacement = _literal(value, node)
                 self.context.count("constants_propagated")
                 return replacement
         return node

@@ -9,6 +9,7 @@ from pathlib import Path
 from ..analysis import stdlib
 from ..analysis.checker import ProjectAnalysis, analyze
 from ..analysis.contracts import ContractReport, verify
+from ..analysis.inference import infer_private_parameters, private_candidates
 from ..analysis.symbols import ProjectSymbols
 from ..cache import CacheKey, CacheStore
 from ..cache.keys import digest, environment_fingerprint
@@ -164,12 +165,14 @@ def analyze_paths(
         symbols.register_external_type(qualname, display)
     symbols.build()
 
+    previous = None if project.config.strict else _infer_private_parameters(project, symbols)
     analysis = analyze(
         symbols,
         diagnostics,
         strict=project.config.strict,
         dynamic_policy=project.config.dynamic_boundaries,
         plugins=project.plugins,
+        previous=previous,
     )
     reports = verify(analysis, diagnostics, backend=backend)
     return AnalysisBundle(
@@ -181,6 +184,34 @@ def analyze_paths(
         diagnostics=diagnostics,
         entry=graph.entry,
     )
+
+
+def _infer_private_parameters(project: Project, symbols: ProjectSymbols) -> ProjectAnalysis | None:
+    """Under `--no-strict`, a module-private function's unannotated parameters
+    take the types its call sites pass (`_scale([1, 2], 2)` makes `xs` a
+    `list[int]`). A caller typed only once its callee is typed reaches it on a
+    later round. The rounds report nothing; the analysis after them does."""
+    candidates = private_candidates(symbols)
+    if not candidates:
+        return None
+    analysis = None
+    for _round in range(_PRIVATE_INFERENCE_ROUNDS):
+        analysis = analyze(
+            symbols,
+            DiagnosticBag(),
+            strict=False,
+            dynamic_policy=project.config.dynamic_boundaries,
+            plugins=project.plugins,
+            previous=analysis,
+        )
+        if not infer_private_parameters(symbols, analysis, candidates):
+            break
+    return analysis
+
+
+#: Each round types the callees of what the round before typed; call chains
+#: of private helpers deeper than this keep their last links unannotated.
+_PRIVATE_INFERENCE_ROUNDS = 4
 
 
 def module_cache_key(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
@@ -59,6 +60,9 @@ def _element_storage(t: T.Type) -> T.Type:
             return base.items[0]
         return T.join(*base.items) if base.items else T.NEVER
     if isinstance(base, T.Instance):
+        if base.name == "io.TextIOWrapper":
+            # A text file iterates over its lines.
+            return T.STR
         if (
             base.name
             in {
@@ -69,6 +73,8 @@ def _element_storage(t: T.Type) -> T.Type:
                 "Iterable",
                 "Iterator",
                 "Generator",
+                "Collection",
+                "Reversible",
                 "Buffer",
                 "memoryview",
                 "array",
@@ -306,8 +312,26 @@ def _all_any(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.BOOL, Facts(int_range=IntRange(0, 1)))
 
 
+#: What `open` gives in a text mode.
+TEXT_STREAM = T.Instance("io.TextIOWrapper", (), ("io.TextIOWrapper", "object"))
+
+
 def _open(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.OBJECT, Facts(), _IO | EffectSet.of(Effect.ALLOC, raises=("OSError",)))
+
+
+def opens_text(node: ast.Call) -> bool:
+    """Whether `open(...)` opens a text file: a mode, if given, that is a string
+    literal without `b`."""
+    mode = node.args[1] if len(node.args) > 1 else None
+    for keyword in node.keywords:
+        if keyword.arg == "mode":
+            mode = keyword.value
+        elif keyword.arg is None:
+            return False
+    if mode is None:
+        return True
+    return isinstance(mode, ast.Constant) and isinstance(mode.value, str) and "b" not in mode.value
 
 
 def _input(args: Sequence[Arg]) -> BuiltinResult:
@@ -420,6 +444,12 @@ def _getattr(args: Sequence[Arg]) -> BuiltinResult:
     )
 
 
+def _setattr(args: Sequence[Arg]) -> BuiltinResult:
+    return BuiltinResult(
+        T.NONE, Facts(), EffectSet.of(Effect.WRITE_OBJECT, raises=("AttributeError",))
+    )
+
+
 def _hasattr(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.BOOL, Facts(int_range=IntRange(0, 1)), EffectSet.of(Effect.READ_OBJECT))
 
@@ -485,6 +515,8 @@ BUILTINS: dict[str, Handler] = {
     "memoryview": _memoryview,
     "getattr": _getattr,
     "hasattr": _hasattr,
+    "setattr": _setattr,
+    "delattr": _setattr,
 }
 
 #: Effects attributed to calls into well-known standard-library modules.
