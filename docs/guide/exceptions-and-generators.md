@@ -160,8 +160,9 @@ def header_then_rows(n: int) -> int:
     return total * 1000 + next(it, 77)
 ```
 
-The steps are the function's own statements, not inside a loop or a branch,
-and the code between two of them does not `return`, `break`, or `continue`.
+The steps are `x = next(it)` and `for` statements of the function itself,
+not inside a loop or a branch, and the code between two of them does not
+`return`, `break`, or `continue`.
 
 ### What stays in Python
 
