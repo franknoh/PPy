@@ -112,12 +112,15 @@ What this suggests for 0.6.0, in order of statements freed per unit of work:
 
 Separately, 400 programs from the corpus ran under CPython and under `ppy
 run`, one at a time, each in its own directory, with empty stdin, a timeout,
-and `PYTHONHASHSEED=0`. Both sides used the same interpreter. A program counts
-as the same when the exit code, stdout, and the exception that ended it all
-match. 13 of the 400 were skipped as nondeterministic under CPython (two
-runs disagreed).
+and `PYTHONHASHSEED=0`. Both sides used the same interpreter, CPython 3.14. A
+program counts as the same when the exit code, stdout, and the exception that
+ended it all match. 13 of the 400 were skipped as nondeterministic under
+CPython (two runs disagreed).
 
-323 matched and 64 differed on the first pass. The differences, sorted:
+On the first pass 323 matched and 64 differed. After the fixes below, on the
+current tree, 353 match and 34 differ. None of the 34 is `ppy run` printing a
+different answer from a program both sides accept, except the one listed
+under "not fixed". The differences, sorted:
 
 **PPy bugs, fixed on this branch**, each with a regression under
 `tests/fuzz_regressions/`:
@@ -136,6 +139,19 @@ runs disagreed).
 - A `# type: ignore` comment crashed the Python backend's source map.
 - A native `sum` over a `list[float]` argument added without CPython's
   compensation, so `sum([0.1, 0.2, 0.3])` printed `0.6000000000000001`.
+- The IR verifier took the join after an `if` whose branches both return as
+  dominated by nothing, and refused a later read of a local, so a whole
+  module failed to lower (backtracking/match_word_pattern).
+
+**A PPy difference, not fixed:** a native function with a `float` parameter
+accepts an `int` and converts it, so its result is a float where CPython's
+would be an int. `cross_product((0, 0), (1, 1), (2, 2))`, declared over
+`tuple[float, float]`, returns `0.0` natively and `0` in CPython
+(maths/ear_clipping_polygon_triangulation's doctest shows it now that doctest
+sees native functions). Refusing the int at the boundary is a one-line change
+but sends every such call to Python; converting only where the result cannot
+tell is the better fix and needs the lowering to know it. It is left for
+0.6.0.
 
 **Checker refusals of valid code, fixed on this branch:**
 
@@ -145,6 +161,8 @@ runs disagreed).
 - A bare `Callable` annotation was "not a type the project can analyze".
 - `seen = {}` filled by `seen[k] = 1` in one branch refused `seen[k] += 1` in
   the other, and `[] + names` was refused.
+- A `return None` after a `while 1:` that leaves only by `return` was checked
+  as reachable.
 
 **Checker refusals of valid code, not fixed:**
 
@@ -154,8 +172,13 @@ runs disagreed).
   types as `Iterator`.
 - `Counter & Counter`, `datetime + timedelta`, and `Decimal / int` have no
   model in the standard-library stubs.
-- `list[int]` passed where `list[int | float]` is expected. This is correct
-  under invariance, but CPython runs it, and the corpus does it often.
+- `list[int]` passed where `list[int | float]` or `Sequence[float]` is
+  expected. The first is correct under invariance, and the second is kept
+  refused on purpose: accepted, the native code would compute in floats and
+  print `9.0` where CPython prints `9`, the difference above. CPython runs
+  both, and the corpus does it often.
+- Old-style type variables (`T = TypeVar("T")`) used in annotations, and
+  `setattr` on a class.
 - A recursive generic `RandomizedHeapNode[T] | None` compared unequal to
   itself.
 
@@ -165,8 +188,8 @@ may be `None`. CPython runs them because the `None` never arrives on that
 input. PPy refuses them in either mode. Whether non-strict mode should warn
 instead is a policy question for 0.6.0.
 
-**Harness artifacts, not differences:** copied to a directory of their own,
-programs that import a sibling (`from .stack import Stack`, `from
-data_structures...`) fail on both sides, and programs that read `input()`
-end in `EOFError` on both sides. Some programs use Python 2 syntax that
-CPython 3 rejects. All of these fail the same way under `ppy run`.
+**Harness artifacts:** copied to a directory of their own, programs that
+import a sibling (`from .stack import Stack`, `from data_structures...`) fail
+on both sides, and programs that read `input()` end in `EOFError` on both
+sides. They count as different only because `ppy run` stops earlier, at the
+check, with its own error.
