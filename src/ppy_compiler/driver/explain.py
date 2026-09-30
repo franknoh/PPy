@@ -159,7 +159,7 @@ def _print_function(
     print(f"python backend: {_python_backend(analysis)}")
     lowered = _lowering_outcome(bundle, info)
     print(f"llvm backend: {lowered or _llvm_backend(report)}")
-    if report is not None and report.native_ok and lowered in (None, "native"):
+    if report is not None and report.native_ok and (lowered is None or lowered.startswith("native")):
         print(f"python boundary: {_boundary(info)}")
     print(f"jit: {_jit_detail(info, report)}")
     print(f"parallel: {'accepted' if report and report.parallel_ok else 'rejected'}")
@@ -257,7 +257,8 @@ def _lowering_outcome(bundle: AnalysisBundle, info: FunctionInfo) -> str | None:
         return None
     if info.qualname in module.functions:
         # The body lowered: that is the answer, whatever the contract feared.
-        return "native"
+        rule = getattr(module, "effects", {}).get(info.qualname)
+        return f"native; {rule}" if rule else "native"
     reason = module.rejected.get(info.qualname)
     return f"boxed: {reason}" if reason else None
 

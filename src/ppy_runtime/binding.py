@@ -200,6 +200,23 @@ def bind(
         return NativeBinding(
             signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
         )
+    effects = None
+    if signature.effects:
+        from .effects import effects_for, register_namespace
+
+        effects = effects_for(owner)
+        if effects is None:
+            # No runtime to print through: the function is its Python definition.
+            return NativeBinding(
+                signature=signature,
+                wrapper=fallback,
+                fallback=fallback,
+                fast_entry=None,
+                owner=owner,
+            )
+        register_namespace(signature.qualname, getattr(fallback, "__globals__", None))
+        # The generated wrapper knows nothing of held output.
+        fast_entry = None
     argument_types: list[type] = []
     for parameter in signature.parameters:
         if parameter.is_buffer:
@@ -229,7 +246,7 @@ def bind(
     if signature.crosses_collections and not (
         text_only and not any(p.is_handle for p in signature.parameters)
     ):
-        return _bind_collections(signature, native, result_types, fallback, owner)
+        return _bind_collections(signature, native, result_types, fallback, owner, effects)
 
     namespace = getattr(fallback, "__globals__", None)
     expanders = [
@@ -314,6 +331,17 @@ def bind(
 
         slots = [result_type() for result_type in result_types]
         target = entry or native
+        if effects is not None:
+            outer = effects.enter()
+            status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
+            if not _settled(effects, status, outer, signature, owner, target):
+                binding.fallbacks += 1
+                return fallback(*args)
+            binding.calls += 1
+            try:
+                return _answer(slots)
+            finally:
+                effects.commit()
         status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
             if status == STATUS_RAISED:
@@ -327,6 +355,9 @@ def bind(
             return fallback(*args)
         binding.calls += 1
         binding.specialized_calls += int(entry is not None)
+        return _answer(slots)
+
+    def _answer(slots: list) -> object:  # type: ignore[type-arg]
         if text_result:
             return _text_result(slots[0].value, slots[1].value)
         if returns_tuple:
@@ -340,6 +371,21 @@ def bind(
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
     return binding
+
+
+def _settled(effects, status, outer, signature, owner, target) -> bool:  # type: ignore[no-untyped-def]
+    """Whether a call with effects answered: what it printed is written out once
+    its result is read (`Effects.commit`); where it fell back, dropped. What it
+    raised after an effect it cannot take back is raised here."""
+    if status >= STATUS_SANITIZER_BASE:
+        effects.abandon(outer)
+        kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
+        raise SanitizerFailure(f"sanitizer: a {kind} check failed in `{signature.qualname}`")
+    return bool(
+        effects.leave(
+            status, outer, signature.qualname, lambda: _let_go_of_raised(owner, target)
+        )
+    )
 
 
 def _dress(wrapper, signature, fallback) -> None:  # type: ignore[no-untyped-def]
@@ -366,7 +412,7 @@ _LIBC.free.restype = None
 
 
 def _bind_collections(  # type: ignore[no-untyped-def]
-    signature: NativeSignature, native, result_types: list, fallback, owner
+    signature: NativeSignature, native, result_types: list, fallback, owner, effects=None
 ) -> NativeBinding:
     """The boundary of a function a collection crosses: each argument copied into
     native memory, the result copied out, and a written argument copied back.
@@ -402,7 +448,10 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             return fallback(*args, **keywords)
         boundary = crossing.Boundary(rt)
         try:
-            answered, answer = _cross(boundary, args)
+            if effects is not None:
+                answered, answer = _cross_with_effects(boundary, args)
+            else:
+                answered, answer = _cross(boundary, args)
         finally:
             # Every handle the crossing made is let go of before any Python
             # runs: a fallback that calls native code again must not find
@@ -438,6 +487,33 @@ def _bind_collections(  # type: ignore[no-untyped-def]
                     f"sanitizer: a {kind} check failed in `{signature.qualname}`"
                 )
             return False, None
+        return True, _read(boundary, args, slots)
+
+    def _cross_with_effects(boundary, args: tuple) -> tuple[bool, object]:  # type: ignore[no-untyped-def]
+        """As `_cross`, for a function with effects (`ppy_runtime/effects.py`)."""
+        atoms: list[object] = []
+        borrowed: list[object] = []
+        try:
+            for expand, spec, value in zip(expanders, specs, args, strict=True):
+                if spec is not None:
+                    atoms.append(boundary.argument(value, spec))
+                else:
+                    assert expand is not None
+                    expand(value, atoms, borrowed)
+        except (GuardFailed, crossing.Refused):
+            return False, None
+        slots = [result_type() for result_type in result_types]
+        outer = effects.enter()
+        status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
+        if not _settled(effects, status, outer, signature, owner, native):
+            return False, None
+        try:
+            return True, _read(boundary, args, slots)
+        finally:
+            effects.commit()
+
+    def _read(boundary, args: tuple, slots: list) -> object:  # type: ignore[no-untyped-def,type-arg]
+        """What an answered call wrote back and gave back."""
         boundary.sync(
             [
                 (value, spec)
@@ -446,17 +522,17 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             ]
         )
         if returned is not None:
-            return True, boundary.result(slots[0].value, returned)
+            return boundary.result(slots[0].value, returned)
         if nothing or not slots:
-            return True, None
+            return None
         if signature.returns == (TEXT,):
-            return True, _text_result(slots[0].value, slots[1].value)
+            return _text_result(slots[0].value, slots[1].value)
         if len(slots) > 1:
-            return True, tuple(
+            return tuple(
                 _result_for(atom)(slot.value)
                 for atom, slot in zip(signature.returns, slots, strict=True)
             )
-        return True, _result_for(signature.returns[0])(slots[0].value)
+        return _result_for(signature.returns[0])(slots[0].value)
 
     _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]

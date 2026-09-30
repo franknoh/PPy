@@ -146,6 +146,8 @@ class LoweringResult:
     exports: dict[str, str] = field(default_factory=dict)
     #: What the lowering and the passes said about the code, as remarks.
     remarks: tuple[str, ...] = ()
+    #: Per function with effects, the rule they run under (`lowering/effects.py`).
+    effects: dict[str, str] = field(default_factory=dict)
 
 
 def _scalar_name(t: T.Type) -> str | None:
