@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 
+from ppy_runtime.abi import classes_from_json, classes_to_json
+
 from .fusion import FusedLoop, SourceSpan
 from .lowering import NativeParam, NativeSignature
 
@@ -104,6 +106,7 @@ def _signature(s: NativeSignature) -> dict:
         "cpu_features": list(s.cpu_features),
         "future": s.future,
         "returned": s.returned,
+        "classes": classes_to_json(s.classes),
     }
 
 
@@ -117,6 +120,7 @@ def _read_signature(raw: dict) -> NativeSignature:
         cpu_features=tuple(raw.get("cpu_features", ())),
         future=str(raw.get("future", "")),
         returned=str(raw.get("returned", "")),
+        classes=classes_from_json(raw.get("classes", [])),
     )
 
 

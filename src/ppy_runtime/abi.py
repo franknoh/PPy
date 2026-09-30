@@ -15,6 +15,7 @@ __all__ = [
     "STATUS_OK",
     "STATUS_RAISED",
     "TEXT",
+    "CrossingClass",
     "NativeParam",
     "NativeSignature",
 ]
@@ -147,6 +148,72 @@ class NativeParam:
 
 
 @dataclass(frozen=True, slots=True)
+class CrossingClass:
+    """A project class whose instances cross the Python boundary, as native
+    code lays them out.
+
+    An object (`kind` "object") is a handle: a sequence of one record, its
+    fields at their word offsets, its class's tag in the header. A value
+    class (`kind` "record") is its fields' words in place, inside a
+    collection's element.
+    """
+
+    qualname: str
+    #: Where Python finds the class: its module and its name there.
+    module: str
+    name: str
+    kind: str
+    #: Each field: its name, its first word, and its type as a signature
+    #: spells an element (`int`, `str`, `list[int]`, `prog.Node`).
+    fields: tuple[tuple[str, int, str], ...] = ()
+    #: An object's record: its words, which are floats, which are handles,
+    #: and (above bit 32) which handles are strings.
+    words: int = 0
+    floats: int = 0
+    handles: int = 0
+    tag: int = 0
+    #: The classes an instance of this one is an instance of, itself first.
+    bases: tuple[str, ...] = ()
+
+
+def classes_to_json(classes: tuple[CrossingClass, ...]) -> list[dict]:
+    """The classes a signature crosses, as a manifest or a cache writes them."""
+    return [
+        {
+            "qualname": c.qualname,
+            "module": c.module,
+            "name": c.name,
+            "kind": c.kind,
+            "fields": [list(f) for f in c.fields],
+            "words": c.words,
+            "floats": c.floats,
+            "handles": c.handles,
+            "tag": c.tag,
+            "bases": list(c.bases),
+        }
+        for c in classes
+    ]
+
+
+def classes_from_json(raw: list[dict]) -> tuple[CrossingClass, ...]:
+    return tuple(
+        CrossingClass(
+            qualname=str(c["qualname"]),
+            module=str(c["module"]),
+            name=str(c["name"]),
+            kind=str(c["kind"]),
+            fields=tuple((str(n), int(o), str(s)) for n, o, s in c["fields"]),
+            words=int(c["words"]),
+            floats=int(c["floats"]),
+            handles=int(c["handles"]),
+            tag=int(c["tag"]),
+            bases=tuple(str(b) for b in c["bases"]),
+        )
+        for c in raw
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class NativeSignature:
     """The PPY native ABI for one function (spec 16.4)."""
 
@@ -166,6 +233,9 @@ class NativeSignature:
     #: A returned collection's type, spelled (`ppy.Vec[int]`), for the boundary
     #: to build the Python object from the handle.
     returned: str = ""
+    #: The project classes whose instances cross with its arguments or its
+    #: result, and every subclass of those.
+    classes: tuple[CrossingClass, ...] = ()
 
     @property
     def crosses_collections(self) -> bool:

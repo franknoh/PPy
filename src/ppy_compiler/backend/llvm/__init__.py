@@ -308,7 +308,7 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
             info = with_implicit_globals(info, _analysis)
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
-        exposed, why = should_lower_native(info, _analysis, layouts)
+        exposed, why = should_lower_native(info, _analysis, layouts, signature.classes)
         functions[qualname] = LoweredFunction(
             info,
             signature,

@@ -22,6 +22,8 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from ppy_runtime.abi import CrossingClass
+
 from ..analysis import types as T
 from ..analysis.checker import receiver_bindings
 from ..analysis.closures import callable_spelled, is_plain_callable
@@ -43,7 +45,17 @@ from ..ir import (
 )
 from ..ir.dialects import core
 
-__all__ = ["HANDLE", "STR", "CollectionLowering", "Kind", "Shape", "kind_of", "shape_of"]
+__all__ = [
+    "HANDLE",
+    "STR",
+    "CollectionLowering",
+    "Kind",
+    "Shape",
+    "crossing_classes",
+    "kind_of",
+    "records_of",
+    "shape_of",
+]
 
 #: A collection's runtime handle: the address of its header.
 HANDLE = PtrType(I8)
@@ -2599,3 +2611,120 @@ def _field_keyword(value: ast.expr | None, keyword: str) -> ast.expr | None:
         if item.arg == keyword:
             return item.value
     return None
+
+
+def records_of(layouts: dict, classes: dict[str, ClassInfo]) -> Records:
+    """What `shape_of` needs of each class a module's layouts name."""
+    records: Records = {}
+    for qualname, fields in layouts.items():
+        info = classes.get(qualname) or classes.get(qualname.rpartition(".")[2])
+        records[qualname] = (tuple(fields), _ordered(info.node) if info is not None else False)
+    return records
+
+
+def crossing_classes(
+    types: list[T.Type], classes: dict[str, ClassInfo], records: Records
+) -> tuple[CrossingClass, ...] | None:
+    """The project classes whose instances cross the Python boundary with
+    values of `types`, laid out as native code lays them (`_layout`), with
+    every subclass an instance may be; None when one of them cannot cross: a
+    generic class, an exception, or a field that holds a function."""
+    by_name = {info.qualname: info for info in classes.values()}
+    found: dict[str, CrossingClass] = {}
+    pending: list[Shape] = []
+
+    def visit(shape: Shape | None) -> bool:
+        if shape is None:
+            return False
+        if shape.kind == "function":
+            return False
+        if shape.kind == "collection":
+            assert shape.collection is not None
+            return all(
+                visit(part)
+                for part in (shape.collection.key, shape.collection.value)
+                if part is not None
+            )
+        if shape.kind in {"object", "record"}:
+            if shape.class_args:
+                return False
+            pending.append(shape)
+        return True
+
+    def spelled_shape(shape: Shape, nullable: bool = False) -> str:
+        if shape.kind == "tuple":
+            return f"tuple[{', '.join(shape.parts)}]"
+        if shape.kind in {"object", "record"}:
+            return shape.record + ("?" if nullable else "")
+        if shape.kind == "collection":
+            assert shape.collection is not None
+            return spelled(shape.collection)
+        return shape.kind
+
+    for t in types:
+        base = T.strip_literal(t)
+        if base == T.NONE:
+            continue
+        if not visit(shape_of(base, records)) and shape_of(base, records) is not None:
+            return None
+    while pending:
+        shape = pending.pop()
+        if shape.record in found:
+            continue
+        info = by_name.get(shape.record)
+        if info is None or info.type_params:
+            return None
+        if shape.kind == "record":
+            fields = records.get(shape.record, ((), False))[0]
+            found[shape.record] = CrossingClass(
+                shape.record,
+                info.module,
+                info.name,
+                "record",
+                tuple((name, index, kind) for index, (name, kind) in enumerate(fields)),
+                words=len(fields),
+            )
+            continue
+        subclasses = [
+            other
+            for other in by_name.values()
+            if shape.record in other.mro and object_chain(other, by_name) is not None
+        ]
+        for sub in subclasses:
+            if sub.qualname in found:
+                continue
+            chain = object_chain(sub, by_name)
+            if chain is None or exception_header(sub, by_name) or sub.type_params:
+                return None
+            laid: list[tuple[str, int, str]] = []
+            offset = floats = handles = leaves = 0
+            seen: set[str] = set()
+            for owner in chain:
+                for name, declared in owner.fields.items():
+                    if name in owner.class_vars or name in seen:
+                        continue
+                    seen.add(name)
+                    field_shape = shape_of(declared, records)
+                    if field_shape is None or not visit(field_shape):
+                        return None
+                    nullable = isinstance(T.strip_literal(declared), T.Union_)
+                    laid.append((name, offset, spelled_shape(field_shape, nullable)))
+                    floats |= field_shape.floats << offset
+                    handles |= field_shape.handles << offset
+                    leaves |= field_shape.leaves << offset
+                    offset += field_shape.words
+            if offset > 64:
+                return None
+            found[sub.qualname] = CrossingClass(
+                sub.qualname,
+                sub.module,
+                sub.name,
+                "object",
+                tuple(laid),
+                words=max(offset, 1),
+                floats=floats,
+                handles=handles | (leaves << 32),
+                tag=class_tag(sub.qualname),
+                bases=tuple(entry for entry in sub.mro if entry in by_name),
+            )
+    return tuple(found[name] for name in sorted(found))

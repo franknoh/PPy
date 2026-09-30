@@ -93,7 +93,7 @@ from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .closures import ClosureLowering
-from .collections import HANDLE, Held
+from .collections import HANDLE, Held, crossing_classes, records_of
 from .containers import ContainerLowering
 from .exceptions import ExceptionLowering, uses_exceptions
 from .generators import GeneratorLowering
@@ -489,9 +489,14 @@ class Frontend:
                 continue
             if proved:
                 lowered.proved[qualname] = tuple(proved)
-            exposed, why = should_lower_native(info, analysis, self.layouts)
             signature = self.declared[qualname][1]
             assert isinstance(signature, IRSignature)
+            exposed, why = should_lower_native(
+                info,
+                analysis,
+                self.layouts,
+                signature.native.classes if signature.native is not None else (),
+            )
             boundary = self._text_boundary(info, signature) if exposed else None
             lowered.functions[qualname] = CanonicalFunction(
                 info, signature, exposed=exposed, exposure_reason=why, boundary=boundary
@@ -601,6 +606,9 @@ class Frontend:
             and results == _result_types(info, self.layouts)
         ):
             native = _signature(info, self.layouts, analysis)
+            classes = self._crossing_classes(info)
+            if classes:
+                native = replace(native, classes=classes)
         if self.cpu_compatible and native is None:
             raise Unsupported("canonical signature has no CPU native ABI")
         return IRSignature(
@@ -610,6 +618,15 @@ class Frontend:
             results,
             native,
         )
+
+    def _crossing_classes(self, info: FunctionInfo) -> tuple:
+        """The project classes whose instances cross the Python boundary with the
+        function's arguments and result (`CrossingClass`); none where one of
+        them cannot."""
+        classes = self.analysis.symbols.classes
+        records = records_of(self.layouts, classes)
+        types = [p.type for p in info.params] + [info.ret]
+        return crossing_classes(types, classes, records) or ()
 
     def _effects_of(self, info: FunctionInfo) -> tuple[str, ...]:
         """What the IR says the function may do: the analysis's effects, with

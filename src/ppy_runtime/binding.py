@@ -454,12 +454,21 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     rt = crossing.runtime(library)
     if rt is None:
         return unbound
-    specs = [crossing.parse(p.element) if p.is_handle else None for p in signature.parameters]
+    described = {c.qualname: c for c in signature.classes}
+    classes = crossing.Classes(signature.classes, _class_finder(fallback)) if described else None
+    specs = [
+        crossing.parse(p.element, described) if p.is_handle else None
+        for p in signature.parameters
+    ]
     parameters = signature.parameters
     if any(p.is_handle and spec is None for p, spec in zip(parameters, specs, strict=True)):
         return unbound
     nothing = signature.returned == crossing.RETURNS_NOTHING
-    returned = crossing.parse(signature.returned) if signature.returned and not nothing else None
+    returned = (
+        crossing.parse(signature.returned, described)
+        if signature.returned and not nothing
+        else None
+    )
     if signature.returned and not nothing and returned is None:
         return unbound
     expanders = [None if p.is_handle else _expander_for(p, None) for p in signature.parameters]
@@ -471,7 +480,7 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     def wrapper(*args: object, **keywords: object) -> object:
         if keywords or len(args) != len(expanders):
             return fallback(*args, **keywords)
-        boundary = crossing.Boundary(rt)
+        boundary = crossing.Boundary(rt, classes)
         try:
             answered, answer = _cross(boundary, args)
         finally:
@@ -534,6 +543,22 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
     return binding
+
+
+def _class_finder(fallback: Callable[..., object]) -> Callable[[object], object]:
+    """How the boundary finds a described class: in the function's own module's
+    namespace, where the program defines it, else in its module."""
+    namespace = getattr(fallback, "__globals__", None)
+
+    def find(described):  # type: ignore[no-untyped-def]
+        if namespace is not None:
+            found = namespace.get(described.name)
+            if isinstance(found, type) and found.__qualname__ == described.name:
+                return found
+        module = sys.modules.get(described.module)
+        return getattr(module, described.name, None) if module is not None else None
+
+    return find
 
 
 def _expander_for(
