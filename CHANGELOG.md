@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.6.0 — unreleased
+
 ## 0.5.0 — 2026-09-30
 
 Ordinary Python goes native without a rewrite. Plain lists, dicts, and sets
