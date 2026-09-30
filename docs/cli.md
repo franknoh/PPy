@@ -770,6 +770,9 @@ the code goes native and what keeps the rest in Python:
   and calls whose effects are unknown list the calls seen most often
 - for native functions Python does not call natively, why the boundary is
   not used (it costs more than the body saves, it passes objects, and so on)
+- a nested function runs where the function around it runs, so it is
+  native when that function is, and otherwise names the function around it;
+  its statements count under itself, not twice
 - files that could not be analyzed or lowered, which are reported and do
   not stop the summary
 

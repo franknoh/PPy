@@ -117,6 +117,9 @@ Read it from the top down:
 - A generic function is not a blocker: it has no entry point of its own and
   is compiled for each native caller that names its types. Most of `sorts`
   is generic sorts that nothing calls natively.
+- A nested function lowers with the function around it. When that one
+  stays in Python, the nested one says so, and the reason to fix is the
+  outer function's.
 - Each reason says what to do and links the page that explains it. The
   first places it occurs are listed with their line.
 
