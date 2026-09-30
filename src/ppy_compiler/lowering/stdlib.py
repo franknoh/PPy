@@ -1,9 +1,11 @@
-"""`random`, `heapq`, and `bisect` in native code.
+"""`random`, `heapq`, `bisect`, and `math` in native code.
 
 The calls `analysis.native_stdlib` answers for, lowered over the runtime in
 `random.c` and `stdlib.c`: CPython's Mersenne Twister and `random.py`'s
-algorithms on top of it, draw for draw, and `_heapq`'s and `_bisect`'s
-comparisons, one for one. Under `ppy run` the generator's state is the one
+algorithms on top of it, draw for draw; `_heapq`'s and `_bisect`'s
+comparisons, one for one; `math`'s integer functions, `fsum`, and `hypot`
+as `mathmodule.c` computes them, and libm's functions with the checks it
+makes of what they give. Under `ppy run` the generator's state is the one
 inside `random._inst`, so Python and native draws interleave as they would
 in CPython; what CPython raises for is a guard, with its message.
 """
@@ -15,9 +17,9 @@ import math
 from collections.abc import Callable
 from functools import cache
 
-from ..analysis.native_stdlib import MATH_NATIVE, MODELS
-from ..backend.llvm.lowering import Unsupported
 from ..analysis.lexical import LexicalBindings
+from ..analysis.native_stdlib import MATH_NATIVE, MODELS
+from ..backend.llvm.lowering import _MATH_INTRINSICS, Unsupported
 from ..ir import BOOL, F64, I64, Value
 from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
@@ -90,7 +92,8 @@ class StdlibLowering:
             return None
         qualname = next(iter(found))
         if qualname.startswith("math."):
-            return qualname if qualname.removeprefix("math.") in MATH_NATIVE else None
+            name = qualname.removeprefix("math.")
+            return qualname if name in MATH_NATIVE or name in _MATH_INTRINSICS else None
         return qualname if qualname in MODELS else None
 
     def _stdlib_call(self, node: ast.Call, discard_result: bool) -> Value | None:
@@ -100,7 +103,9 @@ class StdlibLowering:
             return None
         module, _, name = qualname.partition(".")
         if module == "math":
-            return self._math_native(name, node)
+            made = self._math_native(name, node) if name in MATH_NATIVE else None
+            # `from math import sqrt` reaches the instructions `math.sqrt` does.
+            return made if made is not None else self._math_call(name, node)  # type: ignore[attr-defined]
         if node.keywords and qualname != "random.choices":
             raise Unsupported(f"`{qualname}` with keywords has no native lowering")
         if any(isinstance(a, ast.Starred) for a in node.args):
@@ -207,7 +212,9 @@ class StdlibLowering:
         width = self._checked_binary(stop, start, "sub")  # type: ignore[attr-defined]
         one = core.cmp(b, "eq", step, word(1))
         require(
-            core.bitwise(b, "or", core.cmp(b, "ne", step, word(1)), core.cmp(b, "gt", width, word(0))),
+            core.bitwise(
+                b, "or", core.cmp(b, "ne", step, word(1)), core.cmp(b, "gt", width, word(0))
+            ),
             "empty range in randrange()",
             empty,
             spelled,
@@ -305,7 +312,9 @@ class StdlibLowering:
         state = self._state()
         if weighed is None:
             require(
-                core.bitwise(b, "or", core.cmp(b, "gt", size, word(0)), core.cmp(b, "le", k, word(0))),
+                core.bitwise(
+                    b, "or", core.cmp(b, "gt", size, word(0)), core.cmp(b, "le", k, word(0))
+                ),
                 "choices from an empty population",
                 _text("choices_empty"),
             )
@@ -334,7 +343,9 @@ class StdlibLowering:
                 "weights total not finite",
                 _text("weights_infinite"),
             )
-            positions = rt("ppy_random_weighted_positions", (state, weighed, *flags, k, total), HANDLE)
+            positions = rt(
+                "ppy_random_weighted_positions", (state, weighed, *flags, k, total), HANDLE
+            )
             self._done_with(weighed, weighed_owned)  # type: ignore[attr-defined]
         made = rt("ppy_random_gather", (handle, positions), HANDLE)
         self._release(positions)  # type: ignore[attr-defined]
@@ -363,7 +374,7 @@ class StdlibLowering:
             has_mode = self._word(int(len(floats) == 3))  # type: ignore[attr-defined]
             return rt("ppy_random_triangular", (self._state(), *given, has_mode), F64)  # type: ignore[no-any-return]
         if name in {"gauss", "normalvariate", "lognormvariate"}:
-            mu, sigma = floats if floats else (self._float(0.0), self._float(1.0))
+            mu, sigma = floats or (self._float(0.0), self._float(1.0))
             if name == "gauss":
                 if not self.frontend.standalone:  # type: ignore[attr-defined]
                     raise Unsupported(
@@ -478,7 +489,9 @@ class StdlibLowering:
             # `x <= 0` is false for a NaN, which `log` gives back.
             positive = core.bitwise(b, "xor", core.cmp(b, "le", x, zero), core.const(b, True, BOOL))
             require(positive, "log of a number not above zero", _text("log_domain"))
-            positive = core.bitwise(b, "xor", core.cmp(b, "le", base, zero), core.const(b, True, BOOL))
+            positive = core.bitwise(
+                b, "xor", core.cmp(b, "le", base, zero), core.const(b, True, BOOL)
+            )
             require(positive, "log of a number not above zero", _text("log_domain"))
             top = self._math("log", x)
             bottom = self._math("log", base)
@@ -559,7 +572,9 @@ class StdlibLowering:
         a, other = (self._float_argument(x) for x in node.args)
         keywords = {k.arg: k.value for k in node.keywords}
         relative = (
-            self._float_argument(keywords["rel_tol"]) if "rel_tol" in keywords else self._float(1e-09)
+            self._float_argument(keywords["rel_tol"])
+            if "rel_tol" in keywords
+            else self._float(1e-09)
         )
         absolute = (
             self._float_argument(keywords["abs_tol"]) if "abs_tol" in keywords else self._float(0.0)
@@ -778,7 +793,9 @@ _DOMAIN = "ValueError: math domain error"
 @cache
 def _text(key: str) -> str:
     if key in {"domain", "log_domain"}:
-        said_text = said(lambda: math.log(0.0)) if key == "log_domain" else said(lambda: math.acos(2.0))
+        said_text = (
+            said(lambda: math.log(0.0)) if key == "log_domain" else said(lambda: math.acos(2.0))
+        )
         return said_text if "0.0" not in said_text and "2.0" not in said_text else _DOMAIN
     return _said_text(key)
 

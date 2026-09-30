@@ -285,7 +285,9 @@ def _shared_generator(owner: object) -> _SharedGenerator | None:
     """The runtime whose native code draws, bound to `random._inst`'s state:
     the library's own where it carries the runtime, else the one `ppy run`
     compiles. None where CPython's layout is not the one expected."""
-    library = owner if isinstance(owner, ctypes.CDLL) and hasattr(owner, "ppy_random_bind") else None
+    library = (
+        owner if isinstance(owner, ctypes.CDLL) and hasattr(owner, "ppy_random_bind") else None
+    )
     if library is None:
         from . import collection_boundary  # pylint: disable=import-outside-toplevel
 

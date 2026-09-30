@@ -2392,8 +2392,11 @@ class _Checker:
     def _widen_heap(self, qualname: str, node: ast.Call, args: list[Binding], env: Env) -> None:
         """`heap = []` followed by `heappush(heap, x)` gives `heap` an element
         type, as `append` does."""
-        if qualname in {"heapq.heappush", "bisect.insort", "bisect.insort_left",
-                        "bisect.insort_right"} and len(node.args) >= 2:
+        if (
+            qualname
+            in {"heapq.heappush", "bisect.insort", "bisect.insort_left", "bisect.insort_right"}
+            and len(node.args) >= 2
+        ):
             self._widen_empty_container(
                 ast.Attribute(node.args[0], "append", ast.Load()), "list.append", args[1:2], env
             )

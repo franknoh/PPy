@@ -271,8 +271,10 @@ _FLOAT_UNARY = frozenset(
 
 def _tuple_of_numbers(t: T.Type) -> int | None:
     t = _plain(t)
-    if isinstance(t, T.Tuple_) and not t.homogeneous and all(
-        _is(item, "int", "bool", "float") for item in t.items
+    if (
+        isinstance(t, T.Tuple_)
+        and not t.homogeneous
+        and all(_is(item, "int", "bool", "float") for item in t.items)
     ):
         return len(t.items)
     return None
@@ -287,39 +289,37 @@ def _math(
     described = stdlib.lookup(qualname)
     if name not in MATH_NATIVE or described is None:
         return None
-    effects = described[1]
-    count = len(args)
-    found: T.Type | None = None
     if name == "isclose":
-        if count == 2 and all(map(_number, args)) and not set(keywords) - {"rel_tol", "abs_tol"}:
-            if all(map(_number, keywords.values())):
-                found = T.BOOL
+        tolerances = not set(keywords) - {"rel_tol", "abs_tol"}
+        numbers = all(map(_number, [*args, *keywords.values()]))
+        found = T.BOOL if len(args) == 2 and tolerances and numbers else None
     elif keywords:
-        return None
-    elif name in {"gcd", "lcm"} and all(map(_integer, args)):
-        found = T.INT
-    elif name in {"isqrt", "factorial"} and count == 1 and _integer(args[0]):
-        found = T.INT
-    elif name == "comb" and count == 2 and all(map(_integer, args)):
-        found = T.INT
-    elif name == "perm" and count in (1, 2) and all(map(_integer, args)):
-        found = T.INT
-    elif name in {"prod", "fsum"} and count == 1:
-        element = _list_element(args[0].type)
-        if element in (T.INT, T.FLOAT):
-            found = element if name == "prod" else T.FLOAT
-    elif name == "hypot" and count in (2, 3) and all(map(_number, args)):
-        found = T.FLOAT
-    elif name == "dist" and count == 2:
+        found = None
+    else:
+        found = _math_result(name, args)
+    return (found, described[1]) if found is not None else None
+
+
+#: How many integer arguments each integer function takes.
+_INTEGER_ARITY = {"isqrt": {1}, "factorial": {1}, "comb": {2}, "perm": {1, 2}}
+
+
+def _math_result(name: str, args: list[_Argument]) -> T.Type | None:
+    count = len(args)
+    if name in {"gcd", "lcm"} or name in _INTEGER_ARITY:
+        arity = _INTEGER_ARITY.get(name)
+        return T.INT if (arity is None or count in arity) and all(map(_integer, args)) else None
+    if name in {"prod", "fsum"}:
+        element = _list_element(args[0].type) if count == 1 else None
+        if element not in (T.INT, T.FLOAT):
+            return None
+        return element if name == "prod" else T.FLOAT
+    if name == "dist":
         sizes = {_tuple_of_numbers(a.type) for a in args}
-        if len(sizes) == 1 and sizes & {2, 3}:
-            found = T.FLOAT
-        elif all(_list_element(a.type) == T.FLOAT for a in args):
-            found = T.FLOAT
-    elif name in {"copysign", "atan2", "fmod"} and count == 2 and all(map(_number, args)):
-        found = T.FLOAT
-    elif name == "log" and count == 2 and all(map(_number, args)):
-        found = T.FLOAT
-    elif name in _FLOAT_UNARY and count == 1 and _number(args[0]):
-        found = T.FLOAT
-    return (found, effects) if found is not None else None
+        points = len(sizes) == 1 and bool(sizes & {2, 3})
+        lists = all(_list_element(a.type) == T.FLOAT for a in args)
+        return T.FLOAT if count == 2 and (points or lists) else None
+    arity = {"hypot": {2, 3}, "copysign": {2}, "atan2": {2}, "fmod": {2}, "log": {2}}.get(
+        name, {1} if name in _FLOAT_UNARY else set()
+    )
+    return T.FLOAT if count in arity and all(map(_number, args)) else None
