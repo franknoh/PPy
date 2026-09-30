@@ -42,6 +42,54 @@ perform it.
 A function that fills memory it allocated and passes it on lowers, but is not
 `@ppy.pure`, because the callee saw the object before the function returned.
 
+## Module globals
+
+A function that reads a module global can still run natively under
+`ppy run`, if the global is settled. A settled global is bound once by the
+module's own top-level code and never bound again: no second assignment at
+the top level, no `global` statement that assigns it, and no `del`.
+
+```python
+PRIMES: list[int] = [p for p in range(2, 100) if all(p % d for d in range(2, p))]
+SEEN: dict[int, int] = {}
+
+
+def count(n: int) -> int:
+    total = 0
+    for p in PRIMES:
+        if n % p == 0:
+            SEEN[p] = SEEN.get(p, 0) + 1
+            total += 1
+    return total
+```
+
+Here is how a settled global reaches native code:
+
+- Native code takes each settled global the function reads as one more
+  parameter, after its own.
+- When Python calls the function, the boundary reads each global from the
+  module, as it is at that moment. A container crosses as any container
+  argument does, and a write to it (`SEEN[p] = ...`) is copied back into the
+  module's object.
+- A native caller passes on the globals it was given, so a function that
+  calls `count` takes `PRIMES` and `SEEN` as well, even from another module.
+
+The analysis cannot see every rebinding: `setattr(module, ...)` from
+elsewhere, or a test that patches the name. For that reason the boundary
+reads the global at every call instead of once:
+
+- if a global was rebound to another object of the same type, the call uses
+  the new object;
+- if the name is gone, or now holds a different type, the Python body runs.
+
+A literal constant (`LIMIT = 10`) is folded where it is read and needs none
+of this.
+
+A global that is not settled keeps its readers in Python. Neither kind
+reaches a standalone build or a C export, and a method, a nested function,
+a thread's body, and a function used as a value are not passed globals, so
+they too stay in Python when they read one.
+
 ## The three execution paths
 
 | Command | What runs |
