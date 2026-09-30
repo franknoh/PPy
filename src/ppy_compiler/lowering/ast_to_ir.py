@@ -497,6 +497,7 @@ class Frontend:
                         analysis,
                         self.layouts,
                         allow_io=self.standalone or self.effects,
+                        allow_python=self.effects,
                         allow_launch=self.launches,
                         allow_async=self.asynchronous,
                     )
@@ -991,6 +992,7 @@ class Frontend:
                 analysis,
                 self.layouts,
                 allow_io=self.standalone or self.effects,
+                allow_python=self.effects,
                 allow_launch=self.launches,
                 allow_async=self.asynchronous,
             )
@@ -1034,7 +1036,13 @@ class Frontend:
             return found[1], found[2]
         analysis = self.analysis.functions.get(info.qualname)
         if self.cpu_compatible and analysis is not None:
-            ok, reason = eligible(info, analysis, self.layouts, allow_io=self.standalone or self.effects)
+            ok, reason = eligible(
+                info,
+                analysis,
+                self.layouts,
+                allow_io=self.standalone or self.effects,
+                allow_python=self.effects,
+            )
             if not ok:
                 raise Unsupported(f"`{info.name}` has no native lowering: {reason}")
         base = self.signature(info, analysis)
@@ -1191,7 +1199,11 @@ class Frontend:
         specialized = replace(info, qualname=f"{info.qualname}__{spelled}", params=params)
         if self.cpu_compatible:
             ok, reason = eligible(
-                specialized, analysis, self.layouts, allow_io=self.standalone or self.effects
+                specialized,
+                analysis,
+                self.layouts,
+                allow_io=self.standalone or self.effects,
+                allow_python=self.effects,
             )
             if not ok:
                 raise Unsupported(f"`{qualname}` has no native lowering: {reason}")
@@ -1680,6 +1692,8 @@ class _FunctionLowering(
                 core.br(self.b, Successor(self._loops[-1][0]))
             case ast.Expr(value=ast.Yield() | ast.YieldFrom()):
                 self._yield_statement(node.value)
+            case ast.With():
+                self._effect_with(node)
             case ast.Try():
                 self._try(node)
             case ast.Raise():
@@ -2119,6 +2133,8 @@ class _FunctionLowering(
 
     def _for(self, node: ast.For) -> None:
         if self._for_generator(node):
+            return
+        if self._effect_for(node):
             return
         if self._is_walk(node.iter):
             self._for_collection(node)

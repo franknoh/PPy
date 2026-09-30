@@ -35,12 +35,15 @@ from ..analysis.lexical import LexicalBindings
 from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, IntType, IRFunction, IRModule, Operation, Successor, SymbolRef, Value
 from ..ir.dialects import core
-from .collections import HANDLE, class_tag
+from .collections import HANDLE, STR, class_tag
 
 __all__ = ["EffectLowering", "EffectSummary", "check_effects", "wants_exceptions"]
 
 #: The kinds of `pyio.c`.
-_NONE, _INT, _FLOAT, _BOOL, _STR = 0, 1, 2, 3, 4
+_NONE, _INT, _FLOAT, _BOOL, _STR, _OBJECT = 0, 1, 2, 3, 4, 5
+
+#: `open`'s parameters in order, and what each is when not given.
+_OPEN = ("file", "mode", "buffering", "encoding", "errors", "newline")
 
 #: Streams, as `pyio.c` numbers them.
 _STDOUT, _STDERR = 1, 2
@@ -114,7 +117,7 @@ def wants_exceptions(nodes: list[ast.AST]) -> bool:
         for inner in ast.walk(node):
             if not isinstance(inner, ast.Call) or not isinstance(inner.func, ast.Name):
                 continue
-            if inner.func.id == "input":
+            if inner.func.id in {"input", "open"}:
                 return True
             if inner.func.id == "print" and any(k.arg == "flush" for k in inner.keywords):
                 return True
@@ -141,7 +144,16 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
 
     def _effect_call(self, node: ast.Call, discard: bool) -> Value | None:
         """`print(...)` and `input(...)` of the builtins; None for any other call."""
-        if not self._effects_on() or not isinstance(node.func, ast.Name):
+        if not self._effects_on():
+            return None
+        func = node.func
+        if (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id in self._effect_files()
+        ):
+            return self._effect_file_method(node, discard)
+        if not isinstance(node.func, ast.Name):
             return None
         name = node.func.id
         if name not in {"print", "input"}:
@@ -278,6 +290,180 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
             return "makes a call"
         return ""
 
+    # -- text files ---------------------------------------------------------------
+
+    def _effect_files(self) -> dict[str, Value]:
+        """Names bound by `with open(...) as f`: each its slot, holding the file's
+        number at the boundary (`ppy_runtime/effects.py`)."""
+        return self.__dict__.setdefault("_effect_file_slots", {})  # type: ignore[no-any-return]
+
+    def _effect_with(self, node: ast.With) -> None:
+        """`with open(path, ...) as f:` over a text file: Python's own `open`,
+        so encodings and newlines are CPython's, and `f.close()` on every way
+        out of the block, as the file's `__exit__` does."""
+        if not self._effects_on() or len(node.items) != 1:
+            raise Unsupported("`with` natively opens one text file: `with open(path) as f:`")
+        item = node.items[0]
+        call = item.context_expr
+        lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and isinstance(lexical, LexicalBindings)
+            and lexical.targets_at(call.func) == {"builtins.open"}
+        ):
+            raise Unsupported("`with` natively opens one text file: `with open(path) as f:`")
+        if item.optional_vars is not None and not isinstance(item.optional_vars, ast.Name):
+            raise Unsupported("the file `with open(...)` opens is bound to a name")
+        name = item.optional_vars.id if item.optional_vars is not None else ".file"
+        arguments = self._open_arguments(call)
+        opened = self._python_call("builtins:open", arguments, _OBJECT)
+        assert opened is not None
+        slot = self._alloca(I64, f"{name}.file")  # type: ignore[attr-defined]
+        core.store(self.b, opened, slot)  # type: ignore[attr-defined]
+        self._effect_files()[name] = slot
+        closing = ast.Expr(
+            ast.Call(
+                ast.Attribute(ast.Name(name, ast.Load()), "close", ast.Load()), [], []
+            )
+        )
+        guarded = ast.Try(body=node.body, handlers=[], orelse=[], finalbody=[closing])
+        ast.copy_location(guarded, node)
+        ast.fix_missing_locations(guarded)
+        self.frontend.synthetic.append(guarded)  # type: ignore[attr-defined]
+        self._try(guarded)  # type: ignore[attr-defined]
+
+    def _open_arguments(self, call: ast.Call) -> list[tuple[int, Value, bool]]:
+        """`open`'s arguments, each in its place: a text mode, and strings or None."""
+        given: dict[str, ast.expr] = dict(zip(_OPEN, call.args, strict=False))
+        if len(call.args) > len(_OPEN):
+            raise Unsupported("`open` takes at most six arguments natively")
+        for keyword in call.keywords:
+            if keyword.arg not in _OPEN or keyword.arg in given:
+                raise Unsupported(f"`open({keyword.arg or '**'}=...)` has no native lowering")
+            given[keyword.arg] = keyword.value
+        mode = given.get("mode")
+        if mode is not None and not (
+            isinstance(mode, ast.Constant) and isinstance(mode.value, str) and "b" not in mode.value
+        ):
+            raise Unsupported("`open` natively takes a text mode as a string literal")
+        arguments: list[tuple[int, Value, bool]] = []
+        for parameter in _OPEN:
+            value = given.get(parameter)
+            if value is None:
+                default = {"mode": "r", "buffering": -1}.get(parameter)
+                if isinstance(default, str):
+                    data = self._rt("ppy_str_interned", self._text_data(default), HANDLE)  # type: ignore[attr-defined]
+                    arguments.append((_STR, data, False))
+                elif default is not None:
+                    arguments.append((_INT, self._word(default), False))  # type: ignore[attr-defined]
+                else:
+                    arguments.append((_NONE, self._word(0), False))  # type: ignore[attr-defined]
+                continue
+            if isinstance(value, ast.Constant) and value.value is None:
+                arguments.append((_NONE, self._word(0), False))  # type: ignore[attr-defined]
+            elif parameter == "buffering":
+                arguments.append((_INT, self._coerce(self._expr(value), "int"), False))  # type: ignore[attr-defined]
+            elif self._string_of(value) is not None:  # type: ignore[attr-defined]
+                handle, owned = self._handle(value)  # type: ignore[attr-defined]
+                arguments.append((_STR, handle, owned))
+            else:
+                raise Unsupported(f"`open({parameter}=...)` natively is a string or None")
+        return arguments
+
+    def _effect_file_method(self, node: ast.Call, discard: bool) -> Value:
+        """`f.read()`, `f.readline()`, `f.readlines()`, `f.write(s)`, `f.close()`."""
+        func = node.func
+        assert isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)
+        method = func.attr
+        if node.keywords:
+            raise Unsupported(f"`{ast.unparse(func)}` takes no keywords natively")
+        receiver = (_OBJECT, core.load(self.b, self._effect_files()[func.value.id]), False)  # type: ignore[attr-defined]
+        if method in {"read", "readline"} and len(node.args) <= 1:
+            arguments = [receiver]
+            if node.args:
+                size = self._coerce(self._expr(node.args[0]), "int")  # type: ignore[attr-defined]
+                arguments.append((_INT, size, False))
+            text = self._python_method(method, arguments, _STR)
+            if discard:
+                self._release(text)  # type: ignore[attr-defined]
+                return self._word(0)  # type: ignore[attr-defined,no-any-return]
+            return text  # type: ignore[return-value]
+        if method == "readlines" and not node.args:
+            return self._read_lines(receiver[1], discard)
+        if method == "write" and len(node.args) == 1 and discard:
+            if self._string_of(node.args[0]) is None:  # type: ignore[attr-defined]
+                raise Unsupported("a text file is written a string")
+            handle, owned = self._handle(node.args[0])  # type: ignore[attr-defined]
+            self._python_method("write", [receiver, (_STR, handle, owned)], _NONE)
+            return self._word(0)  # type: ignore[attr-defined,no-any-return]
+        if method in {"close", "flush"} and not node.args:
+            self._python_method(method, [receiver], _NONE)
+            return self._word(0)  # type: ignore[attr-defined,no-any-return]
+        raise Unsupported(f"`{ast.unparse(func)}(...)` of a text file has no native lowering")
+
+    def _read_lines(self, number: Value, discard: bool) -> Value:
+        """`f.readlines()`: `readline` until it gives the empty string, which is
+        what `readlines` does for a text file."""
+        listed = self._rt("ppy_str_list", (), HANDLE)  # type: ignore[attr-defined]
+        self._each_line(number, lambda line: self._rt("ppy_str_list_take", (listed, line), None))  # type: ignore[attr-defined]
+        if discard:
+            self._release(listed)  # type: ignore[attr-defined]
+            return self._word(0)  # type: ignore[attr-defined,no-any-return]
+        return listed
+
+    def _each_line(self, number: Value, take: object, body: list[ast.stmt] | None = None) -> None:
+        """A loop over a file's lines: each one, a new string, handed to `take`,
+        or bound to the loop's name with `body` run for it."""
+        b = self.b  # type: ignore[attr-defined]
+        header = self._block("lines.head")  # type: ignore[attr-defined]
+        more = self._block("lines.body")  # type: ignore[attr-defined]
+        latch = self._block("lines.latch")  # type: ignore[attr-defined]
+        done = self._block("lines.end")  # type: ignore[attr-defined]
+        core.br(b, Successor(header))
+        b.at_end(header)
+        line = self._python_method("readline", [(_OBJECT, number, False)], _STR)
+        assert line is not None
+        empty = core.cmp(b, "eq", self._rt("ppy_str_bytes", (line,)), self._word(0))  # type: ignore[attr-defined]
+        ended = self._block("lines.last")  # type: ignore[attr-defined]
+        core.cond_br(b, empty, Successor(ended), Successor(more))
+        b.at_end(ended)
+        self._release(line)  # type: ignore[attr-defined]
+        core.br(b, Successor(done))
+        b.at_end(more)
+        if body is None:
+            take(line)  # type: ignore[operator]
+            core.br(b, Successor(latch))
+        else:
+            assert isinstance(take, str)
+            self._bind(take, STR, line, True)  # type: ignore[attr-defined]
+            self._loops.append((latch, done))  # type: ignore[attr-defined]
+            self._body(body)  # type: ignore[attr-defined]
+            self._loops.pop()  # type: ignore[attr-defined]
+            if self._open():  # type: ignore[attr-defined]
+                core.br(b, Successor(latch))
+        b.at_end(latch)
+        if not self._dead_latch(latch):  # type: ignore[attr-defined]
+            core.br(b, Successor(header))
+        b.at_end(done)
+
+    def _effect_for(self, node: ast.For) -> bool:
+        """`for line in f:` over a file `with open(...)` opened: `readline` until
+        the empty string, which is what iterating a text file does."""
+        if not (isinstance(node.iter, ast.Name) and node.iter.id in self._effect_files()):
+            return False
+        if node.orelse or not isinstance(node.target, ast.Name):
+            raise Unsupported("a file's lines are bound to one name, with no `else`")
+        number = core.load(self.b, self._effect_files()[node.iter.id])  # type: ignore[attr-defined]
+        self._each_line(number, node.target.id, node.body)
+        return True
+
+    def _python_method(
+        self, method: str, arguments: list[tuple[int, Value, bool]], kind: int
+    ) -> Value | None:
+        """`arguments[0].method(*arguments[1:])`, called through Python."""
+        return self._python_call(method, arguments, kind, method=True)
+
     # -- input and calls into Python --------------------------------------------
 
     def _effect_input(self, node: ast.Call) -> Value:
@@ -373,7 +559,12 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         return found  # type: ignore[no-any-return]
 
     def _python_call(
-        self, spelled: str, arguments: list[tuple[int, Value, bool]], kind: int
+        self,
+        spelled: str,
+        arguments: list[tuple[int, Value, bool]],
+        kind: int,
+        *,
+        method: bool = False,
     ) -> Value | None:
         """Call the Python callable `module:name` with the arguments boxed, and
         unbox its result as `kind`; what it raises is raised natively."""
@@ -389,7 +580,7 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
                 word = value if value.type == I64 else core.cast(self.b, value, I64)  # type: ignore[attr-defined]
                 rt("ppy_io_push", (self._word(argument_kind), word), None)  # type: ignore[attr-defined]
         data, length = self._text_data(spelled)  # type: ignore[attr-defined]
-        status = rt("ppy_io_call", (data, length, self._word(kind), self._word(0)))  # type: ignore[attr-defined]
+        status = rt("ppy_io_call", (data, length, self._word(kind), self._word(int(method))))  # type: ignore[attr-defined]
         for argument_kind, value, owned in arguments:
             if argument_kind == _STR and owned:
                 self._release(value)  # type: ignore[attr-defined]
@@ -401,7 +592,7 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         if kind == _BOOL:
             word = rt("ppy_io_result", ())
             return core.cmp(self.b, "ne", word, self._word(0))  # type: ignore[attr-defined,no-any-return]
-        if kind == _INT:
+        if kind in {_INT, _OBJECT}:
             return rt("ppy_io_result", ())  # type: ignore[no-any-return]
         return None
 
