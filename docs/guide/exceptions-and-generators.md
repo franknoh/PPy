@@ -43,11 +43,37 @@ Nothing falls back to Python.
 
 | | |
 |---|---|
-| `raise T`, `raise T(message)` | a builtin exception, or a class deriving from one whose body is only `pass` or a docstring; the message is a string, an `int`, or a `bool` |
+| `raise T`, `raise T(message)` | a builtin exception, or a class deriving from one; the message is a string, an `int`, or a `bool` |
+| `raise T(...) from cause`, `raise ... from None` | the cause is a name or a new exception, as CPython chains it |
 | `raise`, `raise e` | re-raising the exception a handler holds |
 | `try` with `except T`, `except (A, B)`, `except T as e`, `except`, `else`, `finally` | a handler matches by class, a base catches its subclasses |
 | `assert test`, `assert test, message` | `AssertionError` |
-| `str(e)`, `f"{e}"`, `isinstance(e, T)` | in a handler |
+| `str(e)`, `f"{e}"`, `print(e)`, `isinstance(e, T)`, `e.field` | in a handler |
+
+A project exception class may have fields, methods, and an `__init__` of its
+own. Its `str()` is what `super().__init__(...)` was given, or, where
+`__init__` does not call it, the arguments the class was called with, as
+CPython keeps them:
+
+```python
+class ParseError(ValueError):
+    def __init__(self, line: int, text: str) -> None:
+        super().__init__(f"line {line}: {text}")
+        self.line: int = line
+        self.text: str = text
+
+
+def parse(n: int) -> int:
+    total = 0
+    for i in range(n):
+        try:
+            if i % 7 == 3:
+                raise ParseError(i, "bad token")
+            total += i
+        except ParseError as e:
+            total += e.line * 1000 + len(str(e))
+    return total
+```
 
 `str()` of a `KeyError` is `repr()` of its key, as CPython has it.
 `finally` runs when the body, a handler, or `else` finishes, raises,
@@ -93,8 +119,7 @@ native catches ends the call:
 A function using any of these runs as Python:
 
 - `e.args`, and any other use of `e` than the ones above
-- `raise ... from ...`
-- a project exception class with fields or methods of its own
+- a cause that is neither a name nor a new exception (`raise X from f()`)
 - a `finally` that returns, breaks, or continues out of itself
 
 ## Generators
@@ -112,16 +137,38 @@ one costs what the loop inside it costs.
 | `for x in gen(...)`, with `break`, `continue`, and `else` | `break` closes the generator |
 | `sum`, `min`, `max`, `sorted`, `any`, `all` | over a generator or a generator expression |
 | `next(gen(...))`, `next(gen(...), default)` | the first value, or `StopIteration` |
+| `it = gen(...)`, then `next(it)`, `next(it, default)`, and `for x in it` | stepped from one place to the next, as below |
 | `Vec[T](gen(...))` and the other collections | built from what it yields |
 
 In the generator, `yield value` and `yield from` another generator or a
 collection lower, and `return` ends it. It yields numbers, tuples of
 numbers, strings, collections, or objects.
 
+A generator held in a name and stepped more than once runs in step with the
+function holding it. The code between two steps runs as the generator hands
+over its next value, and a `for` over it may `break` and leave the rest for
+the next step:
+
+```python
+def header_then_rows(n: int) -> int:
+    it = squares(n)
+    first = next(it)
+    second = next(it, -1)
+    total = first * 100 + second
+    for row in it:
+        total += row
+    return total * 1000 + next(it, 77)
+```
+
+The steps are `x = next(it)` and `for` statements of the function itself,
+not inside a loop or a branch, and the code between two of them does not
+`return`, `break`, or `continue`.
+
 ### What stays in Python
 
-A generator that is stored, returned, passed on, or stepped more than once
-keeps the function that does so in Python, and so does:
+A generator that is returned, passed to another function, or stepped from
+inside a loop or a branch keeps the function that does so in Python, and so
+does:
 
 - a generator method, a generic generator, or an async one
 - a generator with a `try`, a nested function, or a `with`

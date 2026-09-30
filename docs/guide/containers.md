@@ -63,12 +63,31 @@ function writes only what it made or what it was passed.
 
 ## The order of a set
 
-CPython walks a set in the order its hash table keeps, which depends on the
-values and, for strings, on the process. Native memory keeps a different
-order. So a `for` loop over a set, `list(s)`, a comprehension over one, and
-printing one stay in Python. What does not depend on the order is native:
-`len`, `in`, the set algebra, `sorted(s)`, `min`, `max`, `sum`, `any`, `all`,
-and building one set from another.
+CPython walks a set in the order its hash table keeps. For a set of ints or
+of tuples of ints that order follows from the values and from what was done
+to the set, and native code keeps a copy of CPython's table beside its own:
+the same slots, the same probing, the same resizes, and the same algorithms
+for `|`, `&`, `-`, `^`, their in-place forms, `update`, `copy`, and `pop`.
+So a `for` loop over such a set, `list(s)`, a comprehension over it, `s.pop()`,
+and printing it are native and give what CPython gives:
+
+```python
+def pairs(n: int) -> set[tuple[int, int]]:
+    return {(i % 7, i * 31 % 11) for i in range(n)}
+
+
+def shown(n: int) -> str:
+    s = pairs(n)
+    s -= {(0, 0)}
+    return f"{s} {s.pop()}"
+```
+
+A set made in Python and passed in has no such copy: its order is not known
+natively, so a walk that shows it falls back to Python. A string's hash
+changes from one process to the next unless `PYTHONHASHSEED` is fixed, so a
+set of strings walked where its order shows stays in Python. What does not
+depend on the order is native for every set: `len`, `in`, the set algebra,
+`sorted(s)`, `min`, `max`, `sum`, `any`, `all`.
 
 A dict walks in insertion order, in Python and natively.
 
@@ -107,15 +126,17 @@ squares after what it held.
 In a standalone build, `print(xs)`, `print(d)`, and an f-string field
 holding a list or a dict write what `repr` writes: numbers, strings with
 their quotes, tuples, nested containers, and dataclasses shown as
-`Point(x=1, y=2.0)`. A set is not printed natively, for the reason above.
+`Point(x=1, y=2.0)`. A set of ints or of tuples of ints prints in CPython's
+order, and an empty one as `set()`.
 
 ## Limitations
 
 - A tuple element holding a string or an object (`list[tuple[str, int]]`)
   keeps the function in Python.
-- A dict keyed by `float` or `bool` stays in Python: equal floats are not
-  always equal words (`0.0` and `-0.0`, NaN), and a bool key is the int it
-  equals.
+- A dict or set keyed by `float` or `bool` is native, with `0.0` and `-0.0`
+  one key. A NaN key, which only its own object finds, falls back. An `int`
+  key given to a dict of floats (`d[1]` where `d: dict[float, int]`) stays in
+  Python, since CPython keeps and prints the key as it came.
 - `d.get(k)` with no default, which may give `None`, stays in Python; with a
   default it is native.
 - `sort(key=...)`, `sorted(key=...)`, `min(key=...)`, and `max(key=...)`

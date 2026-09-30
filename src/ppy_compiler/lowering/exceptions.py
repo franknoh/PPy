@@ -33,7 +33,7 @@ from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, I64, Block, IRType, Successor, Value
 from ..ir.dialects import core
-from .collections import HANDLE, class_tag
+from .collections import HANDLE, STR, Shape, class_tag
 
 __all__ = ["ExceptionLowering", "exception_tag", "uses_exceptions"]
 
@@ -264,8 +264,8 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
 
     def _raise(self, node: ast.Raise) -> None:
         self._use_exceptions()
-        if node.cause is not None:
-            raise Unsupported("`raise ... from ...` has no native lowering")
+        if node.cause is not None and not self._plain_cause(node.cause):
+            raise Unsupported("`raise ... from` takes `None`, a name, or a new exception natively")
         if node.exc is None:
             handled = next((f.handled for f in reversed(self._frames) if f.handled), None)
             if handled is None:
@@ -274,6 +274,16 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
             return
         if isinstance(node.exc, ast.Name) and node.exc.id in self.caught:
             self._reraise(core.load(self.b, self.caught[node.exc.id]))  # type: ignore[attr-defined]
+            return
+        held = self._object_of(node.exc)  # type: ignore[attr-defined]
+        if held is not None and self._is_exception(held):  # type: ignore[attr-defined]
+            # `raise err`, or `raise ParseError(line, text)` of a class with
+            # fields or methods: the object is the exception.
+            handle, owned = self._handle(node.exc)  # type: ignore[attr-defined]
+            if not owned:
+                self._retain(handle)  # type: ignore[attr-defined]
+            self._rt("ppy_exc_raise", (handle,), None)  # type: ignore[attr-defined]
+            self._go_raise()
             return
         call = node.exc if isinstance(node.exc, ast.Call) else None
         spelled = call.func if call is not None else node.exc
@@ -285,6 +295,23 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
             raise Unsupported("an exception with more than one argument has no native lowering")
         message, known = self._exception_message(name, arguments[0] if arguments else None)
         self._raise_made(name, exception_tag(name), message, known)
+
+    def _plain_cause(self, cause: ast.expr) -> bool:
+        """`from None`, `from err`, or `from SomeError(...)`: a cause only changes
+        what a traceback prints above its last line, which is all native code
+        prints, so it is not kept. A cause whose making could do anything else
+        is not one of these."""
+        if isinstance(cause, ast.Constant) and cause.value is None:
+            return True
+        if isinstance(cause, ast.Name):
+            return True
+        if isinstance(cause, ast.Call) and not cause.keywords:
+            called = T.strip_literal(self._type_of(cause.func))  # type: ignore[attr-defined]
+            simple = (ast.Constant, ast.Name)
+            return isinstance(called, T.ClassObject) and all(
+                isinstance(argument, simple) for argument in cause.args
+            )
+        return False
 
     def _reraise(self, exception: Value) -> None:
         self._retain(exception)  # type: ignore[attr-defined]
@@ -306,19 +333,75 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
         return info.qualname
 
     def _project_exception(self, name: str):  # type: ignore[no-untyped-def]
-        """A project class deriving from a builtin exception whose body is only a
-        docstring or `pass`: its instances are their class and their message."""
+        """A project class deriving from a builtin exception that native code can
+        make: its instances are objects whose record starts with the exception
+        runtime's four words, with the fields of its classes after them."""
         classes = self.frontend.analysis.symbols.classes  # type: ignore[attr-defined]
         info = classes.get(name) or classes.get(name.rpartition(".")[2])
         if info is None or "Exception" not in info.mro:
             return None
-        for entry in info.mro:
-            if entry in {"object", "BaseException"} or _builtin_exception(entry):
-                continue
-            found = classes.get(entry) or classes.get(entry.rpartition(".")[2])
-            if found is None or found.methods or found.fields:
-                return None
+        if not self._is_exception(Shape("object", record=info.qualname)):  # type: ignore[attr-defined]
+            return None
         return info
+
+    def _exception_header(self, shape: Shape, made: Value, node: ast.Call) -> None:
+        """A new exception object's first four words: its class's tag and name, and
+        `str()` of it as `BaseException` makes it from the constructor's
+        arguments (an `__init__` that calls `super().__init__` sets it again)."""
+        name = shape.record
+        self._write_word(made, 0, self._word(exception_tag(name)))  # type: ignore[attr-defined]
+        spelled = self._string_literal(name.rpartition(".")[2])  # type: ignore[attr-defined]
+        self._write(self._field_address(made, 1), STR, spelled)  # type: ignore[attr-defined]
+        init = self._resolve(self._class_info(shape), "__init__")  # type: ignore[attr-defined]
+        if init is not None and _calls_super_init(init.methods["__init__"].node):
+            message, known = self._string_literal(""), self._word(1)  # type: ignore[attr-defined]
+        else:
+            message, known = self._args_text(shape, list(node.args))
+        self._write(self._field_address(made, 2), STR, message)  # type: ignore[attr-defined]
+        self._write_word(made, 3, known)
+
+    def _write_word(self, made: Value, index: int, value: Value) -> None:
+        address = self._field_address(made, index)  # type: ignore[attr-defined]
+        self._write(address, Shape("int"), value)  # type: ignore[attr-defined]
+
+    def _args_text(self, shape: Shape, arguments: list[ast.expr]) -> tuple[Value, Value]:
+        """`str()` of an exception made with these positional arguments: nothing,
+        the one argument, or the tuple of them, as `BaseException.__str__` says."""
+        info = self._class_info(shape)  # type: ignore[attr-defined]
+        keyed = "KeyError" in info.mro
+        if len(arguments) <= 1:
+            return self._exception_message(
+                "KeyError" if keyed else shape.record, arguments[0] if arguments else None
+            )
+        builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)  # type: ignore[attr-defined]
+        known = self._word(1)  # type: ignore[attr-defined]
+        self._add_text(builder, "(")
+        for index, argument in enumerate(arguments):
+            if index:
+                self._add_text(builder, ", ")
+            if self._string_of(argument) is not None:  # type: ignore[attr-defined]
+                text = self._owned_string(argument)  # type: ignore[attr-defined]
+                shown = self._rt("ppy_str_add_repr", (builder, text))  # type: ignore[attr-defined]
+                known = core.bitwise(self.b, "and", known, shown)  # type: ignore[attr-defined]
+                self._release(text)  # type: ignore[attr-defined]
+                continue
+            value = self._expr(argument)  # type: ignore[attr-defined]
+            kind = {I64: "int", BOOL: "bool"}.get(value.type)
+            if kind is None:
+                raise Unsupported("an exception's arguments are strings, ints, or bools natively")
+            self._rt(f"ppy_str_add_{kind}", (builder, value), None)  # type: ignore[attr-defined]
+        self._add_text(builder, ")")
+        return self._rt("ppy_str_finish", (builder,), HANDLE), known  # type: ignore[attr-defined]
+
+    def _exception_init(self, handle: Value, shape: Shape, arguments: list[ast.expr]) -> None:
+        """`super().__init__(...)` of a class deriving from a builtin exception: the
+        arguments become `str()` of it, as `BaseException.__init__` sets `args`."""
+        message, known = self._args_text(shape, arguments)
+        address = self._field_address(handle, 2)  # type: ignore[attr-defined]
+        old = self._read(address, STR)  # type: ignore[attr-defined]
+        self._write(address, STR, message)  # type: ignore[attr-defined]
+        self._release(old)  # type: ignore[attr-defined]
+        self._write_word(handle, 3, known)
 
     def _exception_message(self, name: str, argument: ast.expr | None) -> tuple[Value, Value]:
         """`str()` of `name(argument)`, and whether it is CPython's."""
@@ -536,6 +619,13 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
 
     # -- using a caught exception -------------------------------------------------
 
+    def _handle(self, node: ast.expr) -> tuple[Value, bool]:
+        """A name a handler bound with `as` lends the exception it holds."""
+        slot = self._caught_of(node)
+        if slot is not None:
+            return core.load(self.b, slot), False  # type: ignore[attr-defined]
+        return super()._handle(node)  # type: ignore[misc]
+
     def _caught_of(self, node: ast.expr) -> Value | None:
         if isinstance(node, ast.Name) and node.id in getattr(self, "caught", {}):
             return self.caught[node.id]
@@ -548,6 +638,12 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
         told = core.cmp(self.b, "ne", known, self._word(0))  # type: ignore[attr-defined]
         core.guard(self.b, told, "contract", "str() of an exception")  # type: ignore[attr-defined]
         return self._rt("ppy_exc_str", (exception,), HANDLE)  # type: ignore[attr-defined]
+
+    def _shown_text(self, node: ast.expr) -> Value | None:
+        slot = self._caught_of(node)
+        if slot is not None:
+            return self._caught_text(slot)
+        return super()._shown_text(node)  # type: ignore[misc]
 
     def _string_call(self, node: ast.Call, discard: bool) -> Value | None:
         if (
@@ -590,3 +686,20 @@ class _Called:
     """What a call answered, where its status was asked for."""
 
     results: tuple[Value, ...]
+
+
+def _calls_super_init(node: ast.FunctionDef) -> bool:
+    """Whether `__init__` calls `super().__init__(...)` on every path: a statement
+    of its body, not one inside a branch or a loop."""
+    for statement in node.body:
+        call = statement.value if isinstance(statement, ast.Expr) else None
+        if (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "__init__"
+            and isinstance(call.func.value, ast.Call)
+            and isinstance(call.func.value.func, ast.Name)
+            and call.func.value.func.id == "super"
+        ):
+            return True
+    return False

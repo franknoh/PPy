@@ -27,7 +27,7 @@ from ..analysis.checker import receiver_bindings
 from ..analysis.closures import callable_spelled, is_plain_callable
 from ..analysis.symbols import ClassInfo, dataclass_keyword
 from ..backend.llvm.lowering import Unsupported
-from ..driver.ir_pipeline import object_chain
+from ..driver.ir_pipeline import exception_header, object_chain
 from ..ir import (
     BOOL,
     F64,
@@ -295,9 +295,13 @@ def _builtin_kind(base: T.Instance, records: Records) -> Kind | None:
         return Kind("List", shapes[0])
     key = shapes[0]
     assert key is not None
-    # A float key hashes by value across `0.0 == -0.0` and NaN, and a bool key
-    # is the int it equals: neither is a word native code can hash alike.
-    if not (key.integral or key.kind in {"str", "object", "record"}) or key.kind == "bool":
+    # A float key hashes as the number: `-0.0` and `0.0` are one key, and a NaN
+    # key, which only its own object finds, falls back where it is used.
+    numbers = key.parts if key.kind == "tuple" else (key.kind,)
+    if not (
+        all(part in {"int", "float", "bool"} for part in numbers)
+        or key.kind in {"str", "object", "record"}
+    ):
         return None
     if name == "Dict":
         return Kind("Dict", shapes[1], key)
@@ -500,6 +504,10 @@ class CollectionLowering:
         bindings = self._bindings(shape)
         fields: dict[str, tuple[int, Shape]] = {}
         offset = floats = handles = 0
+        if self._is_exception(shape):
+            # An exception's record starts with the exception runtime's four
+            # words; words 1 and 2 (its class's name and `str()` of it) are strings.
+            offset, handles = _EXCEPTION_WORDS, 0b110
         for owner in self._chain(shape):
             for name, declared in owner.fields.items():
                 if name in owner.class_vars or name in fields:
@@ -515,6 +523,15 @@ class CollectionLowering:
             raise Unsupported(f"`{info.name}` has more than 64 words of fields")
         found = Layout(fields, max(offset, 1), floats, handles)
         cache[key] = found
+        return found
+
+    def _is_exception(self, shape: Shape) -> bool:
+        """Whether instances of an object class are exceptions (`exception_header`)."""
+        cache = self.frontend.__dict__.setdefault("_exception_classes", {})  # type: ignore[attr-defined]
+        found = cache.get(shape.record)
+        if found is None:
+            found = exception_header(self._class_info(shape), self._module_classes())
+            cache[shape.record] = found
         return found
 
     def _field(self, shape: Shape, name: str) -> tuple[int, Shape]:
@@ -542,6 +559,8 @@ class CollectionLowering:
         layout = self._layout(shape)
         # String fields are leaves, as `_new` says of string elements.
         leaves = sum(field.leaves << offset for offset, field in layout.fields.values())
+        if self._is_exception(shape):
+            leaves |= 0b110
         made = self._rt(
             "ppy_seq_new",
             (
@@ -554,11 +573,14 @@ class CollectionLowering:
         )
         self._set_tag(made, shape.record)
         info = self._class_info(shape)
+        if self._is_exception(shape):
+            self._exception_header(shape, made, node)  # type: ignore[attr-defined]
         if self._resolve(info, "__init__") is not None:
             self._method_call(shape, "__init__", made, node.args, node.keywords, discard=True)
             return made
         if not info.is_dataclass:
-            if node.args or node.keywords:
+            # An exception's arguments are `BaseException.__init__`'s, in its header.
+            if node.keywords or (node.args and not self._is_exception(shape)):
                 raise Unsupported(f"`{info.name}` takes no arguments without an `__init__`")
             return made
         given: dict[str, ast.expr] = {}
@@ -817,6 +839,17 @@ class CollectionLowering:
         assert isinstance(held, Shape)
         current = self._class_named(owner_name)
         chain = object_chain(current, self._module_classes())
+        if (
+            chain is not None
+            and func.attr == "__init__"
+            and not node.keywords
+            and self._is_exception(held)
+            and not any("__init__" in entry.methods for entry in chain[:-1])
+        ):
+            # Past the project's classes, `BaseException.__init__`.
+            handle = core.load(self.b, self.collections[receiver_name].slot)
+            self._exception_init(handle, held, list(node.args))  # type: ignore[attr-defined]
+            return self._word(0)
         if chain is None or len(chain) < 2:
             raise Unsupported(f"`{current.name}` has no base for `super()` to call")
         found = None
@@ -878,7 +911,7 @@ class CollectionLowering:
                 truth = self._truth(found)  # type: ignore[attr-defined]
                 return core.bitwise(self.b, "xor", truth, core.const(self.b, True, BOOL))
             if self._dataclass_equality(left_shape or right_shape):
-                raise Unsupported("a dataclass's generated `==` compares fields, natively not yet")
+                return self._fields_compare(node, left_shape, right_shape)
             # An object with no `__eq__` of its own is equal only to itself.
             sides = []
             for side in (left, right):
@@ -887,13 +920,231 @@ class CollectionLowering:
                 self._done_with(handle, owned)
             predicate = "eq" if operator is ast.Eq else "ne"
             return core.cmp(self.b, predicate, sides[0], sides[1])
+        if self._dataclass_order(left_shape or right_shape):
+            return self._fields_compare(node, left_shape, right_shape)
         raise Unsupported(f"`{ast.unparse(node)}` compares objects whose class does not say how")
+
+    def _record_compare(self, node: ast.Compare) -> Value | None:
+        """`a == b` of two value-class dataclasses: the generated `__eq__`, field
+        by field, a NaN field falling back as an object's does."""
+        if type(node.ops[0]) not in (ast.Eq, ast.NotEq):
+            return None
+        shapes = [
+            shape_of(self._type_of(side), self._records())
+            for side in (node.left, node.comparators[0])
+        ]
+        if any(shape is None or shape.kind != "record" for shape in shapes):
+            return None
+        first, second = shapes
+        assert first is not None and second is not None
+        info = self._class_named(first.record)
+        if first.record != second.record or not info.is_dataclass:
+            raise Unsupported(f"`{ast.unparse(node)}` compares value classes Python compares")
+        if "__eq__" in info.methods or dataclass_keyword(info.node, "eq") is False:
+            raise Unsupported(f"`{ast.unparse(node)}` compares value classes Python compares")
+        left, right = self._record_value(node.left), self._record_value(node.comparators[0])
+        if left is None or right is None:
+            raise Unsupported(f"`{ast.unparse(node)}` has no native struct")
+        b = self.b
+        answer = core.const(b, True, BOOL)
+        for name, part in zip(first.names, first.parts, strict=True):
+            x, y = core.struct_extract(b, left, name), core.struct_extract(b, right, name)
+            if part == "float":
+                numbers = core.bitwise(b, "and", core.cmp(b, "eq", x, x), core.cmp(b, "eq", y, y))
+                core.guard(b, numbers, "contract", "a NaN field")
+            answer = core.bitwise(b, "and", answer, core.cmp(b, "eq", x, y))
+        if isinstance(node.ops[0], ast.NotEq):
+            return core.bitwise(b, "xor", answer, core.const(b, True, BOOL))
+        return answer
+
+    def _generating(self, shape: Shape) -> ClassInfo | None:
+        """The dataclass whose generated methods an instance of `shape` runs: the
+        nearest along its bases."""
+        for owner in reversed(self._chain(shape)):
+            if owner.is_dataclass:
+                return owner
+        return None
 
     def _dataclass_equality(self, shape: Shape | None) -> bool:
         """A dataclass object compares its fields: `eq=True`, the default."""
         if shape is None:
             return False
-        return any(owner.is_dataclass for owner in self._chain(shape))
+        owner = self._generating(shape)
+        return owner is not None and dataclass_keyword(owner.node, "eq") is not False
+
+    def _dataclass_order(self, shape: Shape | None) -> bool:
+        """`@dataclass(order=True)`: `<` and the rest compare the fields as tuples."""
+        if shape is None:
+            return False
+        owner = self._generating(shape)
+        return owner is not None and dataclass_keyword(owner.node, "order") is True
+
+    def _add_object_text(self, builder: Value, shape: Shape, handle: Value, as_repr: bool) -> None:
+        """`str(obj)` (or `repr(obj)`, `as_repr`) onto a string builder: the class's
+        own `__str__` or `__repr__`, or a dataclass's generated `__repr__`. `None`
+        where the handle is none."""
+        owners = list(reversed(self._chain(shape)))
+        chosen: tuple[str, ClassInfo] | None = None
+        for name in ("__repr__",) if as_repr else ("__str__", "__repr__"):
+            for owner in owners:
+                if name in owner.methods:
+                    chosen = (name, owner)
+                    break
+                if name == "__repr__" and owner.is_dataclass:
+                    if dataclass_keyword(owner.node, "repr") is False:
+                        continue
+                    chosen = ("", owner)
+                    break
+            if chosen is not None:
+                break
+        if chosen is None:
+            raise Unsupported(f"`{shape.record}` is shown with its address, which Python has")
+        b = self.b
+        shown = self._block("show.object")  # type: ignore[attr-defined]
+        none = self._block("show.none")  # type: ignore[attr-defined]
+        done = self._block("show.done")  # type: ignore[attr-defined]
+        core.cond_br(b, self._present(handle), Successor(shown), Successor(none))
+        b.at_end(none)  # type: ignore[attr-defined]
+        self._add_text(builder, "None")  # type: ignore[attr-defined]
+        core.br(b, Successor(done))
+        b.at_end(shown)  # type: ignore[attr-defined]
+        name, owner = chosen
+        if name:
+            text = self._method_call(shape, name, handle, [], [])
+            self._rt("ppy_str_add", (builder, text), None)
+            self._release(text)
+        else:
+            showing: list[str] = self.__dict__.setdefault("_showing", [])
+            if shape.record in showing:
+                raise Unsupported(f"`{shape.record}` holds itself, and is shown by Python")
+            showing.append(shape.record)
+            label = shape.record.removeprefix(f"{self._class_info(shape).module}.")
+            self._add_text(builder, f"{label}(")  # type: ignore[attr-defined]
+            for index, (field, offset, field_shape) in enumerate(
+                self._dataclass_fields(shape, "repr")
+            ):
+                self._add_text(builder, (", " if index else "") + f"{field}=")  # type: ignore[attr-defined]
+                value = self._read(self._field_address(handle, offset), field_shape)
+                self._add_item_repr(builder, field_shape, value)  # type: ignore[attr-defined]
+            self._add_text(builder, ")")  # type: ignore[attr-defined]
+            showing.pop()
+        core.br(b, Successor(done))
+        b.at_end(done)  # type: ignore[attr-defined]
+
+    def _dataclass_fields(self, shape: Shape, purpose: str) -> list[tuple[str, int, Shape]]:
+        """The fields a generated `__eq__`, `__lt__`, or `__repr__` (`purpose`,
+        "compare" or "repr") goes over, in their order: each one's name, word,
+        and shape."""
+        chain = self._chain(shape)
+        if len(self._subclasses(shape.record)) > 1:
+            # CPython's generated methods ask the instance's own class, which a
+            # subclass changes: its fields, its name.
+            raise Unsupported(f"`{shape.record}` has subclasses, whose generated methods differ")
+        dropped: set[str] = set()
+        for owner in chain:
+            for statement in owner.node.body:
+                if (
+                    isinstance(statement, ast.AnnAssign)
+                    and isinstance(statement.target, ast.Name)
+                    and isinstance(statement.value, ast.Call)
+                ):
+                    for keyword in statement.value.keywords:
+                        if keyword.arg == purpose:
+                            if not isinstance(keyword.value, ast.Constant):
+                                raise Unsupported(f"`field({purpose}=...)` is not a constant")
+                            if keyword.value.value is False:
+                                dropped.add(statement.target.id)
+        layout = self._layout(shape)
+        return [
+            (name, offset, field)
+            for name, (offset, field) in layout.fields.items()
+            if name not in dropped
+        ]
+
+    def _fields_compare(
+        self, node: ast.Compare, left_shape: Shape | None, right_shape: Shape | None
+    ) -> Value:
+        """A dataclass's generated `==`, `!=`, `<`, `<=`, `>`, `>=`: the fields
+        compared as tuples are. A NaN field falls back, since whether it equals
+        itself depends on CPython's version and on which float object it is."""
+        operator = type(node.ops[0])
+        if left_shape is None or right_shape is None or left_shape.record != right_shape.record:
+            raise Unsupported(f"`{ast.unparse(node)}` compares objects of two classes")
+        fields = self._dataclass_fields(left_shape, "compare")
+        for name, _, field in fields:
+            if any(part not in {"int", "float", "bool", "str"} for part in _kinds(field)):
+                raise Unsupported(f"field `{name}` is compared by Python")
+        b = self.b
+        sides = []
+        for side in (node.left, node.comparators[0]):
+            handle, owned = self._handle(side)
+            sides.append((handle, owned))
+        left, right = sides[0][0], sides[1][0]
+        present = core.bitwise(b, "and", self._present(left), self._present(right))
+        if operator not in (ast.Eq, ast.NotEq):
+            self._require(
+                present,
+                "an order comparison with `None`",
+                "TypeError: '<' not supported between an instance and None",
+            )
+        result = self._alloca(BOOL, "fields.result")  # type: ignore[attr-defined]
+        identical = core.cmp(b, "eq", core.cast(b, left, I64), core.cast(b, right, I64))
+        core.store(b, identical, result)
+        compared = self._block("fields.compared")  # type: ignore[attr-defined]
+        done = self._block("fields.done")  # type: ignore[attr-defined]
+        core.cond_br(b, present, Successor(compared), Successor(done))
+        b.at_end(compared)  # type: ignore[attr-defined]
+        # Each field read, and whether the two are equal and in order.
+        equal: list[Value] = []
+        less: list[Value] = []
+        for _, offset, field in fields:
+            for index, kind in enumerate(_kinds(field)):
+                if kind == "str":
+                    x = self._read(self._field_address(left, offset), field)
+                    y = self._read(self._field_address(right, offset), field)
+                else:
+                    x = self._read_word(self._field_address(left, offset), index, kind)
+                    y = self._read_word(self._field_address(right, offset), index, kind)
+                if kind == "str":
+                    equal.append(
+                        core.cmp(b, "ne", self._rt("ppy_str_equal", (x, y)), self._word(0))
+                    )
+                    order = self._rt("ppy_str_order", (x, y))
+                    less.append(core.cmp(b, "lt", order, self._word(0)))
+                    continue
+                if kind == "float":
+                    numbers = core.bitwise(
+                        b, "and", core.cmp(b, "eq", x, x), core.cmp(b, "eq", y, y)
+                    )
+                    core.guard(b, numbers, "contract", "a NaN field")
+                if kind == "bool":
+                    x, y = core.cast(b, x, I64), core.cast(b, y, I64)
+                equal.append(core.cmp(b, "eq", x, y))
+                less.append(core.cmp(b, "lt", x, y))
+        if operator in (ast.Eq, ast.NotEq):
+            answer = core.const(b, True, BOOL)
+            for same in equal:
+                answer = core.bitwise(b, "and", answer, same)
+        else:
+            # The first field that differs decides; equal all through, `<=` and `>=` hold.
+            answer = core.const(b, operator in (ast.LtE, ast.GtE), BOOL)
+            for same, lower in reversed(list(zip(equal, less, strict=True))):
+                if operator in (ast.Lt, ast.LtE):
+                    decided = lower
+                else:
+                    decided = core.bitwise(
+                        b, "xor", core.bitwise(b, "or", lower, same), core.const(b, True, BOOL)
+                    )
+                answer = core.select(b, same, answer, decided)
+        core.store(b, answer, result)
+        core.br(b, Successor(done))
+        b.at_end(done)  # type: ignore[attr-defined]
+        found = core.load(b, result)
+        for handle, owned in sides:
+            self._done_with(handle, owned)
+        if operator is ast.NotEq:
+            return core.bitwise(b, "xor", found, core.const(b, True, BOOL))
+        return found
 
     def _object_binary(self, node: ast.BinOp) -> Value | None:
         """`a + b` and the other arithmetic operators through the class's methods."""
@@ -1246,6 +1497,12 @@ class CollectionLowering:
         if kind.key.text:
             self._rt("ppy_coll_text_keys", (made, self._word(kind.key.text)), None)
         self._install_methods(made, kind)
+        if kind.key.floats and kind.key.kind != "record":
+            self._rt("ppy_coll_float_keys", (made, self._word(kind.key.floats)), None)
+        tuples = pyset_kind(kind)
+        if tuples is not None:
+            # A set walks in CPython's order: the runtime keeps a copy of its table.
+            self._rt("ppy_pyset_track", (made, self._word(tuples)), None)
         return made
 
     # -- the program's own order and hash ---------------------------------------
@@ -1648,15 +1905,37 @@ class CollectionLowering:
         """A key's words in a stack buffer, and the buffer's address."""
         key = kind.key
         assert key is not None
-        buffer = self._alloca(key.ir_type(), "key")  # type: ignore[attr-defined]
+        if key.kind in {"int", "float"} and key.kind != _scalar_name(self._type_of(node)):
+            given = _scalar_name(self._type_of(node))
+            if given in {"int", "bool"}:
+                # `d[1]` in a dict of floats, `d[True]` in one of ints: CPython
+                # keeps the key object as it came, and shows it so.
+                raise Unsupported(
+                    f"a `{given}` key in a dict or set of `{key.kind}` keeps its type"
+                )
+        # A bool key is a word in the collection, as an element is.
+        stored = I64 if key.kind == "bool" else key.ir_type()
+        if key.kind == "tuple" and "bool" in key.parts:
+            stored = TupleType(tuple(I64 if p == "bool" else _SCALARS[p] for p in key.parts))
+        buffer = self._alloca(stored, "key")  # type: ignore[attr-defined]
         address = core.cast(self.b, buffer, _pointer(buffer, I8))
         value, owned = self._value(node, key)
         self._write(address, key, value)
+        if key.floats and key.kind != "record":
+            self._nan_key(address, key)
         if owned:
             # A key made for the lookup: the collection takes its own
             # reference when it keeps one, so this one goes after the call.
             self.__dict__.setdefault("_keys_made", []).append(value)
         return address
+
+    def _nan_key(self, address: Value, key: Shape) -> None:
+        """A NaN key is found only by its own object, which a float word has not:
+        where one is used, the call falls back."""
+        for index, part in enumerate(_kinds(key)):
+            if part == "float":
+                word = self._read_word(address, index, "float")
+                core.guard(self.b, core.cmp(self.b, "eq", word, word), "contract", "a NaN key")
 
     def _keys_done(self) -> None:
         """Let go of the keys made for the runtime calls just emitted."""
@@ -2196,6 +2475,28 @@ def _related(held: Kind | Shape, kind: Kind | Shape) -> bool:
     )
 
 
+def pyset_kind(kind: Kind) -> int | None:
+    """A `set` whose order the runtime keeps as CPython's: 0 for ints (and bools),
+    1 for tuples of them; None for any other element, whose hash is not an int's."""
+    key = kind.key
+    if kind.name != "Set" or key is None:
+        return None
+    if key.kind in {"int", "bool"}:
+        return 0
+    if key.kind == "tuple" and all(part in {"int", "bool"} for part in key.parts):
+        return 1
+    return None
+
+
+def _scalar_name(t: T.Type | None) -> str:
+    """`int`, `float`, or `bool` where the checker's type is one of them."""
+    base = T.strip_literal(t) if t is not None else None
+    for name, scalar in (("bool", T.BOOL), ("int", T.INT), ("float", T.FLOAT)):
+        if base == scalar:
+            return name
+    return ""
+
+
 def _kinds(shape: Shape) -> tuple[str, ...]:
     return shape.parts if shape.kind in {"tuple", "record"} else (shape.kind,)
 
@@ -2212,6 +2513,9 @@ _CALLS_BACK = (
     "ppy_coll_update",
     "ppy_coll_equal",
 )
+
+#: The words every exception's record starts with (`ppy_runtime/exceptions.c`).
+_EXCEPTION_WORDS = 4
 
 #: The methods of a class the runtime calls back.
 _COMPARES = frozenset({"__lt__", "__hash__", "__eq__"})

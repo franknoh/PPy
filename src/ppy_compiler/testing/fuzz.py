@@ -98,6 +98,19 @@ class Broken(ValueError):
     pass
 
 
+class Failed(ValueError):
+    def __init__(self, code: int, where: str) -> None:
+        super().__init__(f"{where}: {code}")
+        self.code: int = code
+        self.where: str = where
+
+
+@dataclass(order=True)
+class Tag:
+    rank: int
+    label: str
+
+
 def countdown(n: int) -> Iterator[int]:
     while n > 0:
         yield n
@@ -357,11 +370,13 @@ class _Generator:
             w.depth -= 1
         elif roll < 0.925:
             self.try_statement(w, scope, ret)
-        elif roll < 0.955:
+        elif roll < 0.945:
             self.closure_statement(w, scope)
-        elif roll < 0.975:
+        elif roll < 0.96:
             self.generator_statement(w, scope)
-        elif roll < 0.98:
+        elif roll < 0.975:
+            self.lifted_statement(w, scope)
+        elif roll < 0.985:
             # An assert that holds more often than not, so programs run on.
             holds = self.chance(0.7)
             w.put(f"assert {self.bool_expr(scope, 2)} or {holds}, {self.str_expr(scope, 2)}")
@@ -473,6 +488,95 @@ class _Generator:
             w.put(f"for {item} in sorted({source}):")
             w.put(f"    {name} = {name} * 7 + {item}")
         scope.ints.append(name)
+
+    def lifted_statement(self, w: _Writer, scope: _Scope) -> None:
+        """What 0.5.0 took native: a set's order shown, float and bool keys, a
+        dataclass's `==`, order, and repr, an exception's fields, a generator
+        stepped by hand, and `str.format` and `%`."""
+        rng = self.rng
+        roll = rng.random()
+        if roll < 0.2:
+            a, b = self.name("sa"), self.name("sb")
+            members = ", ".join(self.int_expr(scope, 2) for _ in range(rng.randint(0, 6)))
+            w.put(f"{a}: set[int] = {{{members}}}" if members else f"{a}: set[int] = set()")
+            step, count = rng.randint(1, 9), rng.randint(0, 12)
+            w.put(f"{b}: set[int] = {{x * {step} % 17 for x in range({count})}}")
+            for _ in range(rng.randint(1, 4)):
+                op = rng.random()
+                if op < 0.3:
+                    w.put(f"{a}.add({self.int_expr(scope, 2)})")
+                elif op < 0.45:
+                    w.put(f"{a}.discard({rng.randint(-2, 16)})")
+                elif op < 0.7:
+                    w.put(f"{a} {rng.choice(('|=', '&=', '-=', '^='))} {b}")
+                elif op < 0.85:
+                    left, right = rng.choice((a, b)), rng.choice((a, b))
+                    w.put(f"{a} = {left} {rng.choice(('|', '&', '-', '^'))} {right}")
+                else:
+                    w.put(f"if {a}:")
+                    w.put(f"    {a}.pop()")
+            text = self.name("s")
+            w.put(f"{text}: str = str({a}) + str(list({b}))")
+            scope.strs.append(text)
+        elif roll < 0.35:
+            d = self.name("d")
+            keyed = rng.choice(("float", "bool"))
+            w.put(f"{d}: dict[{keyed}, int] = {{}}")
+            for _ in range(rng.randint(1, 4)):
+                if keyed == "float":
+                    key = rng.choice((*_FLOATS, "0.0", self.float_expr(scope, 2)))
+                else:
+                    key = self.bool_expr(scope, 2)
+                w.put(f"if {key} == {key}:")
+                w.put(f"    {d}[{key}] = {d}.get({key}, 0) + {self.int_expr(scope, 2)}")
+            text = self.name("s")
+            w.put(f"{text}: str = str({d})")
+            scope.strs.append(text)
+        elif roll < 0.55:
+            a, b = self.name("g"), self.name("g")
+            w.put(f"{a} = Tag({self.int_expr(scope, 2)} % 4, {self.str_expr(scope, 2)})")
+            w.put(f"{b} = Tag({rng.randint(0, 3)}, {rng.choice(_WORDS)!r})")
+            op = rng.choice(("==", "!=", "<", "<=", ">", ">="))
+            text = self.name("s")
+            w.put(f'{text}: str = f"{{{a}}} {{{b}!r}} {{{a} {op} {b}}}"')
+            scope.strs.append(text)
+        elif roll < 0.7:
+            name = self.name("n")
+            w.put(f"{name}: int = 0")
+            w.put("try:")
+            w.put(f"    if {self.bool_expr(scope, 2)}:")
+            w.put(f"        raise Failed({self.int_expr(scope, 2)}, {self.str_expr(scope, 2)})")
+            w.put(f"    {name} = {self.int_expr(scope, 2)}")
+            w.put("except Failed as e:")
+            w.put(f"    {name} = e.code % 1000 + len(e.where) + len(str(e))")
+            scope.ints.append(name)
+        elif roll < 0.85:
+            name, it = self.name("n"), self.name("it")
+            w.put(f"{it} = countdown(({self.int_expr(scope, 2)}) % 9)")
+            w.put(f"{name}: int = next({it}, -1)")
+            w.put(f"{name} *= 100")
+            item = self.name("x")
+            w.put(f"for {item} in {it}:")
+            w.put(f"    {name} += {item}")
+            last = self.name("n")
+            w.put(f"{last}: int = next({it}, {rng.randint(0, 9)})")
+            w.put(f"{name} += {last}")
+            scope.ints.append(name)
+        else:
+            text = self.name("s")
+            if self.chance(0.5):
+                w.put(
+                    f'{text}: str = "{{:>6}}|{{:.3f}}|{{!r}}|{{:+d}}".format('
+                    f"{self.str_expr(scope, 2)}, {self.float_expr(scope, 2)}, "
+                    f"{self.str_expr(scope, 2)}, {self.int_expr(scope, 2)})"
+                )
+            else:
+                w.put(
+                    f'{text}: str = "%-5s|%05d|%.2e|%x" % ('
+                    f"{self.str_expr(scope, 2)}, {self.int_expr(scope, 2)}, "
+                    f"{self.float_expr(scope, 2)}, {self.int_expr(scope, 2)})"
+                )
+            scope.strs.append(text)
 
     def closure_statement(self, w: _Writer, scope: _Scope) -> None:
         """A nested function or a lambda over the block's names: called, keeping
