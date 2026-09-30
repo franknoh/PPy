@@ -253,6 +253,33 @@ that takes or returns one is called by native code only. When Python code
 calls it, its Python body runs. The functions Python calls natively take and
 return numbers, and make their objects inside.
 
+## Class attributes
+
+An attribute the class body sets (`capacity: int = 10`, `LIMIT = 3`) may be
+assigned through the class, as `Cache.capacity = n` or
+`setattr(Cache, "capacity", n)`. The checker holds the value to the
+attribute's type, widened from a literal. Such an attribute is state the
+whole program shares: functions that read or write it run on CPython, so
+every reader sees the latest value. An attribute the class body does not set
+is still refused when assigned through the class (`E1506`).
+
+A method can be called through its class with the receiver written out:
+`Cache.add(b, 5)` is `b.add(5)`.
+
+`typing.Self` names the class in its own signatures, fields, and method
+bodies: `def link(self, other: Self) -> Self`. The checker reads it as the
+class that writes it, so a subclass inherits a method that returns the base
+class.
+
+## Named tuples
+
+`class P(NamedTuple)`, `P = NamedTuple("P", [("x", int), ("y", int)])`, and
+`P = namedtuple("P", "x y")` declare a class whose instance is also a tuple:
+`p.x`, `p[0]`, `x, y = p`, and `for v in p` read its fields, and
+`_replace`, `_asdict`, and `_fields` are typed. A `namedtuple` field has no
+type, so what is read from it is `Any`. Functions that take named tuples run
+on CPython.
+
 ## Limitations
 
 - A class with more than one base, a base from another module or a
