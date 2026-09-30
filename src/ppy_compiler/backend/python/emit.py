@@ -22,8 +22,9 @@ def source_map(tree: ast.Module, generated: str) -> dict[int, int]:
     """Map each generated line back to the original `.ppy` line it came from."""
     mapping: dict[int, int] = {}
     generated_tree = ast.parse(generated)
-    original_nodes = [n for n in ast.walk(tree) if hasattr(n, "lineno")]
-    generated_nodes = [n for n in ast.walk(generated_tree) if hasattr(n, "lineno")]
+    # A `# type: ignore` comment has a line but no column, and marks no code.
+    original_nodes = [n for n in ast.walk(tree) if hasattr(n, "col_offset")]
+    generated_nodes = [n for n in ast.walk(generated_tree) if hasattr(n, "col_offset")]
     for original, emitted in zip(_ordered(original_nodes), _ordered(generated_nodes), strict=False):
         mapping.setdefault(emitted.lineno, original.lineno)
     return mapping
