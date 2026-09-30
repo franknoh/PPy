@@ -90,7 +90,7 @@ def test_a_changed_runtime_or_header_builds_a_new_object(tmp_path, user_cache):
 def test_a_runtime_that_cannot_be_compiled_is_linked_as_source(tmp_path, user_cache):
     source = _runtime(tmp_path, "this is not C\n")
     assert runtime_object(source, _compiler()) == source
-    assert list(user_cache.iterdir()) == []
+    assert not list(user_cache.iterdir())
 
 
 def test_a_runtime_is_linked_as_source_when_the_cache_cannot_be_written(tmp_path, monkeypatch):
@@ -150,7 +150,7 @@ def test_a_module_emits_its_llvm_ir_once_when_first_read():
         return "; module m"
 
     module = NativeModule("m", emitter=emit)
-    assert emitted == []
+    assert not emitted
     assert module.ir == "; module m"
     assert module.ir == "; module m"
     assert emitted == ["m"]
@@ -189,7 +189,8 @@ def test_a_run_that_builds_looks_for_a_warm_build_once(tmp_path, monkeypatch):
 
             print(total(10))
             """
-        )
+        ),
+        encoding="utf-8",
     )
     assert main(["run", "prog.py"]) == 0
     assert len(looked) == 1
