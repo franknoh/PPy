@@ -165,6 +165,7 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
     def _exception_slot(self, name: str) -> Value:
         """A slot for an exception, empty from the entry on."""
         slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
+        slot.owner.attributes["ppy.owns"] = True  # type: ignore[union-attr]
         entry = self._entry_builder()  # type: ignore[attr-defined]
         empty = core.call_extern(entry, "ppy_coll_none", (), (HANDLE,)).results[0]
         core.store(entry, empty, slot)

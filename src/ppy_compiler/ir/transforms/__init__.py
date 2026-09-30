@@ -7,6 +7,7 @@ from .canonicalize import Canonicalize, ConstantFold, canonicalization_patterns
 from .dce import DeadCodeElimination
 from .fuse_tensor import FuseTensor, TensorCanonicalize
 from .lower_async import AsyncLoweringError, LowerAsync, lower_async
+from .lower_generators import LowerGenerators, lower_generators
 from .lower_parallel import BACKENDS as PARALLEL_BACKENDS
 from .lower_parallel import LowerParallel
 from .lower_regex import LowerRegex
@@ -38,6 +39,7 @@ __all__ = [
     "Inline",
     "Instrument",
     "LowerAsync",
+    "LowerGenerators",
     "LowerParallel",
     "LowerRegex",
     "LowerTensor",
@@ -90,6 +92,7 @@ def default_pipeline(  # type: ignore[no-untyped-def]
         return manager
     manager.add_stage("after-ir-generation")
     manager.add(LowerAsync())
+    manager.add(LowerGenerators())
     manager.add(LowerRegex())
     manager.add(Canonicalize())
     manager.add_stage("after-canonicalization")

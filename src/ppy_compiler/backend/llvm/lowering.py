@@ -300,6 +300,10 @@ def _collection_param(
         if not is_plain_callable(base):
             return None
         return NativeParam(name, "handle", callable_spelled(base), class_name="callable")
+    if isinstance(base, T.Instance) and base.name in {"Iterator", "Generator"} and base.args:
+        # A generator's frame: native code's own, never crossing to Python.
+        element = T.strip_literal(base.args[0])
+        return NativeParam(name, "handle", f"generator[{element}]", class_name="generator")
     if isinstance(base, T.Instance) and base.name in _BUILTIN_CONTAINERS and base.args:
         if not written and _buffer_element(base) is not None:
             # A list of numbers the function only reads is lent as a buffer.
@@ -383,8 +387,8 @@ def eligible(
     `allow_launch` is the GPU source backends': a kernel launch is written
     as one, where the CPU backends have no launch runtime yet.
     """
-    if info.is_generator:
-        return False, "generators use the boxed runtime"
+    if info.is_generator and info.is_async:
+        return False, "an async generator runs on CPython"
     if info.is_async and not allow_async:
         return False, "a coroutine runs natively only where the async runtime does"
     written = analysis.mutated_params | analysis.delegated_writes

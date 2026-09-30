@@ -24,7 +24,7 @@ from .collections import HANDLE, STR, Kind, Shape, shape_of
 class _Counted(_Source):
     """A walk by position: over a range, a string, a buffer, or a tuple."""
 
-    #: "range", "text", "buffer", or "array".
+    #: "range", "text", "buffer", "array", or "frame" (a generator's).
     what: str = ""
     #: A range's first value, step, and length; a tuple's elements' slots.
     first: Value | None = None
@@ -93,7 +93,7 @@ class WalkLowering:  # pylint: disable=attribute-defined-outside-init
             if _called(node, "zip") and len(node.args) >= 2 and not node.keywords:
                 return all(self._counted_kind(a) is not None or self._is_walk(a) for a in node.args)
         kind = self._counted_kind(node)
-        if kind == "array":
+        if kind in {"array", "frame"}:
             return True
         if kind == "range" and len(node.args) == 3 and _constant_int(node.args[2]) is None:  # type: ignore[attr-defined]
             # A step only known when the loop runs: the plain `range` loop wants
@@ -119,6 +119,8 @@ class WalkLowering:  # pylint: disable=attribute-defined-outside-init
         if what == "range":
             assert isinstance(inner, ast.Call)
             return self._range_source(inner, backwards)
+        if what == "frame":
+            return self._frame_source(inner)  # type: ignore[attr-defined]
         if what == "text":
             handle, owned = self._handle(inner)  # type: ignore[attr-defined]
             slot = self._hold(STR, handle, owned)  # type: ignore[attr-defined]
@@ -228,6 +230,8 @@ class WalkLowering:  # pylint: disable=attribute-defined-outside-init
             assert source.first is not None
             core.store(b, source.first, value)
             core.store(b, self._word(0), at)  # type: ignore[attr-defined]
+        elif source.what == "frame":
+            core.store(b, self._word(0), at)  # type: ignore[attr-defined]
         elif source.backwards:
             core.store(b, core.sub(b, self._length_of(source), self._word(1), overflow="wrap"), at)  # type: ignore[attr-defined]
         else:
@@ -250,6 +254,8 @@ class WalkLowering:  # pylint: disable=attribute-defined-outside-init
         if not isinstance(source, _Counted):
             return super()._more(cursor)  # type: ignore[misc]
         b = self.b  # type: ignore[attr-defined]
+        if source.what == "frame":
+            return self._frame_step(core.load(b, source.slot))  # type: ignore[attr-defined]
         at = core.load(b, cursor.at)
         inside = core.cmp(b, "lt", at, self._length_of(source))
         if source.backwards:
@@ -264,6 +270,10 @@ class WalkLowering:  # pylint: disable=attribute-defined-outside-init
         shape = source.kind.value
         if source.what == "range":
             return [(shape, core.load(b, cursor.key))]
+        if source.what == "frame":
+            value = self._frame_value_read(core.load(b, source.slot), shape)  # type: ignore[attr-defined]
+            self._take_yielded(source, shape, value)  # type: ignore[attr-defined]
+            return [(shape, value)]
         at = core.load(b, cursor.at)
         if source.what == "buffer":
             return [(shape, self._buffer_element(source.name, at))]  # type: ignore[attr-defined]
@@ -286,8 +296,8 @@ class WalkLowering:  # pylint: disable=attribute-defined-outside-init
             super()._advance(cursor)  # type: ignore[misc]
             return
         b = self.b  # type: ignore[attr-defined]
-        if source.what == "text":
-            return  # reading the character moved past it
+        if source.what in {"text", "frame"}:
+            return  # reading the character, or stepping the generator, moved past it
         at = core.load(b, cursor.at)
         delta = self._word(-1 if source.backwards else 1)  # type: ignore[attr-defined]
         core.store(b, core.add(b, at, delta, overflow="wrap"), cursor.at)

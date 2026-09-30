@@ -91,10 +91,11 @@ from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .closures import ClosureLowering
-from .collections import HANDLE, Held
+from .collections import HANDLE, Held, records_of
 from .containers import ContainerLowering
 from .exceptions import ExceptionLowering, uses_exceptions
 from .expressions import ExpressionLowering
+from .frames import FrameLowering, frame_shape, frame_words
 from .generators import GeneratorLowering
 from .intness import ModuleIntness, gives_int
 from .strings import StringLowering
@@ -466,7 +467,7 @@ class Frontend:
                     if not ok:
                         raise Unsupported(reason)
                 if info.is_generator:
-                    raise Unsupported("generators use the boxed runtime")
+                    frame_shape(info, records_of(self))
                 if info.is_async and not self.asynchronous:
                     raise Unsupported("a coroutine runs natively only where the async runtime does")
                 if any(p.kind in {"var_positional", "var_keyword"} for p in info.params):
@@ -864,6 +865,12 @@ class Frontend:
         """Lower the body; returns the chains a proof freed of their guard."""
         function, signature = self.declared[info.qualname]
         lowering = _FunctionLowering(self, function, signature, info, constants)
+        if info.is_generator:
+            shape = frame_shape(info, records_of(self))
+            lowering.__dict__["_frame_shape"] = shape
+            lowering.hoist = False
+            function.attributes["ppy.generator"] = True
+            function.attributes["ppy.generator.value_words"] = frame_words(shape)
         lowering.run(node)
         return lowering.proved
 
@@ -1258,6 +1265,7 @@ class _GuardSite:
 
 class _FunctionLowering(  # pylint: disable=too-many-ancestors
     ExpressionLowering,
+    FrameLowering,
     WalkLowering,
     ClosureLowering,
     ExceptionLowering,
@@ -1664,6 +1672,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
     def _return_default(self) -> None:
         if self.b.block is not None and id(self.b.block) in self._dead:
             core.unreachable(self.b)
+            return
+        if self._frame() is not None:
+            self._frame_end()
             return
         if self.info.ret == T.NONE and not self.function.results:
             self._check_thread_failures()

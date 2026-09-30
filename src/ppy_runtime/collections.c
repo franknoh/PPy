@@ -564,6 +564,21 @@ int8_t *ppy_seq_at(int8_t *handle, int64_t index) {
     return (int8_t *)ppy_coll_record(handle, (header[3] + index) % header[1]);
 }
 
+/* A generator's frame: one record of `words` words, whose first is the resume
+   function's address and whose second is its state; `handles` names the words
+   that hold a reference, which freeing the frame lets go of. */
+int8_t *ppy_gen_new(int64_t words, int64_t handles, int64_t resume) {
+    int8_t *made = ppy_seq_new(1, words, 0, handles);
+    int64_t *record = (int64_t *)ppy_seq_at(made, 0);
+    record[0] = resume;
+    record[1] = 0;
+    return made;
+}
+
+int8_t *ppy_gen_frame(int8_t *generator) {
+    return ppy_seq_at(generator, 0);
+}
+
 int8_t *ppy_seq_push_back(int8_t *handle) {
     int64_t *header = (int64_t *)handle;
     if (header[0] == header[1]) {
