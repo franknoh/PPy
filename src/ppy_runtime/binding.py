@@ -321,7 +321,6 @@ def _random_state_address() -> int | None:
     """Where `random._inst` keeps its index and state words, checked against
     `getstate()` so a build laid out otherwise never has its memory written."""
     import random  # pylint: disable=import-outside-toplevel
-    import sys  # pylint: disable=import-outside-toplevel
 
     if sys.implementation.name != "cpython":
         return None
