@@ -4177,6 +4177,50 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#functions-as-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions as values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#more-of-python-native" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More of Python native
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#finding-what-stays-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Finding what stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4537,6 +4581,50 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#functions-as-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions as values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#more-of-python-native" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More of Python native
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#finding-what-stays-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Finding what stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4830,11 +4918,12 @@
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <h2 id="050-2026-09-30">0.5.0 — 2026-09-30<a class="headerlink" href="#050-2026-09-30" title="Permanent link">&para;</a></h2>
 <p>Ordinary Python goes native without a rewrite. Plain lists, dicts, and sets
-compile, and so do exceptions and generators. A warm <code>ppy run</code> is within
-noise of <code>python</code> (5%, or 30 ms if that is more) or faster on every example;
-a program that does almost no work still pays about 15 ms to start. A
-differential fuzzer now checks every path against CPython, and the bugs it
-found are fixed.</p>
+compile, and so do exceptions, generators, closures, lambdas, and functions
+passed as values. A warm <code>ppy run</code> is within noise of <code>python</code> (5%, or 30 ms
+if that is more) or faster on every example, and a first run takes about
+half as long as in 0.4. <code>ppy explain --summary</code> shows what stays in Python
+and why. A differential fuzzer now checks every path against CPython, and
+the bugs it and a corpus of public programs found are fixed.</p>
 <h3 id="lists-dicts-and-sets">Lists, dicts, and sets<a class="headerlink" href="#lists-dicts-and-sets" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Plain <code>list</code>, <code>dict</code>, and <code>set</code> lower to native code under <code>ppy run</code>, in
@@ -4901,7 +4990,15 @@ found are fixed.</p>
 </ul>
 <p>The strings example runs in about 1 s warm, against about 2.4 s for <code>python</code>.
 - <code>scripts/run_overhead.py</code> times <code>python</code> against <code>ppy run</code>, cold and warm,
-  for every example, and the performance page shows the result.</p>
+  for every example, and the performance page shows the result.
+- The first <code>ppy run</code> of a program is faster: the median across the examples
+  fell from 0.67 s to 0.38 s. The collections and async runtimes are
+  compiled once per machine with optimization and reused. Each module's LLVM
+  IR is emitted only when something reads it. The pipeline's own passes are
+  verified once at the end. External class hierarchies are read on first
+  use.
+- Programs that use lists, dicts, sets, or strings run faster warm, because
+  their runtime is now optimized.</p>
 <h3 id="differential-fuzzing">Differential fuzzing<a class="headerlink" href="#differential-fuzzing" title="Permanent link">&para;</a></h3>
 <ul>
 <li>New: <code>scripts/fuzz.py</code> generates programs over the native subset and runs
@@ -4946,6 +5043,83 @@ found are fixed.</p>
 <li>Fixed: a warm <code>ppy run</code> could rerun the previous build after a same-size
   edit made within one timestamp tick of the last build. A source that
   recent is now checked by its content.</li>
+</ul>
+<h3 id="functions-as-values">Functions as values<a class="headerlink" href="#functions-as-values" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Nested functions and <code>lambda</code> compile to native code under <code>ppy run</code>, in
+  standalone binaries, and in emitted C and C++. A closure reads the
+  enclosing function's variables as they are when it runs, and writes them
+  with <code>nonlocal</code>, as CPython does.</li>
+<li>Functions are values natively: <code>Callable[[A, B], R]</code> parameters, results,
+  locals, list and dict elements, and object fields, and calls through any
+  of them.</li>
+<li><code>sorted(xs, key=...)</code>, <code>min(xs, key=...)</code>, and <code>max(xs, key=...)</code> are
+  native, and <code>sort</code>'s key may be any function value.</li>
+<li><code>map(f, xs)</code>, <code>filter(f, xs)</code>, and <code>filter(None, xs)</code> compile where a
+  loop, <code>sum</code>, <code>min</code>, <code>max</code>, <code>sorted</code>, or a comprehension consumes them.</li>
+<li>A lambda takes its parameter types from where it is written: a <code>Callable</code>
+  parameter, a declared local, a field, a dict or list element, or a
+  constructor argument.</li>
+<li>A function that takes or returns a function value runs as Python when
+  Python calls it. A function value never crosses the boundary.</li>
+<li>Fixed: the Python backend could fold a variable a nested function rebinds
+  with <code>nonlocal</code>, and could move an expression out of a lambda body.</li>
+<li>Fixed: <code>--unsafe</code> C and C++ programs freed a reference cycle only if the
+  collector happened to run.</li>
+<li>The checker now checks nested function bodies. A display returned from a
+  function takes its declared type, and <code>&amp;</code>, <code>|</code>, and <code>^</code> of two bools give
+  a <code>bool</code>.</li>
+<li>New guide page: <a href="https://ppy.franknoh.dev/dev/guide/closures/">Functions as
+  values</a>.</li>
+</ul>
+<h3 id="more-of-python-native">More of Python native<a class="headerlink" href="#more-of-python-native" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Project exception classes with fields and <code>__init__</code>, <code>raise ... from</code>,
+  and generators stepped by <code>next</code> and <code>for</code> compile to native code.</li>
+<li>Sets of ints and tuples of ints walk and print in CPython's order
+  natively, and the in-place set operators change the set itself.</li>
+<li><code>dict</code> and <code>set</code> keyed by <code>float</code> or <code>bool</code> are native.</li>
+<li>Dataclass <code>==</code>, <code>order=True</code>, and <code>repr</code>, and <code>str()</code> and <code>repr()</code> of
+  objects are native.</li>
+<li><code>str.format</code> and <code>%</code> formatting of a literal are native.</li>
+</ul>
+<h3 id="finding-what-stays-in-python">Finding what stays in Python<a class="headerlink" href="#finding-what-stays-in-python" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>ppy explain --summary [PATH ...]</code> reports, for a file, a directory, or a
+  project, how many functions and statements go native, and what keeps the
+  rest in Python. The reasons are grouped and ranked, each with a hint and a
+  guide link. <code>--json</code> gives every function.</li>
+<li>Fixed: <code>ppy run</code> crashed when a function returning a string called one
+  that stayed in Python.</li>
+<li>Fixed: <code>d.get(k)</code> without a default crashed lowering.</li>
+<li>Fixed: a native function refused keyword arguments. It also reported the
+  wrapper's name and module with no docstring, so <code>doctest</code> skipped its
+  tests.</li>
+<li>Fixed: loop-invariant motion hoisted <code>row = []</code> out of a loop, so every
+  pass shared one list.</li>
+<li>Fixed: common-subexpression elimination made <code>a, b = [0] * n, [0] * n</code> one
+  list.</li>
+<li>Fixed: a native <code>sum</code> of a float list added without CPython's compensation
+  (<code>0.6000000000000001</code> for <code>[0.1, 0.2, 0.3]</code>).</li>
+<li>Fixed: a <code># type: ignore</code> comment crashed the Python backend.</li>
+<li>Fixed: the IR verifier refused a local read after an <code>if</code> whose branches
+  both return.</li>
+<li>A builtin such as <code>int</code> meets a Protocol bound.</li>
+<li>A list goes where a <code>Sequence</code> of its element type, or of a base class, is
+  expected.</li>
+<li><code>return NotImplemented</code> in an operator method is allowed.</li>
+<li>A bare <code>Callable</code> annotation is accepted.</li>
+<li>An empty <code>{}</code> or <code>[]</code> takes the type of what fills it.</li>
+<li>A <code>return</code> after <code>while True:</code> with no <code>break</code> is no longer checked.</li>
+</ul>
+<h3 id="known-limitations">Known limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A native function with a <code>float</code> parameter given an <code>int</code> works with it as
+  a float, so a result CPython keeps an <code>int</code> comes back a float: <code>f(0)</code>
+  returns <code>0.0</code> where CPython returns <code>0</code>. A fix that keeps such calls native
+  is planned for 0.6.0.</li>
+<li>A generator returned from a function or passed to another, <code>e.args</code>, and
+  sorting objects of an <code>order=True</code> dataclass stay in Python.</li>
 </ul>
 <h2 id="042-2026-09-28">0.4.2 — 2026-09-28<a class="headerlink" href="#042-2026-09-28" title="Permanent link">&para;</a></h2>
 <ul>
