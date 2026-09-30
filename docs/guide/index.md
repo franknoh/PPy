@@ -20,6 +20,7 @@ path.
 | [Directives and markers](directives.md) | `@ppy.pure`, `@ppy.native`, `@ppy.jit`, `@ppy.dynamic` and the rest; fixed-width integers, `Buffer[T]`, `Range`, ownership. |
 | [Classes](classes.md) | Value classes and object classes in native code: trees, linked nodes, `class Stack[T]`. |
 | [Exceptions and generators](exceptions-and-generators.md) | `raise`, `try`, `assert`, and generators in native code, and what stays in Python. |
+| [Functions as values](closures.md) | Nested functions, `lambda`, `nonlocal`, `Callable` values, keys, `map` and `filter` in native code. |
 | [Strings](strings.md) | `str` in native code: methods, f-strings and format specs, parsing numbers, strings as keys. |
 | [Lists, dicts, and sets](containers.md) | Python's own containers in native code, with no rewrite: displays, comprehensions, methods, and the Python boundary. |
 | [Collections](collections.md) | `Vec`, `Deque`, `Heap`, `LinkedList`, `HashMap`, `HashSet`, `TreeMap`, `TreeSet`: containers that compile, with no pointers. |

@@ -1,0 +1,205 @@
+# fuzz: path=standalone seed=70016 (did not build)
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+def countdown(n: int) -> Iterator[int]:
+    while n > 0:
+        yield n
+        n -= 2
+
+
+def pairs(n: int) -> Iterator[int]:
+    for i in range(n):
+        if i % 3 == 0:
+            continue
+        yield i * i
+    yield from countdown(n)
+
+
+def fn1(a2: bool, a3: bool, a4: bool) -> float:
+    k5: int = 0
+    while k5 < 4:
+        k5 += 1
+        n6: int = 0
+        for x7 in countdown(((-3 - -1) % 9)):
+            if x7 > 19:
+                break
+            n6 = n6 * 3 + x7
+    for i8 in range(1):
+        for i9 in range(1):
+            i9 *= (i8 if (max(i9, i9) >= (-6 + -8)) else i9)
+        n10: int = len('MiXeD')
+        def bump11(by: int) -> None:
+            nonlocal n10
+            n10 = n10 * 2 + by
+        bump11(max(3, i8))
+        bump11(12)
+    n12: int = (((12 + 11) // (k5 if k5 != 0 else -7)) - ((k5 + k5) % (k5 if k5 != 0 else -3)))
+    xs14: list[int] = [x * 2 - 1 for x in range(3) if x != 2]
+    xs14.append((n12 * n12))
+    xs14.append(k5)
+    n13: int = xs14.pop() + len(xs14)
+    return (1e-300 - (7.25 - -2.5))
+
+
+def fn15(a16: int, a17: bool) -> float:
+    def g19(x: int) -> int:
+        return x * 3 + (a16 << (a16 % 38))
+    n18: int = g19((a16 + -12)) - g19(-8)
+    for i20 in range(3):
+        if ((float("inf") * 1e308) > (0.5 / (-0.0 if -0.0 != 0.0 else 2.0))):
+            h21 = Heap[int]()
+            h21.push((-8 & n18))
+            h21.push((i20 + a16))
+            h21.push((i20 * 3))
+            h21.push((a16 - a16))
+            n22: int = 0
+            while h21:
+                n22 = n22 * 5 + h21.pop()
+        else:
+            s23: str = ((' spaced out ' if a17 else 'MiXeD')[4:6:-1] * 0)
+        h25: Callable[[int], int] = lambda v: v * 3 + n18
+        n24: int = 0
+        for x26 in filter(lambda v: v % 2 == 0, range(2)):
+            n24 += h25(x26)
+    n27: int = (n18 + n18)
+    def bump28(by: int) -> None:
+        nonlocal n27
+        n27 = n27 * 2 + by
+    bump28((a16 + n18))
+    bump28(-6)
+    return 0.5
+
+
+def fn29(a30: int, a31: float, a32: float) -> bool:
+    n33: int = 3
+    def bump34(by: int) -> None:
+        nonlocal n33
+        n33 = n33 * 2 + by
+    bump34((a30 << (-6 % 6)))
+    bump34(3037000499)
+    if ((f"<{a31:08.3f}>" != ('x-y-z' + 'ab')) and not (str(-0.0) > 'x-y-z'.title())):
+        def g36(x: int) -> int:
+            return x * 1 + abs(-3)
+        n35: int = g36((n33 % (n33 if n33 != 0 else -3))) - g36(3)
+        n37: int = min(((a30 * n35) + (-2 - a30)), -((4611686018427387903 % (n33 if n33 != 0 else 5))))
+    else:
+        n38: int = a30
+        def bump39(by: int) -> None:
+            nonlocal n38
+            n38 = n38 * 2 + by
+        bump39(2)
+        bump39(-7)
+    a30 *= -4
+    b40: bool = ('MiXeD'.replace('MiXeD', '123') in 'x-y-z'.strip())
+    f41: float = 1e-300
+    for i42 in range(5):
+        f43: float = float((a30 + i42))
+        h45: Callable[[int], int] = lambda v: v * 3 + (n33 if ((i42 | i42) >= -(-1)) else a30)
+        n44: int = sum(map(h45, range(2)))
+    return (((3.0 * 0.5) >= 3.0) and not (str(f41) in 'a'[1:6]))
+
+
+def fn46(a47: float) -> str:
+    assert ((3 - 5) < (4611686018427387904 if ((-6 * 4611686018427387903) != -7) else 9223372036854775807)) or True, ('MiXeD' if ((-5 * 12) == 4611686018427387904) else '123')
+    def g49(x: int) -> int:
+        return x * 3 + len(' spaced out ')
+    n48: int = g49(max(3037000499, -4)) - g49(3037000499)
+    h51: Callable[[int], int] = lambda v: v * 3 + -(n48)
+    n50: int = sum(map(h51, range(0)))
+    b52: bool = ((2 - n50) == (n50 - n50))
+    return str(((-2.5 * 1e308) / (a47 if a47 != 0.0 else 2.0)))
+
+
+def fn53(a54: int, a55: str) -> float:
+    b56: bool = (((1e308 - -2.5) <= (7.25 * 1e-300)) and not ((float(a54) < math.sqrt(abs(1e308))) and not (a54 >= a54)))
+    p57 = Point(len(''), len(a55))
+    n58: int = p57.x * 3 - p57.y
+    n59: int = (a54 * ((a54 >> (n58 % 66)) - int(7.25)))
+    k60: int = 0
+    while k60 < 1:
+        k60 += 1
+        for i61 in range(4):
+            xs63: list[int] = [x * 2 - 1 for x in range(2) if x != 2]
+            xs63.append(a54)
+            if len(xs63) > 1:
+                del xs63[-1]
+            xs63 = xs63[::-1] + xs63[1:]
+            xs63.append((3 | 7))
+            n62: int = xs63.pop() + len(xs63)
+    xs65: list[int] = [(1 | n59), (k60 >> (k60 % 31)), (k60 * -1)]
+    xs65.sort(key=lambda v: (v % 5, -v), reverse=True)
+    n64: int = xs65[0] * 7 + max(xs65, key=lambda v: (v % 5, -v))
+    tm66 = TreeMap[int, int]()
+    tm66[(11 * n64)] = (n59 * n58)
+    tm66[4] = a54
+    tm66[(-4 % (4 if 4 != 0 else -7))] = (a54 - -11)
+    n67: int = tm66.min() * 10 + tm66.max() + len(tm66)
+    q68 = Deque[int]()
+    q68.push_front(n67)
+    q68.push_back((-2 * n64))
+    n67 = q68.pop_back() - q68.pop_front()
+    return -2.5
+
+
+def fn69(a70: int) -> str:
+    p71 = Point((a70 if (a70 >= len('a')) else a70), abs(-1))
+    n72: int = p71.x * 3 - p71.y
+    s73: str = 'a'
+    f74: float = 1e308
+    xs76: list[int] = [-3]
+    xs76.sort(key=lambda v: v * (a70 - -9223372036854775808))
+    n75: int = xs76[0] * 7 + min(xs76, key=lambda v: v * (a70 - -9223372036854775808))
+    b77: bool = ((7.25 - f74) == (1e308 * -7))
+    return 'x-y-z'
+
+
+def main() -> None:
+    print(fn1(True, True, True))
+    print(fn15(-9223372036854775808, False))
+    print(fn15(-4611686018427387904, True))
+    print(fn15(-7, False))
+    print(fn29(9, 7.25, -2.5))
+    print(fn29(-9223372036854775808, -0.0, -2.5))
+    print(fn29(-4, 0.5, 1e-300))
+    print(fn46(float("nan")))
+    print(fn46(7.25))
+    print(fn46(1e-300))
+    print(fn53(-10, 'a'))
+    print(fn53(-6, ''))
+    print(fn69(-11))
+    print(fn69(-11))
+
+
+main()

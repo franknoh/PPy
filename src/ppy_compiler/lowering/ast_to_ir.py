@@ -18,6 +18,7 @@ import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from dataclasses import replace as dataclass_replace
 from pathlib import Path
 
 from ppy_runtime._record import replace
@@ -28,7 +29,7 @@ from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
 from ..analysis.lexical import LexicalBindings
 from ..analysis.refinements import Facts
-from ..analysis.symbols import FunctionInfo, derivative_spec, fold_flags
+from ..analysis.symbols import FunctionInfo, ParamInfo, derivative_spec, fold_flags
 from ..backend.llvm.lowering import (
     _ALLOCATIONS,
     _MATH_INTRINSICS,
@@ -89,6 +90,7 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
+from .closures import ClosureLowering
 from .collections import HANDLE, Held
 from .containers import ContainerLowering
 from .exceptions import ExceptionLowering, uses_exceptions
@@ -388,6 +390,13 @@ class Frontend:
         #: Generic functions by qualname, lowered per instantiation.
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         #: Instantiations made so far: (qualname, type arguments) -> declaration.
+        #: Closure entries, by the definition's node id: (node, function, signature).
+        self._closures: dict[int, tuple[ast.AST, IRFunction, IRSignature]] = {}
+        #: Lambdas and functions used as values, with the nodes made for them.
+        self._lambdas: dict[int, tuple[FunctionInfo, ast.FunctionDef]] = {}
+        self._adapters: dict[str, tuple[FunctionInfo, ast.FunctionDef]] = {}
+        #: Nodes lowering made and gave types to, kept alive with their types.
+        self.synthetic: list[ast.AST] = []
         self.instances: dict[
             tuple[str, tuple[str, ...]], tuple[IRFunction, NativeSignature | IRSignature]
         ] = {}
@@ -421,6 +430,12 @@ class Frontend:
             # The backends ask each call's status for the raised one.
             self.module.attributes["ppy.exceptions"] = True
         for qualname, (info, analysis, node) in functions.items():
+            if info.enclosing is not None:
+                # Lowered as a closure where it is defined, never on its own.
+                lowered.rejected[qualname] = (
+                    "a function defined inside another is lowered as a closure where it is defined"
+                )
+                continue
             extern = info.directive("native.extern")
             if extern is not None:
                 # A C binding: called, never lowered.
@@ -948,6 +963,158 @@ class Frontend:
             self._instantiating.pop()
         return self.instances[key]
 
+    # -- closures ---------------------------------------------------------------
+
+    def closure_code(
+        self, info: FunctionInfo, node: ast.FunctionDef, captured: dict[str, T.Type]
+    ) -> tuple[IRFunction, IRSignature]:
+        """The native entry of a nested function, a lambda, or a function used as
+        a value: its parameters after one more, the closure it runs as, whose
+        words after the first are the cells of `captured`, in that order.
+
+        Made once per definition; a body with no native lowering refuses, and
+        the function that makes the closure stays in Python with it."""
+        key = id(node)
+        found = self._closures.get(key)
+        if found is not None:
+            return found[1], found[2]
+        analysis = self.analysis.functions.get(info.qualname)
+        if self.cpu_compatible and analysis is not None:
+            ok, reason = eligible(info, analysis, self.layouts, allow_io=self.standalone)
+            if not ok:
+                raise Unsupported(f"`{info.name}` has no native lowering: {reason}")
+        base = self.signature(info, analysis)
+        if base.native is None:
+            raise Unsupported(f"`{info.name}` takes or returns what a closure cannot")
+        # Parameters as a call through the value passes them, whatever the
+        # body does with them: the caller knows only the value's type.
+        parameters = tuple(self._value_parameter(p.name, p.type) for p in info.params)
+        results = self._value_results(info.ret)
+        env = NativeParam("__closure", "handle", "closure", class_name="closure")
+        spelled = re.sub(r"\W+", "_", f"{info.qualname}_{node.lineno}_{node.col_offset}").strip("_")
+        signature = IRSignature(
+            spelled,
+            f"ppy_{spelled}",
+            (IRParameter("__closure", HANDLE, env), *parameters),
+            results,
+            replace(
+                base.native,
+                parameters=(env, *(p.native for p in parameters)),
+                symbol=f"ppy_{spelled}",
+            ),
+        )
+        function = self.declare(dataclass_replace(info, qualname=spelled), signature)
+        self._closures[key] = (node, function, signature)
+        try:
+            lowering = _FunctionLowering(self, function, signature, info, {})
+            lowering.captures = captured
+            lowering.run(node)
+        except Unsupported:
+            del self._closures[key]
+            del self.module.functions[function.name]
+            raise
+        return function, signature
+
+    def adapter_code(self, qualname: str) -> tuple[IRFunction, IRSignature]:
+        """A function of this module used as a value: a closure entry that calls it."""
+        entry = self.sources.get(qualname)
+        if entry is None or qualname not in self.declared:
+            raise Unsupported(f"`{qualname}` has no native lowering to call as a value")
+        info = entry[0]
+        known = self._adapters.get(qualname)
+        if known is not None:
+            return self.closure_code(known[0], known[1], {})
+        names = [ast.Name(p.name, ast.Load()) for p in info.params]
+        call = ast.Call(ast.Name(info.name, ast.Load()), list(names), [])
+        body: ast.stmt = ast.Expr(call) if info.ret == T.NONE else ast.Return(call)
+        node = ast.FunctionDef(
+            name=f"{info.name}_as_value",
+            args=ast.arguments([], [ast.arg(p.name) for p in info.params], None, [], [], None, []),
+            body=[body],
+            decorator_list=[],
+            returns=None,
+            type_params=[],
+        )
+        ast.copy_location(node, info.node)
+        ast.fix_missing_locations(node)
+        for name, parameter in zip(names, info.params, strict=True):
+            self.analysis.node_types[id(name)] = parameter.type
+        self.analysis.node_types[id(call)] = info.ret
+        value_info = dataclass_replace(
+            info, qualname=f"{info.qualname}.<value>", node=node, enclosing=None
+        )
+        self._adapters[qualname] = (value_info, node)
+        return self.closure_code(value_info, node, {})
+
+    def lambda_code(
+        self, node: ast.Lambda, typed: T.Callable_, outer: FunctionInfo
+    ) -> tuple[FunctionInfo, ast.FunctionDef]:
+        """A lambda as a function whose body returns its expression, typed as the
+        checker typed it where it is used; `closure_code` makes its entry."""
+        known = self._lambdas.get(id(node))
+        if known is None:
+            params = [
+                ParamInfo(arg.arg, given.type, annotated=True)
+                for arg, given in zip(node.args.args, typed.params, strict=True)
+            ]
+            body = ast.Return(node.body)
+            wrapper = ast.FunctionDef(
+                name="<lambda>",
+                args=node.args,
+                body=[body],
+                decorator_list=[],
+                returns=None,
+                type_params=[],
+            )
+            ast.copy_location(body, node)
+            ast.copy_location(wrapper, node)
+            info = FunctionInfo(
+                name="<lambda>",
+                qualname=f"{outer.qualname}.<locals>.<lambda>",
+                module=outer.module,
+                node=wrapper,
+                path=outer.path,
+                params=params,
+                ret=typed.ret,
+                ret_annotated=True,
+                enclosing=outer.qualname,
+            )
+            known = (info, wrapper)
+            self._lambdas[id(node)] = known
+        return known
+
+    def callable_signature(self, typed: T.Callable_) -> IRSignature:
+        """How a call through a function value of type `typed` passes its
+        arguments and takes its result: the closure entry's own ABI, less the
+        closure it is called with."""
+        parameters = tuple(
+            self._value_parameter(f"arg{index}", given.type)
+            for index, given in enumerate(typed.params)
+        )
+        return IRSignature("<value>", "", parameters, self._value_results(typed.ret), None)
+
+    def _value_parameter(self, name: str, t: T.Type) -> IRParameter:
+        """A parameter of a function called through a value: a scalar, or a
+        handle to a collection, a string, an object, or another function."""
+        native = _native_param(name, t, self.layouts, True)
+        if (
+            native is None
+            or native.is_buffer
+            or native.is_pointer
+            or native.is_tuple
+            or native.is_object
+        ):
+            raise Unsupported(f"a function value's parameter `{t}` has no native form")
+        return IRParameter(name, _param_type(native), native)
+
+    def _value_results(self, t: T.Type) -> tuple[IRType, ...]:
+        atoms = _return_atoms(t, self.layouts)
+        if t == T.NONE:
+            return ()
+        if atoms is None or len(atoms) != 1:
+            raise Unsupported(f"a function value's result `{t}` has no native form")
+        return (HANDLE,) if atoms == ("handle",) else (_scalar_type(atoms[0]),)
+
     def narrowed(
         self, qualname: str, parameter: str, taken_as: T.Type
     ) -> tuple[IRFunction, NativeSignature | IRSignature] | None:
@@ -1062,7 +1229,9 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering, StringLowering):
+class _FunctionLowering(
+    ClosureLowering, ExceptionLowering, GeneratorLowering, ContainerLowering, StringLowering
+):
     """Lowers one function body."""
 
     def __init__(
@@ -1163,6 +1332,7 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         self._stable: set[str] = set()
         self._entry_loads: dict[str, Value] = {}
         self._exception_setup()
+        self._closure_setup()
 
     # -- setup ------------------------------------------------------------
 
@@ -1171,6 +1341,7 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         self.b.at_end(self.entry)
         self._location(node)
         self._bind_parameters()
+        self._setup_closure(node)
         if self.prover is not None:
             self._guard_declared_ranges()
         stored = {
@@ -1185,6 +1356,7 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
             name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
         } - stored
         self._body(node.body)
+        self._check_cells()
         if self._open():
             self._return_default()
         self._finish_exceptions()
@@ -1195,6 +1367,9 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         for argument, parameter in zip(
             self.entry.arguments, self.signature.parameters, strict=True
         ):
+            if parameter.name == "__closure":
+                self._closure_env = argument
+                continue
             if parameter.is_buffer:
                 self.buffers[parameter.name] = argument
                 self._buffer_origins[parameter.name] = (
@@ -1392,6 +1567,10 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
                 self._for(node)
             case ast.Pass():
                 return
+            case ast.FunctionDef():
+                self._define_closure(node)
+            case ast.Nonlocal():
+                self._declare_nonlocal(node)
             case ast.Delete():
                 self._delete(node)
             case ast.Expr(value=ast.Constant()):
@@ -1871,7 +2050,10 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
 
         site: _GuardSite | None = None
         saved_induction = self._induction.get(name)
-        if self.hoist and not _rebinds(node.body, name):
+        # A variable a closure shares lives in its cell, where a call in the
+        # body may change it: the loop counts in a slot of its own.
+        shared = self._is_cell(name)
+        if self.hoist and not _rebinds(node.body, name) and not shared:
             guards = self._block("for.guards")
             setup = self._block("for.setup")
             core.br(self.b, Successor(guards))
@@ -1890,15 +2072,16 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
                 self._induction_terms[name] = self._induction_bounds(start, stop, step_value > 0)
 
         slot = self.slots.get(name)
-        if slot is None or slot.type != PtrType(I64, "stack"):
+        if not shared and (slot is None or slot.type != PtrType(I64, "stack")):
             slot = self._alloca(I64, name)
             self.slots[name] = slot
             self.tuples.pop(name, None)
+        assert slot is not None
         # A body that assigns the loop variable does not steer the loop in
         # Python: `range` hands out the next value whatever the name holds.
         # The count then lives in a slot of its own, and each iteration
         # binds the name from it.
-        rebound = _rebinds(node.body, name)
+        rebound = _rebinds(node.body, name) or shared
         counter = self._alloca(I64, f"{name}.count") if rebound else slot
         core.store(self.b, start, counter)
 
@@ -1960,9 +2143,11 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         assert isinstance(target, ast.Name)
         carried = _scalar_type(_read_as(_kind(element)))
         slot = self.slots.get(target.id)
-        if slot is None or slot.type != PtrType(carried, "stack"):
+        shared = self._is_cell(target.id)
+        if not shared and (slot is None or slot.type != PtrType(carried, "stack")):
             slot = self._alloca(carried, target.id)
             self.slots[target.id] = slot
+        assert slot is not None
         length = core.cast(self.b, core.buffer_len(self.b, buffer), I64)
 
         header = self._block("each.head")
@@ -2536,6 +2721,8 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         )
 
     def _call(self, node: ast.Call, *, discard_result: bool = False) -> Value:
+        if self._calls_value(node):
+            return self._value_call(node, discard_result=discard_result)
         if self._plugin_spec(node) is not None:
             op = self._plugin_call(node)
             if not op.results:
@@ -2584,6 +2771,11 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
                 "builtins.print"
             }:
                 return self._standalone_print(node)
+        if target in {"min", "max"} and node.keywords and target not in self.frontend.declared:
+            # `max(xs, key=f)`: the one keyword a reduction takes.
+            reduced = self._reduction(target, node)
+            if reduced is not None:
+                return reduced
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
         if self.frontend.standalone:

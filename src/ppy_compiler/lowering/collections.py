@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 from ..analysis import types as T
 from ..analysis.checker import receiver_bindings
+from ..analysis.closures import callable_spelled, is_plain_callable
 from ..analysis.symbols import ClassInfo, dataclass_keyword
 from ..backend.llvm.lowering import Unsupported
 from ..driver.ir_pipeline import exception_header, object_chain
@@ -82,7 +83,8 @@ _BOUND_WORDS = {"floor": "at most", "ceiling": "at least", "lower": "below", "hi
 class Shape:
     """What one element or value is, word by word."""
 
-    #: "int", "float", "bool", "str", "tuple", "record", "collection", or "object".
+    #: "int", "float", "bool", "str", "tuple", "record", "collection", "object",
+    #: or "function" (a closure: its type is `class_args[0]`, spelled in `record`).
     kind: str
     #: A tuple's items, or a record's fields: scalar kinds.
     parts: tuple[str, ...] = ()
@@ -107,12 +109,13 @@ class Shape:
 
     @property
     def handles(self) -> int:
-        return 1 if self.kind in {"collection", "object", "str"} else 0
+        return 1 if self.kind in {"collection", "object", "str", "function"} else 0
 
     @property
     def reference(self) -> bool:
-        """Held by handle: a collection, a string, or an instance of an object class."""
-        return self.kind in {"collection", "object", "str"}
+        """Held by handle: a collection, a string, an instance of an object class,
+        or a function value."""
+        return self.kind in {"collection", "object", "str", "function"}
 
     @property
     def comparable(self) -> bool:
@@ -152,6 +155,8 @@ class Shape:
         """An object's type written out, as a parameter's element spells it."""
         if self.kind == "str":
             return "str"
+        if self.kind == "function":
+            return self.record
         return str(T.Instance(self.record, self.class_args, (self.record, "object")))
 
 
@@ -220,6 +225,14 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
         return Shape(str(base))
     if base == T.STR:
         return STR
+    if isinstance(base, T.Callable_):
+        if not is_plain_callable(base):
+            return None
+        # Two values of one signature are one shape, whatever names they carry.
+        plain = T.Callable_(
+            tuple(T.Param(f"arg{i}", p.type) for i, p in enumerate(base.params)), base.ret
+        )
+        return Shape("function", record=callable_spelled(plain), class_args=(plain,))
     if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
         parts = [T.strip_literal(item) for item in base.items]
         if all(part in (T.INT, T.FLOAT, T.BOOL) for part in parts):
@@ -2411,7 +2424,9 @@ def _copies_before_writes(function: ast.AST, record: str, type_of) -> bool:  # t
         )
 
     def visit(node: ast.AST, loops: list[ast.AST]) -> None:
-        inner = [*loops, node] if isinstance(node, (ast.For, ast.While)) else loops
+        inner: list[ast.AST] = list(loops)
+        if isinstance(node, (ast.For, ast.While)):
+            inner.append(node)
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             value = node.value

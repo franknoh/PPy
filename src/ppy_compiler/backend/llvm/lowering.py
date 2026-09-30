@@ -35,6 +35,7 @@ from ppy_runtime.collection_boundary import parse as crossing_spec
 
 from ...analysis import types as T
 from ...analysis.checker import FunctionAnalysis
+from ...analysis.closures import callable_spelled, is_plain_callable
 from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
 from ...analysis.symbols import FunctionInfo
@@ -294,6 +295,11 @@ def _collection_param(
     base = T.strip_literal(t)
     if base == T.STR:
         return NativeParam(name, "handle", "str", class_name="str")
+    if isinstance(base, T.Callable_):
+        # A function value: a closure's handle. None crosses from Python.
+        if not is_plain_callable(base):
+            return None
+        return NativeParam(name, "handle", callable_spelled(base), class_name="callable")
     if isinstance(base, T.Instance) and base.name in _BUILTIN_CONTAINERS and base.args:
         if not written and _buffer_element(base) is not None:
             # A list of numbers the function only reads is lent as a buffer.

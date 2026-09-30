@@ -525,7 +525,7 @@ class CommonSubexpression(Pass):
 
     def _repeated(self, root: ast.expr) -> ast.expr | None:
         seen: dict[str, tuple[int, ast.expr]] = {}
-        for node in ast.walk(root):
+        for node in _same_scope(root):
             if not isinstance(node, (ast.BinOp, ast.Compare)):
                 continue
             if not _is_pure_expr(node):
@@ -541,12 +541,32 @@ class CommonSubexpression(Pass):
         return max(candidates, key=lambda pair: pair[0])[1]
 
 
+#: Expressions with a scope of their own: what they read runs later, or with
+#: names of their own, so a temporary of the statement cannot stand for it.
+_SCOPES = (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+
+
+def _same_scope(root: ast.expr) -> list[ast.AST]:
+    """`root` and what it evaluates in its own scope, not inside a lambda or
+    a comprehension."""
+    found: list[ast.AST] = []
+    pending: list[ast.AST] = [root]
+    while pending:
+        node = pending.pop()
+        found.append(node)
+        if not isinstance(node, _SCOPES):
+            pending.extend(ast.iter_child_nodes(node))
+    return found
+
+
 class _ReplaceExpr(ast.NodeTransformer):
     def __init__(self, dump: str, name: str) -> None:
         self.dump = dump
         self.name = name
 
     def visit(self, node: ast.AST) -> ast.AST:
+        if isinstance(node, _SCOPES):
+            return node
         if isinstance(node, ast.expr) and ast.dump(node) == self.dump:
             return ast.copy_location(ast.Name(id=self.name, ctx=ast.Load()), node)
         return super().visit(node)

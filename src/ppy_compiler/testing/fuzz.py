@@ -65,7 +65,7 @@ _NATIVE_ONLY = frozenset({"standalone", "c", "cpp"})
 
 _PRELUDE = """\
 import math
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from ppy import Deque, HashMap, Heap, TreeMap, Vec
@@ -368,9 +368,11 @@ class _Generator:
             w.depth += 1
             w.put(f"return {self.value(ret, scope)}")
             w.depth -= 1
-        elif roll < 0.94:
+        elif roll < 0.925:
             self.try_statement(w, scope, ret)
-        elif roll < 0.955:
+        elif roll < 0.945:
+            self.closure_statement(w, scope)
+        elif roll < 0.96:
             self.generator_statement(w, scope)
         elif roll < 0.975:
             self.lifted_statement(w, scope)
@@ -575,6 +577,63 @@ class _Generator:
                     f"{self.float_expr(scope, 2)}, {self.int_expr(scope, 2)})"
                 )
             scope.strs.append(text)
+
+    def closure_statement(self, w: _Writer, scope: _Scope) -> None:
+        """A nested function or a lambda over the block's names: called, keeping
+        a count through `nonlocal`, a sort or reduction key, a `Callable` local
+        mapped over a range, or a closure a nested function makes."""
+        rng = self.rng
+        name = self.name("n")
+        roll = rng.random()
+        if roll < 0.25:
+            inner = self.name("g")
+            w.put(f"def {inner}(x: int) -> int:")
+            w.put(f"    return x * {rng.randint(-3, 3)} + {self.int_expr(scope, 2)}")
+            w.put(
+                f"{name}: int = {inner}({self.int_expr(scope, 2)}) - {inner}({self.int_literal()})"
+            )
+        elif roll < 0.45:
+            bump = self.name("bump")
+            w.put(f"{name}: int = {self.int_expr(scope, 2)}")
+            w.put(f"def {bump}(by: int) -> None:")
+            w.put(f"    nonlocal {name}")
+            w.put(f"    {name} = {name} * 2 + by")
+            w.put(f"{bump}({self.int_expr(scope, 2)})")
+            w.put(f"{bump}({self.int_literal()})")
+        elif roll < 0.65:
+            items = self.name("xs")
+            values = ", ".join(self.int_expr(scope, 2) for _ in range(rng.randint(1, 4)))
+            w.put(f"{items}: list[int] = [{values}]")
+            key = rng.choice(
+                (
+                    f"lambda v: v % {rng.randint(2, 5)}",
+                    f"lambda v: (v % {rng.randint(2, 5)}, -v)",
+                    f"lambda v: v * {self.int_expr(scope, 2)}",
+                )
+            )
+            reverse = rng.choice(("", ", reverse=True"))
+            w.put(f"{items}.sort(key={key}{reverse})")
+            which = rng.choice(("min", "max"))
+            w.put(f"{name}: int = {items}[0] * 7 + {which}({items}, key={key})")
+        elif roll < 0.85:
+            function = self.name("h")
+            w.put(f"{function}: Callable[[int], int] = lambda v: v * 3 + {self.int_expr(scope, 2)}")
+            count = rng.randint(0, 5)
+            if self.chance(0.5):
+                w.put(f"{name}: int = sum(map({function}, range({count})))")
+            else:
+                w.put(f"{name}: int = 0")
+                item = self.name("x")
+                w.put(f"for {item} in filter(lambda v: v % 2 == 0, range({count})):")
+                w.put(f"    {name} += {function}({item})")
+        else:
+            make = self.name("make")
+            w.put(f"def {make}(k: int) -> Callable[[int], int]:")
+            w.put(f"    return lambda v: v * k + {self.int_expr(scope, 2)}")
+            made = self.name("h")
+            w.put(f"{made} = {make}({self.int_expr(scope, 2)})")
+            w.put(f"{name}: int = {made}({self.int_literal()}) + {made}({self.int_literal()})")
+        scope.ints.append(name)
 
     def container_statements(self, w: _Writer, scope: _Scope) -> None:
         """Python's own `list`, `dict`, and `set`: displays, comprehensions,
