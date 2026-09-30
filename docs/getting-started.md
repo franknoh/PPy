@@ -72,7 +72,7 @@ echo 300000 | uv run ppy run collatz.ppy   # 3. LLVM native
 All three must print the same answer. If they differ, that is a compiler
 bug.
 
-The first run of the third command builds into the cache (about 0.6 s).
+The first run of the third command builds into the cache (about 0.35 s).
 Later runs only start the launcher, which serves the built artifact. If you
 edit any source under the project, the artifact's name changes and a fresh
 one is built.
