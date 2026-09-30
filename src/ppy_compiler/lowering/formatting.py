@@ -164,10 +164,9 @@ def percent(node: ast.BinOp, kind_of: Callable[[ast.expr], str]) -> ast.JoinedSt
 
 
 def _conversion(match: re.Match[str], value: ast.expr, kind: str) -> ast.FormattedValue:
-    flags = match.group("flags")
-    width = match.group("width")
-    precision = match.group("precision")
-    code = match.group("type")
+    flags, width, code = (str(match.group(part)) for part in ("flags", "width", "type"))
+    given = match.group("precision")
+    precision = None if given is None else str(given)
     left = "-" in flags
     if code in {"s", "r", "a"}:
         if "0" in flags and not left:
