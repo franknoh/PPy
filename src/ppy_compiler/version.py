@@ -14,7 +14,7 @@ __all__ = ["COMPILER_VERSION", "compiler_fingerprint"]
 #: The released version. The packaging build reads this literal;
 #: `ppy_runtime.version` carries the runtime's copy, `ppy.__version__` reads
 #: that, and a test holds them together.
-COMPILER_VERSION = "0.5.0"
+COMPILER_VERSION = "0.6.0a1"
 
 
 #: The fingerprint once worked out; one per process.
