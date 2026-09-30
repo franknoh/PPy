@@ -478,7 +478,12 @@ class Frontend:
         self._reject_callers_of_rejected(lowered)
         for qualname in lowered.rejected:
             declaration = self.declared.get(qualname)
-            if declaration is not None and declaration[0].is_declaration:
+            if declaration is None:
+                continue
+            # A function rejected after it lowered (a callee stayed in Python)
+            # takes its string boundary thunk with it: the thunk calls it.
+            self.module.functions.pop(f"{declaration[0].name}.py", None)
+            if declaration[0].is_declaration:
                 self.module.functions.pop(declaration[0].name, None)
         lowered.remarks = tuple(self.remarks)
         return lowered
