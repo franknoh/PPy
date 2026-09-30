@@ -32,10 +32,13 @@ def grow(n: int) -> int:
     return x
 
 
-print(grow(3))   # native: prints i 0 .. i 2, then 1000000000
-print(grow(10))  # x passes 64 bits at i = 7: the call falls back,
-                 # the held lines are dropped, Python prints i 0 .. i 9 once
+print(grow(3))
+print(grow(10))
 ```
+
+`grow(3)` runs natively and prints `i 0` to `i 2`, then `1000000000`. In
+`grow(10)`, `x` passes 64 bits at `i = 6`: the call falls back, the lines it
+held are dropped, and Python prints `i 0` to `i 9` once.
 
 So a function that only prints keeps every check it had. The output goes
 through Python's own `sys.stdout`, so it interleaves with what Python
@@ -96,16 +99,18 @@ the call.
 ```python
 def ask(n: int) -> str:
     print("asking", n)
-    name = input("name? ")    # barrier: "asking 1" is written first
+    name = input("name? ")
     print("hello", name)
-    return name               # native
+    return name
 
 
 def after(n: int) -> int:
     s = input()
-    return n * n + len(s)     # n * n may pass 64 bits after the barrier:
-                              # `after` stays in Python
+    return n * n + len(s)
 ```
+
+`ask` is native: "asking 1" is written before the prompt. In `after`, `n * n` may pass 64 bits after the barrier, so
+`after` stays in Python.
 
 A native exception after a barrier is raised by the boundary as it is,
 rather than by running the call again: a builtin exception is rebuilt from
