@@ -633,6 +633,8 @@
       
         
       
+        
+      
     
     
     
@@ -1318,6 +1320,34 @@
     
   
     Regular expressions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/stdlib/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The standard library
   
 
     
@@ -6406,10 +6436,9 @@ statistics are not collected on this path.</p>
     <div class="doc doc-contents ">
 
         <p>Build the Python-callable wrapper for one native function.</p>
-<p><code>ctypes.CFUNCTYPE</code> releases the GIL around the foreign call, which is what
-a native region touching no Python objects is allowed to do (spec 16.6).</p>
-<p>When the function asked for it, repeated argument shapes are compiled into
-guarded specializations and selected here (spec 16.9).</p>
+<p>A function that draws random numbers draws from <code>random</code>'s own generator:
+its state is saved before the call and put back before a fallback, so
+the Python rerun draws what the native call drew.</p>
 
 
     </div>

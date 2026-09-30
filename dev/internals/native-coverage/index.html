@@ -633,6 +633,8 @@
       
         
       
+        
+      
     
     
     
@@ -1318,6 +1320,34 @@
     
   
     Regular expressions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/stdlib/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The standard library
   
 
     
@@ -4111,6 +4141,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#after-the-standard-library-went-native" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After the standard library went native
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4274,6 +4315,17 @@
     <span class="md-ellipsis">
       
         Running the corpus under ppy run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#after-the-standard-library-went-native" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After the standard library went native
       
     </span>
   </a>
@@ -4608,6 +4660,47 @@ import a sibling (<code>from .stack import Stack</code>, <code>from data_structu
 on both sides, and programs that read <code>input()</code> end in <code>EOFError</code> on both
 sides. They count as different only because <code>ppy run</code> stops earlier, at the
 check, with its own error.</p>
+<h2 id="after-the-standard-library-went-native">After the standard library went native<a class="headerlink" href="#after-the-standard-library-went-native" title="Permanent link">&para;</a></h2>
+<p>With <code>random</code>, <code>math</code>, <code>heapq</code>, <code>bisect</code>, <code>itertools</code>, and <code>string</code> lowered
+(see <a href="../../guide/stdlib/">the guide</a>), the same summary over the same tree:</p>
+<table>
+<thead>
+<tr>
+<th>tier</th>
+<th style="text-align: right;">functions</th>
+<th style="text-align: right;">statements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>native, called from Python</td>
+<td style="text-align: right;">254 (5%)</td>
+<td style="text-align: right;">2,497 (7%)</td>
+</tr>
+<tr>
+<td>native, called from native code</td>
+<td style="text-align: right;">463 (10%)</td>
+<td style="text-align: right;">1,870 (5%)</td>
+</tr>
+<tr>
+<td>Python</td>
+<td style="text-align: right;">3,969 (85%)</td>
+<td style="text-align: right;">32,602 (88%)</td>
+</tr>
+</tbody>
+</table>
+<p>"Draws random numbers" is gone from the reasons: 138 functions and 1,388
+statements. Calls with unknown effects went from 840 functions (8,213
+statements) to 753 (7,416). Some of the freed functions now stop at the
+next reason in their body, which is why a few rows grew: a <code>for</code> over a
+tuple (55 to 62 functions), integer <code>**</code> (37 to 42), a <code>list[Any]</code>
+parameter (56 to 59).</p>
+<p>The 400-script comparison ran again with <code>random</code> seeded before each
+program on both sides (a <code>sitecustomize</code> that calls <code>random.seed</code>), so
+programs that draw are compared too. 357 match, 33 differ, and 10 were
+skipped as nondeterministic or slow under CPython. Of the programs that
+import <code>random</code> and ran, all but two match. All 33 differences also differ
+on the tree before this change, with the same seed: none is new.</p>
 
 
 
