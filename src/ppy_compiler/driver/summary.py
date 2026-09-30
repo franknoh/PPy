@@ -116,6 +116,12 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/native-lowering/",
     ),
     _shape(
+        r"the module did not lower",
+        "the module failed to lower (a compiler bug; please report it)",
+        "run `ppy run` on the file to see the error, and open an issue with it",
+        "reference/compatibility/",
+    ),
+    _shape(
         r"dynamic",
         "a `ppy.dynamic` boundary",
         "a dynamic region runs on CPython by design",
@@ -272,7 +278,7 @@ def _statements(node: ast.AST) -> int:
     return sum(isinstance(child, ast.stmt) for child in ast.walk(node)) - 1
 
 
-def summarize(bundle, lowered, sources=None) -> Summary:  # type: ignore[no-untyped-def]
+def summarize(bundle, lowered, sources=None, failures=None) -> Summary:  # type: ignore[no-untyped-def]
     """Each function of the given sources (all analyzed modules, without them),
     and where it runs. A module the analysis followed an import into is not
     what was asked about.
@@ -300,6 +306,8 @@ def summarize(bundle, lowered, sources=None) -> Summary:  # type: ignore[no-unty
                 tier="python",
             )
             native = result.functions.get(qualname) if result is not None else None
+            if failures and name in failures:
+                outcome.reason = f"the module did not lower: {failures[name]}"
             if native is not None:
                 if native.exposed:
                     outcome.tier = "native"
@@ -308,6 +316,8 @@ def summarize(bundle, lowered, sources=None) -> Summary:  # type: ignore[no-unty
                     outcome.reason = native.exposure_reason
             elif analysis.dynamic:
                 outcome.reason = "contains a ppy.dynamic boundary"
+            elif failures and name in failures:
+                pass
             elif result is not None and qualname in result.rejected:
                 outcome.reason = result.rejected[qualname]
             else:
@@ -318,6 +328,10 @@ def summarize(bundle, lowered, sources=None) -> Summary:  # type: ignore[no-unty
         for d in bundle.diagnostics.sorted()
         if d.code in {"E1001", "E1002"}
     }
+    for name, why in (failures or {}).items():
+        module = bundle.analysis.modules.get(name)
+        path = getattr(getattr(module, "symbols", None), "path", None)
+        failed[_shown(Path(path), root) if path else name] = f"lowering failed: {why}"
     outcomes.sort(key=lambda o: (o.path, o.line))
     return Summary(outcomes, failed)
 

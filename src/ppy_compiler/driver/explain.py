@@ -65,13 +65,14 @@ def _summary(options: argparse.Namespace, reporter: Reporter) -> int:
     project = open_project(targets[0])
     entries = sorted({entry for target in targets for entry in collect_sources(target)})
     bundle = analyze_paths(project, entries, backend="llvm")
+    failures: dict[str, str] = {}
     try:
         from ..backend.llvm import _collect
 
-        lowered = _collect(bundle)
+        lowered = _collect(bundle, failures=failures)
     except ImportError:  # pragma: no cover - the backend is optional
         lowered = {}
-    summary = summarize(bundle, lowered, entries)
+    summary = summarize(bundle, lowered, entries, failures)
     if options.json:
         print(summary_json(summary), end="")
     else:
