@@ -569,3 +569,70 @@ def test_native_code_raises_where_cpython_does_on_none(project_dir: Path, write)
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert done.stdout == expected
+
+
+PRIVATE_HELPERS = """
+def _scale(xs, k):
+    return [x * k for x in xs]
+
+
+def _count(words):
+    seen = {}
+    for w in words:
+        if w in seen:
+            seen[w] += 1
+        else:
+            seen[w] = 1
+    return seen
+
+
+def evens(n: int) -> list[int]:
+    out = []
+    for i in range(n):
+        if i % 2 == 0:
+            out.append(i)
+    return out
+
+
+def pairs(n: int) -> int:
+    acc = []
+    i = 0
+    while i < n:
+        acc.append((i, i * i))
+        i += 1
+    return sum(b for _, b in acc)
+
+
+def main() -> None:
+    print(_scale([1, 2, 3], 2), _count(["a", "b", "a"]), evens(7), pairs(5))
+
+
+main()
+"""
+
+
+def test_private_helpers_take_their_parameter_types_from_their_calls(write, codes, analyze):
+    """Without strict mode, `_scale(xs, k)` called only as `_scale([1, 2, 3], 2)`
+    has `xs: list[int]` and `k: int`; strict mode still asks for annotations."""
+    path = write("prog.py", PRIVATE_HELPERS)
+    bundle = analyze(path, strict=False)
+    params = {p.name: str(p.type) for p in bundle.symbols.functions["prog._scale"].params}
+    assert params == {"xs": "list[int]", "k": "int"}
+    assert [d.code for d in bundle.diagnostics.sorted() if d.code in {"W2010", "E1201"}] == []
+    assert "E1201" in codes(path)
+
+
+def test_a_helper_used_as_a_value_is_not_inferred(write, analyze):
+    path = write(
+        "prog.py",
+        """
+        def _double(x):
+            return x * 2
+
+
+        def main() -> None:
+            print(_double(3), list(map(_double, [1, 2])))
+        """,
+    )
+    bundle = analyze(path, strict=False)
+    assert not bundle.symbols.functions["prog._double"].params[0].inferred
