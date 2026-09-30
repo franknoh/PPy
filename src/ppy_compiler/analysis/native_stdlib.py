@@ -12,18 +12,16 @@ answers None for, and the call stays a Python call.
 from __future__ import annotations
 
 import string as _string
-from typing import Protocol
 
 from . import types as T
 from .effects import Effect, EffectSet
-from .refinements import Facts
+from .env import Binding
 
 __all__ = ["MODELS", "MUTATES_FIRST", "STRING_CONSTANTS", "call"]
 
 
-class _Argument(Protocol):
-    type: T.Type
-    facts: Facts
+#: What the checker knows of an argument: its type and its facts.
+_Argument = Binding
 
 
 _RANDOM = EffectSet.of(Effect.RANDOM)
@@ -76,20 +74,6 @@ MODELS: dict[str, tuple[T.Type, EffectSet]] = {
     "random.randbytes": _fn("random.randbytes", T.BYTES, _RANDOM),
     "random.getstate": _fn("random.getstate", T.ANY, _RANDOM),
     "random.setstate": _fn("random.setstate", T.NONE, _RANDOM_RAISES),
-    **{
-        f"itertools.{name}": _fn(f"itertools.{name}", T.instance("Iterator", T.ANY), _ALLOC)
-        for name in (
-            "product",
-            "permutations",
-            "combinations",
-            "combinations_with_replacement",
-            "pairwise",
-            "chain",
-            "islice",
-            "accumulate",
-            "repeat",
-        )
-    },
     "heapq.heappush": _fn("heapq.heappush", T.NONE, _HEAP_WRITE),
     "heapq.heappop": _fn("heapq.heappop", T.ANY, _HEAP_WRITE),
     "heapq.heapify": _fn("heapq.heapify", T.NONE, _HEAP_WRITE),
@@ -120,6 +104,23 @@ STRING_CONSTANTS = {
         "printable",
     )
 }
+
+MODELS.update(
+    {
+        f"itertools.{name}": _fn(f"itertools.{name}", T.instance("Iterator", T.ANY), _ALLOC)
+        for name in (
+            "product",
+            "permutations",
+            "combinations",
+            "combinations_with_replacement",
+            "pairwise",
+            "chain",
+            "islice",
+            "accumulate",
+            "repeat",
+        )
+    }
+)
 
 #: The calls that write to the list they are given first.
 MUTATES_FIRST = frozenset(
@@ -182,7 +183,7 @@ def _range(argument: _Argument) -> bool:
 
 
 def call(
-    qualname: str, args: list[_Argument], keywords: dict[str, _Argument]
+    qualname: str, args: list[_Argument], keywords: dict[str | None, _Argument]
 ) -> tuple[T.Type, EffectSet] | None:
     """What a call gives where native code makes it, or None where it does not."""
     if qualname.startswith("math."):
@@ -203,7 +204,9 @@ def call(
     return (found, effects) if found is not None else None
 
 
-def _random(name: str, args: list[_Argument], keywords: dict[str, _Argument]) -> T.Type | None:
+def _random(
+    name: str, args: list[_Argument], keywords: dict[str | None, _Argument]
+) -> T.Type | None:
     count = len(args)
     if name == "choices":
         if count not in (1, 2) or set(keywords) - {"weights", "cum_weights", "k"}:
@@ -314,7 +317,7 @@ def _tuple_of_numbers(t: T.Type) -> int | None:
 
 
 def _math(
-    qualname: str, args: list[_Argument], keywords: dict[str, _Argument]
+    qualname: str, args: list[_Argument], keywords: dict[str | None, _Argument]
 ) -> tuple[T.Type, EffectSet] | None:
     from . import stdlib  # pylint: disable=import-outside-toplevel
 
@@ -376,7 +379,9 @@ def _constant(argument: _Argument) -> int | None:
     return None
 
 
-def _itertools(name: str, args: list[_Argument], keywords: dict[str, _Argument]) -> T.Type | None:
+def _itertools(
+    name: str, args: list[_Argument], keywords: dict[str | None, _Argument]
+) -> T.Type | None:
     """`itertools`' finite iterators over lists and ranges, typed by what they
     hand out; the lowering makes each into a list where it is consumed."""
     if keywords and not (name == "accumulate" and set(keywords) == {"initial"}):
@@ -391,10 +396,13 @@ def _itertools(name: str, args: list[_Argument], keywords: dict[str, _Argument])
     element = elements[0]
     scalar = _is(element, *_SCALARS)
     if name == "product" and 1 <= len(args) <= 4:
-        items = [_walked(a) for a in args]
-        if all(item is not None and _is(item, *_SCALARS) for item in items):
-            return T.instance("Iterator", T.Tuple_(tuple(items)))  # type: ignore[arg-type]
-        return None
+        items: list[T.Type] = []
+        for argument in args:
+            item = _walked(argument)
+            if item is None or not _is(item, *_SCALARS):
+                return None
+            items.append(item)
+        return T.instance("Iterator", T.Tuple_(tuple(items)))
     if name in {"permutations", "combinations", "combinations_with_replacement"}:
         r = _constant(args[1]) if len(args) == 2 else None
         if r is None or not 0 <= r <= 16 or not scalar:
