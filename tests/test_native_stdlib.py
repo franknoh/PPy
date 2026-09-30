@@ -552,3 +552,53 @@ def test_the_bound_state_is_random_inst(tmp_path: Path):
     drawn = [random.random() if i % 2 else lib.ppy_random_double(bound) for i in range(10)]
     random.seed(12345)
     assert drawn == [random.random() for _ in range(10)]
+
+
+ACROSS_PYTHON = """
+import random
+
+
+def py_draw(n: int) -> float:
+    return random.vonmisesvariate(1.0, 2.0) + n
+
+
+def mixed(n: int) -> float:
+    total = 0.0
+    for i in range(n):
+        total += random.random()
+        total += py_draw(i)
+        total += random.uniform(0.0, 1.0)
+    return total
+
+
+def fallback_after_draw(k: int) -> int:
+    a = random.randint(1, 100)
+    return a * k + random.randint(1, 10)
+
+
+def main() -> None:
+    random.seed(99)
+    print(mixed(8))
+    print(random.random())
+    print(fallback_after_draw(3))
+    print(fallback_after_draw(2**62))
+    print(random.random(), mixed(3))
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_draws_on_both_sides_of_a_call_into_python(tmp_path: Path):
+    """Native draws, a call into Python that draws from the same generator (a
+    barrier: nothing falls back after it), native draws again, and then a
+    call that falls back after it drew: CPython's sequence throughout."""
+    expected = _expected(tmp_path, ACROSS_PYTHON)
+    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    assert _output(done).strip() == expected
+    for function in ("mixed", "fallback_after_draw"):
+        explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
+        assert "llvm backend: native" in explained.stdout, (function, explained.stdout)
