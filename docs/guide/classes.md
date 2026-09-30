@@ -248,10 +248,48 @@ leak check passes.
 
 ## The Python boundary
 
-An object never crosses between Python and native code. A native function
-that takes or returns one is called by native code only. When Python code
-calls it, its Python body runs. The functions Python calls natively take and
-return numbers, and make their objects inside.
+Under `ppy run`, Python can call a native function that takes or returns
+objects of the project's classes. The object is copied into native memory
+whole, together with the objects and containers its fields hold. An object
+reached twice becomes one native object, so a shared object and a cycle
+stay what they were.
+
+After the call:
+
+- if the function writes a field, the new values are set on the caller's
+  objects, which stay the same objects;
+- an object the function returns is the caller's own object when it came
+  from one;
+- an object native code made becomes a new instance of its class, with its
+  fields set. `__init__` does not run again, because native code already
+  ran it.
+
+```python
+class Node:
+    def __init__(self, value: int) -> None:
+        self.value = value
+        self.next: Node | None = None
+
+
+def bump(head: Node | None) -> None:
+    while head is not None:
+        head.value += 1
+        head = head.next
+```
+
+Called from Python, `bump(a)` runs natively and leaves each node's `value`
+one higher. `bump(None)` is native too, since the parameter allows `None`.
+
+The copy costs time in proportion to what crosses. So Python calls the
+native body only when the function does work in proportion to it: a loop
+that follows a field (`head = head.next`), a loop over a container of
+objects, or a call to itself on a field (`height(node.left)`). Native
+callers pass objects by handle and copy nothing. `ppy explain` gives the
+reason for each function.
+
+Python runs the function's own body instead when an argument's class is not
+one the signature describes. That covers a class made at run time, a
+subclass from another module, and an object missing a field.
 
 ## Class attributes
 
@@ -299,6 +337,9 @@ on CPython.
   address, which only Python has. A value class with its own `__repr__` or
   `__str__` is shown by Python.
 - A generic class whose type arguments nothing tells stays in Python.
+- An exception object, an instance of a generic class, and an object with a
+  field holding a function do not cross the Python boundary. A function that
+  takes one is called natively by native code only.
 
 Examples: [Inheritance](../howto/49_inheritance.md),
 [Collections](../howto/47_collections.md).

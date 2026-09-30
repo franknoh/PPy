@@ -15,10 +15,15 @@ back into the caller's objects after the call, so Python sees the writes.
 
 What crosses is what has a plain native form: numbers, strings, tuples of
 numbers, and collections of them, Python's own `list`, `dict`, and `set`
-included (a string crosses as its UTF-8 bytes, made a native string). A
-dataclass element, an object, or a `LinkedList` (whose node ids are the
-history of its insertions) keeps the function on its Python body when Python
-calls it.
+included (a string crosses as its UTF-8 bytes, made a native string), and
+instances of the project classes the signature describes (`CrossingClass`):
+an object as a handle to its one record of fields, a value class as its
+fields' words in place. An object crosses whole, the objects its fields hold
+with it, each once; one that comes back as a handle it went in as is the
+caller's object again, its fields set to what native code left in them. A
+`LinkedList` (whose node ids are the history of its insertions), or an
+object whose class the signature does not describe, keeps the function on
+its Python body when Python calls it.
 """
 
 from __future__ import annotations
@@ -30,6 +35,8 @@ import struct
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
+
+from .abi import CrossingClass
 
 __all__ = ["RETURNS_NOTHING", "Boundary", "Spec", "parse", "runtime"]
 
@@ -71,11 +78,18 @@ class Refused(Exception):
 class Spec:
     """One type as the boundary sees it: a scalar, a tuple of scalars, or a collection."""
 
-    #: "int", "float", "bool", "tuple", or a collection's short name.
+    #: "int", "float", "bool", "tuple", "str", a collection's short name,
+    #: "object" (a handle to a project class's instance), or "record" (a value
+    #: class's fields in place).
     kind: str
+    #: A tuple's or a record's words: scalar kinds.
     parts: tuple[str, ...] = ()
     key: Spec | None = None
     value: Spec | None = None
+    #: An object's or a record's class.
+    record: str = ""
+    #: An object that may be `None`, the null handle.
+    nullable: bool = False
 
     @property
     def collection(self) -> bool:
@@ -83,12 +97,17 @@ class Spec:
 
     @property
     def words(self) -> int:
-        return len(self.parts) if self.kind == "tuple" else 1
+        return len(self.parts) if self.kind in {"tuple", "record"} else 1
 
     def _kinds(self) -> tuple[str, ...]:
-        if self.kind == "tuple":
+        if self.kind in {"tuple", "record"}:
             return self.parts
-        return ("handle",) if self.collection or self.kind == "str" else (self.kind,)
+        return ("handle",) if self.reference else (self.kind,)
+
+    @property
+    def reference(self) -> bool:
+        """Held by handle: a collection, a string, or an object."""
+        return self.collection or self.kind in {"str", "object"}
 
     @property
     def floats(self) -> int:
@@ -96,7 +115,7 @@ class Spec:
 
     @property
     def handles(self) -> int:
-        return 1 if self.collection or self.kind == "str" else 0
+        return 1 if self.reference else 0
 
     @property
     def leaves(self) -> int:
@@ -126,12 +145,14 @@ class Spec:
         return base[self.value.python()]
 
 
-_TOKEN = re.compile(r"\s*([A-Za-z_][A-Za-z_0-9.]*|\[|\]|,)")
+_TOKEN = re.compile(r"\s*([A-Za-z_][A-Za-z_0-9.]*|\[|\]|,|\?)")
 
 
-def parse(spelled: str) -> Spec | None:
+def parse(spelled: str, classes: dict[str, CrossingClass] | None = None) -> Spec | None:
     """A type as native signatures spell it (`ppy.HashMap[int, ppy.Vec[float]]`),
-    or None where it does not cross."""
+    or None where it does not cross. A class `classes` describes crosses as
+    one of its instances; `prog.Node?` is one that may be `None`."""
+    classes = classes or {}
     tokens = _TOKEN.findall(spelled)
     if "".join(tokens) != "".join(spelled.split()):
         return None
@@ -145,6 +166,17 @@ def parse(spelled: str) -> Spec | None:
         position += 1
         if name in _SCALARS or name == "str":
             return Spec(name)
+        described = classes.get(name)
+        if described is not None:
+            nullable = position < len(tokens) and tokens[position] == "?"
+            if nullable:
+                position += 1
+            if described.kind == "record":
+                parts = tuple(kind for _field, _offset, kind in described.fields)
+                if any(part not in _SCALARS for part in parts):
+                    return None
+                return Spec("record", parts, record=name)
+            return Spec("object", record=name, nullable=nullable)
         arguments: list[Spec | None] = []
         if position < len(tokens) and tokens[position] == "[":
             position += 1
@@ -177,7 +209,9 @@ def parse(spelled: str) -> Spec | None:
         return Spec(short, value=found[0])
 
     found = one()
-    if found is None or position != len(tokens) or not found.collection:
+    if found is None or position != len(tokens):
+        return None
+    if not found.collection and not (found.kind == "object" and found.record):
         return None
     return found if _keys_ok(found) else None
 
@@ -189,6 +223,74 @@ def _keys_ok(spec: Spec) -> bool:
         if not (text or key.kind == "int" or (key.kind == "tuple" and set(key.parts) == {"int"})):
             return False
     return spec.value is None or not spec.value.collection or _keys_ok(spec.value)
+
+
+class Classes:
+    """The classes a signature crosses, each with its fields parsed and its
+    Python class found when first wanted: the module is still running its
+    body when a function of it is bound."""
+
+    def __init__(self, described: tuple[CrossingClass, ...], resolve: Any = None) -> None:
+        self.by_name = {c.qualname: c for c in described}
+        self.by_tag = {c.tag: c for c in described if c.kind == "object"}
+        self._resolve = resolve
+        self._types: dict[type, CrossingClass] | None = None
+        self._python: dict[str, type] = {}
+        self.fields: dict[str, list[tuple[str, int, Spec]]] = {}
+        for c in described:
+            if c.kind != "object":
+                continue
+            parsed = []
+            for name, offset, spelled in c.fields:
+                spec = _field_spec(spelled, self.by_name)
+                if spec is None:
+                    self.fields.clear()
+                    self.by_name.clear()
+                    self.by_tag.clear()
+                    return
+                parsed.append((name, offset, spec))
+            self.fields[c.qualname] = parsed
+
+    def python(self, qualname: str) -> Any:
+        """The Python class of `qualname`, or None where the module has none."""
+        if qualname not in self._python:
+            described = self.by_name.get(qualname)
+            if described is None or self._resolve is None:
+                return None
+            resolved = self._resolve(described)
+            if not isinstance(resolved, type):
+                return None
+            self._python[qualname] = resolved
+        return self._python[qualname]
+
+    def of(self, value: Any) -> CrossingClass | None:
+        """The class `value` is an instance of, exactly, among those described."""
+        if self._types is None:
+            types: dict[type, CrossingClass] = {}
+            for described in self.by_name.values():
+                found = self.python(described.qualname)
+                if found is not None:
+                    types[found] = described
+            self._types = types
+        return self._types.get(type(value))
+
+
+def _field_spec(spelled: str, classes: dict[str, CrossingClass]) -> Spec | None:
+    """A field's type: a scalar, a string, a tuple of scalars, or what `parse` reads."""
+    if spelled in _SCALARS or spelled == "str":
+        return Spec(spelled)
+    if spelled.startswith("tuple["):
+        parts = tuple(part.strip() for part in spelled[6:-1].split(","))
+        if not parts or any(part not in _SCALARS for part in parts):
+            return None
+        return Spec("tuple", parts)
+    found = parse(spelled, classes)
+    if found is None:
+        described = classes.get(spelled)
+        if described is not None and described.kind == "record":
+            parts = tuple(kind for _field, _offset, kind in described.fields)
+            return Spec("record", parts, record=spelled)
+    return found
 
 
 # -- the runtime, through ctypes ------------------------------------------------
@@ -238,8 +340,17 @@ def runtime(library: Any = None) -> Any:
 
 def _format(spec: Spec) -> str:
     """One element's words as `struct` spells them: `q` an integer or a handle, `d` a double."""
-    kinds = spec.parts if spec.kind == "tuple" else (spec.kind,)
+    kinds = spec.parts if spec.kind in {"tuple", "record"} else (spec.kind,)
     return "".join("d" if kind == "float" else "q" for kind in kinds)
+
+
+def _mask_format(floats: int, words: int) -> str:
+    """A record's words as `struct` spells them, from its float mask."""
+    return "".join("d" if floats >> i & 1 else "q" for i in range(words))
+
+
+#: The header word an object's class tag is kept in (`lowering/collections.py`).
+_TAG = 4
 
 
 class Boundary:
@@ -251,8 +362,9 @@ class Boundary:
     foreign call per element.
     """
 
-    def __init__(self, rt: Any) -> None:
+    def __init__(self, rt: Any, classes: Classes | None = None) -> None:
         self.rt = rt
+        self.classes = classes
         #: id of each Python object made native -> its handle, and the object.
         self._handles: dict[int, tuple[int, Any]] = {}
         #: handle -> the Python object it came from or went to.
@@ -271,6 +383,8 @@ class Boundary:
 
     def _native(self, value: Any, spec: Spec) -> int:
         """A handle holding one new reference to `value`'s native copy."""
+        if spec.kind == "object":
+            return self._object(value, spec)
         seen = self._handles.get(id(value))
         if seen is not None:
             self.rt.ppy_coll_retain(seen[0])
@@ -306,6 +420,90 @@ class Boundary:
             raise
         return handle
 
+    def _object(self, value: Any, spec: Spec) -> int:
+        """An instance of a project class as a handle to its record, the objects
+        and collections its fields hold made native with it."""
+        if value is None:
+            if spec.nullable:
+                return 0
+            raise Refused
+        seen = self._handles.get(id(value))
+        if seen is not None:
+            self.rt.ppy_coll_retain(seen[0])
+            return seen[0]
+        classes = self.classes
+        described = classes.of(value) if classes is not None else None
+        if described is None or spec.record not in described.bases:
+            raise Refused
+        assert classes is not None
+        handle = self.rt.ppy_seq_new(0, described.words, described.floats, described.handles)
+        ctypes.c_int64.from_address(handle + 8 * _TAG).value = described.tag
+        self._handles[id(value)] = (handle, value)
+        self._objects[handle] = value
+        self.rt.ppy_coll_retain(handle)
+        self._owned.append(handle)
+        try:
+            words: list[Any] = [0] * described.words
+            made: list[int] = []
+            try:
+                for name, offset, field in classes.fields[described.qualname]:
+                    try:
+                        item = getattr(value, name)
+                    except AttributeError as exc:
+                        raise Refused from exc
+                    self._place(words, offset, field, item, made)
+            except BaseException:
+                for held in made:
+                    self.rt.ppy_coll_release(held)
+                raise
+            packed = struct.pack("<" + _mask_format(described.floats, described.words), *words)
+            self.rt.ppy_seq_push_many(handle, packed, 1)
+        except BaseException:
+            self.rt.ppy_coll_release(handle)
+            raise
+        return handle
+
+    def _place(self, words: list[Any], offset: int, spec: Spec, item: Any, made: list[int]) -> None:
+        """One field's value into its words of a record; a handle made for it
+        is the record's reference, listed in `made` until the record holds it."""
+        if spec.kind in _SCALARS:
+            _check(spec.kind, item)
+            words[offset] = item
+        elif spec.kind == "str":
+            strings = self._strings([item])
+            made.append(strings[0])
+            words[offset] = strings[0]
+        elif spec.kind == "tuple":
+            if type(item) is not tuple or len(item) != len(spec.parts):
+                raise Refused
+            for index, (kind, part) in enumerate(zip(spec.parts, item, strict=True)):
+                _check(kind, part)
+                words[offset + index] = part
+        elif spec.kind == "record":
+            for index, part in enumerate(self._record_words(item, spec)):
+                words[offset + index] = part
+        else:
+            handle = self._native(item, spec)
+            if handle:
+                made.append(handle)
+            words[offset] = handle
+
+    def _record_words(self, item: Any, spec: Spec) -> list[Any]:
+        """A value class's fields, checked against their kinds."""
+        classes = self.classes
+        described = classes.of(item) if classes is not None else None
+        if described is None or described.qualname != spec.record:
+            raise Refused
+        found = []
+        for name, _offset, kind in described.fields:
+            try:
+                part = getattr(item, name)
+            except AttributeError as exc:
+                raise Refused from exc
+            _check(kind, part)
+            found.append(part)
+        return found
+
     def _fill(self, handle: int, value: Any, spec: Spec) -> None:
         if _FAMILY[spec.kind] == "seq":
             assert spec.value is not None
@@ -340,7 +538,7 @@ class Boundary:
             if made is not None:
                 made.extend(strings)
             return bytes(strings)
-        if spec.collection:
+        if spec.collection or spec.kind == "object":
             words: list[Any] = []
             try:
                 for item in items:
@@ -348,8 +546,11 @@ class Boundary:
             except BaseException:
                 # The references meant for the parent it will never hold.
                 for handle in words:
-                    self.rt.ppy_coll_release(handle)
+                    if handle:
+                        self.rt.ppy_coll_release(handle)
                 raise
+        elif spec.kind == "record":
+            words = [part for item in items for part in self._record_words(item, spec)]
         elif spec.kind == "tuple":
             kinds = spec.parts
             for item in items:
@@ -421,6 +622,8 @@ class Boundary:
             self._python(handle, spec, rewrite=True)
 
     def _python(self, handle: int, spec: Spec, rewrite: bool = False) -> Any:
+        if spec.kind == "object":
+            return self._instance(handle, rewrite)
         known = self._objects.get(handle)
         if known is not None and (not rewrite or handle in self._synced):
             return known
@@ -428,6 +631,62 @@ class Boundary:
         made = known if known is not None else spec.python()()
         self._objects[handle] = made
         _replace(made, spec, self._read(handle, spec, rewrite))
+        return made
+
+    def _instance(self, handle: int, rewrite: bool) -> Any:
+        """The Python object of a native one: the one it came from, its fields
+        set again when `rewrite`, or a new instance of its class, made without
+        running `__init__` (native code ran it), its fields set."""
+        if not handle:
+            return None
+        known = self._objects.get(handle)
+        if known is not None and (not rewrite or handle in self._synced):
+            return known
+        self._synced.add(handle)
+        classes = self.classes
+        assert classes is not None
+        tag = ctypes.c_int64.from_address(handle + 8 * _TAG).value
+        described = classes.by_tag.get(tag)
+        python = classes.python(described.qualname) if described is not None else None
+        if described is None or python is None:
+            raise RuntimeError("native code returned an object of a class it did not describe")
+        made = known if known is not None else object.__new__(python)
+        self._objects[handle] = made
+        buffer = (ctypes.c_int64 * described.words)()
+        self.rt.ppy_coll_copy_out(handle, None, buffer)
+        words = struct.unpack_from("<" + _mask_format(described.floats, described.words), buffer)
+        for name, offset, field in classes.fields[described.qualname]:
+            object.__setattr__(made, name, self._field_value(words, offset, field, rewrite))
+        return made
+
+    def _field_value(self, words: tuple[Any, ...], offset: int, spec: Spec, rewrite: bool) -> Any:
+        if spec.kind == "bool":
+            return words[offset] != 0
+        if spec.kind in _SCALARS:
+            return words[offset]
+        if spec.kind == "str":
+            return self._texts((words[offset],))[0]
+        if spec.kind == "tuple":
+            parts = words[offset : offset + len(spec.parts)]
+            return tuple(
+                part != 0 if kind == "bool" else part
+                for kind, part in zip(spec.parts, parts, strict=True)
+            )
+        if spec.kind == "record":
+            return self._record(spec, words[offset : offset + len(spec.parts)])
+        return self._python(words[offset], spec, rewrite) if words[offset] else None
+
+    def _record(self, spec: Spec, words: Any) -> Any:
+        """A value class's instance from its fields' words."""
+        classes = self.classes
+        assert classes is not None
+        python = classes.python(spec.record)
+        described = classes.by_name.get(spec.record)
+        if python is None or described is None:
+            raise RuntimeError("native code returned a value of a class it did not describe")
+        made = object.__new__(python)
+        for (name, _offset, kind), part in zip(described.fields, words, strict=True):
+            object.__setattr__(made, name, part != 0 if kind == "bool" else part)
         return made
 
     def _read(self, handle: int, spec: Spec, rewrite: bool) -> list[Any]:
@@ -450,6 +709,14 @@ class Boundary:
         words = struct.unpack_from(f"<{_format(spec) * count}", buffer)
         if spec.collection:
             return [self._python(word, spec, rewrite) for word in words]
+        if spec.kind == "object":
+            return [self._instance(word, rewrite) for word in words]
+        if spec.kind == "record":
+            width = len(spec.parts)
+            return [
+                self._record(spec, words[start : start + width])
+                for start in range(0, len(words), width)
+            ]
         if spec.kind == "str":
             return self._texts(words)
         if spec.kind == "tuple":

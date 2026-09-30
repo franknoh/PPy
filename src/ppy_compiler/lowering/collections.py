@@ -22,6 +22,8 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from ppy_runtime.abi import CrossingClass
+
 from ..analysis import types as T
 from ..analysis.checker import receiver_bindings
 from ..analysis.closures import callable_spelled, is_plain_callable
@@ -42,8 +44,19 @@ from ..ir import (
     Value,
 )
 from ..ir.dialects import core
+from .intness import gives_int
 
-__all__ = ["HANDLE", "STR", "CollectionLowering", "Kind", "Shape", "kind_of", "shape_of"]
+__all__ = [
+    "HANDLE",
+    "STR",
+    "CollectionLowering",
+    "Kind",
+    "Shape",
+    "crossing_classes",
+    "kind_of",
+    "records_of",
+    "shape_of",
+]
 
 #: A collection's runtime handle: the address of its header.
 HANDLE = PtrType(I8)
@@ -84,7 +97,8 @@ class Shape:
     """What one element or value is, word by word."""
 
     #: "int", "float", "bool", "str", "tuple", "record", "collection", "object",
-    #: or "function" (a closure: its type is `class_args[0]`, spelled in `record`).
+    #: "function" (a closure: its type is `class_args[0]`, spelled in `record`),
+    #: or "generator" (a generator's frame: what it yields is `class_args[0]`).
     kind: str
     #: A tuple's items, or a record's fields: scalar kinds.
     parts: tuple[str, ...] = ()
@@ -109,13 +123,13 @@ class Shape:
 
     @property
     def handles(self) -> int:
-        return 1 if self.kind in {"collection", "object", "str", "function"} else 0
+        return 1 if self.kind in {"collection", "object", "str", "function", "generator"} else 0
 
     @property
     def reference(self) -> bool:
         """Held by handle: a collection, a string, an instance of an object class,
         or a function value."""
-        return self.kind in {"collection", "object", "str", "function"}
+        return self.kind in {"collection", "object", "str", "function", "generator"}
 
     @property
     def comparable(self) -> bool:
@@ -155,7 +169,7 @@ class Shape:
         """An object's type written out, as a parameter's element spells it."""
         if self.kind == "str":
             return "str"
-        if self.kind == "function":
+        if self.kind in {"function", "generator"}:
             return self.record
         return str(T.Instance(self.record, self.class_args, (self.record, "object")))
 
@@ -209,6 +223,33 @@ def spelled(kind: Kind) -> str:
 Records = dict[str, tuple[tuple[tuple[str, str], ...], bool]]
 
 
+#: The types a generator's frame is held as.
+GENERATOR_TYPES = frozenset({"Iterator", "Generator"})
+
+
+def generator_spelled(t: T.Type) -> str | None:
+    """`generator[int]` for an `Iterator[int]` or a `Generator[int]`, which native
+    code holds as a generator's frame; None for anything else."""
+    t = T.strip_literal(t)
+    if isinstance(t, T.Instance) and t.name in GENERATOR_TYPES and t.args:
+        return f"generator[{T.strip_literal(t.args[0])}]"
+    return None
+
+
+def records_of(frontend: object) -> Records:
+    """The value classes of a frontend's module, by qualified name, made once."""
+    cached = getattr(frontend, "_collection_records", None)
+    if cached is not None:
+        return cached
+    records: Records = {}
+    classes = frontend.analysis.symbols.classes  # type: ignore[attr-defined]
+    for qualname, fields in frontend.layouts.items():  # type: ignore[attr-defined]
+        info = classes.get(qualname) or classes.get(qualname.rpartition(".")[2])
+        records[qualname] = (tuple(fields), _ordered(info.node) if info is not None else False)
+    frontend._collection_records = records  # type: ignore[attr-defined]
+    return records
+
+
 def shape_of(t: T.Type, records: Records) -> Shape | None:
     """The shape of a value of type `t`, or None where it has none.
 
@@ -233,6 +274,10 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
             tuple(T.Param(f"arg{i}", p.type) for i, p in enumerate(base.params)), base.ret
         )
         return Shape("function", record=callable_spelled(plain), class_args=(plain,))
+    generator = generator_spelled(base)
+    if generator is not None:
+        assert isinstance(base, T.Instance)
+        return Shape("generator", record=generator, class_args=(T.strip_literal(base.args[0]),))
     if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
         parts = [T.strip_literal(item) for item in base.items]
         if all(part in (T.INT, T.FLOAT, T.BOOL) for part in parts):
@@ -342,16 +387,7 @@ class CollectionLowering:
     # -- types ------------------------------------------------------------
 
     def _records(self) -> Records:
-        cached = getattr(self.frontend, "_collection_records", None)
-        if cached is not None:
-            return cached
-        records: Records = {}
-        classes = self.frontend.analysis.symbols.classes  # type: ignore[attr-defined]
-        for qualname, fields in self.frontend.layouts.items():  # type: ignore[attr-defined]
-            info = classes.get(qualname) or classes.get(qualname.rpartition(".")[2])
-            records[qualname] = (tuple(fields), _ordered(info.node) if info is not None else False)
-        self.frontend._collection_records = records  # type: ignore[attr-defined]
-        return records
+        return records_of(self.frontend)  # type: ignore[attr-defined]
 
     def _type_of(self, node: ast.expr) -> T.Type:
         """What the checker said of `node`, with a generic instance's arguments in."""
@@ -611,6 +647,7 @@ class CollectionLowering:
                 continue
             if value is None:
                 raise Unsupported(f"`{info.name}` needs `{name}`, whose default is not a constant")
+            self._refuse_int_for_float(info.name, name, field_shape, value)
             self._store_into(address, field_shape, value, fresh=True)
         return made
 
@@ -1382,6 +1419,8 @@ class CollectionLowering:
         missing = [name for name, _ in fields if name not in given]
         if missing:
             raise Unsupported(f"`{made.name}` is built natively from every field: {missing[0]}")
+        for name, kind in fields:
+            self._refuse_int_for_float(made.name, name, Shape(kind), given[name])
         values = [
             self._coerce(self._expr(given[name]), kind)  # type: ignore[attr-defined]
             for name, kind in fields
@@ -1391,6 +1430,12 @@ class CollectionLowering:
         ir_type = shape.ir_type()
         assert isinstance(ir_type, StructType)
         return core.struct_make(self.b, ir_type, *values)
+
+    def _refuse_int_for_float(self, owner: str, name: str, shape: Shape, value: ast.expr) -> None:
+        """A float field given an int keeps the int in Python, and its repr shows it."""
+        kinds = shape.parts if shape.kind == "tuple" else (shape.kind,)
+        if "float" in kinds and gives_int(self._type_of(value)):
+            raise Unsupported(f"`{owner}.{name}` is a float field given an int, which Python keeps")
 
     def _record_value(self, node: ast.expr) -> Value | None:
         """A value-class expression's struct, where it has one natively."""
@@ -1682,6 +1727,8 @@ class CollectionLowering:
             raise Unsupported(f"`{name}` keeps one collection type")
         if held is None:
             slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
+            # The slot owns what it holds (a generator's frame lets go of it).
+            slot.owner.attributes["ppy.owns"] = True  # type: ignore[union-attr]
             entry = self._entry_builder()  # type: ignore[attr-defined]
             empty = core.call_extern(entry, "ppy_coll_none", (), (HANDLE,)).results[0]
             core.store(entry, empty, slot)
@@ -1702,6 +1749,7 @@ class CollectionLowering:
     def _bind_parameter(self, name: str, kind: Kind | Shape, argument: Value) -> None:
         """A collection parameter: the caller's, held for the call like any local."""
         slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
+        slot.owner.attributes["ppy.owns"] = True  # type: ignore[union-attr]
         core.store(self.b, argument, slot)
         self._retain(argument)
         self.collections[name] = Held(kind, slot)
@@ -2604,3 +2652,111 @@ def _field_keyword(value: ast.expr | None, keyword: str) -> ast.expr | None:
         if item.arg == keyword:
             return item.value
     return None
+
+
+def crossing_classes(
+    types: list[T.Type], classes: dict[str, ClassInfo], records: Records
+) -> tuple[CrossingClass, ...] | None:
+    """The project classes whose instances cross the Python boundary with
+    values of `types`, laid out as native code lays them (`_layout`), with
+    every subclass an instance may be; None when one of them cannot cross: a
+    generic class, an exception, or a field that holds a function."""
+    by_name = {info.qualname: info for info in classes.values()}
+    found: dict[str, CrossingClass] = {}
+    pending: list[Shape] = []
+
+    def visit(shape: Shape | None) -> bool:
+        if shape is None:
+            return False
+        if shape.kind == "function":
+            return False
+        if shape.kind == "collection":
+            assert shape.collection is not None
+            return all(
+                visit(part)
+                for part in (shape.collection.key, shape.collection.value)
+                if part is not None
+            )
+        if shape.kind in {"object", "record"}:
+            if shape.class_args:
+                return False
+            pending.append(shape)
+        return True
+
+    def spelled_shape(shape: Shape, nullable: bool = False) -> str:
+        if shape.kind == "tuple":
+            return f"tuple[{', '.join(shape.parts)}]"
+        if shape.kind in {"object", "record"}:
+            return shape.record + ("?" if nullable else "")
+        if shape.kind == "collection":
+            assert shape.collection is not None
+            return spelled(shape.collection)
+        return shape.kind
+
+    for t in types:
+        base = T.strip_literal(t)
+        if base == T.NONE:
+            continue
+        if not visit(shape_of(base, records)) and shape_of(base, records) is not None:
+            return None
+    while pending:
+        shape = pending.pop()
+        if shape.record in found:
+            continue
+        info = by_name.get(shape.record)
+        if info is None or info.type_params:
+            return None
+        if shape.kind == "record":
+            fields = records.get(shape.record, ((), False))[0]
+            found[shape.record] = CrossingClass(
+                shape.record,
+                info.module,
+                info.name,
+                "record",
+                tuple((name, index, kind) for index, (name, kind) in enumerate(fields)),
+                words=len(fields),
+            )
+            continue
+        subclasses = [
+            other
+            for other in by_name.values()
+            if shape.record in other.mro and object_chain(other, by_name) is not None
+        ]
+        for sub in subclasses:
+            if sub.qualname in found:
+                continue
+            chain = object_chain(sub, by_name)
+            if chain is None or exception_header(sub, by_name) or sub.type_params:
+                return None
+            laid: list[tuple[str, int, str]] = []
+            offset = floats = handles = leaves = 0
+            seen: set[str] = set()
+            for owner in chain:
+                for name, declared in owner.fields.items():
+                    if name in owner.class_vars or name in seen:
+                        continue
+                    seen.add(name)
+                    field_shape = shape_of(declared, records)
+                    if field_shape is None or not visit(field_shape):
+                        return None
+                    nullable = isinstance(T.strip_literal(declared), T.Union_)
+                    laid.append((name, offset, spelled_shape(field_shape, nullable)))
+                    floats |= field_shape.floats << offset
+                    handles |= field_shape.handles << offset
+                    leaves |= field_shape.leaves << offset
+                    offset += field_shape.words
+            if offset > 64:
+                return None
+            found[sub.qualname] = CrossingClass(
+                sub.qualname,
+                sub.module,
+                sub.name,
+                "object",
+                tuple(laid),
+                words=max(offset, 1),
+                floats=floats,
+                handles=handles | (leaves << 32),
+                tag=class_tag(sub.qualname),
+                bases=tuple(entry for entry in sub.mro if entry in by_name),
+            )
+    return tuple(found[name] for name in sorted(found))

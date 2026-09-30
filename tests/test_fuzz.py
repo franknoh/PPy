@@ -20,6 +20,7 @@ from ppy_compiler.backend.llvm.link import c_compiler, standalone_toolchain_stat
 from ppy_compiler.testing.fuzz import (
     ALL_PATHS,
     OVERFLOW_64,
+    STATE_PATHS,
     TIMED_OUT,
     Result,
     compare,
@@ -56,6 +57,20 @@ def test_generated_programs_agree_on_every_path(seed: int):
     results = run_program(generate_program(seed), paths)
     assert results["python"].status == 0 or results["python"].last_error, results["python"]
     mismatches = compare(results)
+    assert not mismatches, [
+        (m.path, m.reason, m.expected.last_error, m.found.last_error, m.found.stderr[-2000:])
+        for m in mismatches
+    ]
+
+
+@pytest.mark.parametrize("seed", SEEDS[:2])
+def test_programs_with_module_state_agree(seed: int):
+    """Module globals read and written, and objects Python made walked and
+    written, on the paths with a Python boundary."""
+    paths = tuple(p for p in _available() if p in STATE_PATHS)
+    source = generate_program(seed, state=True)
+    assert "G_TABLE" in source and "class Link" in source
+    mismatches = compare(run_program(source, paths))
     assert not mismatches, [
         (m.path, m.reason, m.expected.last_error, m.found.last_error, m.found.stderr[-2000:])
         for m in mismatches

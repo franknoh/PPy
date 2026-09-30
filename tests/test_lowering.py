@@ -268,12 +268,16 @@ def test_what_the_subset_excludes_is_refused_with_the_reason(write, analyze):
             return len(counts)
 
 
-        def chained(a: int, b: int, c: int) -> bool:
-            return a < b < c
+        def looped(a: int, b: int, c: int) -> bool:
+            while a > 0:
+                a -= 1
+            else:
+                return b < c
+            return False
 
 
         def caller(a: int, b: int, c: int) -> int:
-            return 1 if chained(a, b, c) else 0
+            return 1 if looped(a, b, c) else 0
         """,
     )
     bundle = analyze(path, backend="llvm", strict=False)
@@ -288,8 +292,8 @@ def test_what_the_subset_excludes_is_refused_with_the_reason(write, analyze):
     lowered = lower_module_to_ir(analysis, candidates)
     assert not lowered.functions
     assert "no native ABI" in lowered.rejected["kernels.words"]
-    assert lowered.rejected["kernels.chained"] == "chained comparison has no native lowering"
-    assert "`kernels.chained` has no native lowering" in lowered.rejected["kernels.caller"]
+    assert lowered.rejected["kernels.looped"] == "`while ... else` has no native lowering"
+    assert "`kernels.looped` has no native lowering" in lowered.rejected["kernels.caller"]
     assert not verify(lowered.module), "dropped functions leave no half-built bodies behind"
 
 

@@ -21,7 +21,13 @@ from .symbols import FunctionInfo, ModuleSymbols, ProjectSymbols
 if TYPE_CHECKING:
     from ..plugins.base import LoweringSpec
 
-__all__ = ["FunctionAnalysis", "LoweringNote", "ModuleAnalysis", "ProjectAnalysis"]
+__all__ = [
+    "FunctionAnalysis",
+    "ImplicitGlobal",
+    "LoweringNote",
+    "ModuleAnalysis",
+    "ProjectAnalysis",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +50,21 @@ class LoweringNote:
     facts: Facts = field(default_factory=Facts)
 
 
+@dataclass(frozen=True, slots=True)
+class ImplicitGlobal:
+    """A settled module global native code hands a function as a parameter."""
+
+    module: str
+    name: str
+    type: T.Type
+    #: Whether the function, or a callee it passes the global on to, writes it.
+    written: bool = False
+
+    @property
+    def key(self) -> str:
+        return f"{self.module}:{self.name}"
+
+
 @dataclass(slots=True)
 class FunctionAnalysis:
     info: FunctionInfo
@@ -58,6 +79,19 @@ class FunctionAnalysis:
     parallel_blockers: tuple[str, ...] = ()
     escaping: set[str] = field(default_factory=set)
     mutated_params: set[str] = field(default_factory=set)
+    #: Settled module globals the body reads (see `ModuleSymbols.
+    #: settled_globals`), with their types: native code takes each as one more
+    #: parameter, read from the module when Python calls it.
+    settled_globals: dict[str, T.Type] = field(default_factory=dict)
+    #: Whether the body reads a global that is not settled, which only
+    #: CPython can.
+    unsettled_global: bool = False
+    #: The settled globals native code passes this function, its own reads and
+    #: those of every function it calls, in a fixed order; see `settled.py`.
+    implicit_globals: tuple[ImplicitGlobal, ...] = ()
+    #: Whether every global the function reads, itself or through a callee,
+    #: can be passed to it that way.
+    globals_native: bool = False
     #: Parameters this function hands to a callee that writes through them.
     #: The write lands in the caller's memory just as a direct one would.
     delegated_writes: set[str] = field(default_factory=set)

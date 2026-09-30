@@ -53,9 +53,65 @@ The subset includes what a loop is normally made of:
 - the bitwise operators, including `~`
 - `raise`, `try` with its handlers, `else`, and `finally`, and `assert`
 - a generator consumed where it is made: by `for`, `next`, `sum`, `min`,
-  `max`, a comprehension, or a collection built from it
+  `max`, a comprehension, or a collection built from it; and one that is
+  returned, passed on, stepped in a loop, or made by `__iter__`, which gets a
+  frame of its own
 
 [Exceptions and generators](exceptions-and-generators.md) has the details.
+
+### Expressions
+
+- `isinstance(x, T)` and `isinstance(x, (A, B))` with builtin classes
+  (`int`, `float`, `bool`, `str`, `list`, `dict`, `set`, `tuple`,
+  `type(None)`) fold to a constant where the checker's type of `x` decides
+  the answer. An `int` may be a `bool` and a `float` may be an `int`, so
+  `isinstance(n, bool)` of an `n: int` stays in Python. Object classes are
+  tested by the class tag the instance carries.
+- A chained comparison, `0 <= i < n`, is its comparisons joined by `and`,
+  each operand evaluated once and the ones after a false comparison not at
+  all.
+- `x in (a, b)`, `x in {a, b}`, and `x in [a, b]` are `x == a or x == b`.
+  `x in range(start, stop, step)` is a bounds check and a remainder, with no
+  range made. `not in` is the negation. A NaN on the left falls back,
+  since CPython matches it by identity.
+- `a ** b` and `pow(a, b)` of ints multiply by squaring. A product past 64
+  bits falls back, and so does a negative exponent, whose result is a float.
+  `pow(a, b, m)` reduces as it goes, and `pow(a, b, 0)` raises CPython's
+  `ValueError`.
+- `a = b = value` evaluates the value once and binds each name.
+  `r, c = (x, y) if flag else (y, x)` makes and unpacks only the chosen side.
+
+### Loops
+
+A `for` walks:
+
+- `range` with any step, including one known only at run time; a zero step
+  raises `ValueError`
+- `reversed(range(...))`, from its last value
+- a string's characters, a tuple display (`for dx, dy in ((0, 1), (1, 0))`),
+  and a tuple local
+- a list parameter lent as a buffer
+
+Each of these also works under `enumerate` (with `start=`), `zip`, and, for
+ranges, buffers, and tuples, `reversed`, alone or mixed with the
+collections. A `for` over any of them, or over a collection, may have an
+`else`, which runs when the loop ends without `break`. Identity between two
+values the checker types `bool` (`flag is True`) is equality, since there is
+one `True` and one `False`.
+
+### A `float` given an `int`
+
+CPython lets an `int` stand where a `float` is declared and keeps it an
+`int`: `f(0)` of `def f(x: float) -> float: return x` is `0`. Native code
+converts at the boundary, which is only right where the difference cannot
+show. The compiler follows each `float` parameter (and each tuple, list, or
+value class holding floats) through the body. Where the value, or something
+computed from it the way an `int` stays an `int`, is returned, printed or
+formatted, stored where the caller sees it, or asked its class, the boundary
+takes only a `float` for it and an `int` keeps the call in Python. A native
+caller that passes an `int` to such a parameter stays in Python too, and so
+does one that builds a value class with an `int` for a `float` field. Every
+other `float` parameter takes an `int` up to 2**53, converted exactly.
 
 A module constant written as an expression, such as `MOD = 10**9 + 7` or
 `LIMIT = 1 << 20`, folds into the code rather than staying a global read.

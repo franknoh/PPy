@@ -542,6 +542,7 @@ def _capture_names(pattern: ast.pattern) -> set[str]:
 def analyze_aliases(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     immutable_params: frozenset[str] = frozenset(),
+    settled_globals: frozenset[str] = frozenset(),
 ) -> AliasInfo:
     """Analyze one function. Nested function bodies are left out: a name they
     capture is not re-bound here, and what they do with it is the effect
@@ -549,15 +550,20 @@ def analyze_aliases(
 
     `immutable_params` names parameters whose declared type cannot be mutated
     in place; an augmented assignment through one of those is a rebinding.
+    `settled_globals` names module globals the body reads that no one rebinds:
+    each is rooted as a parameter is, since native code is handed it as one.
     """
-    params = frozenset(
-        arg.arg
-        for arg in [
-            *node.args.posonlyargs,
-            *node.args.args,
-            *node.args.kwonlyargs,
-            *([node.args.vararg] if node.args.vararg else []),
-            *([node.args.kwarg] if node.args.kwarg else []),
-        ]
+    params = (
+        frozenset(
+            arg.arg
+            for arg in [
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+                *([node.args.vararg] if node.args.vararg else []),
+                *([node.args.kwarg] if node.args.kwarg else []),
+            ]
+        )
+        | settled_globals
     )
     return _Analyzer(params, immutable_params & params).run(node)

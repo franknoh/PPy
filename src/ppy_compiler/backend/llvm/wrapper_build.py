@@ -139,7 +139,7 @@ def build_wrappers(
     # A coroutine hands back a future the Python side wraps; no C wrapper for it.
     signatures = {name: s for name, s in signatures.items() if not s.future}
     # A collection crosses through the Python-level binding, which copies it.
-    crossing = {name for name, s in signatures.items() if s.crosses_collections}
+    crossing = {name for name, s in signatures.items() if s.crosses_collections or s.reads_globals}
     signatures = {name: s for name, s in signatures.items() if name not in crossing}
     if not signatures:
         # Every function here crosses through the Python-level binding: there
