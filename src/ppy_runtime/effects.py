@@ -71,7 +71,7 @@ _SIGNATURES: dict[str, tuple[Any, tuple[Any, ...]]] = {
 _NAMESPACES: dict[str, dict[str, Any]] = {}
 
 
-class EffectError(SystemError):
+class EffectError(RuntimeError):
     """A native call fell back after an effect it cannot take back: a PPy bug."""
 
 
