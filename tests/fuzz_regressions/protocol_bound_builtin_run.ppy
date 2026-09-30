@@ -1,0 +1,22 @@
+# corpus: path=run (TheAlgorithms sorts/odd_even_transposition_single_threaded.py; a generic bound by a
+# Protocol naming `__lt__` refused `int` with E1721, since a builtin never gains a Protocol in its MRO)
+from typing import Any, Protocol
+
+
+class Comparable(Protocol):
+    def __lt__(self, other: Any, /) -> bool: ...
+
+
+def smallest[T: Comparable](values: list[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value < best:
+            best = value
+    return best
+
+
+def main() -> None:
+    print(smallest([5, 3, 8]), smallest(["b", "a"]), smallest([2.5, 1.5]))
+
+
+main()

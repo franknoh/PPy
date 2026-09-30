@@ -2531,7 +2531,11 @@ class _Checker:
             if chosen is None:
                 bindings[variable] = variable.bound or T.ANY
                 continue
-            if variable.bound is not None and not T.is_assignable(chosen, variable.bound):
+            if (
+                variable.bound is not None
+                and not T.is_assignable(chosen, variable.bound)
+                and not self._has_protocol_members(chosen, variable.bound)
+            ):
                 self._error(
                     "E1721",
                     f"`{info.name}[{variable.name}]` requires `{variable.bound}`, "
@@ -2901,6 +2905,40 @@ class _Checker:
             self._effects = self._effects | effects
             self._blockers.append(f"uses `{module}` which has effects: {effects}")
         return Binding(T.UNKNOWN)
+
+    def _has_protocol_members(self, chosen: T.Type, bound: T.Type) -> bool:
+        """Whether `chosen` has every member a project Protocol `bound` names.
+
+        A project class gains the Protocols it matches in its MRO when symbols
+        are resolved; a builtin (`int` for a `Comparable` with `__lt__`) never
+        does, so a bound is also met by the members themselves, by name, as
+        that matching is.
+        """
+        target = T.strip_literal(bound)
+        if not isinstance(target, T.Instance):
+            return False
+        protocol = self.project.classes.get(target.name)
+        if protocol is None or not protocol.is_protocol:
+            return False
+        wanted = set(protocol.methods) | set(protocol.fields)
+        wanted -= {"__init__", "__slots__"}
+        if not wanted:
+            return True
+        import builtins  # pylint: disable=import-outside-toplevel
+
+        base = T.strip_literal(chosen)
+        info = self.project.classes.get(base.name) if isinstance(base, T.Instance) else None
+        # A builtin's own type answers for its dunders, which the method table
+        # does not model (`int.__lt__`).
+        runtime = getattr(builtins, base.name, None) if isinstance(base, T.Instance) else None
+        for name in wanted:
+            if info is not None and info.lookup(name, self.project) is not None:
+                continue
+            if isinstance(runtime, type) and hasattr(runtime, name):
+                continue
+            if self._builtin_method(base, name) is None:
+                return False
+        return True
 
     def _builtin_method(self, base: T.Type, attr: str) -> T.Type | None:
         if not isinstance(base, (T.Instance, T.Tuple_)):
