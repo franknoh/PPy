@@ -93,6 +93,7 @@ def _signature(payload: dict) -> NativeSignature:
         cpu_features=tuple(str(f) for f in abi.get("cpu_features", ())),
         future=str(abi.get("future", "")),
         returned=str(abi.get("returned", "")),
+        draws=bool(abi.get("draws", False)),
         classes=classes_from_json(abi.get("classes", [])),
         effects=bool(abi.get("effects", False)),
     )

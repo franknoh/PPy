@@ -1237,7 +1237,11 @@ class _Binder(LibraryBinder):
             types = value_class_types(signature, fallback)
             if types is not None:
                 register = wrappers.registrar(qualname)
-                if not (observation_wanted(specializer, policy, info) and register is not None):
+                # A function that draws needs `random`'s state saved around it,
+                # which only the Python-side wrapper does.
+                if not signature.draws and not (
+                    observation_wanted(specializer, policy, info) and register is not None
+                ):
                     # Nothing to watch for: the wrapper holds the fallback in C
                     # and no Python frame stands on the call path at all.
                     direct = wrappers.bind(qualname, address, types, fallback)

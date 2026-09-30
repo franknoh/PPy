@@ -239,6 +239,10 @@ class NativeSignature:
     #: A returned collection's type, spelled (`ppy.Vec[int]`), for the boundary
     #: to build the Python object from the handle.
     returned: str = ""
+    #: The body draws from `random`'s generator: the boundary saves the state
+    #: before the call and puts it back when the call falls back to Python,
+    #: so the rerun draws the same numbers.
+    draws: bool = False
     #: The project classes whose instances cross with its arguments or its
     #: result, and every subclass of those.
     classes: tuple[CrossingClass, ...] = ()

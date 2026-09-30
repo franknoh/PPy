@@ -797,6 +797,16 @@ MODULE_ATTRIBUTES.update(
 )
 
 
+def _string_constants() -> None:
+    from .native_stdlib import STRING_CONSTANTS  # pylint: disable=import-outside-toplevel
+
+    for qualname in STRING_CONSTANTS:
+        MODULE_ATTRIBUTES.setdefault(qualname, (T.STR, Facts()))
+
+
+_string_constants()
+
+
 # `T = TypeVar("T", ...)` at module level declares a type parameter; the value
 # is the library's business, and making it has no effect a program sees.
 _TYPE_VAR = T.Instance("typing.TypeVar", (), ("typing.TypeVar", "object"))
@@ -864,7 +874,9 @@ def operator(left: T.Type, symbol: str, right: T.Type) -> T.Type | None:
 
 
 def lookup(qualname: str) -> tuple[T.Type, EffectSet] | None:
-    return _FUNCTIONS.get(qualname)
+    from .native_stdlib import MODELS  # pylint: disable=import-outside-toplevel
+
+    return _FUNCTIONS.get(qualname) or MODELS.get(qualname)
 
 
 def call(qualname: str, args: list[tuple[T.Type, Facts]]) -> tuple[T.Type, EffectSet] | None:

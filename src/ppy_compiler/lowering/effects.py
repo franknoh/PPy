@@ -394,10 +394,11 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
                 size = self._coerce(self._expr(node.args[0]), "int")  # type: ignore[attr-defined]
                 arguments.append((_INT, size, False))
             text = self._python_method(method, arguments, _STR)
+            assert text is not None  # a string result is a value
             if discard:
                 self._release(text)  # type: ignore[attr-defined]
                 return self._word(0)  # type: ignore[attr-defined,no-any-return]
-            return text  # type: ignore[return-value]
+            return text
         if method == "readlines" and not node.args:
             return self._read_lines(receiver[1], discard)
         if method == "write" and len(node.args) == 1 and discard:
@@ -485,7 +486,9 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
                 raise Unsupported("`input(prompt)` natively takes a string prompt")
             handle, owned = self._handle(node.args[0])  # type: ignore[attr-defined]
             arguments.append((_STR, handle, owned))
-        return self._python_call("builtins:input", arguments, _STR)  # type: ignore[return-value]
+        line = self._python_call("builtins:input", arguments, _STR)
+        assert line is not None  # a string result is a value
+        return line
 
     def _effect_python_call(self, node: ast.Call, discard: bool) -> Value | None:
         """A call to a function native code has no lowering for, made through

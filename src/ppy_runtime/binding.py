@@ -192,6 +192,163 @@ def bind(
 ) -> NativeBinding:
     """Build the Python-callable wrapper for one native function.
 
+    A function that draws random numbers draws from `random`'s own generator:
+    its state is saved before the call and put back before a fallback, so
+    the Python rerun draws what the native call drew.
+    """
+    if not signature.draws:
+        return _bind(
+            signature,
+            address,
+            fallback,
+            specializer=specializer,
+            policy=policy,
+            info=info,
+            fast_entry=fast_entry,
+            owner=owner,
+            register=register,
+            globals_read=globals_read,
+        )
+    generator = _shared_generator(owner)
+    if generator is None:
+        # Native draws would not be Python's: the Python definition runs.
+        return NativeBinding(
+            signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
+        )
+    binding = _bind(
+        signature,
+        address,
+        generator.restoring(fallback),
+        specializer=specializer,
+        policy=policy,
+        info=info,
+        fast_entry=fast_entry,
+        owner=owner,
+        register=register,
+        globals_read=globals_read,
+    )
+    if binding.wrapper is not binding.fallback:
+        saved = generator.saving(binding.wrapper)
+        _dress(saved, signature, fallback)
+        saved.__ppy_native__ = signature  # type: ignore[attr-defined]
+        saved.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
+        binding.wrapper = saved
+    binding.fallback = fallback
+    return binding
+
+
+#: `RandomObject`'s state after the object header: `int index`, then 624 words.
+_STATE_BYTES = 4 + 624 * 4
+
+
+class _SharedGenerator:
+    """`random._inst`'s Mersenne Twister, which native code draws from in place."""
+
+    def __init__(self, address: int, reseeded: Callable[[], int]) -> None:
+        import threading  # pylint: disable=import-outside-toplevel
+
+        self.address = address
+        self.reseeded = reseeded
+        self.saved = threading.local()
+
+    def _stack(self) -> list[bytes]:
+        stack = getattr(self.saved, "stack", None)
+        if stack is None:
+            stack = self.saved.stack = []
+        return stack
+
+    def saving(self, wrapper: Callable[..., object]) -> Callable[..., object]:
+        def saved(*args: object, **keywords: object) -> object:
+            stack = self._stack()
+            stack.append(ctypes.string_at(self.address, _STATE_BYTES))
+            try:
+                return wrapper(*args, **keywords)
+            finally:
+                stack.pop()
+                if self.reseeded():
+                    # `random.seed` forgets a pending `gauss` value too.
+                    import random  # pylint: disable=import-outside-toplevel
+
+                    random._inst.gauss_next = None  # type: ignore[attr-defined]
+
+        return saved
+
+    def restoring(self, fallback: Callable[..., object]) -> Callable[..., object]:
+        def restored(*args: object, **keywords: object) -> object:
+            stack = self._stack()
+            if stack:
+                ctypes.memmove(self.address, stack[-1], _STATE_BYTES)
+                self.reseeded()
+            return fallback(*args, **keywords)
+
+        restored.__wrapped__ = fallback  # type: ignore[attr-defined]
+        return restored
+
+
+_generators: dict[int, _SharedGenerator | None] = {}
+
+
+def _shared_generator(owner: object) -> _SharedGenerator | None:
+    """The runtime whose native code draws, bound to `random._inst`'s state:
+    the library's own where it carries the runtime, else the one `ppy run`
+    compiles. None where CPython's layout is not the one expected."""
+    library = (
+        owner if isinstance(owner, ctypes.CDLL) and hasattr(owner, "ppy_random_bind") else None
+    )
+    if library is None:
+        from . import collection_boundary  # pylint: disable=import-outside-toplevel
+
+        library = collection_boundary.runtime(None)
+        if library is None:
+            return None
+    key = id(library)
+    if key in _generators:
+        return _generators[key]
+    found = None
+    address = _random_state_address()
+    if address is not None:
+        library.ppy_random_bind.argtypes = (ctypes.c_int64,)
+        library.ppy_random_bind.restype = None
+        library.ppy_random_reseeded.argtypes = ()
+        library.ppy_random_reseeded.restype = ctypes.c_int64
+        library.ppy_random_bind(address)
+        found = _SharedGenerator(address, library.ppy_random_reseeded)
+    _generators[key] = found
+    return found
+
+
+def _random_state_address() -> int | None:
+    """Where `random._inst` keeps its index and state words, checked against
+    `getstate()` so a build laid out otherwise never has its memory written."""
+    import random  # pylint: disable=import-outside-toplevel
+
+    if sys.implementation.name != "cpython":
+        return None
+    inst = random._inst  # type: ignore[attr-defined]
+    _version, words, _gauss = inst.getstate()
+    address = id(inst) + object.__basicsize__
+    index = ctypes.c_int32.from_address(address).value
+    state = (ctypes.c_uint32 * 624).from_address(address + 4)
+    if index != words[-1] or tuple(state) != tuple(words[:-1]):
+        return None
+    return address
+
+
+def _bind(
+    signature: NativeSignature,
+    address: int,
+    fallback: Callable[..., object],
+    *,
+    specializer: object | None = None,
+    policy: object | None = None,
+    info: object | None = None,
+    fast_entry: Callable[..., object] | None = None,
+    owner: object | None = None,
+    register: Callable[[int, tuple], bool] | None = None,
+    globals_read: bool = False,
+) -> NativeBinding:
+    """`bind`, below the layer that saves and restores `random`'s state.
+
     `ctypes.CFUNCTYPE` releases the GIL around the foreign call, which is what
     a native region touching no Python objects is allowed to do (spec 16.6).
 
@@ -385,8 +542,15 @@ def bind(
 
 def _namespace(function: object) -> dict | None:
     """The globals a Python function reads: its module's, or, for the one
-    `_bind_globals` makes, those of the function it stands for."""
-    return getattr(function, "__ppy_globals__", None) or getattr(function, "__globals__", None)
+    `_bind_globals` makes, those of the function it stands for. The wrapper
+    that restores `random`'s state before a fallback is looked through."""
+    found = getattr(function, "__ppy_globals__", None)
+    if found is not None:
+        return found  # type: ignore[no-any-return]
+    wrapped = getattr(function, "__wrapped__", None)
+    if wrapped is not None:
+        return _namespace(wrapped)
+    return getattr(function, "__globals__", None)
 
 
 def _bind_globals(  # type: ignore[no-untyped-def]
@@ -412,7 +576,7 @@ def _bind_globals(  # type: ignore[no-untyped-def]
         return fallback(*args[:count], **keywords)
 
     spelled.__ppy_globals__ = namespace  # type: ignore[attr-defined]
-    inner = bind(signature, address, spelled, owner=owner, globals_read=True)
+    inner = _bind(signature, address, spelled, owner=owner, globals_read=True)
     if inner.wrapper is inner.fallback:
         # No native entry here after all: the Python function is the function.
         inner.wrapper = inner.fallback = fallback

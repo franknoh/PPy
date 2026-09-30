@@ -126,6 +126,7 @@ nav:
       - Reading input: guide/input.md
       - Native lowering: guide/native-lowering.md
       - Regular expressions: guide/regex.md
+      - The standard library: guide/stdlib.md
   - Examples:
       - howto/index.md
       - Comparisons: howto/comparisons.md

@@ -17,7 +17,7 @@ from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
 from . import builtins as B
 from . import collections as C
-from . import stdlib
+from . import native_stdlib, stdlib
 from . import types as T
 from .aliasing import EXTERNAL, AliasInfo, analyze_aliases
 from .annotations import (
@@ -2569,6 +2569,11 @@ class _Checker:
             if refined is not None:
                 return refined
             decided = stdlib.call(callee.type.qualname, [(a.type, a.facts) for a in args])
+            if decided is None:
+                decided = native_stdlib.call(callee.type.qualname, args, keywords)
+                if decided is not None and callee.type.qualname in native_stdlib.MUTATES_FIRST:
+                    self._note_mutation(node.args[0], env)
+                    self._widen_heap(callee.type.qualname, node, args, env)
             if decided is not None:
                 self._add_summarized_effects(decided[1])
                 return Binding(decided[0])
@@ -2645,6 +2650,18 @@ class _Checker:
             return None
         plugin = self.plugins.for_qualname(type_name)
         return plugin.call_alias(type_name) if plugin is not None else None
+
+    def _widen_heap(self, qualname: str, node: ast.Call, args: list[Binding], env: Env) -> None:
+        """`heap = []` followed by `heappush(heap, x)` gives `heap` an element
+        type, as `append` does."""
+        if (
+            qualname
+            in {"heapq.heappush", "bisect.insort", "bisect.insort_left", "bisect.insort_right"}
+            and len(node.args) >= 2
+        ):
+            self._widen_empty_container(
+                ast.Attribute(node.args[0], "append", ast.Load()), "list.append", args[1:2], env
+            )
 
     def _widen_empty_container(
         self, func: ast.Attribute, qualname: str, args: list[Binding], env: Env
