@@ -155,25 +155,98 @@ def link_shared_library(
     A `target` other than the host needs a toolchain for it: the
     `<triple>-gcc` of a cross toolchain, or clang with `--target`.
     """
-    command = [*_linker(target), "-shared", "-fPIC", "-o", str(destination)]
+    linker = _linker(target)
+    command = [*linker, "-shared", "-fPIC", "-o", str(destination)]
     destination.parent.mkdir(parents=True, exist_ok=True)
     command.extend(str(o) for o in objects)
+    host = target is None or target.is_host
     for library in libraries:
         if library == "ppy_aio":
             # The async runtime is compiled into the library, so the artifact stands alone.
             from ppy_runtime.aio import source_path
 
-            command.append(str(source_path()))
+            source = source_path()
+            command.append(str(runtime_object(source, linker[0]) if host else source))
         elif library == "ppy_collections":
             from ppy_runtime.collections import source_path as collections_source
 
-            command.append(str(collections_source()))
+            source = collections_source()
+            command.append(str(runtime_object(source, linker[0]) if host else source))
         else:
             command.append(f"-l{library}")
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         raise ToolchainError(f"link failed: {completed.stderr.strip() or completed.stdout.strip()}")
     return destination
+
+
+#: Bumped when the flags `runtime_object` compiles with change.
+_RUNTIME_OBJECT_TAG = "o1"
+
+
+def runtime_object(source: Path, compiler: str) -> Path:
+    """A runtime's C source (the collections, the async loop) compiled once, with
+    optimization, to an object in the user cache, and linked into every
+    library that needs it from then on.
+
+    Each link used to compile the whole source again, without optimization:
+    about 0.2 s of every first `ppy run` of a program with a collection or a
+    string, and a runtime slower than it had to be. The object is named for
+    the digest of the source and the headers it includes, the compiler, and
+    the flags, so an upgraded runtime or another compiler builds its own. It
+    is written through a draft, so concurrent builds agree and a partial one
+    is never used. Where it cannot be compiled, the source is linked as before.
+    """
+    import hashlib  # pylint: disable=import-outside-toplevel
+    import re  # pylint: disable=import-outside-toplevel
+
+    directory = _runtime_objects()
+    try:
+        text = source.read_bytes()
+    except OSError:
+        return source
+    if directory is None:
+        return source
+    digest = hashlib.sha256(text)
+    for header in re.findall(rb'#include "([^"]+)"', text):
+        try:
+            digest.update((source.parent / header.decode()).read_bytes())
+        except (OSError, UnicodeDecodeError):
+            continue
+    digest.update(f"\0{Path(compiler).resolve()}\0{_RUNTIME_OBJECT_TAG}".encode())
+    target = directory / f"{source.stem}-{digest.hexdigest()[:16]}.o"
+    if target.is_file():
+        return target
+    draft = target.with_name(f"{target.name}.{os.getpid()}.part")
+    command = [
+        compiler,
+        "-O2",
+        "-fPIC",
+        # Calls between the runtime's own functions may inline: nothing
+        # interposes them in a library that carries its own copy.
+        "-fno-semantic-interposition",
+        "-c",
+        str(source),
+        "-o",
+        str(draft),
+    ]
+    done = subprocess.run(command, capture_output=True, text=True, check=False)
+    if done.returncode != 0 or not draft.is_file():
+        draft.unlink(missing_ok=True)
+        return source
+    draft.replace(target)
+    return target
+
+
+def _runtime_objects() -> Path | None:
+    """Where compiled runtimes are kept, or None when it cannot be written."""
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    directory = Path(base) / "ppy" / "runtime-objects"
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    return directory if os.access(directory, os.W_OK) else None
 
 
 def _linker(target) -> list[str]:  # type: ignore[no-untyped-def]

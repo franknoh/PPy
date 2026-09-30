@@ -8,7 +8,7 @@ effect-unknown, which is an error in strict mode rather than a silent `Any`.
 from __future__ import annotations
 
 import ast
-import contextlib
+import importlib.util
 import re as _re
 
 from . import types as T
@@ -265,9 +265,57 @@ EXTERNAL_TYPES: dict[str, str] = {
     "threading.Event": "threading.Event",
 }
 
-#: The real class hierarchy of each opaque type, so that an `ast.Call` is an
-#: `ast.AST` where one is expected. Read from the classes themselves.
-EXTERNAL_MRO: dict[str, tuple[str, ...]] = {}
+
+class _ClassHierarchies(dict):  # type: ignore[type-arg]
+    """The real class hierarchy of each opaque type, so that an `ast.Call` is an
+    `ast.AST` where one is expected. Read from the classes themselves, a module
+    at a time and only when one of its types is asked about: importing
+    `libcst`, `sqlite3`, and the rest to fill the table cost every `ppy run`
+    about 100 ms before it analyzed anything."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pending: dict[str, tuple[str, ...]] = {}
+
+    def _read(self, qualname: str) -> None:
+        module = qualname.rpartition(".")[0]
+        names = self.pending.pop(module, None)
+        if names is None:
+            return
+        try:
+            library = __import__(module)
+        except ImportError:
+            return
+
+        def spelled(base: type) -> str:
+            # `libcst.Call` is defined in `libcst._nodes.expression`; the
+            # annotation, and the table, say `libcst.BaseExpression`.
+            if base.__module__ == "builtins":
+                return base.__name__
+            if getattr(library, base.__name__, None) is base:
+                return f"{module}.{base.__name__}"
+            return f"{base.__module__}.{base.__name__}"
+
+        for name in names:
+            cls = getattr(library, name, None)
+            if isinstance(cls, type):
+                self[f"{module}.{name}"] = tuple(spelled(base) for base in cls.__mro__)
+
+    def get(self, qualname: str, default=None):  # type: ignore[no-untyped-def,override]
+        self._read(qualname)
+        return super().get(qualname, default)
+
+    def __getitem__(self, qualname: str) -> tuple[str, ...]:
+        self._read(qualname)
+        return super().__getitem__(qualname)
+
+    def __contains__(self, qualname: object) -> bool:
+        if isinstance(qualname, str):
+            self._read(qualname)
+        return super().__contains__(qualname)
+
+
+EXTERNAL_MRO: dict[str, tuple[str, ...]] = _ClassHierarchies()
 
 
 def _opaque(module: str, names: tuple[str, ...]) -> None:
@@ -279,28 +327,17 @@ def _opaque(module: str, names: tuple[str, ...]) -> None:
     unknown, and says so. `pathlib.Path` was "not a type the project can
     analyze" in every file that took a path.
     """
-    library = __import__(module)
-
-    def spelled(base: type) -> str:
-        # `libcst.Call` is defined in `libcst._nodes.expression`; the
-        # annotation, and the table, say `libcst.BaseExpression`.
-        if base.__module__ == "builtins":
-            return base.__name__
-        if getattr(library, base.__name__, None) is base:
-            return f"{module}.{base.__name__}"
-        return f"{base.__module__}.{base.__name__}"
-
     for name in names:
         qualname = f"{module}.{name}"
         EXTERNAL_TYPES[qualname] = qualname
-        cls = getattr(library, name, None)
-        if isinstance(cls, type):
-            EXTERNAL_MRO[qualname] = tuple(spelled(base) for base in cls.__mro__)
+    # The hierarchies are read when one is asked about (`_ClassHierarchies`).
+    EXTERNAL_MRO.pending[module] = (*EXTERNAL_MRO.pending.get(module, ()), *names)  # type: ignore[attr-defined]
 
 
 _opaque("pathlib", ("Path", "PurePath", "PosixPath", "WindowsPath", "PurePosixPath"))
-# The converter's own dependency, but the analyzer runs without it.
-with contextlib.suppress(ImportError):
+# The converter's own dependency, but the analyzer runs without it. Whether it
+# is installed is asked without importing it.
+if importlib.util.find_spec("libcst") is not None:
     _opaque(
         "libcst",
         (

@@ -153,7 +153,9 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
     return json.dumps(
         {
             "version": SCHEMA_VERSION,
-            "ir": module.ir,
+            # What has been emitted, if anything; a module rebuilt from the
+            # cache emits its LLVM IR from `ppyir` when it is read.
+            "ir": module.llvm if hasattr(module, "llvm") else module.ir,
             "ppyir": module.ppyir,
             "signatures": {q: _signature(f.signature) for q, f in module.functions.items()},
             "boundaries": {
