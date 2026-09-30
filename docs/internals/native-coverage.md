@@ -8,7 +8,7 @@ found. It is input for choosing what 0.6.0 lowers next.
 
 [TheAlgorithms/Python](https://github.com/TheAlgorithms/Python) (MIT), commit
 `0a72d14` of 2026-09-28, shallow-cloned outside the repository: 1,603 `.py`
-files in 46 folders, 4,686 functions (101 of them nested), 36,969 statements.
+files in 46 top-level directories, 4,686 functions (101 of them nested), 36,969 statements.
 It is a good test of code nobody wrote for PPy: mostly annotated, heavy on
 lists, dicts, and doctests, with some NumPy, Matplotlib, and network code at
 the edges.
@@ -110,7 +110,7 @@ What this suggests for 0.6.0, in order of statements freed per unit of work:
 
 ## Running the corpus under `ppy run`
 
-Separately, 400 programs from the corpus ran under CPython and under `ppy
+Separately, 400 of the corpus's scripts ran under CPython and under `ppy
 run`, one at a time, each in its own directory, with empty stdin, a timeout,
 and `PYTHONHASHSEED=0`. Both sides used the same interpreter, CPython 3.14. A
 program counts as the same when the exit code, stdout, and the exception that
