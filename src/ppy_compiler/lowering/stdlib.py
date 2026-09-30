@@ -42,7 +42,7 @@ _CONSTANT_NAMES = frozenset(q.rpartition(".")[2] for q in _CONSTANTS)
 #: `ppy_math_unary`'s functions, by their number there.
 _UNARY = (
     "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
-    "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs",
+    "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs", "tan",
 )  # fmt: skip
 
 #: `ppy_math_binary`'s, likewise.

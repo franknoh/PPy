@@ -493,7 +493,7 @@ double ppy_math_hypot_list(int8_t *handle, int8_t *other) {
 
 /* One of libm's functions by number, as `math` calls it: 0 asin, 1 acos,
    2 atan, 3 sinh, 4 cosh, 5 tanh, 6 asinh, 7 acosh, 8 atanh, 9 log1p,
-   10 expm1, 11 erf, 12 erfc, 13 cbrt, 14 exp2, 15 fabs. */
+   10 expm1, 11 erf, 12 erfc, 13 cbrt, 14 exp2, 15 fabs, 16 tan. */
 double ppy_math_unary(int64_t which, double x) {
     switch (which) {
     case 0: return asin(x);
@@ -511,6 +511,7 @@ double ppy_math_unary(int64_t which, double x) {
     case 12: return erfc(x);
     case 13: return cbrt(x);
     case 14: return exp2(x);
+    case 16: return tan(x);
     default: return fabs(x);
     }
 }

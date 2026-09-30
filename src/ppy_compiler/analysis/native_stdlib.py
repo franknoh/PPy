@@ -290,14 +290,14 @@ MATH_NATIVE = frozenset(
         "gcd", "lcm", "isqrt", "comb", "perm", "factorial", "prod", "fsum", "isclose",
         "hypot", "dist", "copysign", "atan2", "fmod", "degrees", "radians", "log",
         "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
-        "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs",
+        "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs", "tan",
     }
 )  # fmt: skip
 
 _FLOAT_UNARY = frozenset(
     {
         "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
-        "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs", "degrees", "radians",
+        "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs", "degrees", "radians", "tan",
     }
 )  # fmt: skip
 
