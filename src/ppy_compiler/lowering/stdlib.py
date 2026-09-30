@@ -135,6 +135,9 @@ class StdlibLowering:
             return None
         module, _, name = qualname.partition(".")
         if module == "math":
+            if self.device or self.info.directive("xla.jit") is not None:  # type: ignore[attr-defined]
+                # A device and XLA have their own math: the instructions only.
+                return self._math_call(name, node)  # type: ignore[attr-defined,no-any-return]
             made = self._math_native(name, node) if name in MATH_NATIVE else None
             # `from math import sqrt` reaches the instructions `math.sqrt` does.
             return made if made is not None else self._math_call(name, node)  # type: ignore[attr-defined]

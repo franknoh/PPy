@@ -215,6 +215,6 @@ parameter (56 to 59).
 The 400-script comparison ran again with `random` seeded before each
 program on both sides (a `sitecustomize` that calls `random.seed`), so
 programs that draw are compared too. 357 match, 33 differ, and 10 were
-skipped as nondeterministic or slow under CPython. Of the 18 programs that
-import `random`, 14 match. All 33 differences also differ on the tree
-before this change, with the same seed: none is new.
+skipped as nondeterministic or slow under CPython. Of the programs that
+import `random` and ran, all but two match. All 33 differences also differ
+on the tree before this change, with the same seed: none is new.

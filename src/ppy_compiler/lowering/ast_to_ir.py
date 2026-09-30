@@ -4419,9 +4419,13 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         arguments = tuple(self._coerce(self._expr(a), "float") for a in node.args)
         self.frontend.module.require("math", 1)
         made = math_dialect.call(self.b, "abs" if name == "fabs" else name, *arguments)
-        if name in {"sqrt", "sin", "cos", "tan", "log", "log2", "log10", "exp", "pow"}:
+        if name in {"sqrt", "sin", "cos", "tan", "log", "log2", "log10", "exp", "pow"} and not (
+            self.device or self.info.directive("xla.jit") is not None
+        ):
             # What CPython raises for, which the machine answers with a NaN or
-            # an infinity: `sqrt(-1)`, `log(0)`, `exp(1000)`, `pow(0, -1)`.
+            # an infinity: `sqrt(-1)`, `log(0)`, `exp(1000)`, `pow(0, -1)`. A
+            # kernel on a device and a function XLA stages have no Python to
+            # fall back to, and compute as the machine does.
             self._math_checked(
                 made,
                 list(arguments),

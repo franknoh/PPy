@@ -147,10 +147,10 @@ def test_the_summary_places_every_function_and_says_why(tmp_path: Path):
     tiers = {f["qualname"].rpartition(".")[2]: f["tier"] for f in report["functions"]}
     assert tiers["total"] == "native"
     assert tiers["shout"] in {"python", "internal"}
-    assert tiers["roll"] == "python"
+    # Drawing random numbers is native since 0.6.0: CPython's generator.
+    assert tiers["roll"] != "python"
     categories = {b["category"] for b in report["blockers"]}
     assert "does I/O (`print`, `input`, files)" in categories or tiers["shout"] == "internal"
-    assert "draws random numbers" in categories
     assert any("broken.ppy" in path for path in report["failed"])
     counted = sum(t["functions"] for t in report["totals"].values())
     assert counted == len(report["functions"])
