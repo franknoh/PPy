@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from . import types as T
 from .binding import bind_ast_call
@@ -602,13 +603,7 @@ def infer_private_parameters(symbols, analysis, candidates: dict[str, list[int]]
     """Type each candidate parameter by what its call sites pass, joined.
     True if any parameter took a type."""
 
-    class _View:
-        pass
-
-    view = _View()
-    view.symbols = symbols  # type: ignore[attr-defined]
-    view.analysis = analysis  # type: ignore[attr-defined]
-    observed = observed_arguments(view)
+    observed = observed_arguments(SimpleNamespace(symbols=symbols, analysis=analysis))
     changed = False
     for qualname, indices in candidates.items():
         info = symbols.functions.get(qualname)
