@@ -1,7 +1,7 @@
 # The standard library natively
 
 A function that calls `random`, `math`, `heapq`, `bisect`, `itertools`, or
-reads a `string` constant lowers to native code under `ppy run`, in a
+`collections.deque`, or reads a `string` constant, lowers to native code under `ppy run`, in a
 standalone binary, and in emitted C and C++. It gives CPython's answer on
 every path: the same random numbers from the same seed, the same heap after
 the same pushes, the same last bit of a `math.fsum`.
@@ -125,9 +125,18 @@ items. `r` is a constant. `count`, `cycle`, and `groupby` stay in Python.
 `hexdigits`, `octdigits`, `punctuation`, `whitespace`, and `printable` are
 string literals in native code.
 
+## `collections.deque`
+
+A deque whose annotation says what it holds (`q: deque[int] = deque()`, or
+`deque([...])` given to an annotated name) is the runtime's `Deque`:
+`append`, `appendleft`, `pop`, `popleft`, `extend`, `extendleft`, `rotate`,
+`clear`, `copy`, `len`, `in`, a `for` loop, and `q[i]` counted from either
+end. Popping an empty deque raises CPython's `IndexError`. `maxlen`,
+`q[i] = x`, and `list(q)` stay in Python.
+
 ## What stays in Python
 
-`collections.deque`, `defaultdict`, `Counter`, and `OrderedDict`,
-`functools.reduce`, `functools.lru_cache` and `cache`, and `operator`'s
-functions are not lowered yet. A function that calls them runs in Python,
-and `ppy explain --summary` names the call.
+`defaultdict`, `Counter`, and `OrderedDict`, `functools.reduce`,
+`functools.lru_cache` and `cache`, and `operator`'s functions are not
+lowered yet. A function that calls them runs in Python, and `ppy explain
+--summary` names the call.
