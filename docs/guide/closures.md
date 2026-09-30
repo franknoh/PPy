@@ -69,6 +69,9 @@ def late(n: int) -> int:
     return first + get()  # n + 2 * n
 ```
 
+A loop variable is one variable too: after `for i in range(3):
+fs.append(lambda: i)`, every closure in `fs` gives 2, in CPython and natively.
+
 A call through a value is an indirect call of the entry, with the same
 arguments and result a direct call has. A closure that raises raises through
 the call, and one that falls back takes its caller with it. A closure that
@@ -86,8 +89,6 @@ usual: Python calls it natively and gets back what it returns.
 
 A function using any of these runs as Python:
 
-- a variable a closure shares that is also a `for` loop's variable, as in
-  `for i in range(n): fs.append(lambda: i)`
 - a lambda nothing types, such as `f = lambda v: v + 1` with no annotation
 - a nested function or lambda with defaults, `*args`, keyword-only
   parameters, or a decorator

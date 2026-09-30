@@ -312,7 +312,36 @@ def main() -> None:
 main()
 """
 
+LOOPS = """
+from collections.abc import Callable
+
+
+def captured(n: int) -> int:
+    fs: list[Callable[[], int]] = []
+    for i in range(n):
+        fs.append(lambda: i)
+    return sum(f() for f in fs)
+
+
+def walked(xs: list[int]) -> int:
+    fs: list[Callable[[], int]] = []
+    for x in xs:
+        fs.append(lambda: x * 10)
+    total = 0
+    for f in fs:
+        total += f()
+    return total
+
+
+def main() -> None:
+    print(captured(4), walked([1, 2, 3]))
+
+
+main()
+"""
+
 PROGRAMS = {
+    "loops": (LOOPS, ["captured", "walked"]),
     "held": (HELD, ["dispatch", "rules"]),
     "basics": (BASICS, ["apply", "use_named", "use_lambda", "counter", "make_adder", "adders"]),
     "keys": (KEYS, ["keyed", "mapped", "keyed_value"]),
@@ -478,32 +507,3 @@ def test_python_calls_a_function_using_closures_natively(tmp_path: Path):
     for name in ("apply", "make_adder"):
         found = module.functions.get(f"prog.{name}")
         assert found is None or not found.exposed, name
-
-
-@requires_llvm
-@requires_cc
-def test_a_loop_variable_a_closure_shares_stays_in_python(tmp_path: Path):
-    """Each lambda sees the loop variable's last value, as CPython's do."""
-    source = """
-    from typing import Callable
-
-
-    def captured(n: int) -> int:
-        fs: list[Callable[[], int]] = []
-        for i in range(n):
-            fs.append(lambda: i)
-        return sum(f() for f in fs)
-
-
-    def main() -> None:
-        print(captured(4))
-
-
-    main()
-    """
-    expected = _expected(tmp_path, source)
-    assert expected == "12"
-    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
-    assert _output(done).strip() == expected
-    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.captured")
-    assert "shared with a closure" in explained.stdout, explained.stdout
