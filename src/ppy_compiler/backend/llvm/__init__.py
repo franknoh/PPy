@@ -140,12 +140,9 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         result: LoweringResult = _lower(
             bundle, analysis, candidates, layouts, opt_level, available.get
         )
-        ir_text = result.ir
-        if fused:
-            ir_text = _append_fused(ir_text, module.name, fused)
         native = NativeModule(
             name=module.name,
-            ir=ir_text,
+            ir="",
             ppyir=result.ppyir,
             functions=result.functions,
             rejected=result.rejected,
@@ -196,7 +193,34 @@ def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # t
         sanitize=config.llvm.sanitize,
         instrument=config.llvm.instrument,
         profile=profile_for(config),
+        emit_llvm=False,
     )
+
+
+def module_llvm(bundle, native: NativeModule) -> str:  # type: ignore[no-untyped-def]
+    """A module's own LLVM IR, emitted from its `.ppyir` the first time it is asked
+    for and kept on the module.
+
+    Lowering no longer emits it: the usual build links every module's PPy IR
+    into one program and emits that, so a module's own LLVM IR is only for a
+    build that cannot link (a cache from before linking), the JIT, and
+    `ppy inspect --ir`.
+    """
+    if native.ir or not (native.ppyir or native.fused):
+        return native.ir
+    text = ""
+    if native.ppyir:
+        from ...ir import decode
+        from .from_ir import emit_module
+
+        registry = bundle.project.plugins.dialect_registry()
+        text = emit_module(
+            decode(native.ppyir, registry), configured_target(bundle.project.config.llvm.target)
+        )
+    if native.fused:
+        text = _append_fused(text, native.name, native.fused)
+    native.ir = text
+    return text
 
 
 def _lowering_key(bundle, name: str, opt_level: int | None) -> str:  # type: ignore[no-untyped-def]
@@ -437,7 +461,10 @@ def emit_ir(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
     if not available():
         raise LlvmUnavailable("llvmlite is not installed, so no LLVM IR can be produced")
     engine = JitEngine(opt_level=bundle.project.config.opt_level)
-    return {name: engine.optimized_ir(module.ir) for name, module in _collect(bundle).items()}
+    return {
+        name: engine.optimized_ir(module_llvm(bundle, module))
+        for name, module in _collect(bundle).items()
+    }
 
 
 def _library_key(objects: list[Path]) -> str:
@@ -554,9 +581,18 @@ def compile_project(  # type: ignore[no-untyped-def]
 
     for name, native in natives.items():
         key: CacheKey = module_cache_key(bundle, name, target="llvm", opt_level=level)
-        if store.get(key) is None:
-            store.put(key, engine().optimized_ir(native.ir), kind="llvm", source=name, suffix=".ll")
-        store.mark_root(key, f"llvm:{name}")
+        if not linked:
+            # A module built on its own keeps its optimized LLVM IR; a linked
+            # program's modules have only their PPy IR, and the program's object.
+            if store.get(key) is None:
+                store.put(
+                    key,
+                    engine().optimized_ir(module_llvm(bundle, native)),
+                    kind="llvm",
+                    source=name,
+                    suffix=".ll",
+                )
+            store.mark_root(key, f"llvm:{name}")
         _report(native, reporter, bundle)
 
         if not native.functions and not native.fused:
@@ -577,7 +613,7 @@ def compile_project(  # type: ignore[no-untyped-def]
                 try:
                     emitted = emit_object(
                         engine(),
-                        native.ir,
+                        module_llvm(bundle, native),
                         destination,
                         host_cpu=for_host,
                         target=target,
@@ -948,7 +984,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 continue
             engine.load_library(library)
         if native.functions or native.fused:
-            engine.add(native.ir)
+            engine.add(module_llvm(bundle, native))
     engine.finalize()
 
     collector = None
