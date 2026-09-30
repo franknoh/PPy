@@ -243,10 +243,14 @@ class CollectionApiLowering(CollectionLowering):
         handle = core.load(self.b, source.slot)
         if cursor.version is not None:
             now = self._rt("ppy_coll_field", (handle, self._word(6)))
+            # CPython's words for its own set and dict.
+            said = {"Set": "Set changed size", "Dict": "dictionary changed size"}.get(
+                source.kind.name, f"{source.kind.name} changed"
+            )
             self._require(
                 core.cmp(self.b, "eq", now, cursor.version),
-                f"{source.kind.name} changed during iteration",
-                f"RuntimeError: {source.kind.name} changed during iteration",
+                f"{said} during iteration",
+                f"RuntimeError: {said} during iteration",
             )
         at = core.load(self.b, cursor.at)
         if source.kind.family == "seq":

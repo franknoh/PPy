@@ -986,6 +986,9 @@ int64_t ppy_pyset_slot(int8_t *handle, int64_t entry) {
     int64_t run = start + 9 <= mask ? 9 : 0;
     int64_t j = start;
     while (table[8 + 2 * j] != entry) {
+        if (table[8 + 2 * j] == -1) {
+            return -1; /* not in the set: a walk whose element went */
+        }
         j = ppy_pyset_next(mask, &start, j, &run, &perturb);
     }
     return j;
@@ -1462,7 +1465,11 @@ int64_t ppy_coll_step(int8_t *handle, int64_t at) {
     if (family == 2) {
         int64_t *order = ppy_pyset_table(handle);
         if (order != NULL) {
-            return ppy_pyset_from(order, at < 0 ? 0 : ppy_pyset_slot(handle, at) + 1);
+            int64_t slot = at < 0 ? -1 : ppy_pyset_slot(handle, at);
+            if (at >= 0 && slot < 0) {
+                return -1;
+            }
+            return ppy_pyset_from(order, slot + 1);
         }
         for (int64_t e = at + 1; e < header[3]; e++) {
             if (ppy_map_alive(handle, e)) {
