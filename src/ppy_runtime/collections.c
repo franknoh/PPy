@@ -152,6 +152,7 @@ void ppy_coll_free(int8_t *handle) {
     ppy_coll_untrack(header);
     if (header[12] == 2) {
         free((void *)(intptr_t)header[4]);
+        free((void *)(intptr_t)header[7]);
     }
     if (header[12] != 4 || !header[6]) {
         /* A string's bytes may sit in its header's own block (strings.c). */
@@ -253,7 +254,28 @@ int64_t ppy_coll_held_keys(int8_t *handle) {
     if (header[12] != 2 && header[12] != 3) {
         return 0; /* only maps and sets have keys; a string's header is shorter */
     }
-    return ppy_coll_key_text(handle) | header[24];
+    return ppy_coll_key_text(handle) | (header[24] & 0xFFFFFFFF);
+}
+
+/* The key words that are floats (bits 32-47 of word 24): `-0.0` and `0.0` are
+   one key there, so they hash and compare as the numbers. A NaN key never
+   gets here; the caller falls back first. */
+void ppy_coll_float_keys(int8_t *handle, int64_t mask) {
+    ((int64_t *)handle)[24] |= mask << 32;
+}
+
+/* `key` with each float word's `-0.0` made `0.0`, in `out`; `key` itself
+   where no word is a float. */
+int64_t *ppy_coll_float_normal(int8_t *handle, const int64_t *key, int64_t *out) {
+    int64_t floats = (int64_t)(((uint64_t)((int64_t *)handle)[24] >> 32) & 0xFFFF);
+    if (floats == 0) {
+        return (int64_t *)(intptr_t)key;
+    }
+    int64_t keys = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    for (int64_t w = 0; w < keys; w++) {
+        out[w] = ((floats >> w) & 1) && key[w] == INT64_MIN ? 0 : key[w];
+    }
+    return out;
 }
 
 /* Take (1) or drop (-1) a reference to each string or object word of a key. */
@@ -814,7 +836,239 @@ int64_t ppy_map_hash(int8_t *handle, const int64_t *key, int64_t mask) {
         return (int64_t)(h & (uint64_t)mask);
     }
     int64_t keys = header[13] & 0xFFFFFFFF;
+    int64_t normal[16];
+    key = ppy_coll_float_normal(handle, key, normal);
     return ppy_str_key_hash(key, keys, ppy_coll_key_text(handle)) & mask;
+}
+
+/* -- a set's walking order: CPython's own table, kept beside the index ------- */
+
+/* A set of ints or of tuples of ints walks in the order CPython's set would,
+   so a program prints and loops over it as `python` does. `header[7]` points
+   at a copy of CPython's table (`Objects/setobject.c`): words 0 mask, 1 fill,
+   2 used, 3 finger, 4 whether keys are tuples, 5 whether puts leave it alone;
+   from word 8, a slot per two words, the entry (-1 empty, -2 a dummy) and its
+   hash. The records and the index stay what they are; this only orders. A
+   set made from Python's has no table: its order is not known, and a walk
+   that shows it falls back. */
+
+
+int64_t *ppy_pyset_table(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    return header[12] == 2 ? (int64_t *)(intptr_t)header[7] : NULL;
+}
+
+int64_t ppy_pyset_int_hash(int64_t x) {
+    const uint64_t modulus = (1ULL << 61) - 1;
+    uint64_t magnitude = x < 0 ? (uint64_t)0 - (uint64_t)x : (uint64_t)x;
+    int64_t h = (int64_t)(magnitude % modulus);
+    if (x < 0) {
+        h = -h;
+    }
+    return h == -1 ? -2 : h;
+}
+
+int64_t ppy_pyset_hash(int8_t *handle, const int64_t *key) {
+    int64_t *table = ppy_pyset_table(handle);
+    if (!table[4]) {
+        return ppy_pyset_int_hash(key[0]);
+    }
+    const uint64_t x1 = 11400714785074694791ULL, x2 = 14029467366897019727ULL,
+                   x5 = 2870177450012600261ULL;
+    int64_t n = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    uint64_t acc = x5;
+    for (int64_t i = 0; i < n; i++) {
+        acc += (uint64_t)ppy_pyset_int_hash(key[i]) * x2;
+        acc = (acc << 31) | (acc >> 33);
+        acc *= x1;
+    }
+    acc += (uint64_t)n ^ (x5 ^ 3527539ULL);
+    return acc == UINT64_MAX ? 1546275796 : (int64_t)acc;
+}
+
+int64_t *ppy_pyset_fresh(int64_t size, const int64_t *like) {
+    int64_t *table = (int64_t *)malloc((size_t)(8 + 2 * size) * sizeof(int64_t));
+    if (table == NULL) {
+        ppy_coll_fail();
+    }
+    memcpy(table, like, 8 * sizeof(int64_t));
+    table[0] = size - 1;
+    table[1] = 0;
+    table[2] = 0;
+    for (int64_t j = 0; j < size; j++) {
+        table[8 + 2 * j] = -1;
+    }
+    return table;
+}
+
+/* The next slot of a probe: CPython looks at up to nine slots in a row, then
+   jumps by the perturbed recurrence. `run` counts down the row. */
+int64_t ppy_pyset_next(int64_t mask, int64_t *start, int64_t j, int64_t *run,
+                          uint64_t *perturb) {
+    if (*run > 0) {
+        (*run)--;
+        return j + 1;
+    }
+    *perturb >>= 5;
+    *start = (int64_t)(((uint64_t)*start * 5 + 1 + *perturb) & (uint64_t)mask);
+    *run = *start + 9 <= mask ? 9 : 0;
+    return *start;
+}
+
+void ppy_pyset_insert_clean(int64_t *table, int64_t entry, int64_t hash) {
+    int64_t mask = table[0];
+    uint64_t perturb = (uint64_t)hash;
+    int64_t start = (int64_t)((uint64_t)hash & (uint64_t)mask);
+    int64_t run = start + 9 <= mask ? 9 : 0;
+    int64_t j = start;
+    while (table[8 + 2 * j] != -1) {
+        j = ppy_pyset_next(mask, &start, j, &run, &perturb);
+    }
+    table[8 + 2 * j] = entry;
+    table[8 + 2 * j + 1] = hash;
+}
+
+void ppy_pyset_resize(int8_t *handle, int64_t minused) {
+    int64_t *old = ppy_pyset_table(handle);
+    int64_t size = 8;
+    while (size <= minused) {
+        size <<= 1;
+    }
+    int64_t *table = ppy_pyset_fresh(size, old);
+    table[1] = old[2];
+    table[2] = old[2];
+    for (int64_t j = 0; j <= old[0]; j++) {
+        if (old[8 + 2 * j] >= 0) {
+            ppy_pyset_insert_clean(table, old[8 + 2 * j], old[8 + 2 * j + 1]);
+        }
+    }
+    free(old);
+    ((int64_t *)handle)[7] = (int64_t)(intptr_t)table;
+}
+
+/* A new entry, not in the set: the last dummy on its probe, or the empty slot
+   that ends it, and a larger table past three fifths full. */
+void ppy_pyset_add(int8_t *handle, int64_t entry) {
+    int64_t *table = ppy_pyset_table(handle);
+    int64_t hash = ppy_pyset_hash(handle, ppy_coll_record(handle, entry));
+    int64_t mask = table[0];
+    uint64_t perturb = (uint64_t)hash;
+    int64_t start = (int64_t)((uint64_t)hash & (uint64_t)mask);
+    int64_t run = start + 9 <= mask ? 9 : 0;
+    int64_t j = start, free_slot = -1;
+    while (table[8 + 2 * j] != -1) {
+        if (table[8 + 2 * j] == -2) {
+            free_slot = j;
+        }
+        j = ppy_pyset_next(mask, &start, j, &run, &perturb);
+    }
+    table[2]++;
+    if (free_slot >= 0) {
+        table[8 + 2 * free_slot] = entry;
+        table[8 + 2 * free_slot + 1] = hash;
+        return;
+    }
+    table[1]++;
+    table[8 + 2 * j] = entry;
+    table[8 + 2 * j + 1] = hash;
+    if (table[1] * 5 >= mask * 3) {
+        ppy_pyset_resize(handle, table[2] > 50000 ? table[2] * 2 : table[2] * 4);
+    }
+}
+
+/* The slot holding `entry`, which is in the set. */
+int64_t ppy_pyset_slot(int8_t *handle, int64_t entry) {
+    int64_t *table = ppy_pyset_table(handle);
+    int64_t hash = ppy_pyset_hash(handle, ppy_coll_record(handle, entry));
+    int64_t mask = table[0];
+    uint64_t perturb = (uint64_t)hash;
+    int64_t start = (int64_t)((uint64_t)hash & (uint64_t)mask);
+    int64_t run = start + 9 <= mask ? 9 : 0;
+    int64_t j = start;
+    while (table[8 + 2 * j] != entry) {
+        if (table[8 + 2 * j] == -1) {
+            return -1; /* not in the set: a walk whose element went */
+        }
+        j = ppy_pyset_next(mask, &start, j, &run, &perturb);
+    }
+    return j;
+}
+
+void ppy_pyset_discard(int8_t *handle, int64_t entry) {
+    int64_t *table = ppy_pyset_table(handle);
+    table[8 + 2 * ppy_pyset_slot(handle, entry)] = -2;
+    table[2]--;
+}
+
+/* The live entry at slot `from` or after it, or -1. */
+int64_t ppy_pyset_from(const int64_t *table, int64_t from) {
+    for (int64_t j = from; j <= table[0]; j++) {
+        if (table[8 + 2 * j] >= 0) {
+            return table[8 + 2 * j];
+        }
+    }
+    return -1;
+}
+
+/* A set of ints (0) or of tuples of ints (1), from now on in CPython's order. */
+void ppy_pyset_track(int8_t *handle, int64_t tuples) {
+    int64_t like[8] = {0, 0, 0, 0, tuples, 0, 0, 0};
+    ((int64_t *)handle)[7] = (int64_t)(intptr_t)ppy_pyset_fresh(8, like);
+}
+
+/* Whether a walk of this set can show CPython's order. */
+int64_t ppy_pyset_ordered(int8_t *handle) {
+    return handle != NULL && ppy_pyset_table(handle) != NULL;
+}
+
+/* The entry `set.pop()` takes, or -1 where the set is empty; the caller
+   removes it. */
+int64_t ppy_pyset_pop(int8_t *handle) {
+    int64_t *table = ppy_pyset_table(handle);
+    if (table[2] == 0) {
+        return -1;
+    }
+    int64_t j = table[3] & table[0];
+    while (table[8 + 2 * j] < 0) {
+        j = j == table[0] ? 0 : j + 1;
+    }
+    table[3] = j + 1;
+    return table[8 + 2 * j];
+}
+
+/* `made`, a set with the same entries as `handle` and nothing else put in it,
+   given the table `made = set(handle)` would have: CPython's merge into an
+   empty set. `entries[k]` is `made`'s entry for `handle`'s k-th in walking
+   order, or NULL where the entries are the same. */
+void ppy_pyset_copy_into(int8_t *made, int8_t *handle, const int64_t *entries) {
+    int64_t *other = ppy_pyset_table(handle);
+    int64_t *table = ppy_pyset_table(made);
+    int64_t used = other[2];
+    if (used == 0) {
+        return;
+    }
+    if ((table[1] + used) * 5 >= table[0] * 3) {
+        ppy_pyset_resize(made, (table[2] + used) * 2);
+        table = ppy_pyset_table(made);
+    }
+    table[1] = used;
+    table[2] = used;
+    int64_t k = 0;
+    int same = table[0] == other[0] && other[1] == other[2];
+    for (int64_t j = 0; j <= other[0]; j++) {
+        int64_t e = other[8 + 2 * j];
+        if (e < 0) {
+            continue;
+        }
+        int64_t mine = entries != NULL ? entries[k] : e;
+        k++;
+        if (same) {
+            table[8 + 2 * j] = mine;
+            table[8 + 2 * j + 1] = other[8 + 2 * j + 1];
+        } else {
+            ppy_pyset_insert_clean(table, mine, other[8 + 2 * j + 1]);
+        }
+    }
 }
 
 void ppy_map_reindex(int8_t *handle, int64_t size) {
@@ -884,14 +1138,30 @@ int64_t ppy_map_put(int8_t *handle, const int8_t *key) {
     int64_t keys = (header[13] & 0xFFFFFFFF);
     int64_t stride = header[15];
     int64_t alive = keys + header[8];
+    int64_t *order = ppy_pyset_table(handle);
     if (header[3] == header[1]) {
+        int64_t *moved = order != NULL ? (int64_t *)malloc((size_t)header[3] * 8 + 8) : NULL;
+        if (order != NULL && moved == NULL) {
+            ppy_coll_fail();
+        }
         int64_t kept = 0;
         for (int64_t e = 0; e < header[3]; e++) {
             int64_t *record = ppy_coll_record(handle, e);
             if (record[alive]) {
                 memmove(ppy_coll_record(handle, kept), record, (size_t)(stride * 8));
+                if (moved != NULL) {
+                    moved[e] = kept;
+                }
                 kept++;
             }
+        }
+        if (moved != NULL) {
+            for (int64_t j = 0; j <= order[0]; j++) {
+                if (order[8 + 2 * j] >= 0) {
+                    order[8 + 2 * j] = moved[order[8 + 2 * j]];
+                }
+            }
+            free(moved);
         }
         header[3] = kept;
         if (kept * 2 > header[1]) {
@@ -914,6 +1184,9 @@ int64_t ppy_map_put(int8_t *handle, const int8_t *key) {
     index[i] = e;
     header[0]++;
     header[6]++;
+    if (order != NULL && !order[5]) {
+        ppy_pyset_add(handle, e);
+    }
     return e;
 }
 
@@ -940,6 +1213,9 @@ int64_t ppy_map_remove(int8_t *handle, const int8_t *key) {
     }
     int64_t *index = (int64_t *)(intptr_t)header[4];
     int64_t e = index[at];
+    if (ppy_pyset_table(handle) != NULL) {
+        ppy_pyset_discard(handle, e);
+    }
     index[at] = -2;
     ppy_coll_record(handle, e)[(header[13] & 0xFFFFFFFF) + header[8]] = 0;
     ppy_coll_hold_key(handle, ppy_coll_record(handle, e), -1);
@@ -955,6 +1231,12 @@ void ppy_map_clear(int8_t *handle) {
     header[3] = 0;
     header[6]++;
     ppy_map_reindex(handle, header[5]);
+    int64_t *order = ppy_pyset_table(handle);
+    if (order != NULL) {
+        /* `set.clear()` keeps the finger `pop` starts from. */
+        header[7] = (int64_t)(intptr_t)ppy_pyset_fresh(8, order);
+        free(order);
+    }
 }
 
 /* -- TreeMap and TreeSet: a treap over an array of nodes ---------------------- */
@@ -1181,6 +1463,14 @@ int64_t ppy_coll_step(int8_t *handle, int64_t at) {
         return at < 0 ? header[3] : ppy_list_after(handle, at);
     }
     if (family == 2) {
+        int64_t *order = ppy_pyset_table(handle);
+        if (order != NULL) {
+            int64_t slot = at < 0 ? -1 : ppy_pyset_slot(handle, at);
+            if (at >= 0 && slot < 0) {
+                return -1;
+            }
+            return ppy_pyset_from(order, slot + 1);
+        }
         for (int64_t e = at + 1; e < header[3]; e++) {
             if (ppy_map_alive(handle, e)) {
                 return e;
@@ -1366,6 +1656,12 @@ int8_t *ppy_coll_copy(int8_t *handle) {
         }
         memcpy(index, (void *)(intptr_t)header[4], (size_t)header[5] * sizeof(int64_t));
         copy[4] = (int64_t)(intptr_t)index;
+        copy[7] = 0;
+        int64_t *order = ppy_pyset_table(handle);
+        if (order != NULL) {
+            ppy_pyset_track(made, order[4]);
+            ppy_pyset_copy_into(made, handle, NULL);
+        }
     }
     int64_t count = header[12] == 0 ? header[0] : header[1];
     int64_t keys = header[13] & 0xFFFFFFFF;
@@ -1685,6 +1981,33 @@ int64_t ppy_coll_put_key(int8_t *handle, const int8_t *key) {
    replaced lets go of what it held, a value stored takes a reference. */
 void ppy_coll_update(int8_t *handle, int8_t *other) {
     int64_t *header = (int64_t *)handle;
+    int64_t *order = ppy_pyset_table(handle);
+    int64_t *theirs = order != NULL ? ppy_pyset_table(other) : NULL;
+    if (order != NULL && theirs == NULL && ((int64_t *)other)[12] == 2) {
+        /* A set whose order is not known makes this one's unknown too. */
+        free(order);
+        header[7] = 0;
+        order = NULL;
+    }
+    int64_t *entries = NULL;
+    if (theirs != NULL) {
+        /* CPython's merge: one resize up front, and an empty set takes the
+           other's table whole. */
+        if (other == handle || theirs[2] == 0) {
+            return;
+        }
+        if ((order[1] + theirs[2]) * 5 >= order[0] * 3) {
+            ppy_pyset_resize(handle, (order[2] + theirs[2]) * 2);
+            order = ppy_pyset_table(handle);
+        }
+        if (order[1] == 0) {
+            order[5] = 1;
+            entries = (int64_t *)malloc((size_t)theirs[2] * 8);
+            if (entries == NULL) {
+                ppy_coll_fail();
+            }
+        }
+    }
     int64_t key_words = header[13] & 0xFFFFFFFF;
     int64_t words = header[8];
     int64_t count = ((int64_t *)other)[0];
@@ -1709,8 +2032,81 @@ void ppy_coll_update(int8_t *handle, int8_t *other) {
         }
         memcpy(ppy_coll_value_words(handle, found), values + i * words, (size_t)(words * 8));
     }
+    if (entries != NULL) {
+        /* Found only now: a put may have moved the entries made before it. */
+        for (int64_t i = 0; i < n; i++) {
+            entries[i] = ppy_map_find(handle, (const int8_t *)(keys + i * key_words));
+        }
+    }
     free(keys);
     free(values);
+    if (entries != NULL) {
+        order = ppy_pyset_table(handle);
+        order[5] = 0;
+        ppy_pyset_copy_into(handle, other, entries);
+        free(entries);
+    }
+}
+
+/* After `-=`: CPython resizes the dummies away where they are over a quarter. */
+void ppy_pyset_squeeze(int8_t *handle) {
+    int64_t *table = ppy_pyset_table(handle);
+    if (table != NULL && table[1] - table[2] > table[0] / 4) {
+        ppy_pyset_resize(handle, table[2] > 50000 ? table[2] * 2 : table[2] * 4);
+    }
+}
+
+/* The set operations as CPython does them, for the order they leave. */
+int8_t *ppy_pyset_combine(int8_t *a, int8_t *b, int64_t op) {
+    int64_t keys = ((int64_t *)a)[13] & 0xFFFFFFFF;
+    int64_t used_a = ppy_pyset_table(a)[2], used_b = ppy_pyset_table(b)[2];
+    int8_t *made;
+    if (op == 1 && a == b) {
+        return ppy_coll_copy(a);
+    }
+    if (op == 1) {
+        made = ppy_map_new(keys, 0, 0, 0);
+        ppy_pyset_track(made, ppy_pyset_table(a)[4]);
+        int8_t *walked = used_b > used_a ? a : b;
+        int8_t *asked = used_b > used_a ? b : a;
+        for (int64_t e = ppy_coll_step(walked, -1); e >= 0; e = ppy_coll_step(walked, e)) {
+            const int8_t *key = (const int8_t *)ppy_coll_record(walked, e);
+            if (ppy_map_find(asked, key) >= 0) {
+                ppy_map_put(made, key);
+            }
+        }
+        return made;
+    }
+    if (op == 2 && !((used_a >> 2) > used_b)) {
+        made = ppy_map_new(keys, 0, 0, 0);
+        ppy_pyset_track(made, ppy_pyset_table(a)[4]);
+        for (int64_t e = ppy_coll_step(a, -1); e >= 0; e = ppy_coll_step(a, e)) {
+            const int8_t *key = (const int8_t *)ppy_coll_record(a, e);
+            if (ppy_map_find(b, key) < 0) {
+                ppy_map_put(made, key);
+            }
+        }
+        return made;
+    }
+    /* `|` and a large `-` start from a copy of `a`, `^` from one of `b`. */
+    made = ppy_coll_copy(op == 3 ? b : a);
+    if (op == 0) {
+        if (a != b) {
+            ppy_coll_update(made, b);
+        }
+        return made;
+    }
+    int8_t *walked = op == 3 ? a : b;
+    for (int64_t e = ppy_coll_step(walked, -1); e >= 0; e = ppy_coll_step(walked, e)) {
+        const int8_t *key = (const int8_t *)ppy_coll_record(walked, e);
+        if (ppy_map_remove(made, key) < 0 && op == 3) {
+            ppy_map_put(made, key);
+        }
+    }
+    if (op == 2) {
+        ppy_pyset_squeeze(made);
+    }
+    return made;
 }
 
 /* `a | b` (0), `a & b` (1), `a - b` (2), `a ^ b` (3): a new set of `a`'s
@@ -1718,6 +2114,9 @@ void ppy_coll_update(int8_t *handle, int8_t *other) {
 int8_t *ppy_set_combine(int8_t *a, int8_t *b, int64_t op) {
     int64_t *header = (int64_t *)a;
     int64_t keys = header[13] & 0xFFFFFFFF;
+    if (ppy_pyset_table(a) != NULL && ppy_pyset_table(b) != NULL) {
+        return ppy_pyset_combine(a, b, op);
+    }
     int8_t *made = header[12] == 2 ? ppy_map_new(keys, 0, 0, 0) : ppy_tree_new(keys, 0, 0, 0);
     ppy_coll_text_keys(made, ppy_coll_key_text(a));
     ppy_coll_inherit(made, a);
@@ -1737,6 +2136,81 @@ int8_t *ppy_set_combine(int8_t *a, int8_t *b, int64_t op) {
         }
     }
     return made;
+}
+
+/* `a |= b` (0), `a &= b` (1), `a -= b` (2), `a ^= b` (3): `a` itself changes,
+   as CPython changes it, and so does its table. */
+void ppy_set_inplace(int8_t *a, int8_t *b, int64_t op) {
+    int64_t *order = ppy_pyset_table(a);
+    if (op == 0) {
+        ppy_coll_update(a, b);
+        return;
+    }
+    if (a == b && op != 1) {
+        ppy_map_clear(a);
+        return;
+    }
+    if (op == 1) {
+        int8_t *kept = ppy_set_combine(a, b, 1);
+        int64_t count = ((int64_t *)a)[0], n = 0;
+        int64_t *gone = (int64_t *)malloc((size_t)count * 8 + 8);
+        if (gone == NULL) {
+            ppy_coll_fail();
+        }
+        for (int64_t e = ppy_coll_step(a, -1); e >= 0; e = ppy_coll_step(a, e)) {
+            if (ppy_map_find(kept, (const int8_t *)ppy_coll_record(a, e)) < 0) {
+                gone[n++] = e;
+            }
+        }
+        for (int64_t i = 0; i < n; i++) {
+            ppy_map_remove(a, (const int8_t *)ppy_coll_record(a, gone[i]));
+        }
+        free(gone);
+        order = ppy_pyset_table(a);
+        int64_t *theirs = ppy_pyset_table(kept);
+        if (order != NULL) {
+            /* CPython swaps in the intersection's table; the finger stays. */
+            int64_t *table = NULL;
+            if (theirs != NULL) {
+                table = ppy_pyset_fresh(theirs[0] + 1, theirs);
+                table[1] = theirs[1];
+                table[2] = theirs[2];
+                table[3] = order[3];
+                for (int64_t j = 0; j <= theirs[0]; j++) {
+                    int64_t e = theirs[8 + 2 * j];
+                    table[8 + 2 * j] =
+                        e < 0 ? e
+                              : ppy_map_find(a, (const int8_t *)ppy_coll_record(kept, e));
+                    table[8 + 2 * j + 1] = theirs[8 + 2 * j + 1];
+                }
+            }
+            free(order);
+            ((int64_t *)a)[7] = (int64_t)(intptr_t)table;
+        }
+        ppy_coll_release(kept);
+        return;
+    }
+    if (op == 3 && order != NULL && ppy_pyset_table(b) == NULL) {
+        free(order);
+        ((int64_t *)a)[7] = 0;
+    }
+    for (int64_t e = ppy_coll_step(b, -1); e >= 0; e = ppy_coll_step(b, e)) {
+        const int8_t *key = (const int8_t *)ppy_coll_record(b, e);
+        if (ppy_map_remove(a, key) < 0 && op == 3) {
+            ppy_map_put(a, key);
+        }
+    }
+    if (op == 2) {
+        ppy_pyset_squeeze(a);
+    }
+}
+
+/* Room made up front for `count` more, as CPython does before adding a dict's keys. */
+void ppy_pyset_reserve(int8_t *handle, int64_t count) {
+    int64_t *table = ppy_pyset_table(handle);
+    if (table != NULL && (table[1] + count) * 5 >= table[0] * 3) {
+        ppy_pyset_resize(handle, (table[2] + count) * 2);
+    }
 }
 
 /* `a.issubset(b)` (0), `a.issuperset(b)` (1), `a.isdisjoint(b)` (2). */
@@ -1860,5 +2334,8 @@ int64_t ppy_coll_same_key(int8_t *handle, const int64_t *a, const int64_t *b, in
         return a[0] == b[0] ||
                ((int64_t (*)(int64_t, int64_t))(intptr_t)header[23])(a[0], b[0]) != 0;
     }
+    int64_t left[16], right[16];
+    a = ppy_coll_float_normal(handle, a, left);
+    b = ppy_coll_float_normal(handle, b, right);
     return ppy_str_key_order(a, b, keys, text) == 0;
 }

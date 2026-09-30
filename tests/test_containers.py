@@ -617,8 +617,18 @@ def test_python_calls_container_functions_natively(tmp_path: Path):
 
 @requires_llvm
 @requires_cc
-def test_a_set_walked_where_its_order_shows_stays_in_python(tmp_path: Path):
+def test_a_set_of_strings_walked_where_its_order_shows_stays_in_python(tmp_path: Path):
+    """A set of ints walks in CPython's order natively; a string's hash changes
+    from one process to the next, so a set of strings stays in Python."""
     source = """
+    def named(n: int) -> str:
+        s = {str(i * 7 % 5) for i in range(n)}
+        out = ""
+        for x in s:
+            out += x
+        return out
+
+
     def walked(n: int) -> int:
         s = {i * 7 % 5 for i in range(n)}
         total = 0
@@ -633,7 +643,7 @@ def test_a_set_walked_where_its_order_shows_stays_in_python(tmp_path: Path):
 
 
     def main() -> None:
-        print(walked(9), ordered(9))
+        print(sorted(named(9)), walked(9), ordered(9))
 
 
     main()
@@ -641,7 +651,9 @@ def test_a_set_walked_where_its_order_shows_stays_in_python(tmp_path: Path):
     expected = _expected(tmp_path, source)
     done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
     assert _output(done).strip() == expected
+    named = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.named")
+    assert "hash order" in named.stdout, named.stdout
     walked = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.walked")
-    assert "hash order" in walked.stdout, walked.stdout
+    assert "llvm backend: native" in walked.stdout, walked.stdout
     ordered = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.ordered")
     assert "llvm backend: native" in ordered.stdout, ordered.stdout

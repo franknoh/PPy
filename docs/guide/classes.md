@@ -134,8 +134,9 @@ An object class's operator methods lower as calls:
 |---|---|
 | `a + b`, `a - b`, `a * k`, and the other arithmetic operators | `__add__`, `__sub__`, `__mul__`, ..., or the right operand's `__radd__`, ... |
 | `-a`, `+a`, `~a` | `__neg__`, `__pos__`, `__invert__` |
-| `a == b`, `a != b` | `__eq__`, `__ne__` (or `not __eq__`); a class with neither compares identity |
-| `a < b`, `a <= b`, `a > b`, `a >= b` | `__lt__`, ..., or the reflected method of the right operand |
+| `a == b`, `a != b` | `__eq__`, `__ne__` (or `not __eq__`); a dataclass compares its fields; any other class compares identity |
+| `a < b`, `a <= b`, `a > b`, `a >= b` | `__lt__`, ..., or the reflected method of the right operand; `@dataclass(order=True)` compares its fields as tuples |
+| `str(a)`, `repr(a)`, `print(a)`, `f"{a}"`, `f"{a!r}"` | `__str__`, `__repr__`, or a dataclass's generated `__repr__`, `Point(x=1, y=2.5)` |
 | `obj[key]`, `obj[key] = value` | `__getitem__`, `__setitem__` |
 | `x in obj` | `__contains__` |
 | `len(obj)`, `if obj:` | `__len__`, `__bool__` |
@@ -259,8 +260,17 @@ return numbers, and make their objects inside.
   the functions that use it in Python.
 - A call through a generic base whose subclass has type parameters the
   base's arguments do not decide stays in Python, as above.
-- A dataclass object compared with `==` keeps the function in Python unless
-  the class defines `__eq__`, since the generated one compares fields.
+- A dataclass's generated `==` and order compare fields that are numbers,
+  bools, and strings; a field holding anything else keeps the comparison in
+  Python. A float field that is NaN falls back, since whether it equals itself
+  depends on CPython's version.
+- A dataclass with subclasses keeps its generated methods in Python, since
+  they read the instance's own class.
+- `sorted`, `min`, and `max` of `order=True` dataclass objects stay in
+  Python; comparing two of them is native.
+- A class with neither `__str__`, `__repr__`, nor a generated one prints its
+  address, which only Python has. A value class with its own `__repr__` or
+  `__str__` is shown by Python.
 - A generic class whose type arguments nothing tells stays in Python.
 
 Examples: [Inheritance](../howto/49_inheritance.md),

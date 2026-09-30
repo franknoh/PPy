@@ -1481,10 +1481,13 @@ class _FunctionLowering(
     # -- statements -------------------------------------------------------
 
     def _body(self, body: list[ast.stmt]) -> None:
-        for statement in body:
+        for index, statement in enumerate(body):
             if not self._open():
                 return
             self._location(statement)
+            if self._stepped_generator(statement, body[index + 1 :]):
+                # `it = gen()` stepped by the statements after it, which it lowered.
+                return
             self._statement(statement)
 
     def _resolves_to(self, node: ast.expr, qualname: str) -> bool:
@@ -1894,6 +1897,8 @@ class _FunctionLowering(
         if not isinstance(node.target, ast.Name):
             raise Unsupported("augmented assignment to a non-local has no native lowering")
         if self._augment_string(node.target.id, node):
+            return
+        if self._augment_set(node):
             return
         current = self._load(node.target.id)
         if self.prover is not None and current.type == I64:
@@ -2571,6 +2576,9 @@ class _FunctionLowering(
                     return core.bitwise(self.b, "xor", found, core.const(self.b, True, BOOL))
                 return found
         compared = self._object_compare(node)
+        if compared is not None:
+            return compared
+        compared = self._record_compare(node)
         if compared is not None:
             return compared
         predicate = _COMPARISONS.get(type(node.ops[0]))
@@ -4093,6 +4101,10 @@ class _FunctionLowering(
         listed = self._printed_list(argument)
         if listed is not None:
             parts.append(listed)
+            return parts
+        shown = self._shown_text(argument)
+        if shown is not None:
+            parts.append((shown, True))
             return parts
         if isinstance(argument, ast.JoinedStr):
             for item in argument.values:

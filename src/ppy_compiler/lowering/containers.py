@@ -27,7 +27,7 @@ from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, BufferType, PtrType, Successor, Value
 from ..ir.dialects import core
 from .collection_api import CollectionApiLowering, _called
-from .collections import BUILTINS, HANDLE, Kind, Shape
+from .collections import BUILTINS, HANDLE, Kind, Shape, pyset_kind, shape_of
 
 __all__ = ["ContainerLowering"]
 
@@ -39,6 +39,7 @@ _CONSTRUCTORS = {"list": "List", "dict": "Dict", "set": "Set"}
 
 #: The list methods whose element result the caller owns.
 _TAKEN = frozenset({"pop"})
+_SET_OPERATORS = (ast.BitOr, ast.BitAnd, ast.Sub, ast.BitXor)
 
 
 class ContainerLowering(CollectionApiLowering):
@@ -48,6 +49,11 @@ class ContainerLowering(CollectionApiLowering):
 
     def _builtin_of(self, node: ast.expr) -> Kind | None:
         kind = self._kind_of(node)
+        if kind is None and isinstance(node, ast.BinOp) and isinstance(node.op, _SET_OPERATORS):
+            # `c & b` where `c` was just rebound to `set()`: the checker's type of
+            # the result says less than the set on the left does.
+            left = self._builtin_of(node.left)
+            return left if left is not None and left.name == "Set" else None
         return kind if kind is not None and kind.name in _ALIASES else None
 
     def _alias(self, kind: Kind) -> Kind:
@@ -72,6 +78,11 @@ class ContainerLowering(CollectionApiLowering):
         expected = (
             self._builtin_of(ast.Name(name, ast.Load())) if name in self.collections else None
         )
+        combined = self._builtin_of(value) if isinstance(value, ast.BinOp) else None
+        if combined is not None and combined.name == "Set":
+            handle, owned = self._handle(value)
+            self._bind(name, combined, handle, owned)
+            return True
         if declared is None or _holds_never(declared):
             # `out = []` then `out.append(x)`: the checker widened the name
             # later, and the function's final locals hold what it became.
@@ -97,6 +108,8 @@ class ContainerLowering(CollectionApiLowering):
             made = self._made(kind, node)
             if made is not None:
                 return made, True
+            if isinstance(node, ast.BinOp) and self._kind_of(node) is None:
+                return self._combined(node), True
         return super()._handle(node)
 
     def _value(self, node: ast.expr, shape: Shape) -> tuple[Value, bool]:
@@ -114,6 +127,13 @@ class ContainerLowering(CollectionApiLowering):
         if isinstance(node, (ast.List, ast.Set)) and kind.name in {"List", "Set"}:
             made = self._new(kind)
             self._fill(kind, made, node)
+            if isinstance(node, ast.Set) and len(node.elts) > 2 and all(map(_folded, node.elts)):
+                # CPython folds three or more constants into a frozenset and
+                # merges that into the new set: the set is a copy of one built
+                # by adding them in turn.
+                copied = self._rt("ppy_coll_copy", (made,), HANDLE)
+                self._rt("ppy_coll_release", (made,), None)
+                made = copied
             return made
         if isinstance(node, ast.Dict) and kind.name == "Dict":
             made = self._new(kind)
@@ -160,6 +180,19 @@ class ContainerLowering(CollectionApiLowering):
             self._rt("ppy_coll_update", (made, handle), None)
             self._done_with(handle, owned)
             return made
+        other = self._builtin_of(source)
+        if kind.name == "Set" and other is not None and other.name == "Set":
+            # `set(s)` merges, as CPython does: the copy's table is the merge's.
+            handle, owned = self._handle(source)
+            self._rt("ppy_coll_update", (made, handle), None)
+            self._done_with(handle, owned)
+            return made
+        if kind.name == "Set" and other is not None and other.name == "Dict":
+            # CPython sizes the table for a dict's keys before it adds them.
+            handle, owned = self._handle(source)
+            count = self._rt("ppy_coll_len", (handle,))
+            self._rt("ppy_pyset_reserve", (made, count), None)
+            self._done_with(handle, owned)
         self._refuse_set_order(source, kind)
         self._fill(kind, made, source)
         return made
@@ -270,10 +303,19 @@ class ContainerLowering(CollectionApiLowering):
 
     def _refuse_set_order(self, node: ast.expr, into: Kind | None) -> None:
         """A set walked where the order it walks in shows: that is CPython's hash
-        table's, which native memory does not keep. Into another set it does not."""
+        table's. The runtime keeps it for a set of ints or of tuples of ints, and
+        the walk checks the set has it; a string's hash changes from run to run
+        unless PYTHONHASHSEED is fixed, so a set of strings stays in Python."""
+        del into
         walked = self._builtin_of(node)
-        if walked is not None and walked.name == "Set" and (into is None or into.name != "Set"):
-            raise Unsupported("a set is walked in CPython's hash order, which stays in Python")
+        if walked is None or walked.name != "Set":
+            return
+        if pyset_kind(walked) is None:
+            raise Unsupported(
+                "a set of anything but ints or tuples of ints is walked in CPython's hash"
+                " order, which stays in Python"
+            )
+        self.__dict__.setdefault("_shown_orders", set()).add(id(node))
 
     def _for_collection(self, node: ast.For) -> None:
         iterables = [node.iter]
@@ -293,7 +335,7 @@ class ContainerLowering(CollectionApiLowering):
             self._add_text(builder, empty)
             return self._rt("ppy_str_finish", (builder,), HANDLE), True
         kind = self._builtin_of(node)
-        if kind is None or kind.name == "Set":
+        if kind is None:
             return super()._printed_list(node)  # type: ignore[misc]
         builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)
         handle, owned = self._handle(node)
@@ -301,7 +343,34 @@ class ContainerLowering(CollectionApiLowering):
         self._done_with(handle, owned)
         return self._rt("ppy_str_finish", (builder,), HANDLE), True
 
+    def _shown_text(self, node: ast.expr) -> Value | None:
+        shape = self._object_of(node)
+        record = shape_of(self._type_of(node), self._records())
+        plain = record is not None and record.kind == "record"
+        if (shape is None or self._is_exception(shape)) and not plain:
+            return super()._shown_text(node)  # type: ignore[misc]
+        builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)
+        self._add_formatted(builder, node, -1, "")
+        return self._rt("ppy_str_finish", (builder,), HANDLE)
+
     def _add_formatted(self, builder: Value, node: ast.expr, conversion: int, spec: str) -> None:
+        shape = self._object_of(node)
+        if shape is not None and not self._is_exception(shape):
+            if spec:
+                raise Unsupported("a format spec over an object has no native lowering")
+            handle, owned = self._handle(node)
+            self._add_object_text(builder, shape, handle, conversion in {ord("r"), ord("a")})
+            self._done_with(handle, owned)
+            return None
+        record = shape_of(self._type_of(node), self._records())
+        if record is not None and record.kind == "record" and not spec:
+            if not self._plain_dataclass(record.record):
+                raise Unsupported(f"`{record.record}` is shown by its own method, in Python")
+            value = self._record_value(node)
+            if value is None:
+                raise Unsupported(f"`{ast.unparse(node)}` has no native struct")
+            self._add_item_repr(builder, record, value)
+            return None
         empty = _empty_display(node)
         if empty is not None and not spec:
             self._add_text(builder, empty)
@@ -311,8 +380,6 @@ class ContainerLowering(CollectionApiLowering):
             return super()._add_formatted(builder, node, conversion, spec)  # type: ignore[misc]
         if spec:
             raise Unsupported("a format spec over a container has no native lowering")
-        if kind.name == "Set":
-            raise Unsupported("a set is shown in CPython's hash order, which stays in Python")
         handle, owned = self._handle(node)
         self._add_container_repr(builder, kind, handle)
         self._done_with(handle, owned)
@@ -320,10 +387,37 @@ class ContainerLowering(CollectionApiLowering):
 
     def _add_container_repr(self, builder: Value, kind: Kind, handle: Value) -> None:
         """`[1, 'a']` and `{1: [2.5]}`, as `repr` writes them."""
+        if kind.name == "Set":
+            if pyset_kind(kind) is None:
+                raise Unsupported(
+                    "a set of anything but ints or tuples of ints is shown in CPython's hash"
+                    " order, which stays in Python"
+                )
+            self._order_known(kind, handle)
+            # `set()` where it is empty, `{1, 2}` where it is not.
+            empty = self._block("repr.empty")  # type: ignore[attr-defined]
+            full = self._block("repr.full")  # type: ignore[attr-defined]
+            shown = self._block("repr.shown")  # type: ignore[attr-defined]
+            length = self._rt("ppy_coll_len", (handle,))
+            core.cond_br(
+                self.b,
+                core.cmp(self.b, "eq", length, self._word(0)),
+                Successor(empty),
+                Successor(full),
+            )
+            self.b.at_end(empty)  # type: ignore[attr-defined]
+            self._add_text(builder, "set()")
+            core.br(self.b, Successor(shown))
+            self.b.at_end(full)  # type: ignore[attr-defined]
+            self._add_elements_repr(builder, kind, handle)
+            core.br(self.b, Successor(shown))
+            self.b.at_end(shown)  # type: ignore[attr-defined]
+            return
+        self._add_elements_repr(builder, kind, handle)
+
+    def _add_elements_repr(self, builder: Value, kind: Kind, handle: Value) -> None:
         from .collection_api import _Source  # pylint: disable=import-outside-toplevel
 
-        if kind.name == "Set":
-            raise Unsupported("a set is shown in CPython's hash order, which stays in Python")
         opening, closing = ("[", "]") if kind.name == "List" else ("{", "}")
         self._add_text(builder, opening)
         first = self._alloca(BOOL, "repr.first")  # type: ignore[attr-defined]
@@ -374,6 +468,8 @@ class ContainerLowering(CollectionApiLowering):
             if shape.collection.name not in _ALIASES:
                 raise Unsupported("a `ppy` collection inside a list is shown by Python")
             self._add_container_repr(builder, shape.collection, value)
+        elif shape.kind == "object":
+            self._add_object_text(builder, shape, value, True)
         elif shape.kind == "record" and self._plain_dataclass(shape.record):
             name = shape.record.rpartition(".")[2]
             self._add_text(builder, f"{name}(")
@@ -468,7 +564,11 @@ class ContainerLowering(CollectionApiLowering):
             if attr == "update" and kind.name == "Set":
                 for argument in node.args:
                     self._refuse_set_order(argument, kind)
-            found = self._whole_method(alias, handle, attr, node)
+            found = None
+            if kind.name == "Set" and attr == "pop" and not node.args and not node.keywords:
+                found = self._set_pop(kind, handle)
+            if found is None:
+                found = self._whole_method(alias, handle, attr, node)
             if found is None and not node.keywords:
                 found = self._keyed_method(alias, handle, attr, node.args)
         self._keys_done()
@@ -476,6 +576,42 @@ class ContainerLowering(CollectionApiLowering):
             raise Unsupported(f"`{BUILTIN_NAMES[kind.name]}.{attr}` has no native lowering")
         self._done_with(handle, owned)
         return found
+
+    def _set_pop(self, kind: Kind, handle: Value) -> Value | None:
+        """`s.pop()`: the element CPython's table gives up next."""
+        key_shape = kind.key
+        if pyset_kind(kind) is None or key_shape is None:
+            return None
+        self._order_known(kind, handle)
+        entry = self._rt("ppy_pyset_pop", (handle,))
+        self._require(
+            core.cmp(self.b, "ge", entry, self._word(0)),
+            "pop from an empty set",
+            "KeyError: 'pop from an empty set'",
+        )
+        address = self._rt("ppy_map_key_at", (handle, entry), HANDLE)
+        key = self._read(address, key_shape)
+        self._rt("ppy_map_remove", (handle, address))
+        return key
+
+    def _augment_set(self, node: ast.AugAssign) -> bool:
+        """`s |= t`, `s &= t`, `s -= t`, `s ^= t`: the set itself changes, as in
+        CPython, and so does the order its table leaves."""
+        from .collection_api import _OPERATORS  # pylint: disable=import-outside-toplevel
+
+        assert isinstance(node.target, ast.Name)
+        kind = self._builtin_of(node.target)
+        if kind is None or kind.name != "Set" or type(node.op) not in _OPERATORS:
+            return False
+        if self._kind_of(node.value) != kind:
+            raise Unsupported("a set combines with another of its own type")
+        handle, owned = self._handle(node.target)
+        other, other_owned = self._handle(node.value)
+        operation = self._word(_OPERATORS[type(node.op)])
+        self._rt("ppy_set_inplace", (handle, other, operation), None)
+        self._done_with(other, other_owned)
+        self._done_with(handle, owned)
+        return True
 
     def _list_method_of(self, kind: Kind, handle: Value, attr: str, node: ast.Call) -> Value | None:
         """A list's methods, where a list counts from either end."""
@@ -740,6 +876,16 @@ class ContainerLowering(CollectionApiLowering):
 def _holds_never(t: T.Type) -> bool:
     base = T.strip_literal(t)
     return isinstance(base, T.Instance) and any(isinstance(a, T.NeverType) for a in base.args)
+
+
+def _folded(node: ast.expr) -> bool:
+    """A constant CPython folds into a set display's frozenset: a number, or a
+    tuple of them."""
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        return _folded(node.operand)
+    if isinstance(node, ast.Tuple):
+        return all(_folded(item) for item in node.elts)
+    return isinstance(node, ast.Constant) and isinstance(node.value, (int, float, str, bytes))
 
 
 def _empty_display(node: ast.expr) -> str | None:

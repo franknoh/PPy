@@ -1627,10 +1627,10 @@ def test_a_class_with_a_non_scalar_field_stays_boxed(write, analyze):
 
 
         class Holder:
-            names: dict[float, int]
+            names: dict[bytes, int]
             size: int
 
-            def __init__(self, names: dict[float, int], size: int) -> None:
+            def __init__(self, names: dict[bytes, int], size: int) -> None:
                 self.names = names
                 self.size = size
 
@@ -1641,7 +1641,7 @@ def test_a_class_with_a_non_scalar_field_stays_boxed(write, analyze):
         """,
     )
     bundle = analyze(path, backend="llvm")
-    # No value layout: a `dict` keyed by floats has no native form at all.
+    # No value layout: a `dict` keyed by bytes has no native form at all.
     assert not _layouts(bundle).get("boxed.Holder")
     assert "boxed.size_of" in _collect(bundle)["boxed"].rejected
 
@@ -1956,7 +1956,7 @@ CALLS_A_BOXED_HELPER = """
 
 
     @ppy.pure
-    def helper(counts: dict[float, int]) -> int:
+    def helper(counts: dict[bytes, int]) -> int:
         return len(counts)
 
 

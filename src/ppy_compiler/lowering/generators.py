@@ -11,9 +11,11 @@ with the function's own.
 
 The consumers are `for`, `sum`, `min`, `max`, `sorted`, `any`, `all`,
 `next`, and a collection built from one (`Vec[int](gen())`). A generator
-that escapes (stored, returned, passed on, stepped twice with `next`), one
-that calls itself, one with a `try`, and `x = yield` (which `send` answers)
-keep the function in Python.
+held in a name and stepped by the statements after it (`it = gen()`, then
+`x = next(it)` and `for x in it:` at the same level) is inlined once, with
+those statements as its consumer. A generator that escapes (returned,
+passed on, stored in a collection), one that calls itself, one with a
+`try`, and `x = yield` (which `send` answers) keep the function in Python.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from dataclasses import dataclass, field
 
 from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
-from ..ir import BOOL, Block, Successor, Value
+from ..ir import BOOL, I64, Block, Successor, Value
 from ..ir.dialects import core
 from .collections import HANDLE, Kind, Shape, shape_of
 
@@ -311,6 +313,182 @@ class GeneratorLowering:  # pylint: disable=attribute-defined-outside-init
         core.br(self.b, Successor(stack[-1].exhausted))  # type: ignore[attr-defined]
         return True
 
+    # -- a generator held in a name and stepped ------------------------------------
+
+    def _stepped_generator(self, statement: ast.stmt, rest: list[ast.stmt]) -> bool:
+        """`it = gen(...)` followed by statements that step it: `x = next(it)`,
+        `x = next(it, default)`, and `for x in it:`, each a statement of the
+        same list. Lowers the assignment and every statement after it; False
+        where `statement` is no such assignment.
+
+        The generator is inlined once, and its consumer is the rest of the list:
+        a value goes to the site waiting for it (a word says which), and the
+        statements between two sites run there before the generator resumes.
+        Its end goes to the same site with no value: `next` gives its default
+        or raises `StopIteration`, and a `for` runs its `else`."""
+        found = _stepped_target(statement)
+        if found is None:
+            return False
+        name, source = found
+        if not self._is_generator(source):
+            return False
+        sites = [_Site.of(index, entry, name) for index, entry in enumerate(rest)]
+        steps = [site for site in sites if site is not None]
+        if not steps:
+            return False
+        for index, entry in enumerate(rest):
+            _check_segment_use(entry, name, sites[index] is not None)
+        shape = self._element_shape(source)
+        if shape.reference and any(site.kind == "next" for site in steps):
+            raise Unsupported("`next` of strings or objects has no native lowering")
+        segments = _segments(rest, steps)
+        # The first runs before the generator starts, the last after it closes;
+        # the ones between run inside it.
+        for segment in segments[1:-1]:
+            _check_segment(segment)
+        waiting = self._alloca(I64, f"{name}.site")  # type: ignore[attr-defined]
+        after = self._block("stepped.after")  # type: ignore[attr-defined]
+        exhausted = self._block("stepped.end")  # type: ignore[attr-defined]
+        closed = self._block("stepped.closed")  # type: ignore[attr-defined]
+        self._body(segments[0])  # type: ignore[attr-defined]
+        if not self._open():  # type: ignore[attr-defined]
+            return True
+        core.store(self.b, self._word(0), waiting)  # type: ignore[attr-defined]
+
+        def visit(value: Value, owned: bool) -> None:
+            resume = self._loops[-1][0]  # type: ignore[attr-defined]
+            joined = self._block("stepped.resume")  # type: ignore[attr-defined]
+            for k, site in enumerate(steps):
+                here = self._block(f"stepped.site{k}")  # type: ignore[attr-defined]
+                other = self._block(f"stepped.not{k}")  # type: ignore[attr-defined]
+                current = core.load(self.b, waiting)  # type: ignore[attr-defined]
+                matched = core.cmp(self.b, "eq", current, self._word(k))  # type: ignore[attr-defined]
+                core.cond_br(self.b, matched, Successor(here), Successor(other))  # type: ignore[attr-defined]
+                self.b.at_end(here)  # type: ignore[attr-defined]
+                self._site_value(
+                    site, k, steps, segments, shape, value, owned, waiting, resume, closed
+                )
+                if self._open():  # type: ignore[attr-defined]
+                    core.br(self.b, Successor(joined))  # type: ignore[attr-defined]
+                self.b.at_end(other)  # type: ignore[attr-defined]
+            core.unreachable(self.b)  # type: ignore[attr-defined]
+            if not self._seal(joined):  # type: ignore[attr-defined]
+                # Left open: the generator resumes from here.
+                self.b.at_end(joined)  # type: ignore[attr-defined]
+
+        self._inline(source, visit, exhausted, closed, loops=True)
+        self.b.at_end(exhausted)  # type: ignore[attr-defined]
+        for k in range(len(steps)):
+            here = self._block(f"stepped.ended{k}")  # type: ignore[attr-defined]
+            other = self._block(f"stepped.notended{k}")  # type: ignore[attr-defined]
+            current = core.load(self.b, waiting)  # type: ignore[attr-defined]
+            matched = core.cmp(self.b, "eq", current, self._word(k))  # type: ignore[attr-defined]
+            core.cond_br(self.b, matched, Successor(here), Successor(other))  # type: ignore[attr-defined]
+            self.b.at_end(here)  # type: ignore[attr-defined]
+            self._drained(k, steps, segments, shape, after)
+            self.b.at_end(other)  # type: ignore[attr-defined]
+        core.unreachable(self.b)  # type: ignore[attr-defined]
+        if not self._seal(closed):  # type: ignore[attr-defined]
+            self.b.at_end(closed)  # type: ignore[attr-defined]
+            core.br(self.b, Successor(after))  # type: ignore[attr-defined]
+        if self._seal(after):  # type: ignore[attr-defined]
+            return True
+        self.b.at_end(after)  # type: ignore[attr-defined]
+        self._body(segments[-1])  # type: ignore[attr-defined]
+        return True
+
+    def _site_value(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        site: _Site,
+        k: int,
+        steps: list[_Site],
+        segments: list[list[ast.stmt]],
+        shape: Shape,
+        value: Value,
+        owned: bool,
+        waiting: Value,
+        resume: Block,
+        closed: Block,
+    ) -> None:
+        """A value for the site waiting, `k`: bound where it asks, then on to the
+        next site, which waits for the next value, or, past the last one, the
+        generator closes."""
+        if site.kind == "next":
+            self._store(site.target, value)  # type: ignore[attr-defined]
+            self._after_site(k, steps, segments, waiting, closed)
+            return
+        assert isinstance(site.node, ast.For)
+        left = self._block(f"stepped.for{k}.break")  # type: ignore[attr-defined]
+        self._bind_item(site.node.target, [(shape, value)])  # type: ignore[attr-defined]
+        if owned:
+            self._release(value)  # type: ignore[attr-defined]
+        self._loops.append((resume, left))  # type: ignore[attr-defined]
+        try:
+            self._body(site.node.body)  # type: ignore[attr-defined]
+        finally:
+            self._loops.pop()  # type: ignore[attr-defined]
+        if self._open():  # type: ignore[attr-defined]
+            core.br(self.b, Successor(resume))  # type: ignore[attr-defined]
+        if self._seal(left):  # type: ignore[attr-defined]
+            # No `break`: this loop ends only where the generator does.
+            self.b.at_end(self._block(f"stepped.for{k}.dead"))  # type: ignore[attr-defined]
+            core.unreachable(self.b)  # type: ignore[attr-defined]
+            return
+        self.b.at_end(left)  # type: ignore[attr-defined]
+        self._after_site(k, steps, segments, waiting, closed)
+
+    def _after_site(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        k: int,
+        steps: list[_Site],
+        segments: list[list[ast.stmt]],
+        waiting: Value,
+        closed: Block,
+    ) -> None:
+        """What runs once site `k` is done: past the last site, the generator
+        closes (what follows runs after it); otherwise the statements up to the
+        next site, which then waits for a value while the generator resumes."""
+        if k + 1 == len(steps):
+            core.br(self.b, Successor(closed))  # type: ignore[attr-defined]
+            return
+        self._body(segments[k + 1])  # type: ignore[attr-defined]
+        if self._open():  # type: ignore[attr-defined]
+            core.store(self.b, self._word(k + 1), waiting)  # type: ignore[attr-defined]
+
+    def _drained(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        k: int,
+        steps: list[_Site],
+        segments: list[list[ast.stmt]],
+        shape: Shape,
+        after: Block,
+    ) -> None:
+        """The generator ended with site `k` waiting: it and every site after it
+        find it empty, in order, with the statements between them."""
+        for j in range(k, len(steps)):
+            site = steps[j]
+            if site.kind == "next":
+                if site.default is None:
+                    self._raise_made(  # type: ignore[attr-defined]
+                        "StopIteration",
+                        _stop_tag(),
+                        self._string_literal(""),  # type: ignore[attr-defined]
+                        self._word(1),  # type: ignore[attr-defined]
+                    )
+                    return
+                default, _ = self._value(site.default, shape)  # type: ignore[attr-defined]
+                self._store(site.target, default)  # type: ignore[attr-defined]
+            else:
+                assert isinstance(site.node, ast.For)
+                self._body(site.node.orelse)  # type: ignore[attr-defined]
+            if not self._open():  # type: ignore[attr-defined]
+                return
+            if j + 1 < len(steps):
+                self._body(segments[j + 1])  # type: ignore[attr-defined]
+                if not self._open():  # type: ignore[attr-defined]
+                    return
+        core.br(self.b, Successor(after))  # type: ignore[attr-defined]
+
     # -- consumers ----------------------------------------------------------------
 
     def _for_generator(self, node: ast.For) -> bool:
@@ -442,6 +620,104 @@ class GeneratorLowering:  # pylint: disable=attribute-defined-outside-init
         if self._generator_of(source) is not None:
             raise Unsupported("a generator is walked by `for`, not stepped in `zip` or `enumerate`")
         return super()._start(source)  # type: ignore[misc]
+
+
+@dataclass(slots=True)
+class _Site:
+    """A statement that steps a held generator: `x = next(it[, default])` or `for`."""
+
+    index: int
+    kind: str
+    node: ast.stmt
+    target: ast.expr | None = None
+    default: ast.expr | None = None
+
+    @staticmethod
+    def of(index: int, node: ast.stmt, name: str) -> _Site | None:
+        if isinstance(node, ast.For) and isinstance(node.iter, ast.Name) and node.iter.id == name:
+            return _Site(index, "for", node)
+        value = node.value if isinstance(node, (ast.Assign, ast.AnnAssign)) else None
+        targets = node.targets if isinstance(node, ast.Assign) else [getattr(node, "target", None)]
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "next"
+            and not value.keywords
+            and value.args
+            and isinstance(value.args[0], ast.Name)
+            and value.args[0].id == name
+            and len(value.args) <= 2
+            and len(targets) == 1
+            and isinstance(targets[0], ast.Name)
+        ):
+            default = value.args[1] if len(value.args) == 2 else None
+            return _Site(index, "next", node, targets[0], default)
+        return None
+
+
+def _stepped_target(statement: ast.stmt) -> tuple[str, ast.expr] | None:
+    """`it = gen(...)` or `it: Iterator[int] = (x for ...)`: the name and the generator."""
+    if isinstance(statement, ast.Assign):
+        if len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
+            return statement.targets[0].id, statement.value
+        return None
+    if (
+        isinstance(statement, ast.AnnAssign)
+        and isinstance(statement.target, ast.Name)
+        and statement.value is not None
+    ):
+        return statement.target.id, statement.value
+    return None
+
+
+def _check_segment_use(statement: ast.stmt, name: str, site: bool) -> None:
+    """The held generator is named only by its sites, and not bound again."""
+    if site:
+        assert isinstance(statement, (ast.For, ast.Assign, ast.AnnAssign))
+        inside = statement.body + statement.orelse if isinstance(statement, ast.For) else []
+        named = [n for part in inside for n in ast.walk(part)]
+        if isinstance(statement, (ast.Assign, ast.AnnAssign)) and statement.value is not None:
+            call = statement.value
+            assert isinstance(call, ast.Call)
+            named.extend(n for extra in call.args[1:] for n in ast.walk(extra))
+    else:
+        named = list(ast.walk(statement))
+    if any(isinstance(n, ast.Name) and n.id == name for n in named):
+        raise Unsupported(f"`{name}` is stepped natively only by `next` and `for` statements")
+
+
+def _segments(rest: list[ast.stmt], steps: list[_Site]) -> list[list[ast.stmt]]:
+    """The statements before the first site, between each two, and after the last."""
+    bounds = [site.index for site in steps]
+    segments = [rest[: bounds[0]]]
+    for here, following in zip(bounds, [*bounds[1:], len(rest)], strict=True):
+        segments.append(rest[here + 1 : following])
+    return segments
+
+
+def _check_segment(segment: list[ast.stmt]) -> None:
+    """Statements that run between steps run inside the generator's lowering: a
+    `return`, or a `break` or `continue` of a loop around them, would leave it
+    without closing it."""
+    for statement in segment:
+        for inner in _outside_loops(statement):
+            if isinstance(inner, (ast.Return, ast.Break, ast.Continue)):
+                raise Unsupported(
+                    "a `return`, `break`, or `continue` between a held generator's steps "
+                    "has no native lowering"
+                )
+
+
+def _outside_loops(node: ast.AST):  # type: ignore[no-untyped-def]
+    yield node
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.For, ast.While)):
+            # A `break` or `continue` in there is that loop's; a `return` is not.
+            yield from (n for n in ast.walk(child) if isinstance(n, ast.Return))
+            continue
+        if isinstance(child, (ast.FunctionDef, ast.Lambda, ast.ClassDef)):
+            continue
+        yield from _outside_loops(child)
 
 
 def _stop_tag() -> int:

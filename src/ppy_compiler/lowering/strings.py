@@ -28,6 +28,7 @@ from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, U8, BufferType, PtrType, Successor, TupleType, Value
 from ..ir.dialects import core
 from .collections import HANDLE, STR, Kind, Shape
+from .formatting import format_call, percent
 
 
 def _conversion_call(node: ast.expr) -> tuple[str, ast.expr] | None:
@@ -213,6 +214,9 @@ class StringLowering:
             return self._string_literal(node.value), False
         if isinstance(node, ast.JoinedStr):
             return self._fstring(node), True
+        rewritten = self._as_fstring(node)
+        if rewritten is not None:
+            return self._fstring(rewritten), True
         if isinstance(node, ast.BinOp) and self._string_of(node) is not None:
             return self._string_binop(node), True
         if isinstance(node, ast.Subscript) and self._string_of(node.value) is not None:
@@ -220,6 +224,22 @@ class StringLowering:
         if isinstance(node, ast.IfExp) and self._string_of(node) is not None:
             return self._string_choice(node), True
         return None
+
+    def _as_fstring(self, node: ast.expr) -> ast.JoinedStr | None:
+        """`"...".format(...)` and `"..." % values` as the f-string they mean."""
+        if isinstance(node, ast.Call):
+            return format_call(node)
+        if isinstance(node, ast.BinOp):
+            return percent(node, self._kind_name)
+        return None
+
+    def _kind_name(self, node: ast.expr) -> str:
+        """ "int", "float", "bool", or "str" where the checker says so, else ""."""
+        base = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
+        for name, scalar in (("bool", T.BOOL), ("int", T.INT), ("float", T.FLOAT), ("str", T.STR)):
+            if base == scalar:
+                return name
+        return ""
 
     def _owned_string(self, node: ast.expr) -> Value:
         """A handle the caller owns: a borrowed one gets its own reference."""
@@ -880,6 +900,9 @@ class StringLowering:
     def _string_method(self, node: ast.Call) -> Value:
         """`s.method(...)`: a handle the caller owns, a number, or a truth."""
         assert isinstance(node.func, ast.Attribute)
+        rewritten = format_call(node)
+        if rewritten is not None:
+            return self._fstring(rewritten)
         attr = node.func.attr
         if node.keywords and not {k.arg for k in node.keywords} <= {"sep", "maxsplit", "keepends"}:
             raise Unsupported(f"`str.{attr}` keywords have no native lowering")
@@ -1182,6 +1205,13 @@ class StringLowering:
         self._require(written, f"the format spec `{spec}`")  # type: ignore[attr-defined]
 
     # -- printing and reading --------------------------------------------------------
+
+    def _shown_text(self, node: ast.expr) -> Value | None:  # pylint: disable=useless-return
+        """`str()` of a value that is not a string, a number, or a list, as an
+        owned string: an exception, an object with `__str__` or `__repr__`. None
+        where there is no such text natively."""
+        del node
+        return None
 
     def _printed_list(self, node: ast.expr) -> tuple[Value, bool] | None:
         """`print(words)`: the list's repr, as a string to print and let go."""

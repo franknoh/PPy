@@ -1242,6 +1242,32 @@ class _Checker:
         ):
             self._declarations[node.target.id] = Binding(resolved.type, resolved.facts)
 
+    def _shown_object(self, builtin: str, t: T.Type) -> str | None:
+        """`repr(obj)` or `str(obj)` of an instance of the project's class: the
+        method it runs (`""` for a dataclass's generated `__repr__`), or None
+        where the class shows it some other way."""
+        base = T.strip_literal(t)
+        if not isinstance(base, T.Instance):
+            return None
+        info = self.project.classes.get(base.name)
+        if info is None:
+            return None
+        owners = []
+        for entry in info.mro:
+            owner = self.project.classes.get(entry)
+            if owner is None:
+                break
+            owners.append(owner)
+        # `str()` runs the first `__str__` along the bases, and else `repr()`.
+        for name in ("__str__", "__repr__") if builtin == "str" else ("__repr__",):
+            for owner in owners:
+                method = owner.methods.get(name)
+                if method is not None:
+                    return method.qualname
+                if name == "__repr__" and owner.is_dataclass:
+                    return ""
+        return None
+
     def _stmt_AugAssign(self, node: ast.AugAssign, env: Env) -> None:
         current = self._load_target(node.target, env)
         value = self._expr(node.value, env)
@@ -2219,6 +2245,20 @@ class _Checker:
                 and value.type.qualname in self.project.functions
             ):
                 self._calls.add(value.type.qualname)
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in {"repr", "str"}
+            and node.func.id not in env
+            and len(args) == 1
+            and not node.keywords
+        ):
+            shown = self._shown_object(node.func.id, args[0].type)
+            if shown is not None:
+                self._mark_call_arguments(node, env, retains=False)
+                self._effects = self._effects | EffectSet.of(Effect.ALLOC)
+                if shown:
+                    self._calls.add(shown)
+                return Binding(T.STR)
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
             if result is not None and self._calls_native_function(node, args):
@@ -3138,6 +3178,7 @@ class _Checker:
             ("set", "add"): T.Callable_((T.Param("value", element),), T.NONE, "set.add"),
             ("set", "discard"): T.Callable_((T.Param("value", element),), T.NONE, "set.discard"),
             ("set", "remove"): T.Callable_((T.Param("value", element),), T.NONE, "set.remove"),
+            ("set", "pop"): T.Callable_((), element, "set.pop"),
             ("set", "union"): T.Callable_((), base, "set.union"),
             ("set", "intersection"): T.Callable_((), base, "set.intersection"),
             ("set", "difference"): T.Callable_((), base, "set.difference"),
