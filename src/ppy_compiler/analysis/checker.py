@@ -30,6 +30,7 @@ from .annotations import (
     vector_type,
 )
 from .binding import bind_ast_call, bind_call, positional_values
+from .closures import captured_names, rebound_by_closures
 from .effects import Effect, EffectSet
 from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
@@ -697,6 +698,7 @@ class _Checker:
         self._attribute_owners: dict[int, T.Type] = {}
         #: Source annotations remain contracts after flow-sensitive rebinding.
         self._declarations: dict[str, Binding] = {}
+        self._unsettled: set[str] = set()
 
     def check_module(self) -> ModuleAnalysis:
         env = Env()
@@ -733,7 +735,9 @@ class _Checker:
         return found
 
     def _nested_functions(self) -> list[FunctionInfo]:
-        return []
+        """Functions defined inside this module's functions, each after the one
+        it is in, so the enclosing function's locals are known when it is checked."""
+        return list(self.symbols.nested.values())
 
     def _extern_stub(self, info: FunctionInfo) -> FunctionAnalysis | None:
         """`@ppy.native.extern(...)`: the signature is the whole function.
@@ -791,6 +795,7 @@ class _Checker:
             self._external_writes,
             self._aliases,
             self._declarations,
+            self._unsettled,
         )
         self._effects = EffectSet()
         self._unknown = []
@@ -834,6 +839,15 @@ class _Checker:
             if isinstance(param.type, T.UnknownType) and not param.annotated:
                 self._implicit_any(info, param.name)
             env.set(param.name, Binding(param.type, facts))
+        # Names a closure can rebind: a read knows their type, not their value.
+        self._unsettled = rebound_by_closures(info.node)
+        if info.enclosing is not None:
+            # A closure reads the enclosing function's names as they are when
+            # it runs; their types are the ones that function settled on.
+            for name, seen in captured_names(info, self.module.functions).items():
+                env.set(name, Binding(seen))
+                self._function_locals.add(name)
+                self._unsettled.add(name)
 
         # A generic function's body may name its type parameters, as its
         # signature does: `s: T = v[0]`; a method's body, its class's too.
@@ -871,6 +885,7 @@ class _Checker:
             self._external_writes,
             self._aliases,
             self._declarations,
+            self._unsettled,
         ) = previous
         return result
 
@@ -1436,6 +1451,9 @@ class _Checker:
     def _stmt_FunctionDef(self, node: ast.FunctionDef, env: Env) -> None:
         self._check_decorators(node, env)
         qualname = f"{self.symbols.name}.{node.name}"
+        if self._current is not None:
+            # A function defined inside this one: a closure over its names.
+            qualname = f"{self._current.qualname}.<locals>.{node.name}"
         info = self.project.functions.get(qualname)
         env.set(node.name, Binding(info.signature() if info else T.UNKNOWN))
 
@@ -1846,6 +1864,13 @@ class _Checker:
     def _expr_Name(self, node: ast.Name, env: Env) -> Binding:
         binding = env.get(node.id)
         if binding is not None:
+            named = binding.type
+            if isinstance(named, T.Callable_) and named.qualname in self.project.functions:
+                # A function named as a value may be called wherever the value
+                # goes: native code and a standalone build need it.
+                self._calls.add(named.qualname)
+            if node.id in self._unsettled and self._current is not None:
+                return Binding(T.strip_literal(binding.type))
             if self._is_module_global(node.id) and self._current is not None:
                 self._effects = self._effects.add(Effect.READ_GLOBAL)
                 self._blockers.append(f"reads mutable global `{node.id}`")
@@ -2073,12 +2098,12 @@ class _Checker:
         if dialect is not None:
             return dialect
         callee = self._expr(node.func, env)
-        args = [
-            self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args
-        ]
+        args = self._call_arguments(node, callee, env)
         keywords: dict[str | None, Binding] = {}
         for keyword in node.keywords:
             self._lambda_parameters = self._sort_key_context(callee, keyword)
+            if self._lambda_parameters is None:
+                self._lambda_parameters = self._builtin_key_context(node, keyword, args, env)
             value = self._expr(keyword.value, env)
             self._lambda_parameters = None
             if keyword.arg is not None:
@@ -2093,6 +2118,19 @@ class _Checker:
                 self._calls.add(value.type.qualname)
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
+            if result is not None and self._calls_native_function(node, args):
+                # `map(f, xs)` and `filter(f, xs)` with `f` a function of this
+                # program: what runs is `f`, whose effects are its own.
+                called = T.strip_literal(args[0].type)
+                assert isinstance(called, T.Callable_)
+                own = self.project.functions.get(called.qualname)
+                result = B.BuiltinResult(
+                    result.type,
+                    result.facts,
+                    EffectSet.of(Effect.ALLOC) | (own.effects if own is not None else EffectSet()),
+                )
+                if own is not None:
+                    self._calls.add(own.qualname)
             if result is not None:
                 self._mark_call_arguments(node, env, retains=not _is_inspecting_builtin(node, env))
                 self._effects = self._effects | result.effects
@@ -3281,6 +3319,73 @@ class _Checker:
         self._bind_target(node.target, value, env)
         return value
 
+    def _call_arguments(self, node: ast.Call, callee: Binding, env: Env) -> list[Binding]:
+        """The positional arguments, a lambda among them typed by the parameter
+        it is passed as: `apply(lambda x: x + 1, xs)` against `f: Callable[[int], int]`,
+        and `map(lambda x: ..., xs)` / `filter(...)` by what `xs` yields."""
+        values = [arg.value if isinstance(arg, ast.Starred) else arg for arg in node.args]
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in {"map", "filter"}
+            and node.func.id not in env
+            and len(values) >= 2
+            and isinstance(values[0], ast.Lambda)
+        ):
+            rest = [self._expr(value, env) for value in values[1:]]
+            self._lambda_parameters = tuple(
+                self._iteration_element(given, spelled).type
+                for given, spelled in zip(rest, values[1:], strict=True)
+            )
+            first = self._expr(values[0], env)
+            self._lambda_parameters = None
+            return [first, *rest]
+        wanted = T.strip_literal(callee.type)
+        params = (
+            [p for p in wanted.params if p.kind not in {"keyword_only", "var_keyword"}]
+            if isinstance(wanted, T.Callable_)
+            else []
+        )
+        found: list[Binding] = []
+        for index, value in enumerate(values):
+            expected = T.strip_literal(params[index].type) if index < len(params) else None
+            if isinstance(value, ast.Lambda) and isinstance(expected, T.Callable_):
+                self._lambda_parameters = tuple(p.type for p in expected.params)
+            found.append(self._expr(value, env))
+            self._lambda_parameters = None
+        return found
+
+    def _calls_native_function(self, node: ast.Call, args: list[Binding]) -> bool:
+        """`map`/`filter` whose function is the program's own: a lambda, a
+        function of this project, or a value typed as a `Callable`."""
+        if not isinstance(node.func, ast.Name) or node.func.id not in {"map", "filter"}:
+            return False
+        if len(args) != 2:
+            return False
+        called = T.strip_literal(args[0].type)
+        if not isinstance(called, T.Callable_):
+            return False
+        return (
+            isinstance(node.args[0], ast.Lambda)
+            or called.qualname in self.project.functions
+            or not called.qualname
+        )
+
+    def _builtin_key_context(
+        self, node: ast.Call, keyword: ast.keyword, args: list[Binding], env: Env
+    ) -> tuple[T.Type, ...] | None:
+        """`sorted(xs, key=lambda x: ...)`, `min`/`max` too: the key's parameter
+        is an element of `xs`."""
+        if (
+            keyword.arg != "key"
+            or not isinstance(keyword.value, ast.Lambda)
+            or not isinstance(node.func, ast.Name)
+            or node.func.id not in {"sorted", "min", "max"}
+            or node.func.id in env
+            or len(args) != 1
+        ):
+            return None
+        return (self._iteration_element(args[0], node.args[0]).type,)
+
     def _sort_key_context(self, callee: Binding, keyword: ast.keyword) -> tuple[T.Type, ...] | None:
         """A collection's or a list's `sort(key=lambda x: ...)`: the lambda's parameter
         is an element."""
@@ -3307,9 +3412,9 @@ class _Checker:
             inner.set(arg.arg, Binding(given))
         body = self._expr(node.body, inner)
         if not typed:
-            # A sort key is lowered where it is used; any other lambda is a
-            # function value, which native code has no form for.
-            self._native_blockers.append("contains a lambda")
+            # A lambda typed by where it goes is a native function value; one
+            # nothing types has no native form.
+            self._native_blockers.append("contains a lambda whose parameters nothing types")
         return Binding(
             T.Callable_(
                 tuple(

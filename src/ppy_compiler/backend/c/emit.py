@@ -2239,6 +2239,8 @@ class _FunctionEmitter:
                 self.fold(op.result, _member(whole, field_name), reads=reads)
             case "call":
                 self.call(op)
+            case "call_indirect":
+                self.call_indirect(op)
             case "call_extern":
                 self.call_extern(op)
             case "call_intrinsic":
@@ -2620,11 +2622,38 @@ class _FunctionEmitter:
             else:
                 self.line(f"{direct};")
             return
+        self._native_call(op, symbol, arguments, tuple(target.results or ()))
+
+    def call_indirect(self, op: Operation) -> None:
+        """A call through a function value: its native entry's address, cast to
+        the function pointer type its arguments and results give it."""
+        operands = op.operands[1:]
+        results = list(op.results)
+        if op.attributes.get("capture_status"):
+            results.pop()
+        arguments: list[str] = []
+        spelled: list[str] = []
+        for operand in operands:
+            arguments.extend(self.flatten(operand))
+            spelled.extend(self.owner.atoms(operand.type))
+        for result in results:
+            spelled.extend(f"{atom} *" for atom in self.owner.atoms(result.type))
+        if not results:
+            spelled.append("int64_t *")
+        code = self.flatten(op.operands[0])[0]
+        callee = f"((int32_t (*)({', '.join(spelled)}))(intptr_t)({code}))"
+        self._native_call(op, callee, arguments, tuple(r.type for r in results))
+
+    def _native_call(  # pylint: disable=too-many-branches
+        self, op: Operation, symbol: str, arguments: list[str], target_results: tuple
+    ) -> None:
+        """A native call's result slots, status, and results: `symbol` is the
+        callee, a name or a cast function pointer."""
         results = list(op.results)
         captured = op.attributes.get("capture_status")
         status_result = results.pop() if captured else None
         slots: list[list[str]] = []
-        for result, t in zip(results, target.results or (), strict=True):
+        for result, t in zip(results, target_results, strict=True):
             names = []
             atoms = self.owner.atoms(t)
             if atoms == [self.owner.c_type(t)] and result.uses:
@@ -2637,7 +2666,7 @@ class _FunctionEmitter:
                     names.append(slot)
             slots.append(names)
             arguments.extend(f"&{n}" for n in names)
-        if not target.results:
+        if not target_results:
             slot = self.fresh("res")
             self._declare_slot("int64_t", slot)
             arguments.append(f"&{slot}")
@@ -2660,7 +2689,7 @@ class _FunctionEmitter:
             )
         else:
             self.fail_unless(f"{call} == {STATUS_OK}", "call.ok", failed=f"{call} != {STATUS_OK}")
-        for result, t, names in zip(results, target.results, slots, strict=True):
+        for result, t, names in zip(results, target_results, slots, strict=True):
             if isinstance(t, BufferType):
                 self.define_buffer(result, names[0], names[1])
             elif id(result) in self.scalars:
@@ -2761,6 +2790,13 @@ class _FunctionEmitter:
             callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
             trampoline = self.owner.callback(callee_name)
             self.define(op.results[0], f"(int64_t)(intptr_t)&{trampoline}")
+            return
+        if name == "ppy.function_address":
+            callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
+            target = self.owner.module.functions.get(callee_name)
+            if target is None:
+                raise EmitError(f"the address of @{callee_name}, which was not emitted")
+            self.define(op.results[0], f"(int64_t)(intptr_t)&{self.owner.symbol_of(target)}")
             return
         if name == "ppy.string_data":
             if self.owner.readable:
