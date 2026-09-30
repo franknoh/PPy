@@ -263,6 +263,11 @@ def kind_of(t: T.Type, records: Records) -> Kind | None:
     base = T.strip_literal(t)
     if isinstance(base, T.Instance) and base.name in BUILTINS:
         return _builtin_kind(base, records)
+    if isinstance(base, T.Instance) and base.name == "collections.deque" and len(base.args) == 1:
+        # `collections.deque` is the runtime's `Deque`; `lowering/stdlib.py`
+        # gives it Python's method names.
+        element = shape_of(base.args[0], records)
+        return Kind("Deque", element) if element is not None else None
     if not isinstance(base, T.Instance) or not base.name.startswith("ppy."):
         return None
     name = base.name.removeprefix("ppy.")

@@ -460,6 +460,8 @@ def _module_shape(
                 continue
             if names == "math" and all(name in _MATH_NAMES for name in listed):
                 continue
+            if names == "collections" and listed == ["deque"]:
+                continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))
                 is not None

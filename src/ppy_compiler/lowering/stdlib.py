@@ -29,6 +29,19 @@ from .collections import HANDLE, Kind, _pointer, kind_of
 
 __all__ = ["StdlibLowering"]
 
+#: `collections.deque`'s methods, as the runtime's `Deque` names them.
+_DEQUE_METHODS = {
+    "append": "push_back",
+    "appendleft": "push_front",
+    "pop": "pop_back",
+    "popleft": "pop_front",
+    "extend": "extend",
+    "extendleft": "extendleft",
+    "rotate": "rotate",
+    "clear": "clear",
+    "copy": "copy",
+}
+
 #: `math`'s constants.
 _CONSTANTS = {
     "math.pi": math.pi,
@@ -69,7 +82,32 @@ _FLOAT_ARGUMENTS = {
 class StdlibLowering:
     """The standard library's calls; mixed into `_FunctionLowering`."""
 
+    def _make_collection(self, name: str, value: ast.expr, declared: T.Type | None = None) -> bool:
+        if isinstance(value, ast.Call) and self._stdlib_target_any(value) == "collections.deque":
+            kind = kind_of(declared, self._records()) if declared is not None else None  # type: ignore[attr-defined]
+            kind = kind or self._kind_of(value)
+            if kind is None:
+                # `r = deque([1, 2])`: the name's type says what the call's may not.
+                analysis = self.frontend.analysis.functions.get(self.info.qualname)  # type: ignore[attr-defined]
+                final = analysis.locals.get(name) if analysis is not None else None
+                kind = kind_of(final, self._records()) if final is not None else None  # type: ignore[attr-defined]
+            if not isinstance(kind, Kind) or kind.name != "Deque":
+                raise Unsupported(
+                    "a `deque` natively holds what its annotation says: `q: deque[int] = deque()`"
+                )
+            made = self._made(kind, value)
+            assert made is not None
+            self._bind(name, kind, made, owned=True)  # type: ignore[attr-defined]
+            return True
+        return super()._make_collection(name, value, declared)  # type: ignore[misc,no-any-return]
+
     def _handle(self, node: ast.expr) -> tuple[Value, bool]:
+        if isinstance(node, ast.Call) and self._stdlib_target_any(node) == "collections.deque":
+            kind = self._kind_of(node)
+            if kind is not None and kind.name == "Deque":
+                made = self._made(kind, node)
+                if made is not None:
+                    return made, True
         if isinstance(node, ast.Name):
             constant = self._string_handle(node)
             if constant is not None:
@@ -114,6 +152,83 @@ class StdlibLowering:
                     found = kind_of(T.list_of(made.args[0]), self._records())  # type: ignore[attr-defined]
                     return found if isinstance(found, Kind) else None
         return super()._kind_of(node)  # type: ignore[misc,no-any-return]
+
+    # -- collections.deque ------------------------------------------------------------
+
+    def _is_pydeque(self, node: ast.expr) -> bool:
+        found = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
+        return isinstance(found, T.Instance) and found.name == "collections.deque"
+
+    def _made(self, kind: Kind, node: ast.expr) -> Value | None:
+        """`deque()` and `deque(xs)`: a runtime `Deque`, filled in order."""
+        if (
+            kind.name == "Deque"
+            and isinstance(node, ast.Call)
+            and self._stdlib_target_any(node) == "collections.deque"
+        ):
+            if node.keywords or len(node.args) > 1:
+                raise Unsupported("`deque` with `maxlen` has no native lowering")
+            made = self._new(kind)  # type: ignore[attr-defined]
+            if node.args:
+                self._fill(kind, made, node.args[0])  # type: ignore[attr-defined]
+            return made  # type: ignore[no-any-return]
+        return super()._made(kind, node)  # type: ignore[misc,no-any-return]
+
+    def _collection_method(self, receiver: ast.expr, attr: str, node: ast.Call) -> Value:
+        """A `deque`'s methods by their Python names, onto the runtime's `Deque`."""
+        if self._is_pydeque(receiver):
+            renamed = _DEQUE_METHODS.get(attr)
+            if renamed is None:
+                raise Unsupported(f"`deque.{attr}` has no native lowering")
+            if attr in {"pop", "popleft"}:
+                kind, handle, owned = self._receiver(receiver)  # type: ignore[attr-defined]
+                self._require(  # type: ignore[attr-defined]
+                    core.cmp(
+                        self.b,  # type: ignore[attr-defined]
+                        "gt",
+                        self._rt("ppy_coll_len", (handle,)),  # type: ignore[attr-defined]
+                        self._word(0),  # type: ignore[attr-defined]
+                    ),
+                    "pop from an empty deque",
+                    _text("deque_pop"),
+                )
+                self._done_with(handle, owned)  # type: ignore[attr-defined]
+            attr = renamed
+        return super()._collection_method(receiver, attr, node)  # type: ignore[misc,no-any-return]
+
+    def _item(self, container: ast.expr, index: ast.expr, value: ast.expr | None = None) -> Value:
+        """`q[i]` of a `deque`, counted from either end as CPython counts it."""
+        if isinstance(index, ast.Slice) or not self._is_pydeque(container):
+            return super()._item(container, index, value)  # type: ignore[misc,no-any-return]
+        kind, handle, owned = self._receiver(container)  # type: ignore[attr-defined]
+        shape = kind.value
+        assert shape is not None
+        if owned and shape.reference:
+            raise Unsupported("an element read from a temporary deque outlives it")
+        stored = self._value(value, shape) if value is not None else None  # type: ignore[attr-defined]
+        b = self.b  # type: ignore[attr-defined]
+        word = self._word  # type: ignore[attr-defined]
+        position = self._list_position(handle, self._int_argument(index))  # type: ignore[attr-defined]
+        length = self._rt("ppy_coll_len", (handle,))  # type: ignore[attr-defined]
+        inside = core.bitwise(
+            b, "and", core.cmp(b, "ge", position, word(0)), core.cmp(b, "lt", position, length)
+        )
+        self._require(inside, "deque index out of range", _text("deque_index"))  # type: ignore[attr-defined]
+        address = self._rt("ppy_seq_at", (handle, position), HANDLE)  # type: ignore[attr-defined]
+        if stored is not None:
+            self._put_value(address, shape, stored[0], stored[1], fresh=False)  # type: ignore[attr-defined]
+            self._done_with(handle, owned)  # type: ignore[attr-defined]
+            return word(0)  # type: ignore[no-any-return]
+        found = self._read(address, shape)  # type: ignore[attr-defined]
+        self._done_with(handle, owned)  # type: ignore[attr-defined]
+        return found  # type: ignore[no-any-return]
+
+    def _stdlib_target_any(self, node: ast.Call) -> str | None:
+        lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
+        if not isinstance(lexical, LexicalBindings):
+            return None
+        found = lexical.targets_at(node.func)
+        return next(iter(found)) if len(found) == 1 else None
 
     def _stdlib_target(self, node: ast.Call) -> str | None:
         lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
@@ -884,12 +999,15 @@ _A, _B, _S = 1234567, 7654, 99991
 
 def _raising() -> dict[str, Callable[[], object]]:
     import bisect  # pylint: disable=import-outside-toplevel
+    import collections  # pylint: disable=import-outside-toplevel
     import heapq  # pylint: disable=import-outside-toplevel
     import itertools  # pylint: disable=import-outside-toplevel
     import random  # pylint: disable=import-outside-toplevel
 
     r = random.Random(0)
     return {
+        "deque_pop": lambda: collections.deque().pop(),
+        "deque_index": lambda: collections.deque()[0],
         "fsum_overflow": lambda: math.fsum([1e308, 1e308]),
         "fsum_nan": lambda: math.fsum([math.inf, -math.inf]),
         "log_base": lambda: math.log(2.0, 1.0),

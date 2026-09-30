@@ -320,6 +320,61 @@ def main() -> None:
 main()
 """
 
+DEQUE = """
+from collections import deque
+
+
+def queues(n: int) -> str:
+    q: deque[int] = deque()
+    for i in range(n):
+        q.append(i)
+        if i % 3 == 0:
+            q.appendleft(q.pop())
+    r: deque[int] = deque([1, 2, 3])
+    r.rotate(1)
+    r.extend([7, 8])
+    s = 0
+    while r:
+        s = s * 10 + r.popleft()
+    t = 0
+    for x in q:
+        t = t * 7 % 1000003 + x
+    return f"{s} {len(q)} {t} {q[0]} {q[-1]} {q[-20]}"
+
+
+def bfs(n: int) -> int:
+    seen = [False] * n
+    seen[0] = True
+    frontier: deque[int] = deque([0])
+    steps = 0
+    while frontier:
+        u = frontier.popleft()
+        steps += u
+        for v in [(u * 2 + 1) % n, (u * 3 + 2) % n]:
+            if not seen[v]:
+                seen[v] = True
+                frontier.append(v)
+    return steps
+
+
+def empty(n: int) -> str:
+    q: deque[int] = deque()
+    try:
+        q.popleft()
+    except IndexError as e:
+        return str(e) + str(n)
+    return ""
+
+
+def main() -> None:
+    print(queues(20))
+    print(bfs(50))
+    print(empty(3))
+
+
+main()
+"""
+
 #: name -> (source, the functions `ppy explain` must call native).
 PROGRAMS = {
     "random": (RANDOM, ("draws",)),
@@ -330,6 +385,7 @@ PROGRAMS = {
     "gauss": (GAUSS, ()),
     "math": (MATH, ("integers", "floats", "sums")),
     "itertools": (ITERTOOLS, ("walks", "letters")),
+    "deque": (DEQUE, ("queues", "bfs", "empty")),
 }
 
 
