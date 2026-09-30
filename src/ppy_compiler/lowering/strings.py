@@ -1183,6 +1183,13 @@ class StringLowering:
 
     # -- printing and reading --------------------------------------------------------
 
+    def _shown_text(self, node: ast.expr) -> Value | None:
+        """`str()` of a value that is not a string, a number, or a list, as an
+        owned string: an exception, an object with `__str__` or `__repr__`. None
+        where there is no such text natively."""
+        del node
+        return None
+
     def _printed_list(self, node: ast.expr) -> tuple[Value, bool] | None:
         """`print(words)`: the list's repr, as a string to print and let go."""
         if not self._is_string_list(node):

@@ -3902,6 +3902,10 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         if listed is not None:
             parts.append(listed)
             return parts
+        shown = self._shown_text(argument)
+        if shown is not None:
+            parts.append((shown, True))
+            return parts
         if isinstance(argument, ast.JoinedStr):
             for item in argument.values:
                 if isinstance(item, ast.FormattedValue):

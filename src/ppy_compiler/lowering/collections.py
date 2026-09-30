@@ -26,7 +26,7 @@ from ..analysis import types as T
 from ..analysis.checker import receiver_bindings
 from ..analysis.symbols import ClassInfo, dataclass_keyword
 from ..backend.llvm.lowering import Unsupported
-from ..driver.ir_pipeline import object_chain
+from ..driver.ir_pipeline import exception_header, object_chain
 from ..ir import (
     BOOL,
     F64,
@@ -487,6 +487,10 @@ class CollectionLowering:
         bindings = self._bindings(shape)
         fields: dict[str, tuple[int, Shape]] = {}
         offset = floats = handles = 0
+        if self._is_exception(shape):
+            # An exception's record starts with the exception runtime's four
+            # words; words 1 and 2 (its class's name and `str()` of it) are strings.
+            offset, handles = _EXCEPTION_WORDS, 0b110
         for owner in self._chain(shape):
             for name, declared in owner.fields.items():
                 if name in owner.class_vars or name in fields:
@@ -502,6 +506,15 @@ class CollectionLowering:
             raise Unsupported(f"`{info.name}` has more than 64 words of fields")
         found = Layout(fields, max(offset, 1), floats, handles)
         cache[key] = found
+        return found
+
+    def _is_exception(self, shape: Shape) -> bool:
+        """Whether instances of an object class are exceptions (`exception_header`)."""
+        cache = self.frontend.__dict__.setdefault("_exception_classes", {})  # type: ignore[attr-defined]
+        found = cache.get(shape.record)
+        if found is None:
+            found = exception_header(self._class_info(shape), self._module_classes())
+            cache[shape.record] = found
         return found
 
     def _field(self, shape: Shape, name: str) -> tuple[int, Shape]:
@@ -529,6 +542,8 @@ class CollectionLowering:
         layout = self._layout(shape)
         # String fields are leaves, as `_new` says of string elements.
         leaves = sum(field.leaves << offset for offset, field in layout.fields.values())
+        if self._is_exception(shape):
+            leaves |= 0b110
         made = self._rt(
             "ppy_seq_new",
             (
@@ -541,6 +556,8 @@ class CollectionLowering:
         )
         self._set_tag(made, shape.record)
         info = self._class_info(shape)
+        if self._is_exception(shape):
+            self._exception_header(shape, made, node)  # type: ignore[attr-defined]
         if self._resolve(info, "__init__") is not None:
             self._method_call(shape, "__init__", made, node.args, node.keywords, discard=True)
             return made
@@ -804,6 +821,17 @@ class CollectionLowering:
         assert isinstance(held, Shape)
         current = self._class_named(owner_name)
         chain = object_chain(current, self._module_classes())
+        if (
+            chain is not None
+            and func.attr == "__init__"
+            and not node.keywords
+            and self._is_exception(held)
+            and not any("__init__" in entry.methods for entry in chain[:-1])
+        ):
+            # Past the project's classes, `BaseException.__init__`.
+            handle = core.load(self.b, self.collections[receiver_name].slot)
+            self._exception_init(handle, held, list(node.args))  # type: ignore[attr-defined]
+            return self._word(0)
         if chain is None or len(chain) < 2:
             raise Unsupported(f"`{current.name}` has no base for `super()` to call")
         found = None
@@ -2197,6 +2225,9 @@ _CALLS_BACK = (
     "ppy_coll_update",
     "ppy_coll_equal",
 )
+
+#: The words every exception's record starts with (`ppy_runtime/exceptions.c`).
+_EXCEPTION_WORDS = 4
 
 #: The methods of a class the runtime calls back.
 _COMPARES = frozenset({"__lt__", "__hash__", "__eq__"})
