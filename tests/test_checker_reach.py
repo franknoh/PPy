@@ -139,7 +139,49 @@ def main() -> None:
 main()
 """
 
+CLASS_STATE = """
+class Cache:
+    capacity: int = 10
+    LIMIT = 3
+
+    def __init__(self, n: int) -> None:
+        if n:
+            Cache.capacity = n
+        self.items: list[int] = []
+
+    def full(self) -> bool:
+        return len(self.items) >= Cache.capacity
+
+    def add(self, x: int) -> int:
+        self.items.append(x)
+        return len(self.items)
+
+    def scaled(self, k: int) -> int:
+        return self.capacity * k
+
+
+def total(xs: list[int]) -> int:
+    s = 0
+    for x in xs:
+        s += x * Cache.capacity
+    return s
+
+
+def main() -> None:
+    a = Cache(0)
+    print(a.full(), total([1, 2]), a.scaled(2))
+    b = Cache(2)
+    Cache.add(b, 5)
+    print(Cache.add(b, 6), b.full(), a.full(), total([1, 2]), a.scaled(2))
+    Cache.LIMIT += 1
+    print(Cache.LIMIT, __import__("math").floor(2.5))
+
+
+main()
+"""
+
 PROGRAMS = {
+    "class_state": CLASS_STATE,
     "old_style_generics": OLD_STYLE_GENERICS,
     "self": SELF,
     "library_values": LIBRARY_VALUES,
@@ -221,6 +263,29 @@ def test_ppy_run_prints_what_python_prints(project_dir: Path, write, name: str):
 
         def wrong(q: Queue[int]) -> str:
             return q.get()
+        """,
+        # A module name `__import__` cannot know.
+        """
+        def load(name: str) -> None:
+            __import__(name)
+        """,
+        # An attribute the class body never set is still a monkey-patch.
+        """
+        class Box:
+            size: int = 1
+
+
+        def patch() -> None:
+            Box.colour = "red"
+        """,
+        # And one it did set keeps its type.
+        """
+        class Box:
+            size: int = 1
+
+
+        def patch() -> None:
+            Box.size = "big"
         """,
         # `Self` outside a class says what it is.
         """

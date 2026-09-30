@@ -236,6 +236,9 @@ class ClassInfo:
     #: `(int,)` for `Stack` in `class IntStack(Stack[int])`, `(T,)` in
     #: `class Counted[T](Stack[T])`, where `T` is this class's own.
     base_args: dict[str, tuple[T.Type, ...]] = field(default_factory=dict)
+    #: Class attributes the program assigns through the class after the body
+    #: set them (`LRUCache._MAX_CAPACITY = n`): shared state, read as such.
+    rebound: set[str] = field(default_factory=set)
 
     def instance(self, args: tuple[T.Type, ...] = ()) -> T.Instance:
         return T.Instance(self.qualname, args, self.mro or (self.qualname, "object"))
@@ -1041,6 +1044,7 @@ class ProjectSymbols:
             T.GENERIC_BASES[info.qualname] = (info.type_params, dict(info.base_args))
             annotations.type_params = {}
             annotations.self_type = None
+        _collect_rebound_class_attributes(symbols)
         for info in list(symbols.functions.values()):
             self._resolve_function(symbols, info, annotations)
         for info in symbols.classes.values():
@@ -1258,6 +1262,50 @@ class ProjectSymbols:
                 resolved = annotations.resolve(node.annotation)
                 symbols.globals[node.target.id] = resolved.type
                 symbols.global_facts[node.target.id] = resolved.facts
+
+
+def class_level(info: ClassInfo, name: str) -> bool:
+    """Does the class body give `name` a value (`PAGE = 8`, `size: int = 10`)?"""
+    for child in info.node.body:
+        if isinstance(child, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in child.targets
+        ):
+            return True
+        if (
+            isinstance(child, ast.AnnAssign)
+            and child.value is not None
+            and isinstance(child.target, ast.Name)
+            and child.target.id == name
+        ):
+            return True
+    return False
+
+
+def _collect_rebound_class_attributes(symbols: ModuleSymbols) -> None:
+    """`Cls.attr = value` anywhere in the module, for a class attribute the
+    body of `Cls` set: a class variable the program changes as it runs."""
+    by_name = {info.name: info for info in symbols.classes.values()}
+    if not by_name:
+        return
+    for node in ast.walk(symbols.module.tree):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+            targets = [node.target]
+        else:
+            continue
+        for target in targets:
+            if (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id in by_name
+            ):
+                info = by_name[target.value.id]
+                if not info.is_enum and class_level(info, target.attr):
+                    info.rebound.add(target.attr)
+                    # `LIMIT = 3` is an `int` once the program changes it.
+                    if target.attr in info.fields:
+                        info.fields[target.attr] = T.strip_literal(info.fields[target.attr])
 
 
 def _is_type_alias_annotation(annotation: ast.expr) -> bool:

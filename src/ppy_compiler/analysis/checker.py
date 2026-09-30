@@ -35,7 +35,14 @@ from .effects import Effect, EffectSet
 from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
 from .results import FunctionAnalysis, LoweringNote, ModuleAnalysis, ProjectAnalysis
-from .symbols import ClassInfo, FunctionInfo, ModuleSymbols, ProjectSymbols, dataclass_keyword
+from .symbols import (
+    ClassInfo,
+    FunctionInfo,
+    ModuleSymbols,
+    ProjectSymbols,
+    class_level,
+    dataclass_keyword,
+)
 
 if TYPE_CHECKING:
     from ..plugins.base import CallResult, PluginRegistry
@@ -696,6 +703,8 @@ class _Checker:
         #: For a method read off a generic class's instance, by the attribute
         #: node: what the class's parameters are for that receiver.
         self._receivers: dict[int, dict[T.TypeVar_, T.Type]] = {}
+        #: Method attributes read through their class, which binds no receiver.
+        self._through_class: set[int] = set()
         #: What a value is going where it goes: the declared type of the
         #: variable, field, or return it is bound to. A generic class or a
         #: collection made without its type arguments takes them from here.
@@ -2660,6 +2669,15 @@ class _Checker:
             return Binding(_awaitable_of(signature.ret))
         return Binding(signature.ret)
 
+    def _receiver_offset(self, info: FunctionInfo, node: ast.Call, bound: bool) -> int:
+        """How many parameters the call does not write down: the receiver of
+        a method reached through an instance, and none through the class."""
+        if bound:
+            return 1
+        if id(node.func) in self._through_class:
+            return 0
+        return 1 if info.is_method and not info.is_static else 0
+
     def _check_arity(
         self,
         info: FunctionInfo,
@@ -2721,7 +2739,7 @@ class _Checker:
         declared return with them substituted. The specialization it names
         is counted against the project's limit, and a generic that feeds its
         own type parameter back into itself, wrapped, is refused."""
-        offset = 1 if bound or (info.is_method and not info.is_static) else 0
+        offset = self._receiver_offset(info, node, bound)
         positional = args[: len(positional_values(node.args))]
         bindings: dict[T.TypeVar_, T.Type] = {}
         for reached in bind_call(info.params, positional, list(keywords.items()), offset=offset):
@@ -2833,7 +2851,7 @@ class _Checker:
         bound: bool = False,
         receiver: dict[T.TypeVar_, T.Type] | None = None,
     ) -> None:
-        offset = 1 if bound or (info.is_method and not info.is_static) else 0
+        offset = self._receiver_offset(info, node, bound)
         # Positional order, keywords by name, the receiver that is never
         # written down: the same rules the conversion passes use, from the
         # same code, so the two cannot drift apart.
@@ -2916,6 +2934,17 @@ class _Checker:
             if info is not None:
                 found = info.lookup(node.attr, self.project)
                 if found is not None:
+                    self._read_class_attribute(info, node.attr)
+                    method = info.find_method(node.attr, self.project)
+                    if (
+                        method is not None
+                        and not method.is_static
+                        and not method.is_classmethod
+                        and not method.is_property
+                    ):
+                        # `MLFQ.waiting_time(mlfq, queue)`: through the class,
+                        # the receiver is the first argument written down.
+                        self._through_class.add(id(node))
                     return Binding(found[0], found[1])
             dunder = _CLASS_DUNDERS.get(node.attr)
             if dunder is not None:
@@ -2964,6 +2993,7 @@ class _Checker:
                 found = info.lookup(node.attr, self.project)
                 if found is not None:
                     self._effects = self._effects.add(Effect.READ_OBJECT)
+                    self._read_class_attribute(info, node.attr)
                     return Binding(T.substitute(found[0], receiver), found[1])
                 inherited_external = self._external_base_attribute(info, node.attr, owner.facts)
                 if inherited_external is not None:
@@ -5814,9 +5844,10 @@ class _Checker:
         if not isinstance(node.func, ast.Name):
             return self._check_dynamic_import(node, env)
         name = node.func.id
-        if name in env:
+        if name in env or name == "__import__":
             # A bound name is not a builtin -- but it may still be an alias
             # of importlib's importer, which the lexical layer resolves.
+            # `__import__("doctest")` is as static as `import doctest`.
             return self._check_dynamic_import(node, env)
         if name in _FORBIDDEN_CALLS:
             code, message = _FORBIDDEN_CALLS[name]
@@ -5856,7 +5887,10 @@ class _Checker:
         about it: attributes resolve like any import's, and assigning through
         it is the monkey-patch it always was.
         """
-        if self._lexical_target(node.func) != "importlib.import_module":
+        target = self._lexical_target(node.func)
+        if target is None and isinstance(node.func, ast.Name) and node.func.id == "__import__":
+            target = "builtins.__import__"
+        if target not in {"importlib.import_module", "builtins.__import__"}:
             return None
         if len(node.args) != 1 or node.keywords:
             return None
@@ -5866,6 +5900,9 @@ class _Checker:
         name = argument.value
         if not name or name.startswith("."):
             return None
+        if target == "builtins.__import__":
+            # `__import__("os.path")` returns the top-level package.
+            name = name.partition(".")[0]
         return Binding(T.Module_(name))
 
     def _check_dynamic_import(self, node: ast.Call, env: Env) -> bool:
@@ -5942,9 +5979,46 @@ class _Checker:
             or "wrap the region in `with ppy.dynamic:` or mark the function `@ppy.dynamic`",
         )
 
+    def _rebinding_class(self, info: ClassInfo, attr: str) -> ClassInfo | None:
+        """The class in `info`'s MRO whose body set `attr` and which the
+        program assigns it through, if any."""
+        for name in info.mro or (info.qualname,):
+            cls = self.project.classes.get(name)
+            if cls is not None and class_level(cls, attr):
+                return cls if attr in cls.rebound else None
+        return None
+
+    def _read_class_attribute(self, info: ClassInfo, attr: str) -> None:
+        """A class attribute the program reassigns is shared state: reading
+        it reads a global, and native code does not hold its value."""
+        cls = self._rebinding_class(info, attr)
+        if cls is not None:
+            self._effects = self._effects.add(Effect.READ_GLOBAL)
+            self._native_blockers.append(f"reads `{cls.name}.{attr}`, which the program reassigns")
+
     def _check_attribute_assignment(
         self, owner: Binding, target: ast.Attribute, value: Binding
     ) -> None:
+        if isinstance(owner.type, T.ClassObject):
+            info = self.project.classes.get(owner.type.name)
+            declared = info.lookup(target.attr, self.project) if info is not None else None
+            if (
+                info is not None
+                and declared is not None
+                and self._rebinding_class(info, target.attr) is not None
+            ):
+                # `LRUCache._MAX_CAPACITY = n` on an attribute the class body
+                # set: a class variable changing value, as CPython has it.
+                if not T.is_assignable(value.type, declared[0]):
+                    self._error(
+                        "E1301",
+                        f"cannot assign `{value.type}` to `{ast.unparse(target)}`, "
+                        f"declared `{declared[0]}`",
+                        target,
+                    )
+                self._effects = self._effects.add(Effect.WRITE_GLOBAL)
+                self._native_blockers.append(f"assigns the class attribute `{ast.unparse(target)}`")
+                return
         if isinstance(owner.type, (T.Module_, T.ClassObject)):
             self._dynamic_feature(
                 "E1506",
@@ -6911,7 +6985,9 @@ def _module_digests(
     for module_symbols in ordered:
         parts = [_function_summary(info) for info in module_symbols.functions.values()]
         for cls in module_symbols.classes.values():
-            parts.append(f"{cls.qualname}|{cls.fields}|{cls.field_facts}|{sorted(cls.class_vars)}")
+            parts.append(
+                f"{cls.qualname}|{cls.fields}|{cls.field_facts}|{sorted(cls.class_vars)}|{sorted(cls.rebound)}"
+            )
             parts.extend(_function_summary(method) for method in cls.methods.values())
         own[module_symbols.name] = hashlib.blake2b(
             "\n".join(parts).encode("utf-8"), digest_size=16
