@@ -249,12 +249,14 @@ class _Generator:
         """A nonnegative int below `top`, from an expression."""
         return f"(abs({self.int_expr(scope, depth + 1)}) % {top})"
 
+    # A list display holds one item at least: `[]` says nothing of what it
+    # holds, which a native build needs told.
     def int_list(self, scope: _Scope, depth: int) -> str:
-        items = ", ".join(self.int_expr(scope, 3) for _ in range(self.rng.randint(0, 5)))
+        items = ", ".join(self.int_expr(scope, 3) for _ in range(self.rng.randint(1, 5)))
         return f"[{items}]"
 
     def float_list(self, scope: _Scope, depth: int) -> str:
-        items = ", ".join(self.float_expr(scope, 3) for _ in range(self.rng.randint(0, 5)))
+        items = ", ".join(self.float_expr(scope, 3) for _ in range(self.rng.randint(1, 5)))
         return f"[{items}]"
 
     def stdlib_int(self, scope: _Scope, depth: int) -> str:
