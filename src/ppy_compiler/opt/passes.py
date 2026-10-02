@@ -724,9 +724,9 @@ class InlineSmallFunctions(Pass):
             self._shadowed.pop()
         return node
 
-    visit_FunctionDef = _scope  # noqa: N815
-    visit_AsyncFunctionDef = _scope  # noqa: N815
-    visit_Lambda = _scope  # noqa: N815
+    visit_FunctionDef = _scope
+    visit_AsyncFunctionDef = _scope
+    visit_Lambda = _scope
 
     def _is_shadowed(self, name: str) -> bool:
         return any(name in names for names in self._shadowed)

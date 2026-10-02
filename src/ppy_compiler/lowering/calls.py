@@ -224,9 +224,7 @@ def _defined_in(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, ast.A
     return found
 
 
-def nested_entry_refusal(
-    info: FunctionInfo, enclosing: dict[str, FunctionInfo]
-) -> str | None:
+def nested_entry_refusal(info: FunctionInfo, enclosing: dict[str, FunctionInfo]) -> str | None:
     """Why a function defined inside another cannot have a native entry of its
     own, or None where it can: it shares no variable with the functions around
     it, so every function object its `def` makes behaves the same, and one
@@ -242,7 +240,10 @@ def nested_entry_refusal(
         shared = free & own_names(outer.node)
         if first and info.name in shared and _defined_in(outer.node).get(info.name) is node:
             if not _only_called(node, info.name):
-                return f"`{info.name}` uses itself as a value, which it shares with the function around it"
+                return (
+                    f"`{info.name}` uses itself as a value, which it shares with the "
+                    "function around it"
+                )
             shared.discard(info.name)
         if shared:
             names = ", ".join(f"`{n}`" for n in sorted(shared))
