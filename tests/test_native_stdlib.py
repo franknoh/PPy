@@ -797,6 +797,48 @@ def main() -> None:
 main()
 """
 
+PASSED = """
+import random
+from collections import Counter, defaultdict, deque
+
+
+def fill(d: defaultdict[str, list[int]], n: int) -> None:
+    for i in range(n):
+        d[str(i % 3)].append(i)
+
+
+def tally(words: list[str]) -> Counter[str]:
+    return Counter(words)
+
+
+def drain(q: deque[int]) -> int:
+    total = 0
+    while q:
+        total = total * 3 + q.popleft()
+    return total
+
+
+def pick(r: random.Random, n: int) -> list[int]:
+    return [r.randrange(100) for _ in range(n)]
+
+
+def run(n: int) -> str:
+    d: defaultdict[str, list[int]] = defaultdict(list)
+    fill(d, n)
+    c = tally(["b", "a", "b", "c", "a", "b"])
+    c.update(tally(["c", "c"]))
+    q = deque(range(n))
+    r = random.Random(n)
+    return f"{d} {c} {drain(q)} {q} {pick(r, 4)} {pick(r, 2)}"
+
+
+def main() -> None:
+    print(run(7))
+
+
+main()
+"""
+
 #: name -> (source, the functions `ppy explain` must call native).
 PROGRAMS = {
     "random": (RANDOM, ("draws",)),
@@ -817,6 +859,8 @@ PROGRAMS = {
     # A nested cached function's table is its closure's, new each time.
     "nested_memo": (NESTED_MEMO, ("min_distance_up_bottom", "fib_terms", "counted")),
     "counted": (COUNTED, ("majority_vote", "inplace", "solution")),
+    # Native code's own: passed between native functions by handle.
+    "passed": (PASSED, ("fill", "tally", "drain", "pick", "run")),
 }
 
 
