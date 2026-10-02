@@ -43,7 +43,7 @@ from ppy_runtime.collection_boundary import parse as crossing_spec
 
 from ...analysis import types as T
 from ...analysis.checker import FunctionAnalysis
-from ...analysis.closures import callable_spelled, is_plain_callable
+from ...analysis.closures import callable_spelled, is_plain_callable, shared_with_closures
 from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
 from ...analysis.settled import implicit_parameter_name
@@ -266,9 +266,18 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     A list of numbers only read is lent as a buffer, a copy of its words. A
     function that writes through a parameter may be handed the same list
     twice (`f(xs, xs)`), and a copy would not see the write: then each list
-    goes by handle, and the boundary keeps one object one handle."""
-    if analysis is None or not writes(analysis):
+    goes by handle, and the boundary keeps one object one handle.
+
+    A parameter a nested function or a lambda shares is held by handle too:
+    the closure reads it through a cell, which holds a handle, and can
+    outlive the call a buffer is lent for."""
+    if analysis is None:
         return frozenset()
+    if not writes(analysis):
+        node = analysis.info.node
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return frozenset()
+        return frozenset(p.name for p in analysis.info.params) & shared_with_closures(node)
     return frozenset(p.name for p in analysis.info.params) | {
         implicit_parameter_name(analysis, held) for held in analysis.implicit_globals
     }

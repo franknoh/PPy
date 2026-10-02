@@ -1,0 +1,16 @@
+# fuzz: path=run (a nested function read a list parameter lent as a buffer through an empty cell, and crashed)
+def total(dims: list[int]) -> int:
+    def at(i: int) -> int:
+        return dims[i]
+
+    s = 0
+    for i in range(len(dims)):
+        s += at(i)
+    return s
+
+
+def main() -> None:
+    print(total([1, 2, 3, 4]))
+
+
+main()

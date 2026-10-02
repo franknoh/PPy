@@ -1,0 +1,14 @@
+# fuzz: path=run (d.get(k) with no default raised IndexError in the lowering)
+def look(d: dict[int, int], k: int) -> int:
+    v = d.get(k)
+    if v is None:
+        return -1
+    return v
+
+
+def main() -> None:
+    d = {1: 10, 2: 20}
+    print(look(d, 1), look(d, 3))
+
+
+main()

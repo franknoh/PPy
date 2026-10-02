@@ -776,7 +776,7 @@ _TAKES_REFERENCE: dict[str, frozenset[int]] = {
 }
 
 #: Operations that read a handle and leave the caller's reference with it.
-_LENDS = frozenset({"core.call_extern", "core.call"})
+_LENDS = frozenset({"core.call_extern", "core.call", "core.call_indirect"})
 
 
 def _takes(user: object, index: int) -> bool:
