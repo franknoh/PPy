@@ -15,7 +15,12 @@ class LlvmUnavailable(RuntimeError):
 def available() -> bool:
     import importlib.util
 
-    return importlib.util.find_spec("llvmlite.binding") is not None
+    # The submodule's spec imports its package first, which raises rather
+    # than answering None when llvmlite is not installed at all.
+    try:
+        return importlib.util.find_spec("llvmlite.binding") is not None
+    except ImportError:
+        return False
 
 
 def llvm_status() -> tuple[str, str]:

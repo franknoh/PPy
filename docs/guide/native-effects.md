@@ -71,7 +71,7 @@ Some effects cannot be taken back:
 
 - `input()`, which consumes a line of stdin;
 - `print(..., flush=True)`;
-- a call into Python;
+- a call into Python that may change something (see below);
 - opening, reading, or writing a file.
 
 Each of these is a barrier. It first writes out what the call has held, so
@@ -128,14 +128,47 @@ A native function can call a function that stays in Python: another
 function of the module that did not compile, a function of an imported
 module, or a builtin. The call goes through Python with the GIL held:
 
-- arguments are numbers, bools, strings, and `None`, boxed;
-- the result is unboxed by the type the checker gave the call: a `float`, a
-  `bool`, a `str`, or nothing. A value of another type raises `TypeError`;
-- what the callee raises is raised natively.
+- arguments are numbers, bools, strings, and `None`, boxed, by position or
+  by keyword;
+- what the callee raises is raised natively;
+- the result is taken back as the type the checker gave the call: an
+  `int`, a `float`, a `bool`, a `str`, a tuple of numbers and bools, or
+  nothing.
 
-An `int` result is not taken back: a Python function may return an integer
-no word holds, and after the call there is no falling back. A call whose
-result is an `int` keeps its caller in Python.
+Python promises nothing about a result's type: a function annotated
+`-> float` may return `1`, and one annotated `-> int` may return an
+integer no word holds. CPython carries on with such a value. Native code
+cannot, so what happens to a result that is not what native code holds
+depends on whether the call may be run a second time.
+
+A callee that changes nothing is no barrier. That is a builtin given
+numbers and strings (`len`, `round`, `divmod`, `int`, `str`, `abs`,
+`sum`, `min`, `max`, `pow`, `hash`, `format`, and the like), a `math`
+function, or a function of the module whose effects are only reading and
+allocating. Its result must be exactly of the checked type: an `int` that
+fits 64 bits and is not a `bool`, a `float`, a `bool`, a `str` and not a
+subclass of one. When it is not, the native call falls back and Python
+runs the whole function again, calling the callee again; nothing it did
+could be seen the first time, so nothing is seen twice.
+
+Any other callee is a barrier, after which nothing may fall back. Its
+result is taken back only where it cannot be other than the checked
+type:
+
+- a `str`, a `bool`, or a `float` from a builtin or a standard-library
+  function whose result type is fixed (`input`, `str`, `os.path.exists`);
+- a `str`, a `bool`, or a `float` from a function of the module each of
+  whose `return` statements gives exactly that type, with no way to fall
+  off the end and give `None`. `ppy.assume[T](...)` counts as the program's
+  promise of `T`;
+- an `int` never: no callee that may change something promises 64 bits.
+
+Any other result keeps the caller in Python, and `ppy explain` says
+"stays in Python and gives `T`". A result that breaks the promise anyway
+(a function rebound at run time, or a broken `ppy.assume`) raises
+`TypeError` naming the function. CPython would not raise there, which is
+why the compiler takes such results only where the promise is the
+checker's or the program's own.
 
 A function that calls into Python holds the GIL where it does so. It is
 native, but not free-threaded.

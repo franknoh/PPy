@@ -219,10 +219,23 @@ class _Scope:
 
 
 class _Generator:
-    def __init__(
-        self, seed: int, prints: bool = False, state: bool = False, stdlib: bool = False
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        seed: int,
+        prints: bool = False,
+        state: bool = False,
+        stdlib: bool = False,
+        calls: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: Whether functions take defaults and keyword-only parameters, and
+        #: `main` calls them by keyword and leaves defaults out, drawn from a
+        #: sequence of their own so the rest of the program stays the same.
+        self.calls = calls
+        self.call_rng = random.Random(seed ^ 0xCA11)
+        #: Per function: its parameters, their kinds, their defaults, and
+        #: where the keyword-only ones start.
+        self.signatures: dict[str, tuple[list[str], list[str], dict[str, str], int]] = {}
         self.fresh = 0
         self.seed = seed
         #: Whether functions print too, between checks that may fall back.
@@ -1092,6 +1105,8 @@ class _Generator:
         ret = rng.choice(("int", "int", "float", "str", "bool"))
         params = [self.name("a") for _ in kinds]
         signature = ", ".join(f"{p}: {k}" for p, k in zip(params, kinds, strict=True))
+        if self.calls:
+            signature = self.call_signature(name, params, kinds)
         w.put(f"def {name}({signature}) -> {ret}:")
         w.depth += 1
         scope = _Scope()
@@ -1106,6 +1121,58 @@ class _Generator:
         w.put("")
         w.put("")
         return kinds, ret
+
+    def call_signature(self, name: str, params: list[str], kinds: list[str]) -> str:
+        """Parameters with constant defaults on the last few, and the last ones
+        keyword-only now and then."""
+        rng = self.call_rng
+        defaulted = rng.randint(0, len(params))
+        defaults = {
+            p: self.constant(k)
+            for p, k in list(zip(params, kinds, strict=True))[len(params) - defaulted :]
+        }
+        keyword_only = rng.randint(1, len(params)) if rng.random() < 0.3 else len(params)
+        self.signatures[name] = (params, kinds, defaults, keyword_only)
+        parts = []
+        for index, (param, kind) in enumerate(zip(params, kinds, strict=True)):
+            if index == keyword_only:
+                parts.append("*")
+            default = defaults.get(param)
+            parts.append(f"{param}: {kind}" + (f" = {default}" if default is not None else ""))
+        return ", ".join(parts)
+
+    def constant(self, kind: str) -> str:
+        """A literal of `kind`, as a default may be."""
+        rng = self.call_rng
+        if kind == "int":
+            return str(rng.randint(-9, 9))
+        if kind == "float":
+            return rng.choice(_FLOATS)
+        if kind == "str":
+            return repr(rng.choice(_WORDS))
+        return rng.choice(("True", "False"))
+
+    def call(self, name: str, kinds: list[str]) -> str:
+        """A call of `name`: by position, or with keywords and defaults left out."""
+        found = self.signatures.get(name)
+        if found is None:
+            return f"{name}({', '.join(self.argument(k) for k in kinds)})"
+        params, kinds, defaults, keyword_only = found
+        rng = self.call_rng
+        positional: list[str] = []
+        named: list[str] = []
+        by_name = False
+        for index, (param, kind) in enumerate(zip(params, kinds, strict=True)):
+            if param in defaults and rng.random() < 0.4:
+                by_name = True  # left out: whatever follows is named
+                continue
+            if index >= keyword_only or by_name or rng.random() < 0.3:
+                by_name = True
+                named.append(f"{param}={self.argument(kind)}")
+            else:
+                positional.append(self.argument(kind))
+        rng.shuffle(named)
+        return f"{name}({', '.join([*positional, *named])})"
 
     def argument(self, kind: str) -> str:
         rng = self.rng
@@ -1203,10 +1270,7 @@ class _Generator:
         for _ in range(self.rng.randint(3, 6)):
             name = self.name("fn")
             kinds, _ret = self.function(w, name)
-            calls.extend(
-                f"{name}({', '.join(self.argument(k) for k in kinds)})"
-                for _ in range(self.rng.randint(1, 3))
-            )
+            calls.extend(self.call(name, kinds) for _ in range(self.rng.randint(1, 3)))
         after = self.state_part(w) if self.with_state else []
         w.put("def main() -> None:")
         if self.stdlib:
@@ -1242,15 +1306,21 @@ class _Generator:
 
 
 def generate_program(
-    seed: int, prints: bool = False, state: bool = False, stdlib: bool = False
+    seed: int,
+    prints: bool = False,
+    state: bool = False,
+    stdlib: bool = False,
+    calls: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
     it also reads and writes module globals and walks objects Python made,
     which only the paths with a Python boundary run (`STATE_PATHS`). With
     `stdlib`, functions also draw seeded random numbers and call `math`,
-    `heapq`, `bisect`, and `itertools`."""
-    return _Generator(seed, prints, state, stdlib).program()
+    `heapq`, `bisect`, and `itertools`. With `calls`, functions take defaults
+    and keyword-only parameters, and `main` calls them by keyword and leaves
+    defaults out."""
+    return _Generator(seed, prints, state, stdlib, calls).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
