@@ -445,6 +445,73 @@ def test_a_value_class_argument_crosses_with_an_object_result(tmp_path: Path):
     assert "STATS prog.run 2 0" in lines, lines
 
 
+RAISES_WITH_A_LIST = """
+def simplify(pts: list[tuple[float, float]], epsilon: float) -> list[tuple[float, float]]:
+    if epsilon < 0:
+        raise ValueError(f"epsilon must be non-negative, got {epsilon!r}")
+    keep: list[tuple[float, float]] = []
+    for p in pts:
+        if p[1] > epsilon:
+            keep.append(p)
+    return keep
+
+
+try:
+    simplify([(0.0, 0.0), (1.0, 2.0)], -1.0)
+except ValueError as e:
+    print(e)
+print(simplify([(0.0, 0.0), (1.0, 2.0)], 1.0))
+"""
+
+#: Records, in order, the boundary letting go of its copies and the sweep.
+_ORDER = """
+import sys
+from pathlib import Path
+
+import ppy_runtime.binding as binding
+import ppy_runtime.collection_boundary as crossing
+import ppy_runtime.launch as launch
+
+events = []
+close = crossing.Boundary.close
+sweep = binding._let_go_of_raised
+
+
+def closed(self):
+    if self._owned:
+        events.append("close")
+    close(self)
+
+
+def swept(owner, native):
+    events.append("sweep")
+    sweep(owner, native)
+
+
+crossing.Boundary.close = closed
+binding._let_go_of_raised = swept
+launch.main(Path(sys.argv[1]), [])
+print("ORDER", " ".join(events))
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_raised_call_lets_go_of_its_argument_copies_before_the_sweep(tmp_path: Path):
+    """The sweep after a raised status frees everything on the thread's list; a
+    copy of an argument freed there and released again by the boundary was a
+    double free (`geometry/ramer_douglas_peucker.py` aborted under `ppy run`)."""
+    expected = _expected(tmp_path, RAISES_WITH_A_LIST)
+    built = _run(tmp_path, "-m", "ppy_compiler", "build", "prog.ppy", "-o", "dist")
+    assert built.returncode == 0, built.stderr
+    (tmp_path / "order.py").write_text(_ORDER, encoding="utf-8")
+    ran = _run(tmp_path, "order.py", str(tmp_path / "dist" / "ppy-bindings.json"))
+    assert ran.returncode == 0, ran.stderr
+    lines = ran.stdout.splitlines()
+    assert "\n".join(lines[:-1]) == expected
+    assert lines[-1].startswith("ORDER close sweep"), lines[-1]
+
+
 # -- what binding refuses ------------------------------------------------------------
 
 

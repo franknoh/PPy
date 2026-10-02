@@ -776,6 +776,10 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
             if status == STATUS_RAISED:
+                # The arguments' copies go first: the sweep frees whatever is
+                # left on the thread's list, and a copy freed there would be
+                # let go of a second time by `close`.
+                boundary.close()
                 _let_go_of_raised(owner, native)
             if status >= STATUS_SANITIZER_BASE:
                 kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
@@ -801,6 +805,8 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         slots = [result_type() for result_type in result_types]
         outer = effects.enter()
         status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
+        if status == STATUS_RAISED:
+            boundary.close()  # before the sweep `_settled` may make, as in `_cross`
         settled = _settled(effects, status, outer, signature, owner, native)
         if isinstance(settled, BaseException):
             raise settled
