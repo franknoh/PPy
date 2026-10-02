@@ -9,7 +9,7 @@ from pathlib import Path
 from ..analysis import stdlib
 from ..analysis.checker import ProjectAnalysis, analyze
 from ..analysis.contracts import ContractReport, verify
-from ..analysis.inference import infer_private_parameters, private_candidates
+from ..analysis.call_inference import CallSiteInference, new_errors
 from ..analysis.symbols import ProjectSymbols
 from ..cache import CacheKey, CacheStore
 from ..cache.keys import digest, environment_fingerprint
@@ -166,7 +166,7 @@ def analyze_paths(
         symbols.register_external_type(qualname, display)
     symbols.build()
 
-    previous = None if project.config.strict else _infer_private_parameters(project, symbols)
+    previous = None if project.config.strict else _infer_parameters(project, symbols)
     analysis = analyze(
         symbols,
         diagnostics,
@@ -187,32 +187,50 @@ def analyze_paths(
     )
 
 
-def _infer_private_parameters(project: Project, symbols: ProjectSymbols) -> ProjectAnalysis | None:
-    """Under `--no-strict`, a module-private function's unannotated parameters
-    take the types its call sites pass (`_scale([1, 2], 2)` makes `xs` a
-    `list[int]`). A caller typed only once its callee is typed reaches it on a
-    later round. The rounds report nothing; the analysis after them does."""
-    candidates = private_candidates(symbols)
-    if not candidates:
+def _infer_parameters(project: Project, symbols: ProjectSymbols) -> ProjectAnalysis | None:
+    """Under `--no-strict`, a function's unannotated parameters take the type
+    its calls pass (`count_divisors(28)` makes `n` an `int`; see
+    `analysis.call_inference`). A caller typed only once its callee is typed
+    reaches it on a later round. An inference the checker then finds an error
+    in is taken back: the source did not say it, so it must not be reported.
+    The rounds report nothing; the analysis after them does."""
+    inference = CallSiteInference(symbols)
+    if not inference.candidates:
         return None
-    analysis = None
-    for _round in range(_PRIVATE_INFERENCE_ROUNDS):
-        analysis = analyze(
+
+    def check(previous: ProjectAnalysis | None) -> ProjectAnalysis:
+        return analyze(
             symbols,
             DiagnosticBag(),
             strict=False,
             dynamic_policy=project.config.dynamic_boundaries,
             plugins=project.plugins,
-            previous=analysis,
+            previous=previous,
         )
-        if not infer_private_parameters(symbols, analysis, candidates):
+
+    baseline = analysis = check(None)
+    for attempt in range(_RETRACTIONS + 1):
+        for _round in range(_INFERENCE_ROUNDS):
+            if not inference.step(analysis):
+                break
+            analysis = check(analysis)
+        errors = new_errors(baseline, analysis)
+        if not errors:
             break
+        if attempt == _RETRACTIONS:
+            inference.retract_all()
+        else:
+            inference.retract(errors, analysis)
+        analysis = check(analysis)
     return analysis
 
 
 #: Each round types the callees of what the round before typed; call chains
-#: of private helpers deeper than this keep their last links unannotated.
-_PRIVATE_INFERENCE_ROUNDS = 4
+#: deeper than this keep their last links unannotated.
+_INFERENCE_ROUNDS = 6
+#: How many times inference may be taken back where an error points and
+#: redone; past that, all of it is taken back.
+_RETRACTIONS = 4
 
 
 def module_cache_key(

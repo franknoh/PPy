@@ -121,6 +121,9 @@ class ParamInfo:
     #: A settled module global native code takes as this parameter
     #: (`module:name`); Python callers never pass it.
     global_of: str = ""
+    #: Where an inferred type came from, in words: the calls, doctests, or
+    #: default value that gave it (`ppy explain` says so).
+    origin: str = ""
 
     @property
     def known(self) -> bool:
