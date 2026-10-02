@@ -5,6 +5,7 @@
     uv run python scripts/fuzz.py --state --count 25 # module globals and objects
     uv run python scripts/fuzz.py --seed 0 --count 25 --stdlib   # the standard library
     uv run python scripts/fuzz.py --seed 0 --count 25 --calls    # keywords and defaults
+    uv run python scripts/fuzz.py --unannotated --count 25   # inferred parameter types
     uv run python scripts/fuzz.py --replay           # every saved regression
     uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
 
@@ -17,7 +18,10 @@ also print between checks that may fall back, and a path that prints a
 line more often than CPython does is a failure of its own. With `--state`,
 each program also reads and writes module globals and walks objects Python
 made, and runs on the paths with a Python boundary (CPython, `ppy`, and
-`ppy run`).
+`ppy run`). With `--unannotated`, the functions have no annotations, run
+without strict mode, and are called from Python with arguments of other
+types than the ones their types were inferred from, on the paths with a
+Python boundary.
 
 Run it through the shared memory cap in a batch at a time; each program's
 paths run one after another, each under its own timeout and memory cap.
@@ -80,11 +84,12 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     state: bool = False,
     stdlib: bool = False,
     calls: bool = False,
+    unannotated: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
     for current in range(seed, seed + count):
-        source = generate_program(current, prints, state, stdlib, calls)
+        source = generate_program(current, prints, state, stdlib, calls, unannotated)
         results = run_program(source, paths, timeout=60.0)
         mismatches = printed_twice(results) + compare(results)
         if not mismatches:
@@ -146,16 +151,29 @@ def main(argv: list[str] | None = None) -> int:
             " operator, and collections' containers"
         ),
     )
+    parser.add_argument(
+        "--unannotated",
+        action="store_true",
+        help="functions without annotations, typed from their calls under --no-strict",
+    )
     options = parser.parse_args(argv)
     if options.show is not None:
         shown = generate_program(
-            options.show, options.prints, options.state, options.stdlib, options.calls
+            options.show,
+            options.prints,
+            options.state,
+            options.stdlib,
+            options.calls,
+            options.unannotated,
         )
         print(shown, end="")
         return 0
     if options.replay:
         return replay()
-    paths = options.paths or ",".join(STATE_PATHS if options.state else ALL_PATHS)
+    # A program with module state, or one Python calls by name, runs where
+    # there is a Python boundary.
+    python_only = options.state or options.unannotated
+    paths = options.paths or ",".join(STATE_PATHS if python_only else ALL_PATHS)
     return fuzz(
         options.seed,
         options.count,
@@ -165,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
         options.state,
         options.stdlib,
         options.calls,
+        options.unannotated,
     )
 
 

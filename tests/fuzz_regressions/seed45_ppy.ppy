@@ -1,0 +1,163 @@
+# fuzz: path=ppy seed=45 (stdout differs)
+# fuzz: unannotated
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+class Failed(ValueError):
+    def __init__(self, code: int, where: str) -> None:
+        super().__init__(f"{where}: {code}")
+        self.code: int = code
+        self.where: str = where
+
+
+@dataclass(order=True)
+class Tag:
+    rank: int
+    label: str
+
+
+def countdown(n: int) -> Iterator[int]:
+    pass
+
+
+def pairs(n: int) -> Iterator[int]:
+    yield from countdown(n)
+
+
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+
+
+def fn1(a2, a3):
+    b4: bool = (-3 < (-10 << (11 % 20)))
+    f5: float = (a3 + 12)
+    h6 = Heap[int]()
+    h6.push(9223372036854775807)
+    h6.push((11 * 8))
+    h6.push(min(6, -1))
+    n7: int = 0
+    return (abs((n7 + n7)) % ((n7 // ((n7 - n7) if (n7 - n7) != 0 else -7)) if (n7 // ((n7 - n7) if (n7 - n7) != 0 else -7)) != 0 else -3))
+
+
+def fn8(a9, a10):
+    t11 = (10, (3.0 + -2.5))
+    n12, f13 = t11
+    n14: int = 0
+    n16: int = -3
+    p17 = Point(max(-11, 0), (9223372036854775807 * n16))
+    n18: int = p17.x * 3 - p17.y
+    f19: float = ((3.0 * float(n14)) + max((1e-300 + -2.5), (f13 - f13)))
+    return (len("-".join('123'.split())) * ((-9 | n12) >> (5 % 24)))
+
+
+def fn24(a25):
+    f26: float = min(((7.25 * 3) * (-2.5 * -1)), (math.sqrt(abs(1e-300)) + (9 * 9)))
+    p40 = Point((6 + 4), -4611686018427387904)
+    n41: int = p40.x * 3 - p40.y
+    return (-(n41) >= (-4 * -8))
+
+
+def fn46(a47):
+    c48 = Counter((4611686018427387903 & -12))
+    n49: int = c48.bump(2)
+    n49 += c48.bump((6 // (-1 if -1 != 0 else -3)))
+    assert ((-4 - n49) == min(4611686018427387903, n49)) or True, a47
+    s50: str = a47
+    t51 = ((n49 * n49), 1e-300)
+    n52, f53 = t51
+    n54: int = (-((n49 * n49)) | (n49 if (n49 > len('Hello')) else n49))
+    return n49
+
+
+def fn55(a56):
+    b57: bool = ((3.0 + a56) > (-2.5 - a56))
+    xs59: list[int] = [(-12 + 2), -1]
+    xs59.sort(reverse=False)
+    xs59.insert(-2, (-6 // (1 if 1 != 0 else -7)))
+    n58: int = sum(xs59) + min(xs59)
+    t60 = (n58, a56)
+    n61, f62 = t60
+    return min(-2, (-(n58) // ((n58 * n61) if (n58 * n61) != 0 else -3)))
+
+
+def main() -> None:
+    print(fn1('ab', float("inf")))
+    print(fn1('MiXeD', 1e308))
+    print(fn8(' spaced out ', ''))
+    print(fn8('', 'a'))
+    print(fn8('', 'MiXeD'))
+    print(fn24('MiXeD'))
+    print(fn46('a'))
+    print(fn46(' spaced out '))
+    print(fn55(3.0))
+
+
+main()
+if __name__ == "__main__":
+    import sys
+
+    here = sys.modules[__name__]
+    try:
+        print(getattr(here, 'fn1')('ok', 'x'))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn8')(4, 4))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn24')('ok'))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn46')(4))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn55')(3))
+    except Exception as e:
+        print(type(e).__name__)
