@@ -96,7 +96,7 @@ from .closures import ClosureLowering
 from .collections import HANDLE, Held, crossing_classes, records_of
 from .containers import ContainerLowering
 from .effects import EffectLowering, check_effects, rule_of, wants_exceptions
-from .exceptions import ExceptionLowering, uses_exceptions
+from .exceptions import ExceptionLowering, OwnedTemporaries, uses_exceptions
 from .expressions import ExpressionLowering
 from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
@@ -1467,6 +1467,7 @@ class _GuardSite:
 
 
 class _FunctionLowering(  # pylint: disable=too-many-ancestors
+    OwnedTemporaries,
     StdlibLowering,
     ExpressionLowering,
     FrameLowering,

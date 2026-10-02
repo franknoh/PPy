@@ -267,12 +267,87 @@ def main() -> None:
 main()
 """
 
+#: Temporaries a check raises over: the list of `[1, 2][5]`, a string being
+#: indexed, a call's argument, a loop's iterable. The raise edge lets go of
+#: each, whether a `try` in the function catches it or a caller's does.
+TEMPORARIES = """
+def inner(i: int) -> int:
+    return [i, i + 1, i + 2][i]
+
+
+def text_at(s: str, i: int) -> str:
+    return (s + "!" + str(i))[i]
+
+
+def lookup(d: dict[str, int], k: str) -> int:
+    return {"x": 1, "y": 2}[k] + d[k]
+
+
+def total(xs: list[int]) -> int:
+    t = 0
+    for x in xs:
+        t += x
+    return t
+
+
+def nested(i: int) -> int:
+    return len([[1, 2], [3]][i])
+
+
+def loop_raise(n: int) -> int:
+    count = 0
+    try:
+        for v in [10, 20, 30]:
+            count += [v, v][n]
+    except IndexError:
+        count = -count
+    return count
+
+
+def call_args(i: int) -> int:
+    return total([1, 2, 3]) + total([4, 5][i : i + 1]) + [7][i]
+
+
+def main() -> None:
+    d = {"x": 5}
+    for i in range(4):
+        try:
+            print(inner(i))
+        except IndexError as e:
+            print("inner", e)
+        try:
+            print(text_at("ab", i * 2))
+        except IndexError as e:
+            print("text", e)
+        try:
+            print(nested(i))
+        except IndexError:
+            print("nested")
+        try:
+            print(call_args(i))
+        except IndexError:
+            print("args")
+    for k in ["x", "y", "z"]:
+        try:
+            print(lookup(d, k))
+        except KeyError as e:
+            print("key")
+    print(loop_raise(1), loop_raise(2))
+
+
+main()
+"""
+
 PROGRAMS = {
     "exceptions": (
         EXCEPTIONS,
         ["check", "safe_get", "loops", "arithmetic", "frames", "leaving", "nested"],
     ),
     "generators": (GENERATORS, ["consume", "reduce_all", "tally", "guarded"]),
+    "temporaries": (
+        TEMPORARIES,
+        ["inner", "text_at", "lookup", "nested", "loop_raise", "call_args", "main"],
+    ),
 }
 
 
