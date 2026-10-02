@@ -1,7 +1,7 @@
 {
  "src/ppy_compiler": {
   "seconds": 174.5,
-  "errors": 145,
+  "errors": 138,
   "by_code": {
    "E1101": 10,
    "E1202": 1,
@@ -17,7 +17,7 @@
  },
  "src/ppy_runtime": {
   "seconds": 78.6,
-  "errors": 4,
+  "errors": 2,
   "by_code": {
    "E1101": 2,
    "E1303": 2
@@ -29,7 +29,7 @@
  },
  "src/ppy": {
   "seconds": 79.7,
-  "errors": 19,
+  "errors": 18,
   "by_code": {
    "E1101": 1,
    "E1202": 13,

@@ -246,7 +246,7 @@ the table is now:
 
 | statements | functions | reason |
 |---:|---:|---|
-| 3,013 | 429 | a parameter or result with no annotation the checker could infer |
+| 3,008 | 428 | a parameter or result with no annotation the checker could infer |
 | 2,059 | 202 | writes to a parameter native code copies |
 | 1,803 | 140 | writes to an object native code does not own |
 | 905 | 143 | a `numpy.ndarray` parameter |
