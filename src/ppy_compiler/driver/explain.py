@@ -228,7 +228,9 @@ def _print_inferred(info: FunctionInfo) -> None:
     if lines:
         # A Python caller crosses the wrapper, which checks each argument's
         # exact type and runs the Python body when one is something else.
-        lines.append("(the Python boundary checks these at each call, and runs the Python body otherwise)")
+        lines.append(
+            "(the Python boundary checks these at each call, and runs the Python body otherwise)"
+        )
     if not info.ret_annotated and not isinstance(info.ret, T.UnknownType):
         lines.append(f"return: {info.ret}, from the body's return statements")
     if lines:

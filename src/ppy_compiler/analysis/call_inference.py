@@ -216,7 +216,9 @@ class CallSiteInference:
                     continue
                 seen = T.strip_literal(checked.type_of(node))
                 for member in T.members_of(seen):
-                    if isinstance(member, T.Callable_) and member.qualname in self.symbols.functions:
+                    if not isinstance(member, T.Callable_):
+                        continue
+                    if member.qualname in self.symbols.functions:
                         found.add(self.family.get(member.qualname, member.qualname))
         return found
 
@@ -259,15 +261,11 @@ class CallSiteInference:
             found = []
             for member in T.members_of(receiver):
                 if isinstance(member, T.Instance) and member.name in self.symbols.classes:
-                    method = self.symbols.classes[member.name].find_method(
-                        func.attr, self.symbols
-                    )
+                    method = self.symbols.classes[member.name].find_method(func.attr, self.symbols)
                     if method is not None:
                         found.append(_Target(method.qualname, 1))
                 elif isinstance(member, T.ClassObject) and member.name in self.symbols.classes:
-                    method = self.symbols.classes[member.name].find_method(
-                        func.attr, self.symbols
-                    )
+                    method = self.symbols.classes[member.name].find_method(func.attr, self.symbols)
                     if method is not None:
                         found.append(_Target(method.qualname, 1 if method.is_classmethod else 0))
             return found
@@ -340,9 +338,8 @@ class CallSiteInference:
                     continue
                 owners = _method_owners(module)
                 for node in module.module.nodes:
-                    if (
-                        isinstance(node, ast.Call)
-                        and node.lineno <= line <= (node.end_lineno or node.lineno)
+                    if isinstance(node, ast.Call) and node.lineno <= line <= (
+                        node.end_lineno or node.lineno
                     ):
                         for target in self._targets(module, checked, node, owners):
                             blamed.update(m for m in self._members(target.qualname))
@@ -378,9 +375,7 @@ class CallSiteInference:
         """What the classes' fields were before anything was inferred: a
         field typed from an inferred parameter (`self.n = n`) only ever
         widens, so taking the parameter back must take the field back too."""
-        self._fields = {
-            name: dict(cls.fields) for name, cls in self.symbols.classes.items()
-        }
+        self._fields = {name: dict(cls.fields) for name, cls in self.symbols.classes.items()}
 
     def _reset(self) -> None:
         for name, fields in getattr(self, "_fields", {}).items():

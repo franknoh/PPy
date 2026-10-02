@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..analysis import stdlib
+from ..analysis.call_inference import CallSiteInference, new_errors
 from ..analysis.checker import ProjectAnalysis, analyze
 from ..analysis.contracts import ContractReport, verify
-from ..analysis.call_inference import CallSiteInference, new_errors
 from ..analysis.symbols import ProjectSymbols
 from ..cache import CacheKey, CacheStore
 from ..cache.keys import digest, environment_fingerprint
@@ -132,8 +132,14 @@ def analyze_paths(
     backend: str = "python",
     follow_imports: bool = True,
     overlays: dict[Path, str] | None = None,
+    infer_calls: bool = True,
 ) -> AnalysisBundle:
-    """Parse, resolve, type-check, and verify contracts for the given entries."""
+    """Parse, resolve, type-check, and verify contracts for the given entries.
+
+    `infer_calls=False` leaves unannotated parameters unknown under
+    `--no-strict`: `ppy convert` runs its own inference, whose answers are
+    the annotations it writes.
+    """
     diagnostics = DiagnosticBag()
     for problem in project.plugins.problems:
         # A plugin the project asked for and cannot have: an error, not a
@@ -166,7 +172,9 @@ def analyze_paths(
         symbols.register_external_type(qualname, display)
     symbols.build()
 
-    previous = None if project.config.strict else _infer_parameters(project, symbols)
+    previous = (
+        None if project.config.strict or not infer_calls else _infer_parameters(project, symbols)
+    )
     analysis = analyze(
         symbols,
         diagnostics,

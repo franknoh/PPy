@@ -1240,7 +1240,7 @@ class _Generator:
             # Python calls each function by a name the analysis cannot follow,
             # with other types: the native entry must refuse them and run the
             # Python body, which prints what CPython prints.
-            w.put("if __name__ == \"__main__\":")
+            w.put('if __name__ == "__main__":')
             w.put("    import sys")
             w.put("")
             w.put("    here = sys.modules[__name__]")
