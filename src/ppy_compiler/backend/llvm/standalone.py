@@ -35,8 +35,6 @@ _LIBRARY_NAMES = {
     "functools": frozenset({"cache", "lru_cache", "reduce", "partial", "cmp_to_key"}),
     "operator": OPERATOR_FUNCTIONS | {"itemgetter", "attrgetter"},
 }
-    ),
-}
 
 #: What `from collections import ...` may name in a standalone module.
 _COLLECTIONS = frozenset({"deque", "defaultdict", "Counter", "OrderedDict"})

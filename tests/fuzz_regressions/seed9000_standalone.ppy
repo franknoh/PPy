@@ -1,0 +1,219 @@
+# fuzz: path=standalone seed=9000 (did not build)
+import bisect
+import heapq
+import itertools
+import random
+import functools
+import operator
+import collections
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+class Failed(ValueError):
+    def __init__(self, code: int, where: str) -> None:
+        super().__init__(f"{where}: {code}")
+        self.code: int = code
+        self.where: str = where
+
+
+@dataclass(order=True)
+class Tag:
+    rank: int
+    label: str
+
+
+def countdown(n: int) -> Iterator[int]:
+    while n > 0:
+        yield n
+        n -= 2
+
+
+def pairs(n: int) -> Iterator[int]:
+    for i in range(n):
+        if i % 3 == 0:
+            continue
+        yield i * i
+    yield from countdown(n)
+
+
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    for value in it:
+        if most <= 0:
+            break
+        total = total * 5 + value
+        most -= 1
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+        for name in self.names:
+            if name not in seen:
+                seen.append(name)
+                yield name + str(len(seen))
+
+
+@functools.lru_cache(maxsize=None)
+def _cached(n: int) -> int:
+    if n < 2:
+        return n
+    return (_cached(n - 1) + _cached(n - 2)) % 1000003
+
+
+def fn1(a2: bool, a3: int) -> bool:
+    if (min(3.0, -0.0) >= (1e308 * 0.5)):
+        p4 = Point(pow(a3, 0, 1), a3)
+        n5: int = p4.x * 3 - p4.y
+        n5 -= (8 * a3)
+    else:
+        if (max(a3, a3) != (a3 % (a3 if a3 != 0 else -7))):
+            v6 = Vec[int]()
+            v6.push((-1 - a3))
+            v6.push((a3 // (8 if 8 != 0 else -7)))
+            v6.push((-7 >> (a3 % 7)))
+            v6.reverse()
+            n7: int = 0
+            for x8 in v6:
+                n7 = n7 * 7 + x8
+        else:
+            a3 %= (6 if 6 != 0 else 3)
+    a3 += (a3 - a3)
+    for i9 in range(2):
+        m10 = HashMap[str, int]()
+        m10[' spaced out '] = m10.get(' spaced out ', 0) + (a3 * -7)
+        m10["-".join('123'.split())] = m10.get("-".join('123'.split()), 0) + i9
+        m10['two  gaps'.strip()] = m10.get('two  gaps'.strip(), 0) + abs(a3)
+        n11: int = len(m10) * 100
+        for key12 in m10:
+            n11 = n11 * 3 + m10[key12]
+        s13: str = ("-".join(str(a3).split()) + (('a' + 'a') if (a2 or not ((10 // (n11 if n11 != 0 else 3)) > (n11 - -7))) else 'two  gaps'))
+    return ((a3 + -8) not in {(a3 % (a3 if a3 != 0 else 3)), (a3 + a3)})
+
+
+def fn14(a15: int, a16: float) -> int:
+    for i17 in range(5):
+        h18: list[int] = [4, a15, i17, 7, a15]
+        heapq.heapify(h18)
+        heapq.heappush(h18, int(1e-300))
+        heapq.heappush(h18, -8)
+        random.shuffle(h18)
+        heapq.heapify(h18)
+        n19: int = heapq.heappop(h18) + len(h18)
+        bisect.insort(h18, -10)
+        n19 += sum(h18) + h18[0]
+        m20 = HashMap[int, int]()
+        m20[(a15 * -4)] = m20.get((a15 * -4), 0) + -1
+        n21: int = len(m20) * 100
+        for key22 in m20:
+            n21 = n21 * 3 + m20[key22]
+    a15 %= ((-4611686018427387904 * a15) if (-4611686018427387904 * a15) != 0 else 3)
+    return 9223372036854775807
+
+
+def fn23(a24: float, a25: str) -> str:
+    d27: dict[int, int] = {}
+    d27[(9 + 9223372036854775807)] = d27.get((9 + 9223372036854775807), 0) + (11 // (-4 if -4 != 0 else 3))
+    d27[(-1 % (-10 if -10 != 0 else -3))] = d27.get((-1 % (-10 if -10 != 0 else -3)), 0) + (-2 << (2 % 36))
+    d27[(-3 * -10)] = d27.get((-3 * -10), 0) + -10
+    n26: int = len(d27) * 100
+    n26 += sum(d27.values())
+    c29 = Counter(n26)
+    n30: int = c29.bump((n26 & n26))
+    n30 += c29.bump((8 - n26))
+    p31 = Point((n30 * 8), (5 + n26))
+    n32: int = p31.x * 3 - p31.y
+    n33: int = 0
+    try:
+        assert ((n32 + n32) <= 12), ''
+        n33 = (n32 - n30)
+    except Broken as e:
+        s34: str = str(e)
+        n33 = len(s34) + 1
+    return a25
+
+
+def fn35(a36: int) -> float:
+    sa38: set[int] = {(-4 + a36), (a36 - -6), (a36 ^ a36)}
+    sb39: set[int] = {x % 5 for x in range(7)}
+    sa38.add((a36 - a36))
+    sa38.discard(2)
+    n37: int = len(sa38 ^ sb39) * 10 + (1 if 4 in sb39 else 0)
+    n37 += sum(sa38) + (max(sb39) if sb39 else 0)
+    n40: int = math.factorial((abs((a36 * 0)) % 22))
+    return 1e308
+
+
+def fn41(a42: bool, a43: int, a44: bool) -> int:
+    if a44:
+        for i45 in range(2):
+            p46 = Point((i45 | a43), a43)
+            n47: int = p46.x * 3 - p46.y
+        s48: str = "-".join((('Hello' + 'a') if (-2 == (a43 * a43)) else '').split())
+    else:
+        sa50: set[int] = {(-4611686018427387904 ^ 4611686018427387904)}
+        sb51: set[int] = {x % 5 for x in range(6)}
+        sa50.add(a43)
+        sa50.discard(3)
+        n49: int = len(sa50 | sb51) * 10 + (1 if 1 in sb51 else 0)
+    p52 = Point(min(a43, 9), (10 | -10))
+    n53: int = p52.x * 3 - p52.y
+    p54 = Point((a43 - a43), (n53 * n53))
+    n55: int = p54.x * 3 - p54.y
+    return a43
+
+
+def main() -> None:
+    random.seed(9000)
+    print(fn1(True, -8))
+    print(fn1(False, -4611686018427387904))
+    print(fn14(9223372036854775807, 1e308))
+    print(fn14(-9, float("-inf")))
+    print(fn23(1e308, '123'))
+    print(fn35(0))
+    print(fn35(7))
+    print(fn35(-1))
+    print(fn41(True, -7, False))
+    print(fn41(False, 3, True))
+
+
+main()
