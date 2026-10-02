@@ -1,7 +1,7 @@
 {
  "src/ppy_compiler": {
   "seconds": 174.5,
-  "errors": 147,
+  "errors": 145,
   "by_code": {
    "E1101": 10,
    "E1202": 1,
