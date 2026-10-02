@@ -27,6 +27,7 @@ from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
+from ..analysis.closures import own_names
 from ..analysis.lexical import LexicalBindings
 from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo, ParamInfo, derivative_spec, fold_flags
@@ -1607,6 +1608,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         self._stable = {
             name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
         } - stored
+        self._bind_constant_tables(node)
         self._body(node.body)
         self._check_cells()
         if self._open():
@@ -2717,13 +2719,69 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         packed = core.load(self.b, self.tuples[name])
         assert isinstance(packed.type, TupleType)
         if not isinstance(index, ast.Constant) or not isinstance(index.value, int):
-            raise Unsupported("a fixed tuple must be indexed by a constant")
+            return self._tuple_item_at(packed, index)
         position = index.value
         if position < 0:
             position += len(packed.type.items)
         if not 0 <= position < len(packed.type.items):
             raise Unsupported(f"index {index.value} is out of range for `{name}`")
         return core.tuple_extract(self.b, packed, position)
+
+    def _tuple_item_at(self, packed: Value, index: ast.expr) -> Value:
+        """`table[i]` of a tuple whose items are all of one type: the index
+        counted from either end and checked as CPython checks it, then the
+        item picked out by comparing it with each position."""
+        assert isinstance(packed.type, TupleType)
+        items = packed.type.items
+        if not items or len(items) > _MAX_TUPLE_WIDTH or any(t != items[0] for t in items):
+            raise Unsupported("a fixed tuple must be indexed by a constant")
+        b = self.b
+        position = self._coerce(self._expr(index), "int")
+        count = core.const(b, len(items), I64)
+        zero = core.const(b, 0, I64)
+        negative = core.cmp(b, "lt", position, zero)
+        position = core.select(b, negative, core.add(b, position, count, overflow="wrap"), position)
+        inside = core.bitwise(
+            b, "and", core.cmp(b, "ge", position, zero), core.cmp(b, "lt", position, count)
+        )
+        self._require(inside, "tuple index out of range", "IndexError: tuple index out of range")
+        found = core.tuple_extract(b, packed, 0)
+        for at in range(1, len(items)):
+            here = core.cmp(b, "eq", position, core.const(b, at, I64))
+            found = core.select(b, here, core.tuple_extract(b, packed, at), found)
+        return found
+
+    def _bind_constant_tables(self, node: ast.FunctionDef) -> None:
+        """Each module-level table of numbers the body reads (`RATES = (0.1,
+        0.3)`), made once in the entry block as the tuple value it is."""
+        symbols = getattr(self.frontend.analysis, "symbols", None)
+        if symbols is None:
+            return
+        own = own_names(node)
+        read = {
+            inner.id
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Load)
+        }
+        for name in sorted(read - own - set(self.tuples)):
+            table = symbols.constant_globals.get(name)
+            if not isinstance(table, tuple):
+                continue
+            entry = self._entry_builder()
+            items: list[Value] = []
+            for item in table:
+                if isinstance(item, bool):
+                    items.append(core.const(entry, item, BOOL))
+                elif isinstance(item, int):
+                    if not -(1 << 63) <= item < (1 << 63):
+                        raise Unsupported(f"`{name}` holds an integer past 64 bits")
+                    items.append(core.const(entry, item, I64))
+                else:
+                    items.append(core.const(entry, float(item), F64))
+            packed = core.tuple_make(entry, *items)
+            slot = self._alloca(packed.type, name)
+            core.store(self._entry_builder(), packed, slot)
+            self.tuples[name] = slot
 
     def _module_constant(self, name: str) -> Value | None:
         symbols = getattr(self.frontend.analysis, "symbols", None)
