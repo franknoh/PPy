@@ -260,3 +260,12 @@ the table is now:
 Of the compiled functions Python does not call natively, 329 are too small
 for the boundary to pay off and 208 do less with their collections than
 copying them in costs.
+
+The 400-script comparison, run again on the same programs: 387 match and 13
+are skipped as nondeterministic or slow under CPython. None differs, down
+from 34 when the 0.6.0 work began. The last eight were programs `ppy run`
+refused at compile time under `strict = false`: an import of a sibling
+module that CPython also fails to find, a `MutableSequence[T]` parameter, a
+generator expression assigned to a bare `Generator`, and `globals()` passed
+to `timeit`. Under `--no-strict` these are now warnings, and that code runs
+on CPython.

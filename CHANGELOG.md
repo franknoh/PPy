@@ -8,7 +8,11 @@ take the project's objects; `isinstance`, chained comparisons, `in`, integer
 powers, and generators passed around as values; and `random`, `math`,
 `heapq`, `bisect`, and `itertools`. The checker accepts more of the typing
 module, and a native function given an `int` for a `float` parameter now
-returns what CPython returns. CORPUS_SUMMARY
+returns what CPython returns. With `--no-strict`, `ppy run` no longer
+refuses a program CPython runs. On TheAlgorithms/Python, the functions
+Python calls natively went from 231 to 523, and 387 of 400 scripts print
+the same as under CPython, with the other 13 skipped as nondeterministic
+or slow and none differing.
 
 ### Effects in native code
 
@@ -108,6 +112,14 @@ returns what CPython returns. CORPUS_SUMMARY
   Python.
 - Fixed: `(-2) ** c` printed `-(2 ** c)` under the Python backend after
   constant folding.
+- `--no-strict` no longer stops `ppy run` with a compile error on code
+  CPython runs. Unresolvable annotations, undefined names, star imports,
+  `eval`, `exec`, `globals()`, `vars()`, computed `getattr`, `setattr`, and
+  `__import__`, metaclasses, and computed bases are `W2010` warnings, and
+  that code runs on CPython. A script whose import fails ends with CPython's
+  `ImportError` or `ModuleNotFoundError`.
+- `MutableSequence` is accepted in annotations, and a bare `Generator`
+  accepts a generator expression.
 
 ### Known limitations
 
