@@ -25,6 +25,43 @@ __all__ = [
     "GeneratedModule",
 ]
 
+def _bind_nested(
+    body: list[ast.stmt], bindings: list[tuple[str, frozenset[str]]], prefix: str
+) -> list[ast.stmt]:
+    """`_bind_in` for a function's body: its own `def`s, wherever they sit in
+    its statements, bound under `prefix`."""
+    import ast  # pylint: disable=import-outside-toplevel
+
+    class _Nested(ast.NodeTransformer):
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:  # noqa: N802
+            return node  # its own body is bound by the `_bind_in` that reaches it
+
+        visit_AsyncFunctionDef = visit_FunctionDef  # noqa: N815
+        visit_ClassDef = visit_FunctionDef  # noqa: N815
+
+        def generic_visit(self, node: ast.AST) -> ast.AST:
+            for field_name in ("body", "orelse", "finalbody", "handlers", "cases"):
+                inner = getattr(node, field_name, None)
+                if isinstance(inner, list) and inner and isinstance(inner[0], ast.stmt):
+                    setattr(node, field_name, _bind_in(inner, bindings, prefix))
+            for field_name in ("handlers", "cases"):
+                for child in getattr(node, field_name, None) or ():
+                    self.generic_visit(child)
+            for field_name in ("body", "orelse", "finalbody"):
+                for child in getattr(node, field_name, None) or ():
+                    if isinstance(child, ast.stmt) and not isinstance(
+                        child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                    ):
+                        self.generic_visit(child)
+            return node
+
+    rebuilt = _bind_in(body, bindings, prefix)
+    for statement in rebuilt:
+        if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            _Nested().generic_visit(statement)
+    return rebuilt
+
+
 #: Names injected into a generated module namespace by the backends.
 BINDER_NAME = "__ppy_bind_native__"
 EXPORTED_BINDER = "__ppy_bind_exported__"
@@ -118,6 +155,11 @@ def _bind_in(
         if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         key = f"{prefix}{statement.name}"
+        inner = f"{key}.<locals>."
+        if any(name.startswith(inner) for _binder, names in bindings for name in names):
+            # A nested function with a native entry of its own, bound where
+            # its `def` runs, each time it runs.
+            statement.body = _bind_nested(statement.body, bindings, inner)
         for binder, names in bindings:
             if key not in names:
                 continue
@@ -135,6 +177,43 @@ def _bind_in(
             ast.copy_location(binding, statement)
             ast.fix_missing_locations(binding)
             rebuilt.append(binding)
+    return rebuilt
+
+
+def _bind_nested(
+    body: list[ast.stmt], bindings: list[tuple[str, frozenset[str]]], prefix: str
+) -> list[ast.stmt]:
+    """`_bind_in` for a function's body: its own `def`s, wherever they sit in
+    its statements, bound under `prefix`."""
+    import ast  # pylint: disable=import-outside-toplevel
+
+    class _Nested(ast.NodeTransformer):
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:  # noqa: N802
+            return node  # its own body is bound by the `_bind_in` that reaches it
+
+        visit_AsyncFunctionDef = visit_FunctionDef  # noqa: N815
+        visit_ClassDef = visit_FunctionDef  # noqa: N815
+
+        def generic_visit(self, node: ast.AST) -> ast.AST:
+            for field_name in ("body", "orelse", "finalbody", "handlers", "cases"):
+                inner = getattr(node, field_name, None)
+                if isinstance(inner, list) and inner and isinstance(inner[0], ast.stmt):
+                    setattr(node, field_name, _bind_in(inner, bindings, prefix))
+            for field_name in ("handlers", "cases"):
+                for child in getattr(node, field_name, None) or ():
+                    self.generic_visit(child)
+            for field_name in ("body", "orelse", "finalbody"):
+                for child in getattr(node, field_name, None) or ():
+                    if isinstance(child, ast.stmt) and not isinstance(
+                        child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                    ):
+                        self.generic_visit(child)
+            return node
+
+    rebuilt = _bind_in(body, bindings, prefix)
+    for statement in rebuilt:
+        if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            _Nested().generic_visit(statement)
     return rebuilt
 
 

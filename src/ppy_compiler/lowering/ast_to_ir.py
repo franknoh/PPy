@@ -92,7 +92,7 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
-from .calls import CallBinding
+from .calls import CallBinding, nested_entry_refusal
 from .closures import ClosureLowering
 from .collections import HANDLE, Held, crossing_classes, records_of
 from .containers import ContainerLowering
@@ -474,13 +474,16 @@ class Frontend:
         if self.native_exceptions:
             # The backends ask each call's status for the raised one.
             self.module.attributes["ppy.exceptions"] = True
+        enclosing = {q: entry[0] for q, entry in functions.items()}
         for qualname, (info, analysis, node) in functions.items():
             if info.enclosing is not None:
-                # Lowered as a closure where it is defined, never on its own.
-                lowered.rejected[qualname] = (
-                    "a function defined inside another is lowered as a closure where it is defined"
-                )
-                continue
+                # Lowered as a closure where it is defined; and, where it
+                # shares nothing with the functions around it, on its own too,
+                # for Python to call when the function around it is Python's.
+                refused = nested_entry_refusal(info, enclosing)
+                if refused is not None:
+                    lowered.rejected[qualname] = refused
+                    continue
             if qualname in self.python:
                 lowered.rejected[qualname] = self.python[qualname]
                 continue
@@ -667,7 +670,7 @@ class Frontend:
             raise Unsupported("canonical signature has no CPU native ABI")
         return IRSignature(
             info.qualname,
-            "ppy_" + info.qualname.replace(".", "_"),
+            "ppy_" + info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
             tuple(parameters),
             results,
             native,
@@ -845,7 +848,7 @@ class Frontend:
             else _result_types(info, self.layouts)
         )
         function = self.module.add_function(
-            info.qualname.replace(".", "_"),
+            info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
             params,
             results,
             attributes={
@@ -916,7 +919,7 @@ class Frontend:
         for type_ in results:
             self.require_type(type_)
         function = self.module.add_function(
-            info.qualname.replace(".", "_"),
+            info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
             params,
             results,
             visibility="extern",
@@ -3192,11 +3195,19 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             powered = self._pow_call(node)
             if powered is not None:
                 return powered
+        scoped = self._scoped_callee(node)
         for qualname, (function, signature) in self.frontend.declared.items():
-            if qualname.rpartition(".")[2] == target and "ppy.generic" not in function.attributes:
+            if scoped is not None:
+                # A name a function around this one defines: that one, or none.
+                reached = qualname == scoped
+            else:
+                reached = qualname.rpartition(".")[2] == target and "<locals>" not in qualname
+            if reached and "ppy.generic" not in function.attributes:
                 return self._native_call(
                     function, signature, qualname, node, discard_result=discard_result
                 )
+        if scoped is not None:
+            raise Unsupported(f"`{target}` is a function the one around this keeps in Python")
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
                 return self._generic_call(qualname, info, node, discard_result=discard_result)

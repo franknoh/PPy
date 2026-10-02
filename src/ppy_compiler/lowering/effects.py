@@ -32,6 +32,7 @@ import sys
 from dataclasses import dataclass, field
 
 from ..analysis import types as T
+from ..analysis.closures import own_names
 from ..analysis.effects import Effect
 from ..analysis.lexical import LexicalBindings
 from ..backend.llvm.lowering import Unsupported
@@ -624,7 +625,7 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
             info = symbols.functions.get(func.id)
             if info is not None:
                 effects = info.effects
-                return effects.is_known() and not (set(effects.effects) - _RERUNNABLE)
+                return not info.dynamic and not set(effects.effects) - _RERUNNABLE
             return func.id in _PURE_BUILTINS and func.id not in symbols.imports
         if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
             binding = symbols.imports.get(func.value.id)
@@ -695,6 +696,12 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
                     names.update(inner.names)
                 elif isinstance(inner, ast.alias):
                     names.add((inner.asname or inner.name).partition(".")[0])
+            # A nested function sees the names of the functions around it too.
+            sources = getattr(self.frontend, "sources", {})  # type: ignore[attr-defined]
+            outer = sources.get(self.info.enclosing or "")  # type: ignore[attr-defined]
+            while outer is not None:
+                names |= own_names(outer[0].node)
+                outer = sources.get(outer[0].enclosing or "")
             found = self.__dict__["_effect_bound"] = frozenset(names)
         return found  # type: ignore[no-any-return]
 
