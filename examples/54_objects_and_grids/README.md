@@ -15,6 +15,44 @@ ppy run world.ppy
 ppy explain --summary world.ppy
 ```
 
+<!-- outputs:start -->
+## What it prints
+
+**`python  world.ppy`**, **`ppy run world.ppy`**
+
+```text
+generation  40: 2349 alive (2349 by Python's count), 53643 born, 56133 died
+generation  80: 1739 alive (1739 by Python's count), 31597 born, 32207 died
+generation 120: 1451 alive (1451 by Python's count), 23478 born, 23766 died
+generation 160: 1372 alive (1372 by Python's count), 20657 born, 20736 died
+generation 200: 1160 alive (1160 by Python's count), 19690 born, 19902 died
+energy at the start: -3453.615764
+step  400: energy -3439.215631, first body at (0.1334, -0.0402)
+step  800: energy -3451.679512, first body at (0.4097, 0.4738)
+step 1200: energy -3448.311153, first body at (-0.1150, -0.6762)
+step 1600: energy -3454.178277, first body at (-0.0289, -0.6484)
+step 2000: energy -3450.191775, first body at (0.0380, -0.6717)
+the first body is the same object: True
+```
+
+**`ppy explain --summary world.ppy`**
+
+```text
+10 functions, 77 statements
+  native, called from Python              3 functions ( 30%)       39 statements ( 51%)
+  native, called from native code         6 functions ( 60%)       25 statements ( 32%)
+  Python                                  1 functions ( 10%)       13 statements ( 17%)
+
+what keeps functions in Python, by statements kept out (a function can count under more than one):
+       13 statements      1 functions  `…` yields values with no native form
+      examples/54_objects_and_grids/world.ppy:95 world.main
+
+native, but Python calls the Python body (why its boundary is not used):
+      6 functions  copying the collections in costs more than the body does with them
+```
+
+<!-- outputs:end -->
+
 ## The program
 
 - `Census` counts cells: `count(was, now)` adds one birth or death and one
@@ -67,16 +105,16 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python world.ppy` | @@PY@@ |
-| `ppy run world.ppy`, after the first run built the cache | @@RUN@@ |
+| `python world.ppy` | 2.26 |
+| `ppy run world.ppy`, after the first run built the cache | 0.58 |
 
-Timed inside the program:
+Timed inside the program, the mean of five runs:
 
 | part | CPython | `ppy run` |
 |---|---:|---:|
-| five `advance(grid, 40)` calls | @@P1@@ | @@N1@@ |
-| five `orbit(bodies, 0.0005, 400)` calls | @@P2@@ | @@N2@@ |
-| one `orbit(bodies, 0.0005, 1)` call, 60 bodies in and out | @@P3@@ | @@N3@@ |
+| five `advance(grid, 40)` calls | 1.43 s | 0.385 s |
+| five `orbit(bodies, 0.0005, 400)` calls | 0.700 s | 0.120 s |
+| one `orbit(bodies, 0.0005, 1)` call, 60 bodies in and out | 353 µs | 73 µs |
 
 There is no standalone build: `main` stays in Python, and the point of
 the example is the crossing, which a standalone binary does not have.

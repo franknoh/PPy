@@ -374,6 +374,26 @@ def test_lsp_command_serves_a_session(workspace: Path):
     assert b'"hoverProvider":true' in result.stdout
 
 
+def test_explain_says_when_python_calls_the_python_body(workspace: Path):
+    """A native function the cost model keeps off the boundary is not reported as crossing it."""
+    (workspace / "tiny.ppy").write_text(
+        textwrap.dedent(
+            """
+            def inc(x: int) -> int:
+                return x + 1
+
+
+            print(inc(3))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    done = _ppy(["explain", "inc"], workspace)
+    assert done.returncode == 0
+    assert "called from Python, its Python body runs: the boundary crossing" in done.stdout
+    assert "python boundary:" not in done.stdout
+
+
 def test_explain_reports_which_boundary_a_function_crosses(workspace: Path):
     (workspace / "boundary.ppy").write_text(
         textwrap.dedent(

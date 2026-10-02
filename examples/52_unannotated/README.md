@@ -16,6 +16,63 @@ ppy explain numbers.digit_sum
 ppy explain --summary numbers.ppy
 ```
 
+<!-- outputs:start -->
+## What it prints
+
+**`python  numbers.ppy`**, **`ppy run numbers.ppy`**
+
+```text
+primes below 2,000,000: 148933
+longest Collatz chain below 1,000,000: (837799, 524)
+Harshad numbers below 1,000,000: 95427 the last 999990
+mean digit sum: 27.0
+is_prime(2**31 - 1): True
+digit_sum(10**30 - 1): 270
+```
+
+**`ppy explain numbers.digit_sum`**
+
+<details markdown="1">
+<summary>22 lines</summary>
+
+```text
+function: digit_sum
+qualname: numbers.digit_sum
+semantic type: (int, int) -> int
+effects: MayRaise[ZeroDivisionError]
+purity: inferred pure
+optimization: O2
+python backend: optimized
+llvm backend: native
+python boundary: a generated CPython-ABI wrapper
+jit: not requested
+parallel: rejected
+reason: `number` carries a dependency across iterations
+reductions: +
+representation:
+  number: int -> i64 (guarded)
+  base: int -> i64 (guarded)
+  return: int -> PyLong*
+inferred (not annotated):
+  number: int, from 3 calls (numbers.ppy:90, numbers.ppy:72, numbers.ppy:88)
+  base: int, from 1 call (numbers.ppy:72) and the default value
+  (the Python boundary checks these at each call, and runs the Python body otherwise)
+  return: int, from the body's return statements
+```
+
+</details>
+
+**`ppy explain --summary numbers.ppy`**
+
+```text
+7 functions, 36 statements
+  native, called from Python              7 functions (100%)       36 statements (100%)
+  native, called from native code         0 functions (  0%)        0 statements (  0%)
+  Python                                  0 functions (  0%)        0 statements (  0%)
+```
+
+<!-- outputs:end -->
+
 ## The program
 
 - `is_prime(number)` tries odd divisors up to the square root.
@@ -56,7 +113,7 @@ looks for the types elsewhere:
   `longest_collatz` returns `tuple[int, int]`.
 
 `ppy explain` lists each inferred type with the calls it came from. For
-`digit_sum` (below) that is two calls for `number`, and one call plus the
+`digit_sum` (below) that is three calls for `number`, and one call plus the
 default for `base`. `ppy explain --summary` counts the seven functions as
 native and called from Python.
 
@@ -79,8 +136,26 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python numbers.ppy` | @@PY@@ |
-| `ppy run numbers.ppy`, after the first run built the cache | @@RUN@@ |
+| `python numbers.ppy` | 7.22 |
+| `ppy run numbers.ppy`, after the first run built the cache | 1.96 |
+
+Timed one part at a time inside the program (one run each):
+
+| part | CPython | `ppy run` |
+|---|---:|---:|
+| `count_primes(2_000_000)` | 2.53 | 0.13 |
+| `longest_collatz(1_000_000)` | 4.19 | 0.17 |
+| `harshad_numbers(1_000_000)` | 0.17 | 0.03 |
+| `mean([float(digit_sum(n)) for n in range(1_000_000)])` | 0.21 | 1.55 |
+
+The last line is slower under `ppy run`. Its comprehension runs in Python
+and calls `digit_sum(n)` a million times, leaving `base` to its default.
+A call from Python that leaves out a default, or names an argument, is
+bound by the boundary in Python against the function's signature, which
+costs about 1.5 µs; the same call with both arguments, `digit_sum(n, 10)`,
+costs about 70 ns, against about 155 ns for CPython's own call. A loop
+that calls a native function many times from Python should pass every
+argument by position, or move into a function of its own.
 
 The program has no `main()`, so there is no standalone build of it; a
 standalone binary needs a native `main` to start from.

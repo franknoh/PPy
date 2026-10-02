@@ -15,12 +15,11 @@ A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit `@ppy.native`/`@ppy.jit`/`@ppy.specialize`/`@ppy.parallel` gets the
 boundary. Native callers call its native symbol directly, boundary or not.
 
-The generated wrapper's call costs about what a Python call does: 31 ns for
+The generated wrapper's call costs about what a Python call does: 29 ns for
 `def add(x: int, y: int) -> int: return x + y` called from Python, against
-33 ns for CPython's own call of it, measured with `examples/bench_boundary.py`.
-So straight-line work pays from two operations (`0.5 * base * height`), and
-a one-operation helper stays on the Python side (remarked as `R3004`). The
-rest costs more:
+30 ns for CPython's own call of it. So straight-line work pays from two
+operations (`0.5 * base * height`), and a one-operation helper stays on the
+Python side (remarked as `R3004`). The rest costs more:
 
 | what crosses | straight-line work it takes |
 |---|---|
@@ -44,8 +43,38 @@ its own terms.
 A container or an object is copied whole on each call, so the body has to
 do work in proportion to it ([Lists, dicts, and sets](containers.md#between-functions)).
 
-`ppy explain FILE.ppy:name` reports the decision and, when the answer is no,
-the first blocking construct.
+`ppy explain module.name` (or `FILE.ppy:LINE`) reports the decision and,
+when the answer is no, the first blocking construct.
+
+### What a call costs
+
+`examples/bench_boundary.py` calls each shape below many times from a
+Python loop and prints the time per call. The `ppy run` column is the
+program as `ppy run` runs it; the CPython column is the same program under
+`python`. The median of three runs, in nanoseconds:
+
+| call | `ppy run` | CPython |
+|---|---:|---:|
+| `x + y` of two ints, kept in Python by the cost model | 29 | 30 |
+| `x + y` of two ints, `@ppy.native` | 29 | 30 |
+| a loop of 100 additions | 65 | 886 |
+| `sum` of a borrowed buffer of 100 ints | 67 | 254 |
+| a guard that fails, so the Python body runs | 82 | 36 |
+| a `list[int]` of 100 written in place, `@ppy.native` | 1,496 | 2,538 |
+| a `dict[int, int]` of 100 read, `@ppy.native` | 2,109 | 1,742 |
+| a chain of 10 objects walked, `@ppy.native` | 831 | 141 |
+| a function returning `None` that fills a list of 100 | 553 | 553 |
+
+The `@ppy.native` `x + y` row is the wrapper alone: parsing the arguments,
+the exact type checks, and boxing the result. A failed guard costs the
+wrapper plus a Python call. The written list copies 100 ints in and back
+and still wins, because the body does a multiplication and a remainder per
+element; filling a list of 100 costs the same both ways, since copying it
+back takes what the native loop saves. The dict and object rows are
+the shapes the cost model keeps off the boundary: one addition per entry or
+per object does not pay for copying it, and without `@ppy.native` Python
+runs their Python bodies. Measured on Python 3.14 on an Intel Core Ultra 9
+386H under WSL2.
 
 ## Byte-wide buffers
 
@@ -61,14 +90,29 @@ is made of.
 
 ## Types that lower
 
-A function lowers when its types are:
+A function lowers when each of its parameters, locals, and its result has
+a type native code holds, and its body stays inside the modeled subset.
+The types are:
 
-- scalars
-- `Buffer[T]`
-- homogeneous `list[int]`/`list[float]`, or `Sequence` of those
-- all-scalar `@dataclass` value classes (flattened into scalar arguments)
+- `int`, `float`, `bool`, `None`, the fixed-width markers, and tuples of
+  these
+- `str` ([Strings](strings.md))
+- `list`, `dict`, and `set` of any of these, nested too
+  ([Lists, dicts, and sets](containers.md)), and `Sequence` of them; a list
+  of numbers a function only reads is lent as a buffer
+- `Buffer[T]` and the `ppy` collections (`Vec`, `HashMap`, ...)
+- value classes, copied as their fields, and object classes, held by
+  handle ([Classes](classes.md))
+- `deque`, `Counter`, `defaultdict`, `OrderedDict`, and `random.Random`
+  ([The standard library](stdlib.md))
+- generators and iterators of one of these types
+  ([Exceptions and generators](exceptions-and-generators.md)), and
+  function values ([Functions as values](closures.md))
 
-and its body stays inside the modeled subset.
+A parameter has to be annotated, or under `--no-strict` inferred from the
+calls the project makes ([Types from call sites](subset.md#types-from-call-sites)).
+`list[Any]`, a bare `list`, and NumPy arrays have no native form, and a
+function that takes one runs as Python.
 
 ## What the body may contain
 
@@ -186,8 +230,13 @@ A function whose writes all happen inside a callee it handed a buffer to
 lowers too: the write lands in the caller's memory either way. The reverse
 also lowers: filling memory you allocated and then passing it on.
 
-A call to a function that did not lower keeps its caller on the Python side,
-because the call would otherwise name a symbol nothing defines.
+A call to a function that did not lower goes through Python under `ppy run`:
+the native caller boxes the arguments, calls the Python function with the
+GIL held, and takes back a result of the type the checker gave the call.
+Which results it may take, and why such a call is often a barrier, is in
+[Calls into Python](native-effects.md#calls-into-python). A standalone
+binary has no Python to call, so there the caller does not lower either,
+and the build stops with `E1803`.
 
 `int(x)` of a float truncates toward zero, as CPython does, when the result
 is a 64-bit word. The machine's conversion has no answer for the rest (x86
@@ -206,25 +255,34 @@ the largest or smallest word: Python's integers have no largest.
 
 `ppy explain --summary` answers, for a file, a directory, or a project, how
 much of the code goes native and what keeps the rest in Python. Here it is
-over the `sorts` folder of TheAlgorithms/Python, trimmed:
+over the `sorts` folder of TheAlgorithms/Python with `--no-strict`, trimmed
+to the first two reasons:
 
 ```text
-167 functions, 1389 statements
-  native, called from Python              1 functions (  1%)        8 statements (  1%)
-  native, called from native code         0 functions (  0%)        0 statements (  0%)
-  Python                                166 functions ( 99%)     1381 statements ( 99%)
-  (76 of the Python functions are generic: each native caller compiles its own instance)
+175 functions, 1389 statements
+  native, called from Python              2 functions (  1%)       24 statements (  2%)
+  native, called from native code         2 functions (  1%)       18 statements (  1%)
+  Python                                171 functions ( 98%)     1347 statements ( 97%)
+  (73 of the Python functions are generic: each native caller compiles its own instance)
 
 what keeps functions in Python, by statements kept out (a function can count under more than one):
-      161 statements     13 functions  calls code whose effects are unknown (a library, or a call the checker cannot type)
-      annotate it, add a stub or plugin, or call it outside the hot function
-      most often: `dict.fromkeys` (1), `file.readlines` (1), `file.write` (1), `heapq.heapify` (1)
-      see https://ppy.franknoh.dev/latest/guide/effects/
-      sorts/benchmark_sorts.py:56 sorts.benchmark_sorts.is_sorted
-      155 statements      9 functions  writes to a parameter native code copies
+      143 statements     10 functions  writes to a parameter native code copies
       return the new value, or take a `Buffer`, a list, or a ppy collection
       see https://ppy.franknoh.dev/latest/guide/native/
       sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
+      sorts/circle_sort.py:50 sorts.circle_sort.circle_sort.<locals>.circle_sort_util
+      sorts/dutch_national_flag_sort.py:33 sorts.dutch_national_flag_sort.dutch_national_flag_sort
+       53 statements     10 functions  a parameter or result with no annotation the checker could infer
+      annotate it, or run `ppy convert` to write the inferred annotations
+      see https://ppy.franknoh.dev/latest/guide/subset/
+      sorts/external_sort.py:13 sorts.external_sort.FileSplitter.__init__
+      sorts/external_sort.py:26 sorts.external_sort.FileSplitter.split
+      sorts/external_sort.py:48 sorts.external_sort.NWayMerge.select
+  ... 60 more reasons, 70 functions (--limit to see more, --json for all)
+
+native, but Python calls the Python body (why its boundary is not used):
+      1 functions  copying its strings across costs what one pass over them saves
+      1 functions  copying the collections in costs more than the body does with them
 ```
 
 Read it from the top down:
@@ -239,14 +297,21 @@ Read it from the top down:
 - A generic function is not a blocker: it has no entry point of its own and
   is compiled for each native caller that names its types. Most of `sorts`
   is generic sorts that nothing calls natively.
-- A nested function lowers with the function around it. When that one
-  stays in Python, the nested one says so, and the reason to fix is the
-  outer function's.
+- A nested function that shares no variable with the functions around it
+  is counted on its own, since it has an entry of its own
+  ([Functions as values](closures.md#a-nested-function-in-a-python-function)).
+  One that shares a variable lowers with the function around it: it counts
+  as native and called from native code when that function is native, and
+  otherwise says that the function around it stays in Python, which is the
+  reason to fix.
 - Each reason says what to do and links the page that explains it. The
   first places it occurs are listed with their line.
 
 `--json` gives every function with its tier and reason, for a script or a
-dashboard. See [the command](../cli.md#ppy-explain).
+dashboard. See [the command](../cli.md#ppy-explain). Without `--no-strict`
+the summary analyzes as `ppy check` does, so an unannotated parameter is an
+error and its function counts as Python; on code written without
+annotations, pass `--no-strict` to see what `ppy run --no-strict` compiles.
 
 ## Threads
 

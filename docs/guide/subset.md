@@ -33,7 +33,9 @@ The compiler analyzes the whole project as one call graph. Inside it:
   `match`, comprehensions, decorators the compiler knows, and the stdlib it
   models.
 
-Strict mode is the default. `--no-strict` downgrades only the errors that have
+Strict mode is the default. `--no-strict` on the command line, or
+`strict = false` in `[tool.ppy]`, turns it off for a run or for the
+project. Without strict mode the compiler downgrades only the errors that have
 a sound fallback: an unannotated parameter (`E1201`), an unknown attribute
 (`E1202`), an unvouched decorator (`E1204`), iterating something that is not
 iterable (`E1302`), and a call with no known signature (`E1306`). Code the
@@ -52,13 +54,15 @@ analysis cannot read but CPython runs is downgraded too:
   `E1507`).
 - an operator on an instance of a class whose base the analysis cannot see
   (`E1302`).
+- a value stored into a list or dict element whose type does not match the
+  element type (`E1301`), such as a list stored where the rows hold strings.
 
 Each is still reported, as a `W2010` warning that names the code it replaces,
 and the function involved runs on CPython, which runs it or raises its own
 error. So a script whose sibling import fails ends with CPython's
-`ImportError`, not with a compile error. Type mismatches (`E1301`) and the
-rest stay errors, with one exception: a value that may be `None` where one
-that is not is needed.
+`ImportError`, not with a compile error. Other type mismatches (`E1301`)
+and the rest stay errors, with one exception: a value that may be `None`
+where one that is not is needed.
 
 A program often passes a `Node | None` where a `Node` is declared, or reads
 `.value` from something that may be `None`, because it knows the `None`
@@ -129,6 +133,11 @@ inferred (not annotated):
 
 Strict mode does not infer: an unannotated parameter is still `E1201`.
 
+[An unannotated module](../howto/52_unannotated.md) is a worked example:
+seven functions with no annotations, each typed from its calls and
+defaults, and the boundary running the Python body for an argument that
+does not fit.
+
 ## Accepted forms of ordinary Python
 
 These are valid Python that the checker accepts and types:
@@ -165,7 +174,10 @@ The standard library's `Queue`, `LifoQueue`, `PriorityQueue`, `deque`,
 their type arguments (`Queue[int].get()` is an `int`). `datetime` and `date`
 with `timedelta`, `Decimal` and `Fraction` with themselves and with numbers,
 and `Counter` with `Counter` under `+ - & |` have their operators typed, and
-their fields and common methods too. Code that uses them runs on CPython.
+their fields and common methods too. `deque`, `Counter`, `OrderedDict`, and
+`defaultdict` also compile to native code
+([The standard library](stdlib.md)); code that uses the queues,
+`datetime`, `Decimal`, or `Fraction` runs on CPython.
 
 ## Compatibility policy
 

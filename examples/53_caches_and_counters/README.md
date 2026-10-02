@@ -13,6 +13,24 @@ ppy run words.ppy
 ppy build --standalone words.ppy -o dist && ./dist/words
 ```
 
+<!-- outputs:start -->
+## What it prints
+
+**`python  words.ppy`**, **`ppy run words.ppy`**, **`ppy build --standalone words.ppy -o dist && ./dist/words`**
+
+```text
+300000 words, 99370 different
+  ne     5090
+  mi     5005
+  ant    4999
+a e i o: [314741, 209800, 210487, 210676]
+lengths 2 to 12: [39719, 9943, 32288, 16067, 27578, 19151, 25111, 20810, 24311, 21702, 23411]
+nearest of 150 words: mean distance 4.927, most 7
+cheapest order for a chain of 250 matrices: 1041250 multiplications
+```
+
+<!-- outputs:end -->
+
 ## The program
 
 - `make_words(seed, count)` builds 300,000 words of one to six syllables,
@@ -68,18 +86,19 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python words.ppy` | @@PY@@ |
-| `ppy run words.ppy`, after the first run built the cache | @@RUN@@ |
-| `./dist/words`, the standalone binary | @@SA@@ |
+| `python words.ppy` | 1.47 |
+| `ppy run words.ppy`, after the first run built the cache | 0.78 |
+| `./dist/words`, the standalone binary | 0.76 |
 
-Timed one part at a time inside the program, the speedup differs by part:
+Timed one part at a time inside the program, in seconds, the mean of five
+runs:
 
 | part | CPython | `ppy run` |
 |---|---:|---:|
-| `make_words` | @@P1@@ | @@N1@@ |
-| `letter_counts` | @@P2@@ | @@N2@@ |
-| `nearest` (22,350 `distance` calls) | @@P3@@ | @@N3@@ |
-| `cheapest(0, 250)` | @@P4@@ | @@N4@@ |
+| `make_words` | 0.157 | 0.106 |
+| `letter_counts` | 0.131 | 0.100 |
+| `nearest` (22,350 `distance` calls) | 0.618 | 0.347 |
+| `cheapest(0, 250)` | 0.500 | 0.077 |
 
 `cheapest` gains the most: each entry runs a loop of lookups into one
 table. `nearest` gains the least: every `distance` call makes a new table
