@@ -30,12 +30,13 @@ from dataclasses import dataclass
 
 from ..analysis import types as T
 from ..analysis.lexical import LexicalBindings
+from ..analysis.native_stdlib import library_lambda
 from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, Successor, Value
 from ..ir.dialects import core
 from ..ir.raising import said
 from .collection_api import _Cursor, _Source
-from .collections import HANDLE, Kind, Shape, _pointer
+from .collections import HANDLE, Kind, Shape, _pointer, shape_of
 
 __all__ = ["LibraryLowering"]
 
@@ -579,6 +580,137 @@ class LibraryLowering:
         if isinstance(source, _Ranked) and source.order is not None:
             self._let_go(source.order)  # type: ignore[attr-defined]
 
+    # -- functions as values: `operator`'s, `itemgetter`, `attrgetter` --------------------
+
+    def _as_lambda(self, node: ast.expr) -> ast.Lambda | None:
+        """The lambda a library function written as a value stands for, as the
+        checker typed it (`analysis.native_stdlib.library_lambda`)."""
+        if not isinstance(node, (ast.Attribute, ast.Name, ast.Call)):
+            return None
+        if isinstance(node, ast.Name) and (
+            node.id in self.collections or node.id in self.slots  # type: ignore[attr-defined]
+        ):
+            return None
+        lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
+
+        def canonical(expr: ast.expr) -> str | None:
+            if not isinstance(lexical, LexicalBindings):
+                return None
+            found = lexical.targets_at(expr)
+            return next(iter(found)) if len(found) == 1 else None
+
+        return library_lambda(node, canonical)
+
+    def _key_function(self, key: ast.expr, element: Shape):  # type: ignore[no-untyped-def]
+        return super()._key_function(self._as_lambda(key) or key, element)  # type: ignore[misc]
+
+    def _map_filter(self, node: ast.expr) -> tuple[str, ast.expr, ast.expr] | None:
+        found = super()._map_filter(node)  # type: ignore[misc]
+        if found is None:
+            return None
+        which, function, iterable = found
+        return which, self._as_lambda(function) or function, iterable
+
+    def _function_value(self, node: ast.expr) -> Value | None:
+        return super()._function_value(self._as_lambda(node) or node)  # type: ignore[misc,no-any-return]
+
+    def _function_shape(self, node: ast.expr) -> Shape | None:
+        made = self._as_lambda(node)
+        if made is not None:
+            found = shape_of(self._type_of(made), self._records())  # type: ignore[attr-defined]
+            return found if found is not None and found.kind == "function" else None
+        return super()._function_shape(node)  # type: ignore[misc,no-any-return]
+
+    def _reduce(self, node: ast.Call) -> Value:
+        """`functools.reduce(f, xs[, initial])`: a walk keeping the running value,
+        `f` run in place where it is a lambda, called otherwise."""
+        if node.keywords or not 2 <= len(node.args) <= 3:
+            raise Unsupported("`functools.reduce` takes a function, an iterable, and a start")
+        b = self.b  # type: ignore[attr-defined]
+        shape = shape_of(self._type_of(node), self._records())  # type: ignore[attr-defined]
+        if shape is None or shape.kind not in {"int", "float", "bool", "str"}:
+            raise Unsupported("`functools.reduce` keeps a number or a string natively")
+        function = node.args[0]
+        lambda_ = function if isinstance(function, ast.Lambda) else self._as_lambda(function)
+        self._walks += 1  # type: ignore[attr-defined]
+        tag = self._walks  # type: ignore[attr-defined]
+        if lambda_ is not None:
+            if len(lambda_.args.args) != 2 or lambda_.args.vararg or lambda_.args.defaults:
+                raise Unsupported("`functools.reduce` calls a function of two arguments")
+            first, second = (a.arg for a in lambda_.args.args)
+            applied = lambda_.body
+        else:
+            first, second = f".racc{tag}", f".relem{tag}"
+            callee: ast.expr = function
+            held = self._reference_of(function)  # type: ignore[attr-defined]
+            if isinstance(held, Shape) and held.kind == "function" and not (
+                isinstance(function, ast.Name) and function.id in self.collections  # type: ignore[attr-defined]
+            ):
+                # A function value made by an expression is made once, first.
+                callee = ast.Name(f".rfn{tag}", ast.Load())
+                handle, owned = self._handle(function)  # type: ignore[attr-defined]
+                self._bind(callee.id, held, handle, owned)  # type: ignore[attr-defined]
+            applied = ast.Call(
+                callee, [ast.Name(first, ast.Load()), ast.Name(second, ast.Load())], []
+            )
+            ast.copy_location(applied, node)
+            ast.fix_missing_locations(applied)
+            self.frontend.analysis.node_types[id(applied)] = self._type_of(node)  # type: ignore[attr-defined]
+            self.frontend.synthetic.append(applied)  # type: ignore[attr-defined]
+        source = self._source(node.args[1])  # type: ignore[attr-defined]
+        if source is None or source.mode == "items":
+            raise Unsupported(f"`{ast.unparse(node.args[1])}` is not reduced natively")
+        running = self._alloca(shape.ir_type(), "reduce.value")  # type: ignore[attr-defined]
+        started = self._alloca(BOOL, "reduce.started")  # type: ignore[attr-defined]
+        if len(node.args) == 3:
+            value, owned = self._value(node.args[2], shape)  # type: ignore[attr-defined]
+            if shape.reference and not owned:
+                self._retain(value)  # type: ignore[attr-defined]
+            core.store(b, value, running)
+            core.store(b, core.const(b, True, BOOL), started)
+        else:
+            if shape.reference:
+                core.store(b, self._rt("ppy_coll_none", (), HANDLE), running)  # type: ignore[attr-defined]
+            else:
+                core.store(b, self._class_default(shape), running)
+            core.store(b, core.const(b, False, BOOL), started)
+
+        def step(items: list[tuple[Shape, Value]]) -> None:
+            element_shape, element = items[0]
+            if element_shape != shape and lambda_ is None and shape.reference:
+                raise Unsupported("`functools.reduce` keeps what its elements are natively")
+            apply = self._block("reduce.apply")  # type: ignore[attr-defined]
+            begin = self._block("reduce.first")  # type: ignore[attr-defined]
+            done = self._block("reduce.next")  # type: ignore[attr-defined]
+            core.cond_br(b, core.load(b, started), Successor(apply), Successor(begin))
+            b.at_end(begin)
+            if shape.reference:
+                self._retain(element)  # type: ignore[attr-defined]
+            core.store(b, self._coerce(element, shape.kind) if not shape.reference else element, running)  # type: ignore[attr-defined]
+            core.store(b, core.const(b, True, BOOL), started)
+            core.br(b, Successor(done))
+            b.at_end(apply)
+            current = core.load(b, running)
+            self._bind_element(ast.Name(first, ast.Store()), shape, current)  # type: ignore[attr-defined]
+            self._bind_element(ast.Name(second, ast.Store()), element_shape, element)  # type: ignore[attr-defined]
+            made, owned = self._value(applied, shape)  # type: ignore[attr-defined]
+            if shape.reference:
+                if not owned:
+                    self._retain(made)  # type: ignore[attr-defined]
+                self._release(current)  # type: ignore[attr-defined]
+            core.store(b, made, running)
+            core.br(b, Successor(done))
+            b.at_end(done)
+
+        self._walk(source, step)  # type: ignore[attr-defined]
+        if len(node.args) == 2:
+            self._require(  # type: ignore[attr-defined]
+                core.load(b, started),
+                "reduce of an empty iterable",
+                _text("reduce_empty"),
+            )
+        return core.load(b, running)
+
     # -- equality -------------------------------------------------------------------------
 
     def _collection_equality(self, node: ast.Compare) -> Value | None:
@@ -741,7 +873,12 @@ class LibraryLowering:
 def _raising() -> dict[str, object]:
     import collections  # pylint: disable=import-outside-toplevel
 
-    return {"popitem": lambda: collections.OrderedDict().popitem()}
+    import functools  # pylint: disable=import-outside-toplevel
+
+    return {
+        "popitem": lambda: collections.OrderedDict().popitem(),
+        "reduce_empty": lambda: functools.reduce(max, []),
+    }
 
 
 def _text(key: str) -> str:

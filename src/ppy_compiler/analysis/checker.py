@@ -1431,7 +1431,7 @@ class _Checker:
         types from there: `f: Callable[[int], int] = lambda x: x + 1`, and a
         list or dict of them written out in place."""
         wanted = T.strip_literal(expected)
-        if isinstance(node, ast.Lambda) and isinstance(wanted, T.Callable_):
+        if self._lambda_like(node) and isinstance(wanted, T.Callable_):
             self._lambda_expected[id(node)] = tuple(p.type for p in wanted.params)
         elif (
             isinstance(node, (ast.List, ast.Set)) and isinstance(wanted, T.Instance) and wanted.args
@@ -2284,10 +2284,44 @@ class _Checker:
             env.set(pattern.name, Binding(T.list_of(B.element_type(subject.type))))
 
     def _expr(self, node: ast.expr, env: Env) -> Binding:
+        lambda_ = self._library_lambda(node)
+        if lambda_ is not None:
+            # `operator.add`, `itemgetter(1)`: the lambda each is, typed as a
+            # lambda written in its place would be.
+            if id(node) in self._lambda_expected:
+                self._lambda_expected[id(lambda_)] = self._lambda_expected[id(node)]
+            binding = self._expr(lambda_, env)
+            self._record(node, binding)
+            return binding
         method = getattr(self, f"_expr_{type(node).__name__}", None)
         binding = Binding(T.UNKNOWN) if method is None else method(node, env)
         self._record(node, binding)
         return binding
+
+    def _library_lambda(self, node: ast.expr) -> ast.Lambda | None:
+        if not isinstance(node, (ast.Attribute, ast.Name, ast.Call)):
+            return None
+        if isinstance(node, ast.Name) and node.id in self._function_locals:
+            return None
+        resolver = self.project.resolver(self.symbols)
+
+        def canonical(expr: ast.expr) -> str | None:
+            found = resolver.canonical(expr)
+            if (
+                found is None
+                and isinstance(expr, ast.Name)
+                and expr.id in {"max", "min"}
+                and expr.id not in self.symbols.functions
+                and expr.id not in self.symbols.imports
+            ):
+                return f"builtins.{expr.id}"
+            return found
+
+        return native_stdlib.library_lambda(node, canonical)
+
+    def _lambda_like(self, node: ast.expr) -> bool:
+        """A lambda, or a library function that stands for one."""
+        return isinstance(node, ast.Lambda) or self._library_lambda(node) is not None
 
     def _record_empty_display(self, node: ast.expr, actual: T.Type, declared: T.Type) -> None:
         """`return []` from a `-> list[int]`: the empty display is a `list[int]`,
@@ -2561,6 +2595,9 @@ class _Checker:
         native = self._native_call(node, env)
         if native is not None:
             return native
+        reduced = self._reduce_call(node, env)
+        if reduced is not None:
+            return reduced
         dialect = self._dialect_call(node, env)
         if dialect is not None:
             return dialect
@@ -2906,6 +2943,48 @@ class _Checker:
             elif canonical == "collections":
                 spelled.update(f"{local}.{name.rpartition('.')[2]}" for name in made)
         return frozenset(spelled)
+
+    def _reduce_call(self, node: ast.Call, env: Env) -> Binding | None:
+        """`functools.reduce(f, xs[, initial])`: `f` typed as a function of the
+        running value and an element, and the result what `f` gives. A lambda,
+        a library function (`operator.add`), and a function of the program
+        are what native code calls."""
+        if not isinstance(node.func, (ast.Name, ast.Attribute)):
+            return None
+        if self.project.resolver(self.symbols).canonical(node.func) != "functools.reduce":
+            return None
+        if node.keywords or not 2 <= len(node.args) <= 3:
+            return None
+        if any(isinstance(a, ast.Starred) for a in node.args):
+            return None
+        self._expr(node.func, env)
+        items = self._expr(node.args[1], env)
+        element = T.strip_literal(self._iteration_element(items, node.args[1]).type)
+        initial = self._expr(node.args[2], env) if len(node.args) == 3 else None
+        running = T.strip_literal(initial.type) if initial is not None else element
+        function = node.args[0]
+        if self._lambda_like(function):
+            self._lambda_parameters = (running, element)
+        called = self._expr(function, env)
+        self._lambda_parameters = None
+        self._mark_call_arguments(node, env)
+        self._effects = self._effects.add(raises=("TypeError",))
+        typed = T.strip_literal(called.type)
+        if not isinstance(typed, T.Callable_):
+            self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
+            return Binding(T.ANY)
+        own = self.project.functions.get(typed.qualname)
+        if own is not None:
+            self._effects = self._effects | own.effects
+            self._calls.add(own.qualname)
+        elif typed.qualname and not self._lambda_like(function):
+            self._effects = self._effects.add(Effect.PYTHON_CALLBACK)
+            self._native_blockers.append(f"`functools.reduce` calls `{typed.qualname}`")
+        ret = T.strip_literal(typed.ret)
+        if initial is None:
+            # One element is the answer, not called with anything.
+            return Binding(T.join(ret, element))
+        return Binding(T.join(ret, running))
 
     def _library_collection(
         self,
@@ -4186,7 +4265,7 @@ class _Checker:
             and node.func.id in {"map", "filter"}
             and node.func.id not in env
             and len(values) >= 2
-            and isinstance(values[0], ast.Lambda)
+            and self._lambda_like(values[0])
         ):
             rest = [self._expr(value, env) for value in values[1:]]
             self._lambda_parameters = tuple(
@@ -4205,7 +4284,7 @@ class _Checker:
         found: list[Binding] = []
         for index, value in enumerate(values):
             expected = T.strip_literal(params[index]) if index < len(params) else None
-            if isinstance(value, ast.Lambda) and isinstance(expected, T.Callable_):
+            if self._lambda_like(value) and isinstance(expected, T.Callable_):
                 self._lambda_parameters = tuple(p.type for p in expected.params)
             found.append(self._expr(value, env))
             self._lambda_parameters = None
@@ -4242,7 +4321,7 @@ class _Checker:
         if not isinstance(called, T.Callable_):
             return False
         return (
-            isinstance(node.args[0], ast.Lambda)
+            self._lambda_like(node.args[0])
             or called.qualname in self.project.functions
             or not called.qualname
         )
@@ -4254,7 +4333,7 @@ class _Checker:
         is an element of `xs`."""
         if (
             keyword.arg != "key"
-            or not isinstance(keyword.value, ast.Lambda)
+            or not self._lambda_like(keyword.value)
             or not isinstance(node.func, ast.Name)
             or node.func.id not in {"sorted", "min", "max"}
             or node.func.id in env
@@ -4267,7 +4346,7 @@ class _Checker:
         """A collection's or a list's `sort(key=lambda x: ...)`: the lambda's parameter
         is an element."""
         wanted = callee.type
-        if keyword.arg != C.KEY_PARAMETER or not isinstance(keyword.value, ast.Lambda):
+        if keyword.arg != C.KEY_PARAMETER or not self._lambda_like(keyword.value):
             return None
         if not isinstance(wanted, T.Callable_) or not (
             wanted.qualname.startswith("ppy.") or wanted.qualname == "list.sort"

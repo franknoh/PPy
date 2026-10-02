@@ -44,6 +44,9 @@ _DEQUE_METHODS = {
     "copy": "copy",
 }
 
+#: `functools`' calls lowered here.
+_FUNCTOOLS = frozenset({"functools.reduce"})
+
 #: `math`'s constants.
 _CONSTANTS = {
     "math.pi": math.pi,
@@ -243,6 +246,8 @@ class StdlibLowering(LibraryLowering, MemoLowering):
         if qualname.startswith("math."):
             name = qualname.removeprefix("math.")
             return qualname if name in MATH_NATIVE or name in _MATH_INTRINSICS else None
+        if qualname in _FUNCTOOLS:
+            return qualname
         return qualname if qualname in MODELS else None
 
     def _stdlib_call(self, node: ast.Call, discard_result: bool) -> Value | None:
@@ -250,6 +255,8 @@ class StdlibLowering(LibraryLowering, MemoLowering):
         qualname = self._stdlib_target(node)
         if qualname is None:
             return None
+        if qualname == "functools.reduce":
+            return self._reduce(node)
         module, _, name = qualname.partition(".")
         if module == "math":
             if self.device or self.info.directive("xla.jit") is not None:  # type: ignore[attr-defined]
