@@ -129,6 +129,17 @@ def _makes_new_object(node: ast.expr) -> bool:
 _RAISING_OPERATORS = (ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.LShift, ast.RShift)
 
 
+def _raises_nothing_unknown(node: ast.expr) -> bool:
+    """Every operator in it that can raise has a known value itself, so it
+    did not raise: `('a' if -3 // n > 1 else 'a')` is always `'a'`, unless
+    `n` is 0, and then CPython raises before it is anything."""
+    return all(
+        has_const(child)
+        for child in ast.walk(node)
+        if isinstance(child, ast.BinOp) and isinstance(child.op, _RAISING_OPERATORS)
+    )
+
+
 def _makes_bool(node: ast.expr) -> bool:
     """Whatever its operands, this expression's value is a `bool`."""
     if isinstance(node, ast.Compare):
@@ -258,6 +269,7 @@ class ConstantFold(Pass):
             and _is_load(node)
             and has_const(node)
             and _is_pure_expr(node)
+            and _raises_nothing_unknown(node)
         ):
             value = const_of(node)
             if isinstance(value, (int, float, complex, str, bytes, bool, type(None))):
