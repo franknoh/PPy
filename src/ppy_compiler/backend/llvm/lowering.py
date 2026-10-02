@@ -424,6 +424,8 @@ def eligible(
     `with_implicit_globals`), which Python's boundary reads from the module
     at the call.
     """
+    if analysis.python_only:
+        return False, analysis.python_only[0]
     if info.is_generator and info.is_async:
         return False, "an async generator runs on CPython"
     if info.is_async and not allow_async:

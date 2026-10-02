@@ -36,11 +36,29 @@ The compiler analyzes the whole project as one call graph. Inside it:
 Strict mode is the default. `--no-strict` downgrades only the errors that have
 a sound fallback: an unannotated parameter (`E1201`), an unknown attribute
 (`E1202`), an unvouched decorator (`E1204`), iterating something that is not
-iterable (`E1302`), and a call with no known signature (`E1306`). Each is
-still reported, as a `W2010` warning that names the code it replaces, and the
-code involved runs on CPython. Type mismatches (`E1301`) and the rest stay
-errors, with one exception: a value that may be `None` where one that is not
-is needed.
+iterable (`E1302`), and a call with no known signature (`E1306`). Code the
+analysis cannot read but CPython runs is downgraded too:
+
+- an annotation it cannot resolve, such as a type from a module that is not
+  there or one it does not model (`E1101`, or `E1301` for the annotation's
+  form). The value is treated as unknown.
+- a name nothing defines (`E1101`). CPython raises `NameError` if the line
+  runs.
+- a star import (`E1103`). It may rebind any name, so no function in that
+  module is compiled.
+- `eval`, `exec`, `globals()`, `locals()`, `vars()`, `__import__` of a
+  computed name, `getattr` or `setattr` with a computed name, and a class
+  built by a metaclass or on a computed base (`E1501` to `E1504`, `E1506`,
+  `E1507`).
+- an operator on an instance of a class whose base the analysis cannot see
+  (`E1302`).
+
+Each is still reported, as a `W2010` warning that names the code it replaces,
+and the function involved runs on CPython, which runs it or raises its own
+error. So a script whose sibling import fails ends with CPython's
+`ImportError`, not with a compile error. Type mismatches (`E1301`) and the
+rest stay errors, with one exception: a value that may be `None` where one
+that is not is needed.
 
 A program often passes a `Node | None` where a `Node` is declared, or reads
 `.value` from something that may be `None`, because it knows the `None`

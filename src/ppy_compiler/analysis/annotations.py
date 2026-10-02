@@ -76,6 +76,7 @@ _BARE_GENERIC = {
 
 _ABSTRACT = {
     "typing.Sequence": "Sequence",
+    "typing.MutableSequence": "MutableSequence",
     "typing.Iterable": "Iterable",
     "typing.Iterator": "Iterator",
     "typing.Mapping": "Mapping",
@@ -88,6 +89,7 @@ _ABSTRACT = {
     "collections.abc.Coroutine": "Coroutine",
     "collections.abc.AsyncIterator": "AsyncIterator",
     "collections.abc.Sequence": "Sequence",
+    "collections.abc.MutableSequence": "MutableSequence",
     "collections.abc.Iterable": "Iterable",
     "collections.abc.Iterator": "Iterator",
     "collections.abc.Mapping": "Mapping",
@@ -661,8 +663,27 @@ class AnnotationResolver:
         )
 
     def _error(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
+        """An annotation the analysis cannot read: an error under strict mode.
+
+        Under `--no-strict` it is `W2010` instead. CPython never refuses a
+        program over an annotation it cannot type -- it evaluates one at most,
+        and raises its own error if the name is missing then -- so the
+        annotated value is taken as `Any` and the code that depends on it
+        stays on the Python path, as any other unknown does.
+        """
+        if self.strict:
+            self.diagnostics.add(
+                Diagnostic(code, Severity.ERROR, message, span_of(self.path, node), help=help)
+            )
+            return
         self.diagnostics.add(
-            Diagnostic(code, Severity.ERROR, message, span_of(self.path, node), help=help)
+            Diagnostic(
+                "W2010",
+                Severity.WARNING,
+                f"{message} ({code} under strict mode)",
+                span_of(self.path, node),
+                help=help,
+            )
         )
 
 

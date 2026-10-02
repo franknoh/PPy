@@ -207,16 +207,22 @@ def _display_fits(node: ast.expr, actual: T.Type, declared: T.Type) -> bool:
 
 def _generator_fits(actual: T.Type, declared: T.Type) -> bool:
     """A generator expression is a `Generator[T, None, None]`: it is typed
-    `Iterator[T]`, and fits a `Generator` that sends and returns nothing."""
+    `Iterator[T]`, and fits a `Generator` that sends and returns nothing --
+    a bare `Generator` among them, which says nothing of what it yields."""
     actual = T.strip_literal(actual)
     declared = T.strip_literal(declared)
-    return (
+    if not (
         isinstance(actual, T.Instance)
         and actual.name == "Iterator"
         and len(actual.args) == 1
         and isinstance(declared, T.Instance)
         and declared.name == "Generator"
-        and 1 <= len(declared.args) <= 3
+    ):
+        return False
+    if not declared.args:
+        return True
+    return (
+        len(declared.args) <= 3
         and T.is_assignable(actual.args[0], declared.args[0])
         and all(isinstance(a, T.AnyType) or a == T.NONE for a in declared.args[1:])
     )
@@ -316,6 +322,11 @@ def _forget_attributes(env: Env, root: str) -> None:
 def _is_place(node: ast.expr) -> bool:
     return isinstance(node, (ast.Attribute, ast.Subscript))
 
+
+#: Sequences indexed by an int, giving an element, or sliced, giving the same.
+_INDEXED_SEQUENCES = frozenset(
+    {"list", "Sequence", "MutableSequence", "Buffer", "memoryview", "array"}
+)
 
 #: Containers a callee cannot write through: a `list[int]` is a `Sequence[float]`.
 _READ_ONLY_CONTAINERS = frozenset(
@@ -846,6 +857,20 @@ class _Checker:
         self._provisional_locals: set[str] = set()
         self._blockers: list[str] = []
         self._native_blockers: list[str] = []
+        #: Under `--no-strict`, why the function stays on CPython whatever the
+        #: road: code the analysis could not follow, so it cannot be lowered.
+        self._python_only: list[str] = []
+        #: Under `--no-strict`, a `from m import *` may rebind any name the
+        #: analysis believes it knows, so nothing in the module goes native.
+        self._star_blockers: tuple[str, ...] = (
+            ()
+            if strict
+            else tuple(
+                f"the module star-imports `{node.module}`, which may rebind any name"
+                for node in ast.walk(symbols.module.tree)
+                if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names)
+            )
+        )
         #: What the next lambda's parameters are, where its use says: a
         #: collection's `sort(key=...)` hands it an element.
         self._lambda_parameters: tuple[T.Type, ...] | None = None
@@ -983,6 +1008,7 @@ class _Checker:
             self._provisional_locals,
             self._blockers,
             self._native_blockers,
+            self._python_only,
             self._escaping,
             self._mutated,
             self._delegated,
@@ -1008,7 +1034,8 @@ class _Checker:
         self._provisional_returns = []
         self._provisional_locals = set()
         self._blockers = []
-        self._native_blockers = []
+        self._native_blockers = list(self._star_blockers)
+        self._python_only = list(self._star_blockers)
         self._escaping = set()
         self._mutated = set()
         self._delegated = set()
@@ -1099,6 +1126,7 @@ class _Checker:
             self._provisional_locals,
             self._blockers,
             self._native_blockers,
+            self._python_only,
             self._escaping,
             self._mutated,
             self._delegated,
@@ -1212,6 +1240,7 @@ class _Checker:
             unknown_callees=tuple(dict.fromkeys(self._unknown)),
             purity_blockers=tuple(dict.fromkeys(self._blockers)),
             native_blockers=tuple(dict.fromkeys(self._native_blockers)),
+            python_only=tuple(dict.fromkeys(self._python_only)),
             escaping=set(self._escaping),
             mutated_params=set(self._mutated),
             settled_globals=dict(self._settled_reads),
@@ -2159,7 +2188,7 @@ class _Checker:
         if isinstance(target, ast.Name):
             binding = env.get(target.id)
             if binding is None:
-                self._error("E1101", f"`{target.id}` is used before it is bound", target)
+                self._unreadable("E1101", f"`{target.id}` is used before it is bound", target)
                 return Binding(T.UNKNOWN)
             return binding
         return self._expr(target, env)
@@ -2284,7 +2313,7 @@ class _Checker:
             # The two builtin singletons that are values, not callables:
             # `return NotImplemented` is how an operator method declines.
             return Binding(T.OBJECT)
-        self._error("E1101", f"`{node.id}` is not defined at this point", node)
+        self._unreadable("E1101", f"`{node.id}` is not defined at this point", node)
         return Binding(T.UNKNOWN)
 
     def _inherited_type(self) -> T.Type | None:
@@ -3632,12 +3661,26 @@ class _Checker:
                 modeled = table.get((concrete, method))
                 if modeled is not None:
                     table[(owner, method)] = modeled
+        # A `MutableSequence` offers what `MutableSequence` defines, which is
+        # the list's methods less `sort` and `copy`.
+        for method in ("append", "extend", "pop", "insert", "clear", "remove", "reverse"):
+            modeled = table.get(("list", method))
+            if modeled is not None:
+                table[("MutableSequence", method)] = T.Callable_(
+                    modeled.params, modeled.ret, f"MutableSequence.{method}"
+                )
         table[("Sequence", "count")] = T.Callable_(
             (T.Param("value", element),), T.INT, "Sequence.count"
         )
         table[("Sequence", "index")] = T.Callable_(
             (T.Param("value", element),), T.INT, "Sequence.index"
         )
+        for method in ("count", "index"):
+            table[("MutableSequence", method)] = T.Callable_(
+                table[("Sequence", method)].params,
+                T.INT,
+                f"MutableSequence.{method}",
+            )
         table[("dict", "copy")] = T.Callable_((), base, "dict.copy")
         found = table.get((name, attr))
         if found is not None:
@@ -3801,7 +3844,7 @@ class _Checker:
                 wanted = "`peek` and `pop`" if "Heap" in base.name else "its methods"
                 self._error("E1301", f"a `{base.name}` is read by {wanted}", node)
                 return Binding(C.value_of(base))
-            if base.name in {"list", "Sequence", "Buffer", "memoryview", "array"}:
+            if base.name in _INDEXED_SEQUENCES:
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(base if is_slice else B.element_type(base))
             if base.name == "dict":
@@ -4213,11 +4256,15 @@ class _Checker:
         left_base = _widest_numeric(left_base)
         right_base = _widest_numeric(right_base)
         if not (T.is_numeric(left_base) and T.is_numeric(right_base)):
-            self._error(
-                "E1302",
-                f"`{_ARITH_OPS.get(op, '?')}` is not defined for `{left.type}` and `{right.type}`",
-                node,
+            message = (
+                f"`{_ARITH_OPS.get(op, '?')}` is not defined for `{left.type}` and `{right.type}`"
             )
+            if self._opaque_instance(left_base) or self._opaque_instance(right_base):
+                # A class built on a base the analysis cannot see may have
+                # the operator from it; CPython knows, so `--no-strict` asks it.
+                self._unreadable("E1302", message, node)
+            else:
+                self._error("E1302", message, node)
             return Binding(T.UNKNOWN)
 
         if (
@@ -6314,13 +6361,18 @@ class _Checker:
                     node,
                 )
             return
-        self._error(
-            code,
-            message,
-            node,
-            help=help
-            or "wrap the region in `with ppy.dynamic:` or mark the function `@ppy.dynamic`",
-        )
+        help = help or "wrap the region in `with ppy.dynamic:` or mark the function `@ppy.dynamic`"
+        if not self.strict and self.dynamic_policy != "deny":
+            # CPython runs it, so `--no-strict` does too: the code around it
+            # is treated as if it sat in a dynamic boundary and stays on the
+            # Python path, and the finding is reported as `W2010`.
+            self._dynamic_seen = True
+            self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
+            self._native_blockers.append(message)
+            self._python_only.append(message)
+            self._strictly(code, message, node, help=help)
+            return
+        self._error(code, message, node, help=help)
 
     def _rebinding_class(self, info: ClassInfo, attr: str) -> ClassInfo | None:
         """The class in `info`'s MRO whose body set `attr` and which the
@@ -7195,6 +7247,34 @@ class _Checker:
                 help=help,
             )
         )
+
+    def _opaque_instance(self, t: T.Type) -> bool:
+        """An instance of a project class with a base the analysis cannot see:
+        one computed at runtime, or one from outside the project and the builtins."""
+        base = T.strip_literal(t)
+        if not isinstance(base, T.Instance):
+            return False
+        info = self.project.classes.get(base.name)
+        if info is None:
+            return False
+        if any(not _static_base(b) for b in info.node.bases):
+            return True
+        return any(
+            entry not in self.project.classes and entry not in T.BUILTIN_MRO
+            for entry in info.mro or ()
+        )
+
+    def _unreadable(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
+        """Code the analysis cannot follow but CPython runs, or fails in itself.
+
+        Strict mode refuses it. Under `--no-strict` it is `W2010`, and the
+        function it is in stays on the Python path, where CPython does what it
+        does -- runs it, or raises its own `NameError`.
+        """
+        if not self.strict:
+            self._native_blockers.append(message)
+            self._python_only.append(message)
+        self._strictly(code, message, node, help)
 
     def _may_be_none(self, code: str, message: str, node: ast.AST) -> None:
         """`W2011`: under `--no-strict`, a value that may be `None` where one

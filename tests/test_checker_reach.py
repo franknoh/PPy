@@ -366,6 +366,48 @@ def main() -> None:
 main()
 """
 
+MUTABLE_SEQUENCE = """
+from collections.abc import MutableSequence
+
+
+def bump(xs: MutableSequence[int]) -> MutableSequence[int]:
+    for i in range(len(xs)):
+        xs[i] += 1
+    xs.append(0)
+    xs.insert(0, 7)
+    xs.reverse()
+    return xs
+
+
+def total(xs: MutableSequence[int]) -> int:
+    s = 0
+    for x in xs:
+        s += x
+    return s + xs.count(0) + xs[0] + xs.pop()
+
+
+def main() -> None:
+    a = [1, 2, 3]
+    print(bump(a), total(a), a)
+
+
+main()
+"""
+
+BARE_ITERATORS = """
+from collections.abc import Generator, Iterable, Iterator
+
+
+def main() -> None:
+    g: Generator = (i * i for i in range(5))
+    it: Iterator = (i for i in range(3))
+    ib: Iterable = (i for i in range(3))
+    print(sum(g), list(it), list(ib))
+
+
+main()
+"""
+
 EMPTY_RETURNS = """
 def firsts(limit: int) -> list[int]:
     if limit <= 0:
@@ -393,6 +435,8 @@ main()
 """
 
 PROGRAMS = {
+    "bare_iterators": BARE_ITERATORS,
+    "mutable_sequence": MUTABLE_SEQUENCE,
     "empty_returns": EMPTY_RETURNS,
     "generators": GENERATORS,
     "generic_static": GENERIC_STATIC,
@@ -516,6 +560,26 @@ def test_ppy_run_prints_what_python_prints(project_dir: Path, write, name: str):
         def f(c: C) -> None:
             setattr(c, "n", "x")
         """,
+        # A tuple is not a `MutableSequence`.
+        """
+        from collections.abc import MutableSequence
+
+
+        def bump(xs: MutableSequence[int]) -> None:
+            xs.append(1)
+
+
+        def wrong() -> None:
+            bump((1, 2))
+        """,
+        # Nor is a `list[str]` a `MutableSequence[int]`.
+        """
+        from collections.abc import MutableSequence
+
+
+        def wrong(xs: list[str]) -> MutableSequence[int]:
+            return xs
+        """,
         # `Self` outside a class says what it is.
         """
         from typing import Self
@@ -597,6 +661,159 @@ def test_native_code_raises_where_cpython_does_on_none(project_dir: Path, write)
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert done.stdout == expected
+
+
+#: Programs CPython runs -- to the end, or to an error of its own -- that the
+#: checker cannot fully read. Strict mode refuses each; `--no-strict` warns
+#: (`W2010`), keeps what it cannot read on the Python path, and runs it.
+CPYTHON_RUNS = {
+    # A sibling module that is not there: CPython raises at the import.
+    "relative_import": """
+from .stack import Stack
+
+
+def evaluate(text: str) -> int:
+    operands: Stack[int] = Stack()
+    for ch in text:
+        operands.push(int(ch))
+    return operands.pop()
+
+
+print(evaluate("12"))
+""",
+    "missing_package": """
+from data_structures.heap.heap import Heap
+
+
+def top(xs: list[int]) -> Heap:
+    heap = Heap()
+    heap.build_max_heap(xs)
+    return heap
+
+
+print(top([3, 1, 2]))
+""",
+    # Annotations CPython never evaluates, naming what nothing defines.
+    "unreadable_annotations": """
+def scale(x: "Missing", k: int) -> int:
+    held: Unknowable[int] = x
+    return held * k
+
+
+print(scale(4, 3))
+""",
+    # `globals()`, `eval` and a computed `getattr`: CPython runs them all.
+    "dynamic_features": """
+from timeit import timeit
+
+LIMIT = 3
+
+
+class Box:
+    size = 5
+
+
+def lookup(name: str) -> int:
+    return globals()[name]
+
+
+def attribute(box: Box, name: str) -> int:
+    return getattr(box, name)
+
+
+def total(n: int) -> int:
+    s = 0
+    for i in range(n):
+        s += i
+    return s
+
+
+print(lookup("LIMIT"), eval("1 + 2"), attribute(Box(), "size"), total(10))
+print(timeit("total(10)", globals=globals(), number=2) >= 0)
+""",
+    # A star import may rebind any name -- here `pow`, to `math.pow`, which
+    # returns a float -- so nothing in the module is lowered.
+    "star_import": """
+from math import *
+
+
+def squares(n: int) -> int:
+    s = 0
+    for i in range(n):
+        s += pow(i, 2)
+    return s
+
+
+print(squares(4), floor(3.7))
+""",
+    # A base computed at runtime may give the class its operators.
+    "computed_base": """
+def pick(flag: bool) -> type:
+    return int if flag else float
+
+
+class Num(pick(True)):
+    pass
+
+
+def bump(n: Num) -> int:
+    return n + 1
+
+
+print(bump(Num(5)))
+""",
+    # A name nothing defines: CPython raises `NameError` when it gets there.
+    "undefined_name": """
+def area(r: float) -> float:
+    return PI * r * r
+
+
+print("before")
+print(area(2.0))
+""",
+}
+
+
+def _last_raised(err: str) -> str:
+    lines = [line for line in err.strip().splitlines() if line and not line[0].isspace()]
+    raised = [line for line in lines if line.split(":")[0].endswith(("Error", "Exception"))]
+    return raised[-1] if raised else ""
+
+
+@pytest.mark.parametrize("name", sorted(CPYTHON_RUNS))
+def test_strict_mode_refuses_what_it_cannot_read(write, codes, name: str):
+    path = write("prog.py", CPYTHON_RUNS[name])
+    assert any(c.startswith("E") for c in codes(path))
+    loose = codes(path, strict=False)
+    assert [c for c in loose if c.startswith("E")] == [], loose
+    assert "W2010" in loose
+
+
+@pytest.mark.parametrize("name", sorted(CPYTHON_RUNS))
+def test_no_strict_runs_what_cpython_runs(project_dir: Path, write, name: str):
+    """Same stdout, same exit code, and the same exception last, as CPython."""
+    (project_dir / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    path = write("prog.py", CPYTHON_RUNS[name])
+    expected = subprocess.run(
+        [sys.executable, path.name],
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    done = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "run", "prog.py"],
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+        env=_env(),
+        timeout=600,
+        check=False,
+    )
+    assert "error[" not in done.stderr, done.stderr
+    assert done.returncode == expected.returncode, done.stdout + done.stderr
+    assert done.stdout == expected.stdout
+    assert _last_raised(done.stderr) == _last_raised(expected.stderr)
 
 
 PRIVATE_HELPERS = """
