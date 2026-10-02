@@ -230,10 +230,13 @@ up in a table first. A call in the body to the function itself is a call to
 the entry, so a dynamic program computes each subproblem once, natively.
 Under `ppy run` the entry is what Python's callers call too, so they share
 the table. The arguments are numbers, bools, strings, and tuples of
-numbers, and so is the result. A function whose `cache_info`,
-`cache_clear`, or `__wrapped__` the module reads keeps CPython's cache and
-stays in Python, so the counts it reports are CPython's. A cached method
-or nested function stays in Python too.
+numbers, and so is the result. A cached function defined inside another
+gets a new table each time its `def` runs, as CPython makes a new cache, and
+the closure holds it. A function whose `cache_info`, `cache_clear`, or
+`__wrapped__` the module reads keeps CPython's cache and stays in Python, so
+the counts it reports are CPython's. A cached method stays in Python, and
+so does a cached function with default arguments, since `f(5)` and
+`f(5, 2)` are two entries in CPython's cache.
 
 ## `operator`
 
