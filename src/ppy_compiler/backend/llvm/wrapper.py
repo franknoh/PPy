@@ -797,7 +797,8 @@ static PyObject *ppy_call_{index}(
     if ((kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0)
         || (ppy_target_{index} != NULL && nargs != {count})) {{
         if (ppy_target_{index} != NULL && ppy_binder_{index}.function != NULL) {{
-            if (ppy_bind_call(&ppy_binder_{index}, ppy_given, ppy_count, kwnames, ppy_bound, {count})) {{
+            if (ppy_bind_call(
+                    &ppy_binder_{index}, ppy_given, ppy_count, kwnames, ppy_bound, {count})) {{
                 args = ppy_bound;
                 nargs = {count};
                 goto ppy_bound_call;

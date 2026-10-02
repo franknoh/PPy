@@ -40,6 +40,7 @@ from .collections import HANDLE, Held, Kind, Shape, shape_of
 
 __all__ = ["ClosureLowering"]
 
+
 def _plain(typed: T.Callable_) -> T.Callable_:
     return T.Callable_(
         tuple(T.Param(f"arg{i}", p.type) for i, p in enumerate(typed.params)), typed.ret

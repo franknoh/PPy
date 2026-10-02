@@ -500,7 +500,8 @@ class _Generator:
         the function made, concatenated: each is the list's, not the draw's."""
         rng = self.rng
         parts, drawn, text = self.name("parts"), self.name("r"), self.name("t")
-        w.put(f"{parts}: list[str] = [str(x) * {rng.randint(1, 4)} for x in range({rng.randint(1, 6)})]")
+        width, count = rng.randint(1, 4), rng.randint(1, 6)
+        w.put(f"{parts}: list[str] = [str(x) * {width} for x in range({count})]")
         w.put(f"{drawn} = random.Random({self.int_expr(scope, 2)})")
         w.put(f'{text}: str = ""')
         w.put(f"for _ in range({rng.randint(1, 5)}):")

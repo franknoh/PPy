@@ -530,7 +530,7 @@ def test_the_generated_wrapper_binds_keywords_and_defaults_itself(tmp_path: Path
     ran = _run(tmp_path, "stats.py", str(tmp_path / "dist" / "ppy-bindings.json"))
     assert ran.returncode == 0, ran.stderr
     lines = ran.stdout.splitlines()
-    assert "\n".join(lines[: -3]) == expected.stdout.strip()
+    assert "\n".join(lines[:-3]) == expected.stdout.strip()
     assert "NATIVE prog.scale True" in lines and "NATIVE prog.mix True" in lines, lines
     # No call went through Python's binding (`binding.keyed`).
     assert lines[-1] == "KEYED 0", lines
