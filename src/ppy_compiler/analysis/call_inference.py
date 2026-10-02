@@ -93,6 +93,7 @@ class CallSiteInference:
         #: Families whose inference made the checker report an error.
         self.retracted: set[str] = set()
         self._doctests: list[tuple[str, ast.Call, _Target, dict[str, T.Type]]] | None = None
+        self._fields: dict[str, dict[str, T.Type]] = {}
 
     # -- which functions -------------------------------------------------
 
@@ -378,7 +379,7 @@ class CallSiteInference:
         self._fields = {name: dict(cls.fields) for name, cls in self.symbols.classes.items()}
 
     def _reset(self) -> None:
-        for name, fields in getattr(self, "_fields", {}).items():
+        for name, fields in self._fields.items():
             cls = self.symbols.classes.get(name)
             if cls is not None:
                 cls.fields.clear()
