@@ -2462,15 +2462,17 @@ def test_a_module_nothing_moved_in_is_not_checked_again(write, analyze):
     assert again.modules["lib"] is first.modules["lib"], "nothing moved: kept"
     assert again.modules["app"] is first.modules["app"]
 
-    # Inference learns `scale`'s parameter: the module that calls it must be
-    # looked at again, and the one that defines it too.
+    # `scale(n)` already gave `x` its type; another round moves it: the
+    # module that calls it must be looked at again, and the one that
+    # defines it too.
     scale = bundle.symbols.functions["lib.scale"]
-    scale.params[0].type = T.INT
+    assert str(scale.params[0].type) == "int"
+    scale.params[0].type = T.FLOAT
     scale.params[0].inferred = True
     moved = run_checker(bundle.symbols, DiagnosticBag(), strict=False, previous=again)
     assert moved.modules["lib"] is not again.modules["lib"]
     assert moved.modules["app"] is not again.modules["app"]
-    assert str(moved.function("lib.scale").inferred_ret) == "int"
+    assert str(moved.function("lib.scale").inferred_ret) == "float"
 
     fresh = run_checker(bundle.symbols, DiagnosticBag(), strict=False)
     for name in ("lib", "app"):
