@@ -247,6 +247,17 @@ _COLLECTIONS = frozenset(
 #: Python's own containers, which native code holds as the runtime's collections.
 _BUILTIN_CONTAINERS = frozenset({"list", "dict", "set"})
 
+#: The standard library's containers native code holds (`lowering/library.py`).
+_LIBRARY_CONTAINERS = frozenset(
+    {
+        "collections.deque",
+        "collections.defaultdict",
+        "collections.OrderedDict",
+        "collections.Counter",
+        "random.Random",
+    }
+)
+
 
 def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     """The parameters held by handle rather than lent as buffers: every one, when
@@ -333,6 +344,18 @@ def _collection_param(
         # A generator's frame: native code's own, never crossing to Python.
         element = T.strip_literal(base.args[0])
         return NativeParam(name, "handle", f"generator[{element}]", class_name="generator")
+    if isinstance(base, T.Instance) and base.name in _LIBRARY_CONTAINERS:
+        # `deque`, `defaultdict`, `Counter`, `OrderedDict`, `random.Random`:
+        # native code's own, passed by handle, never crossing to Python.
+        if base.name != "random.Random" and not _held_natively(base, layouts):
+            return None
+        from ...lowering.collections import kind_of  # pylint: disable=import-outside-toplevel
+
+        records = {name: (tuple(fields), False) for name, fields in (layouts or {}).items()}
+        kind = kind_of(base, records)
+        if kind is None:
+            return None
+        return NativeParam(name, "handle", kind.spelled, class_name=base.name)
     if isinstance(base, T.Instance) and base.name in _BUILTIN_CONTAINERS and base.args:
         if not written and _buffer_element(base) is not None:
             # A list of numbers the function only reads is lent as a buffer.
@@ -963,11 +986,11 @@ def _signature(
         returns = ("i64",)
     return NativeSignature(
         qualname=info.qualname,
-        symbol="ppy_" + info.qualname.replace(".", "_"),
+        symbol="ppy_" + info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
         parameters=parameters,
         returns=returns,
         releases_gil=_releases_gil(analysis) and _runs_long(info)
-        if analysis is not None
+        if analysis is not None and not _cached(info)
         else False,
         cpu_features=_cpu_features(info),
         future=future,
@@ -1019,6 +1042,18 @@ def _cpu_features(info: FunctionInfo) -> tuple[str, ...]:
 #: GIL has to be held for the whole call.
 # A draw moves `random._inst`'s state, which Python code may be reading.
 _NEEDS_GIL = (Effect.PYTHON_CALLBACK, Effect.EXTERNAL_UNKNOWN, Effect.IO, Effect.RANDOM)
+
+
+def _cached(info: FunctionInfo) -> bool:
+    """A cached function writes its table, which Python's callers share, and
+    one taking a `random.Random` draws from a Python object's memory: the GIL
+    is held for both."""
+    if any(name in {"functools.cache", "functools.lru_cache"} for name in info.decorators):
+        return True
+    return any(
+        isinstance(base := T.strip_literal(p.type), T.Instance) and base.name == "random.Random"
+        for p in info.params
+    )
 
 
 def _releases_gil(analysis: FunctionAnalysis) -> bool:

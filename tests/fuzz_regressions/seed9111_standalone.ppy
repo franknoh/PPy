@@ -1,0 +1,310 @@
+# fuzz: path=standalone seed=9111 (did not build)
+import bisect
+import heapq
+import itertools
+import random
+import functools
+import operator
+import collections
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+class Failed(ValueError):
+    def __init__(self, code: int, where: str) -> None:
+        super().__init__(f"{where}: {code}")
+        self.code: int = code
+        self.where: str = where
+
+
+@dataclass(order=True)
+class Tag:
+    rank: int
+    label: str
+
+
+def countdown(n: int) -> Iterator[int]:
+    while n > 0:
+        yield n
+        n -= 2
+
+
+def pairs(n: int) -> Iterator[int]:
+    for i in range(n):
+        if i % 3 == 0:
+            continue
+        yield i * i
+    yield from countdown(n)
+
+
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    for value in it:
+        if most <= 0:
+            break
+        total = total * 5 + value
+        most -= 1
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+        for name in self.names:
+            if name not in seen:
+                seen.append(name)
+                yield name + str(len(seen))
+
+
+@functools.lru_cache(maxsize=None)
+def _cached(n: int) -> int:
+    if n < 2:
+        return n
+    return (_cached(n - 1) + _cached(n - 2)) % 1000003
+
+
+def fn1(a2: int, a3: float) -> int:
+    n4: int = (9 + -((a2 + -8)))
+    s5: str = 'ab'.capitalize()
+    for i6 in range(2):
+        f7: float = math.sqrt(abs(float((i6 + 1))))
+        tm8 = TreeMap[int, int]()
+        tm8[(a2 * i6)] = -11
+        tm8[-7] = n4
+        tm8[abs(n4)] = len(s5)
+        tm8[2] = (n4 - i6)
+        n9: int = tm8.min() * 10 + tm8.max() + len(tm8)
+    return a2
+
+
+def fn10(a11: bool, a12: bool) -> bool:
+    b13: bool = (max(6, 7) not in ((5 - 4), len(' spaced out '), 9, -3,))
+    if ((2 * -11) == (8 - 3)):
+        p14 = Point((-4611686018427387904 // (-7 if -7 != 0 else 3)), -4)
+        n15: int = p14.x * 3 - p14.y
+        xs17: list[int] = [max(-8, 4611686018427387903)]
+        xs17.sort(reverse=False)
+        xs17[-1] = xs17[0] + len(xs17)
+        xs17[-1] = xs17[0] + len(xs17)
+        n16: int = 1 if (n15 // (1 if 1 != 0 else -3)) in xs17 else 0
+    else:
+        n18: int = 10
+    for i19 in range(2):
+        if (abs(-5) > (-12 + 11)):
+            return a11
+        n20: int = max(pairs((i19 % 9 + 1)))
+    h21: list[int] = [4, -9]
+    heapq.heapify(h21)
+    heapq.heappush(h21, pow(4, 64, 1000000007))
+    random.shuffle(h21)
+    heapq.heapify(h21)
+    n22: int = heapq.heappop(h21) + len(h21)
+    bisect.insort(h21, (1 - -1))
+    n22 += sum(h21) + h21[0]
+    for i23 in range(2):
+        n24: int = n22
+        n25: int = n24
+    return a11
+
+
+def fn26(a27: str) -> float:
+    assert ((-10 * -5) <= -6) or True, a27.title()
+    s28: str = a27
+    tm29 = TreeMap[int, int]()
+    tm29[(7 if ((-5 + 7) == (12 * -12)) else 7)] = (4 + 2)
+    tm29[(4611686018427387903 + -11)] = (-10 + -3)
+    tm29[(-1 if ((0 + 3037000499) >= -6) else 8)] = 9
+    n30: int = tm29.min() * 10 + tm29.max() + len(tm29)
+    q31 = Deque[int]()
+    q31.push_front(n30)
+    q31.push_back(11)
+    n30 = q31.pop_back() - q31.pop_front()
+    return ((1e-300 - (1e-300 - 0.5)) * 0.5)
+
+
+def fn32(a33: int, a34: bool) -> int:
+    c35 = Counter((a33 + 12))
+    n36: int = c35.bump(-5)
+    n36 += c35.bump(-9223372036854775808)
+    h37: list[int] = [a33, n36, n36, 3037000499]
+    heapq.heapify(h37)
+    heapq.heappush(h37, (a33 // (-2 if -2 != 0 else -7)))
+    heapq.heappush(h37, 8)
+    heapq.heappush(h37, (n36 * n36))
+    n38: int = heapq.heappop(h37) + len(h37)
+    bisect.insort(h37, int(-2.5))
+    n38 += sum(h37) + h37[0]
+    d39: collections.defaultdict[int, int] = collections.defaultdict(int)
+    d39[(abs(a33) % 6)] += (n38 * 10)
+    d39[(abs(-10) % 6)] += (-6 << (a33 % 28))
+    d39[(abs(n36) % 6)] += -8
+    d39[(abs(n36) % 6)] += (8 - -7)
+    n38 += d39[(abs(n36) % 8)] + len(d39)
+    c40 = collections.Counter([-1, 10, -10, 0, a33])
+    c40.update([n38, n38, 7, n38])
+    od41: collections.OrderedDict[int, int] = collections.OrderedDict()
+    k42: int = (abs(12) % 5)
+    od41[k42] = (0 - a33)
+    od41[(abs(11) % 5)] = len(' spaced out ')
+    od41[(abs(n38) % 5)] = len('ab')
+    od41[(abs(n36) % 5)] = abs(n38)
+    od41.move_to_end(k42, last=True)
+    q43 = collections.deque([n38])
+    q43.rotate(1)
+    q43.appendleft((n38 ^ -6))
+    s44: str = str(d39) + str(c40) + str(c40.most_common(2)) + str(od41) + str(q43)
+    tm45 = TreeMap[int, int]()
+    tm45[-10] = len('ab')
+    tm45[(-4 if ((-10 % (a33 if a33 != 0 else -3)) >= (n38 & n38)) else a33)] = (n38 % (-1 if -1 != 0 else 5))
+    tm45[9] = 4611686018427387904
+    tm45[(a33 + n36)] = (4611686018427387904 ^ -8)
+    n46: int = tm45.min() * 10 + tm45.max() + len(tm45)
+    for i47 in range(4):
+        d49: dict[str, int] = {}
+        d49[('a' * 2)] = d49.get(('a' * 2), 0) + (n46 - 10)
+        d49.pop((s44 + 'ab'), 0)
+        n48: int = len(d49) * 100
+        for k50, value in d49.items():
+            n48 = n48 * 3 + value
+        h51: list[int] = [12, i47, n48, i47, a33]
+        heapq.heapify(h51)
+        heapq.heappush(h51, (n36 + n38))
+        heapq.heappush(h51, max(a33, i47))
+        heapq.heappush(h51, -(n38))
+        n52: int = heapq.heappop(h51) + len(h51)
+        bisect.insort(h51, (i47 + n36))
+        n52 += sum(h51) + h51[0]
+        d53: collections.defaultdict[int, int] = collections.defaultdict(int)
+        d53[(abs(n52) % 6)] += (1 + i47)
+        d53[(abs(n46) % 6)] += (n36 * -4)
+        d53[(abs(9223372036854775807) % 6)] += -7
+        d53[(abs(n36) % 6)] += (n48 + 4)
+        n52 += d53[(abs(n46) % 8)] + len(d53)
+        c54 = collections.Counter([n46])
+        c54.update([n36, n36, i47, n46])
+        od55: collections.OrderedDict[int, int] = collections.OrderedDict()
+        k56: int = (abs(n52) % 5)
+        od55[k56] = (n38 - n48)
+        od55[(abs(i47) % 5)] = n46
+        od55[(abs(n36) % 5)] = (a33 % (3 if 3 != 0 else -7))
+        od55[(abs(a33) % 5)] = abs(n38)
+        od55.move_to_end(k56, last=False)
+        q57 = collections.deque([i47, i47, n46, n36])
+        q57.rotate(3)
+        q57.appendleft((9 * 3))
+        s58: str = str(d53) + str(c54) + str(c54.most_common(2)) + str(od55) + str(q57)
+    s59: str = str((-4 + (n38 + a33)))
+    return len('Hello'.replace('x-y-z', ' spaced out '))
+
+
+def fn60(a61: int, a62: int, a63: int) -> str:
+    n64: int = (random.Random(9111).randint(a62, a62 + (abs(a62) % 30)) if (a61 <= (a62 - -11) > (3 - a62)) else a63)
+    if ((a61 + 3) == (a63 << (a63 % 14))):
+        f65: float = (0.5 * min((float("nan") * 1e308), (float("nan") / (1e308 if 1e308 != 0.0 else 2.0))))
+        if ((7.25 / (f65 if f65 != 0.0 else 2.0)) < (f65 - f65)):
+            n66: int = -5
+        else:
+            f67: float = ((f65 / (7.25 if 7.25 != 0.0 else 2.0)) / (((f65 - f65) - math.sqrt(abs(f65))) if ((f65 - f65) - math.sqrt(abs(f65))) != 0.0 else 2.0))
+    else:
+        n68: int = pow(len(str(-8)), 7, 7)
+    return 'ab'.upper()[3:6:2].capitalize()
+
+
+def fn69(a70: float, a71: str, a72: int) -> int:
+    h73: list[int] = [a72, a72, 9, -5, 4611686018427387904]
+    heapq.heapify(h73)
+    heapq.heappush(h73, (a72 * -4))
+    heapq.heappush(h73, a72)
+    random.shuffle(h73)
+    heapq.heapify(h73)
+    n74: int = heapq.heappop(h73) + len(h73)
+    bisect.insort(h73, (9223372036854775807 - -10))
+    n74 += sum(h73) + h73[0]
+    d75: collections.defaultdict[int, int] = collections.defaultdict(int)
+    d75[(abs(a72) % 6)] += (n74 ** 0)
+    d75[(abs(a72) % 6)] += (n74 - n74)
+    d75[(abs(n74) % 6)] += n74
+    d75[(abs(0) % 6)] += (n74 + n74)
+    n74 += d75[(abs(a72) % 8)] + len(d75)
+    c76 = collections.Counter([a72, n74, n74, n74])
+    c76.update([-5, -1, 1])
+    od77: collections.OrderedDict[int, int] = collections.OrderedDict()
+    k78: int = (abs(a72) % 5)
+    od77[k78] = (9 - a72)
+    od77[(abs(a72) % 5)] = abs(a72)
+    od77.move_to_end(k78, last=False)
+    q79 = collections.deque([a72])
+    q79.rotate(0)
+    q79.appendleft(abs(1))
+    s80: str = str(d75) + str(c76) + str(c76.most_common(2)) + str(od77) + str(q79)
+    tm81 = TreeMap[int, int]()
+    tm81[(a72 - a72)] = (-4 % -4611686018427387904)
+    n82: int = tm81.min() * 10 + tm81.max() + len(tm81)
+    q83 = Deque[int]()
+    q83.push_front(n82)
+    q83.push_back((a72 + n74))
+    n82 = q83.pop_back() - q83.pop_front()
+    s84: str = (s80 + a71).strip()
+    n85: int = (math.isqrt(n82) << ((5 - (a72 - -8)) % 25))
+    n86: int = abs(5)
+    n87: int = (((-1 // (5 if 5 != 0 else -7)) - (-9 if ((n74 << (n85 % 47)) < n86) else n82)) % (max((a72 - 7), (a72 // (9 if 9 != 0 else -3))) if max((a72 - 7), (a72 // (9 if 9 != 0 else -3))) != 0 else -7))
+    return (abs(n74) // (int(1e308) if int(1e308) != 0 else -7))
+
+
+def main() -> None:
+    random.seed(9111)
+    print(fn1(-9223372036854775808, -0.0))
+    print(fn1(0, 0.5))
+    print(fn10(False, False))
+    print(fn10(True, False))
+    print(fn10(True, True))
+    print(fn26('MiXeD'))
+    print(fn26('ab'))
+    print(fn32(-9, True))
+    print(fn32(-9, False))
+    print(fn32(4611686018427387904, False))
+    print(fn60(-4, 0, 12))
+    print(fn60(8, 2, 0))
+    print(fn60(-12, 9, 0))
+    print(fn69(1e-300, 'a', -12))
+    print(fn69(3.0, '123', 5))
+
+
+main()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import hashlib
 import json
@@ -156,6 +157,12 @@ def _collect(bundle, opt_level: int | None = None, failures=None) -> dict[str, N
             if function_analysis is None:
                 continue
             candidates[info.qualname] = (info, function_analysis, node)
+        for info in symbols.nested.values():
+            # A nested function is lowered with the function around it, and
+            # on its own where it shares nothing with it (`lowering/calls.py`).
+            function_analysis = analysis.functions.get(info.qualname)
+            if function_analysis is not None and isinstance(info.node, ast.FunctionDef):
+                candidates[info.qualname] = (info, function_analysis, info.node)
 
         reused = _cached_lowering(bundle, module.name, opt_level)
         if reused is not None:
@@ -1163,6 +1170,9 @@ def _binding_name(info) -> str:  # type: ignore[no-untyped-def]
     """How a generated module names this entry point when it binds it."""
     if info.owner:
         return f"{info.owner.rpartition('.')[2]}.{info.name}"
+    if info.enclosing:
+        # `outer.<locals>.inner`, as the generated module binds it in `outer`.
+        return info.qualname.removeprefix(f"{info.module}.")
     return info.name
 
 

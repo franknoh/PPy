@@ -11,11 +11,18 @@
            the arguments pushed so far; `c` is the kind of result wanted
      op 4  as 3, a method of the first argument, named by the text at `a`
      op 5  let go of the Python object numbered `a`
+     op 6  as 3, for a callee no second run could tell from the first: the
+           result must be exactly of the kind wanted, and the hook answers
+           1 where it is not, for the native call to fall back, or, where
+           the call's flags have bit 1 (a promised result), raises TypeError
+     op 7  as 6, a method
 
    A kind is 0 none, 1 int, 2 float, 3 bool, 4 str (a handle), 5 a Python
-   object (its number in the boundary's table). Arguments are pushed with
-   `ppy_io_push`; the result is left in the thread's state for
-   `ppy_io_result` to take.
+   object (its number in the boundary's table), 6 the name of the keyword
+   argument pushed next (a str handle). A tuple of numbers and bools is
+   8 | count << 4 | each item's kind << (8 + 4 * index), its items answered
+   in the argument words. Arguments are pushed with `ppy_io_push`; the
+   result is left in the thread's state for `ppy_io_result` to take.
 
    What a native call prints is held in the thread's buffer, a run of
    records `[stream: 1 byte][length: 8 bytes][bytes]`, until the call ends:
@@ -331,6 +338,38 @@ int64_t ppy_io_call(const int8_t *name, int64_t bytes, int64_t kind, int64_t met
         return -1;
     }
     return 0;
+}
+
+/* A call into Python that is not a barrier: the callee changes nothing a
+   second run of it could see (`lowering/effects.py` decides), so nothing
+   held is written and the call is not marked crossed. Answers 0; -1 with
+   Python's exception pending natively; or 1 where the result was not
+   exactly of the kind wanted, and the native call falls back. */
+int64_t ppy_io_call_pure(const int8_t *name, int64_t bytes, int64_t kind, int64_t method) {
+    int64_t *state = ppy_io_state();
+    int64_t done =
+        ppy_io_hook((method & 1) ? 7 : 6, (int64_t)(intptr_t)name, bytes, kind | (method & 2) << 40);
+    state[8] = 0;
+    if (done == 1) {
+        return 1;
+    }
+    if (done != 0) {
+        ppy_io_raise_pending();
+        return -1;
+    }
+    return 0;
+}
+
+/* Called from the hook: item `index` of a tuple result. */
+void ppy_io_answer_at(int64_t index, int64_t word) {
+    if (index >= 0 && index < 32) {
+        ppy_io_state()[19 + 2 * index] = word;
+    }
+}
+
+/* Item `index` of a tuple result. */
+int64_t ppy_io_result_at(int64_t index) {
+    return ppy_io_state()[19 + 2 * index];
 }
 
 /* What the call answered: the word of a number, a flag, or an object. */

@@ -710,10 +710,32 @@ class InlineSmallFunctions(Pass):
         super().__init__(context)
         self.candidates = candidates
         self.budget = _INLINE_BUDGET.get(context.level, 0)
+        #: Names the functions being visited bind: a call by one of them, or a
+        #: body reading one, is not the module's function or global there.
+        self._shadowed: list[set[str]] = []
+
+    def _scope(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> ast.AST:
+        from ..analysis.closures import own_names  # pylint: disable=import-outside-toplevel
+
+        self._shadowed.append(own_names(node))
+        try:
+            self.generic_visit(node)
+        finally:
+            self._shadowed.pop()
+        return node
+
+    visit_FunctionDef = _scope
+    visit_AsyncFunctionDef = _scope
+    visit_Lambda = _scope
+
+    def _is_shadowed(self, name: str) -> bool:
+        return any(name in names for names in self._shadowed)
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
         self.generic_visit(node)
         if not isinstance(node.func, ast.Name) or node.keywords:
+            return node
+        if self._is_shadowed(node.func.id):
             return node
         entry = self.candidates.get(node.func.id)
         if entry is None:
@@ -723,6 +745,13 @@ class InlineSmallFunctions(Pass):
         if body is None:
             return node
         if _expr_size(body) > self.budget:
+            return node
+        own = {p.name for p in info.params}
+        if any(
+            isinstance(inner, ast.Name) and inner.id not in own and self._is_shadowed(inner.id)
+            for inner in ast.walk(body)
+        ):
+            # The body reads a global the caller's scope binds a local of.
             return node
         params = [p.name for p in info.params]
         if len(params) != len(node.args):

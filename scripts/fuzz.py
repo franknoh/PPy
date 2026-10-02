@@ -3,7 +3,8 @@
     uv run python scripts/fuzz.py --seed 0 --count 25
     uv run python scripts/fuzz.py --seed 400 --count 10 --paths run,standalone
     uv run python scripts/fuzz.py --state --count 25 # module globals and objects
-    uv run python scripts/fuzz.py --seed 0 --count 25 --stdlib   # random, math, heapq, bisect
+    uv run python scripts/fuzz.py --seed 0 --count 25 --stdlib   # the standard library
+    uv run python scripts/fuzz.py --seed 0 --count 25 --calls    # keywords and defaults
     uv run python scripts/fuzz.py --replay           # every saved regression
     uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
     uv run python scripts/fuzz.py --boundary --count 25  # writes through shared containers
@@ -84,12 +85,13 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     prints: bool = False,
     state: bool = False,
     stdlib: bool = False,
+    calls: bool = False,
     boundary: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
     for current in range(seed, seed + count):
-        source = generate_program(current, prints, state, stdlib, boundary)
+        source = generate_program(current, prints, state, stdlib, calls, boundary=boundary)
         results = run_program(source, paths, timeout=60.0)
         mismatches = printed_twice(results) + compare(results)
         if not mismatches:
@@ -144,14 +146,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prints", action="store_true", help="functions print between checks")
     parser.add_argument("--show", type=int, help="print the program for this seed and exit")
     parser.add_argument(
+        "--calls",
+        action="store_true",
+        help="functions take defaults and keyword-only parameters; calls name and omit them",
+    )
+    parser.add_argument(
         "--stdlib",
         action="store_true",
-        help="draw seeded random numbers and call math, heapq, bisect, and itertools",
+        help=(
+            "draw seeded random numbers and call math, heapq, bisect, itertools, functools,"
+            " operator, and collections' containers"
+        ),
     )
     options = parser.parse_args(argv)
     if options.show is not None:
         shown = generate_program(
-            options.show, options.prints, options.state, options.stdlib, options.boundary
+            options.show,
+            options.prints,
+            options.state,
+            options.stdlib,
+            options.calls,
+            boundary=options.boundary,
         )
         print(shown, end="")
         return 0
@@ -167,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         options.prints,
         options.state,
         options.stdlib,
+        options.calls,
         options.boundary,
     )
 

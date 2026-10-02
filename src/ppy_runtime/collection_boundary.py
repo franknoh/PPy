@@ -81,6 +81,13 @@ _FAMILY = {
 }
 
 
+#: A `random.Random` argument's kind: lent by address, never copied.
+_GENERATOR = "random.Random"
+
+#: `RandomObject`'s state after the object header: `int index`, then 624 words.
+_STATE_BYTES = 4 + 624 * 4
+
+
 class Refused(Exception):
     """An argument that does not match its declared type: the Python body runs instead."""
 
@@ -219,6 +226,9 @@ def parse(spelled: str, classes: dict[str, CrossingClass] | None = None) -> Spec
             return Spec(short, key=found[0])
         return Spec(short, value=found[0])
 
+    if tokens == ["random.Random"]:
+        # A generator the caller lends: native code draws from its own state.
+        return Spec(_GENERATOR)
     found = one()
     if found is None or position != len(tokens):
         return None
@@ -367,6 +377,7 @@ _SIGNATURES: dict[str, tuple[Any, tuple[Any, ...]]] = {
     "ppy_coll_text_keys": (None, (_P, _I)),
     "ppy_str_new_many": (None, (ctypes.c_char_p, ctypes.c_char_p, _I, _P)),
     "ppy_str_gather": (_I, (_P, _I, _P, _P)),
+    "ppy_random_external": (_P, (_I,)),
 }
 
 _loaded: dict[str, Any] = {}
@@ -469,6 +480,8 @@ class Boundary:
         self._synced: set[int] = set()
         #: Handles this call owns a reference to, let go of at the end.
         self._owned: list[int] = []
+        #: The generators arguments lent, by address, and their state before.
+        self._generators: dict[int, bytes] = {}
 
     # -- in -------------------------------------------------------------------
 
@@ -482,6 +495,8 @@ class Boundary:
         """A handle holding one new reference to `value`'s native copy."""
         if spec.kind == "object":
             return self._object(value, spec)
+        if spec.kind == _GENERATOR:
+            return self._generator(value)
         seen = self._handles.get(id(value))
         if seen is not None:
             self.rt.ppy_coll_retain(seen[0])
@@ -712,9 +727,29 @@ class Boundary:
         self._owned.append(handle)
         return self._python(handle, spec)
 
+    def _generator(self, value: Any) -> int:
+        """A `random.Random` lent: a handle drawing from its state in place, the
+        state kept to put back if the call falls back (`restore`)."""
+        import random  # pylint: disable=import-outside-toplevel
+
+        if type(value) is not random.Random or not _generator_layout():
+            raise Refused
+        address = id(value) + object.__basicsize__
+        if address not in self._generators:
+            self._generators[address] = ctypes.string_at(address, _STATE_BYTES)
+        return int(self.rt.ppy_random_external(address))
+
+    def restore(self) -> None:
+        """Put each generator an argument lent back as it was: the call fell
+        back, and Python draws the same numbers again."""
+        for address, state in self._generators.items():
+            ctypes.memmove(address, state, _STATE_BYTES)
+
     def sync(self, arguments: list[tuple[Any, Spec]]) -> None:
         """Copy each argument's native contents back into the caller's objects."""
         for value, spec in arguments:
+            if spec.kind == _GENERATOR:
+                continue  # drawn from in place
             handle = self._handles[id(value)][0]
             self._python(handle, spec, rewrite=True)
 
@@ -836,6 +871,29 @@ class Boundary:
         for handle in self._owned:
             self.rt.ppy_coll_release(handle)
         self._owned.clear()
+
+
+_LAYOUT: list[bool] = []
+
+
+def _generator_layout() -> bool:
+    """Whether a `random.Random` keeps its index and state words right after
+    its object header, as `random._inst` does (`binding._random_state_address`):
+    asked once, of a generator made for it."""
+    if not _LAYOUT:
+        import random  # pylint: disable=import-outside-toplevel
+        import sys  # pylint: disable=import-outside-toplevel
+
+        found = False
+        if sys.implementation.name == "cpython":
+            probe = random.Random(20261002)
+            _version, words, _gauss = probe.getstate()
+            address = id(probe) + object.__basicsize__
+            index = ctypes.c_int32.from_address(address).value
+            state = (ctypes.c_uint32 * 624).from_address(address + 4)
+            found = index == words[-1] and tuple(state) == tuple(words[:-1])
+        _LAYOUT.append(found)
+    return _LAYOUT[0]
 
 
 #: The one Python type a word of each scalar kind is stored as.

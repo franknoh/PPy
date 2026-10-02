@@ -11,13 +11,22 @@ answers None for, and the call stays a Python call.
 
 from __future__ import annotations
 
+import ast
 import string as _string
+from collections.abc import Callable
 
 from . import types as T
 from .effects import Effect, EffectSet
 from .env import Binding
 
-__all__ = ["MODELS", "MUTATES_FIRST", "STRING_CONSTANTS", "call"]
+__all__ = [
+    "MODELS",
+    "MUTATES_FIRST",
+    "OPERATOR_FUNCTIONS",
+    "STRING_CONSTANTS",
+    "call",
+    "library_lambda",
+]
 
 
 #: What the checker knows of an argument: its type and its facts.
@@ -188,6 +197,16 @@ def call(
     """What a call gives where native code makes it, or None where it does not."""
     if qualname.startswith("math."):
         return _math(qualname, args, keywords)
+    if qualname.startswith("random.Random."):
+        # An instance's method: the module's function, on its own state.
+        from .stdlib import INSTANCE_ATTRS  # pylint: disable=import-outside-toplevel
+
+        name = qualname.removeprefix("random.Random.")
+        method = INSTANCE_ATTRS["random.Random"].get(name)
+        if method is None or f"random.{name}" not in MODELS:
+            return None
+        drawn = _random(name, args, keywords)
+        return (drawn, method[1]) if drawn is not None else None
     model = MODELS.get(qualname)
     if model is None:
         return None
@@ -421,3 +440,205 @@ def _itertools(
         if initial is None or _plain(initial.type) == element:
             return T.instance("Iterator", element)
     return None
+
+
+# -- functions as values: `operator`'s, and `itemgetter` and `attrgetter` -------------
+
+_BINARY = {
+    "add": ast.Add, "sub": ast.Sub, "mul": ast.Mult, "truediv": ast.Div,
+    "floordiv": ast.FloorDiv, "mod": ast.Mod, "pow": ast.Pow, "lshift": ast.LShift,
+    "rshift": ast.RShift, "and_": ast.BitAnd, "or_": ast.BitOr, "xor": ast.BitXor,
+    "concat": ast.Add,
+}  # fmt: skip
+_COMPARE = {"lt": ast.Lt, "le": ast.LtE, "eq": ast.Eq, "ne": ast.NotEq, "ge": ast.GtE, "gt": ast.Gt}
+_UNARY = {
+    "neg": ast.USub,
+    "pos": ast.UAdd,
+    "invert": ast.Invert,
+    "inv": ast.Invert,
+    "not_": ast.Not,
+}
+
+#: Every `operator` function a lambda stands for, as `operator.<name>`.
+OPERATOR_FUNCTIONS = frozenset(
+    {*_BINARY, *_COMPARE, *_UNARY, "abs", "truth", "contains", "getitem"}
+)
+
+#: Where the lambda a library function stands for is kept on its node.
+_LAMBDA = "_ppy_lambda"
+
+
+def library_lambda(
+    node: ast.expr,
+    canonical: Callable[[ast.expr], str | None],
+    arity: Callable[[str], int | None] | None = None,
+    stable: Callable[[str], bool] | None = None,
+) -> ast.Lambda | None:
+    """The lambda a library function written as a value is: `operator.add` is
+    `lambda a, b: a + b`, `itemgetter(1)` is `lambda x: x[1]`, `attrgetter("w")`
+    is `lambda x: x.w`, and `partial(f, 2)` of a two-argument `f` is
+    `lambda y: f(2, y)`. The checker types it where it is used, as it types a
+    lambda written there, and native code makes it a function value or runs
+    its body in place. The same node always gives the same lambda; None for
+    anything else. `canonical` names what an expression refers to, `arity`
+    how many parameters a function of the program has, and `stable` whether
+    a name holds one value for the whole function (a `partial` binds its
+    arguments when it is made, which a lambda's names do not)."""
+    made = getattr(node, _LAMBDA, None)
+    if made is not None:
+        return made if isinstance(made, ast.Lambda) else None
+    _MADE[0] += 1
+    found = _library_lambda(node, canonical)
+    if found is None and arity is not None and stable is not None:
+        found = _partial_lambda(node, canonical, arity, stable)
+    if isinstance(node, (ast.Attribute, ast.Name, ast.Call)):
+        setattr(node, _LAMBDA, found if found is not None else False)
+    return found
+
+
+def _library_lambda(
+    node: ast.expr, canonical: Callable[[ast.expr], str | None]
+) -> ast.Lambda | None:
+    if isinstance(node, (ast.Name, ast.Attribute)):
+        name = canonical(node) or ""
+        if name in {"builtins.max", "builtins.min"}:
+            # `reduce(max, xs)`: the builtin of two arguments.
+            called = ast.Name(name.removeprefix("builtins."), ast.Load())
+            return _lambda(node, 2, ast.Call(called, [_arg_name(0), _arg_name(1)], []))
+        if not name.startswith("operator."):
+            return None
+        return _operator_lambda(name.removeprefix("operator."), node)
+    if not isinstance(node, ast.Call) or node.keywords or not node.args:
+        return None
+    if any(isinstance(a, ast.Starred) for a in node.args):
+        return None
+    name = canonical(node.func) or ""
+    if name == "operator.itemgetter":
+        if not all(isinstance(a, ast.Constant) and type(a.value) in (int, str) for a in node.args):
+            return None
+        parts: list[ast.expr] = [
+            ast.Subscript(_arg_name(0), ast.Constant(a.value), ast.Load())  # type: ignore[attr-defined]
+            for a in node.args
+        ]
+    elif name == "operator.attrgetter":
+        if not all(isinstance(a, ast.Constant) and isinstance(a.value, str) for a in node.args):
+            return None
+        parts = []
+        for spelled in node.args:
+            reached: ast.expr = _arg_name(0)
+            for attr in spelled.value.split("."):  # type: ignore[attr-defined]
+                if not attr.isidentifier():
+                    return None
+                reached = ast.Attribute(reached, attr, ast.Load())
+            parts.append(reached)
+    else:
+        return None
+    body = parts[0] if len(parts) == 1 else ast.Tuple(parts, ast.Load())
+    return _lambda(node, 1, body)
+
+
+def _partial_lambda(
+    node: ast.expr,
+    canonical: Callable[[ast.expr], str | None],
+    arity: Callable[[str], int | None],
+    stable: Callable[[str], bool],
+) -> ast.Lambda | None:
+    """`partial(f, a, b)` of a function of the program, its arguments
+    constants or names that keep one value: `lambda x: f(a, b, x)`."""
+    if not isinstance(node, ast.Call) or node.keywords or len(node.args) < 2:
+        return None
+    if canonical(node.func) != "functools.partial":
+        return None
+    function = node.args[0]
+    bound = node.args[1:]
+    if not isinstance(function, ast.Name):
+        return None
+    target = canonical(function)
+    count = arity(target) if target is not None else None
+    if count is None or len(bound) > count:
+        return None
+    for argument in bound:
+        if _written_constant(argument) or (isinstance(argument, ast.Name) and stable(argument.id)):
+            continue
+        return None
+    passed: list[ast.expr] = [_copied(a) for a in bound]
+    rest = count - len(bound)
+    passed.extend(_arg_name(i) for i in range(rest))
+    called = ast.Call(ast.Name(function.id, ast.Load()), passed, [])
+    return _lambda(node, rest, called)
+
+
+def _written_constant(node: ast.expr) -> bool:
+    """A number, a string, a bool, or `None` written out, or a negative number."""
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        node = node.operand
+        return isinstance(node, ast.Constant) and type(node.value) in (int, float)
+    return isinstance(node, ast.Constant) and type(node.value) in (
+        int,
+        float,
+        str,
+        bool,
+        type(None),
+    )
+
+
+def _copied(node: ast.expr) -> ast.expr:
+    if isinstance(node, ast.Constant):
+        return ast.Constant(node.value)
+    if isinstance(node, ast.UnaryOp):
+        return ast.UnaryOp(ast.USub(), _copied(node.operand))
+    assert isinstance(node, ast.Name)
+    return ast.Name(node.id, ast.Load())
+
+
+def _operator_lambda(name: str, node: ast.expr) -> ast.Lambda | None:
+    a, b = _arg_name(0), _arg_name(1)
+    body: ast.expr
+    if name in _BINARY:
+        body = ast.BinOp(a, _BINARY[name](), b)
+    elif name in _COMPARE:
+        body = ast.Compare(a, [_COMPARE[name]()], [b])
+    elif name in _UNARY:
+        body = ast.UnaryOp(_UNARY[name](), a)
+        return _lambda(node, 1, body)
+    elif name in {"abs", "truth"}:
+        called = ast.Name("abs" if name == "abs" else "bool", ast.Load())
+        return _lambda(node, 1, ast.Call(called, [a], []))
+    elif name == "contains":
+        body = ast.Compare(b, [ast.In()], [a])
+    elif name == "getitem":
+        body = ast.Subscript(a, b, ast.Load())
+    else:
+        return None
+    return _lambda(node, 2, body)
+
+
+#: How many lambdas have been made: each names its parameters apart, so two
+#: of them in one function never share a local.
+_MADE = [0]
+
+
+def _arg_name(index: int) -> ast.Name:
+    return ast.Name(f"_ppy{_MADE[0]}_{index}", ast.Load())
+
+
+def _lambda(node: ast.expr, count: int, body: ast.expr) -> ast.Lambda:
+    arguments = ast.arguments(
+        posonlyargs=[],
+        args=[ast.arg(f"_ppy{_MADE[0]}_{i}") for i in range(count)],
+        vararg=None,
+        kwonlyargs=[],
+        kw_defaults=[],
+        kwarg=None,
+        defaults=[],
+    )
+    made = ast.Lambda(arguments, body)
+    for part in ast.walk(made):
+        # What the lambda is made of stands for itself: `max` in its body is
+        # the builtin called.
+        setattr(part, _LAMBDA, False)
+        ast.copy_location(part, node)
+        if hasattr(part, "end_lineno"):
+            part.end_lineno = getattr(node, "end_lineno", None)  # type: ignore[attr-defined]
+            part.end_col_offset = getattr(node, "end_col_offset", None)  # type: ignore[attr-defined]
+    return made

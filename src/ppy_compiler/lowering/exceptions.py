@@ -31,11 +31,18 @@ from dataclasses import dataclass, field
 
 from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
-from ..ir import BOOL, I64, Block, IRType, Successor, Value
+from ..ir import BOOL, I64, Block, IRType, Operation, Successor, Value
 from ..ir.dialects import core
 from .collections import HANDLE, STR, Shape, class_tag
 
-__all__ = ["ARGS_NONE", "ARGS_ONE_TEXT", "ExceptionLowering", "exception_tag", "uses_exceptions"]
+__all__ = [
+    "ARGS_NONE",
+    "ARGS_ONE_TEXT",
+    "ExceptionLowering",
+    "OwnedTemporaries",
+    "exception_tag",
+    "uses_exceptions",
+]
 
 #: Checks that stand for what only native code cannot do: never an exception
 #: here, since CPython would answer where native code stops.
@@ -90,6 +97,9 @@ class _Frame:
     final: list[ast.stmt]
     #: How many loops were open when the region opened.
     loops: int
+    #: How many owned temporaries were live when the region opened: the ones
+    #: after these are let go of on the way to its handlers.
+    live: int = 0
     #: A handler's slot for the exception it handles, for a bare `raise`.
     handled: Value | None = None
     #: Names a handler bound with `as`, deleted when it ends.
@@ -111,6 +121,13 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
         self._propagate: Block | None = None
         #: The blocks after a `try` that some path falls into.
         self._reached: set[int] = set()
+        #: Owned handles the statements being lowered made and have not yet
+        #: let go of, oldest first (`OwnedTemporaries`).
+        self._live: list[Value] = []
+        #: Each raise edge that left with owned temporaries live: the branch,
+        #: and those temporaries. Which of them to let go of there is decided
+        #: once the function is whole (`_clean_raise_edges`).
+        self._cleanups: list[tuple[Operation, tuple[Value, ...]]] = []
         if self._exceptions_on():
             # A check hoisted out of a loop fails before the iterations that
             # ran first; caught, that would be a different answer.
@@ -125,6 +142,7 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
     def _finish_exceptions(self) -> None:
         """The function's exit for an exception: let go of what it held, and return
         the raised status."""
+        self._clean_raise_edges()
         if self._propagate is None:
             return
         self.b.at_end(self._propagate)  # type: ignore[attr-defined]
@@ -175,8 +193,46 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
     # -- raising ----------------------------------------------------------------
 
     def _go_raise(self) -> None:
-        """The pending exception goes where the code catches it."""
-        core.br(self.b, Successor(self._raise_target()))  # type: ignore[attr-defined]
+        """The pending exception goes where the code catches it, letting go of
+        the temporaries the code between here and there holds."""
+        target = self._raise_target()
+        mark = self._frames[-1].live if self._frames else 0
+        held = tuple(getattr(self, "_live", ())[mark:])
+        branch = core.br(self.b, Successor(target))  # type: ignore[attr-defined]
+        if held:
+            self._cleanups.append((branch, held))
+
+    def _clean_raise_edges(self) -> None:
+        """Release, on each raise edge, the temporaries still owned there.
+
+        A temporary is a handle an expression made (a list literal, a string, a
+        callee's result) that the statement lets go of once it is done with it.
+        A check that raises partway through the statement leaves that release
+        behind on the path that did not raise, so the raise edge lets go of it
+        instead -- unless, by then, something else may own it. That is decided
+        on the finished function: the temporary must be defined on every path
+        to the edge (its block dominates the edge's), and no use that takes
+        its reference (a store, a return, a branch argument, a release, a
+        runtime call that keeps it) may come between its definition and the
+        edge on any path. Where in doubt it is not released: a leak, never a
+        double free.
+        """
+        if not self._cleanups:
+            return
+        from ..ir.analysis import dominators
+        from ..ir.model import Builder
+
+        registry = self.frontend.registry  # type: ignore[attr-defined]
+        tree = dominators(self.function, registry)  # type: ignore[attr-defined]
+        for branch, held in self._cleanups:
+            site = branch.parent
+            if site is None:
+                continue
+            builder = Builder().before(branch)
+            for handle in reversed(held):
+                if _still_owned(handle, site, tree, registry):
+                    core.call_extern(builder, "ppy_coll_release", (handle,), ())
+        self._cleanups.clear()
 
     def _raise_made(self, name: str, tag: int, message: Value, known: Value) -> None:
         """Raise a new exception of class `name`, taking `message`."""
@@ -469,11 +525,11 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
         unwind = self._block("try.unwind")  # type: ignore[attr-defined]
         after = self._block("try.after")  # type: ignore[attr-defined]
         final = node.finalbody
-        self._frames.append(_Frame(dispatch, final, loops))
+        self._frames.append(_Frame(dispatch, final, loops, live=len(self._live)))
         self._body(node.body)  # type: ignore[attr-defined]
         self._frames.pop()
         if self._open():  # type: ignore[attr-defined]
-            self._frames.append(_Frame(unwind, final, loops))
+            self._frames.append(_Frame(unwind, final, loops, live=len(self._live)))
             self._body(node.orelse)  # type: ignore[attr-defined]
             self._frames.pop()
             self._leave_normally(final, after)
@@ -537,7 +593,7 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
         slot = self._exception_slot("handled")
         exception = self._rt("ppy_exc_take", (), HANDLE)  # type: ignore[attr-defined]
         core.store(self.b, exception, slot)  # type: ignore[attr-defined]
-        frame = _Frame(unwind, final, loops, handled=slot)
+        frame = _Frame(unwind, final, loops, live=len(self._live), handled=slot)
         previous = None
         if handler.name:
             previous = self.caught.get(handler.name)
@@ -702,6 +758,90 @@ class _Called:
     """What a call answered, where its status was asked for."""
 
     results: tuple[Value, ...]
+
+
+#: Runtime calls that take the caller's reference to a handle operand, by
+#: operand index: after one, the caller no longer owns it.
+_TAKES_REFERENCE: dict[str, frozenset[int]] = {
+    "ppy_coll_release": frozenset({0}),
+    "ppy_exc_make": frozenset({1, 2}),
+    "ppy_exc_raise": frozenset({0}),
+    "ppy_str_finish": frozenset({0}),
+    "ppy_str_extend": frozenset({0}),
+    "ppy_str_open": frozenset({0}),
+    "ppy_str_next": frozenset({2}),
+    "ppy_str_list_take": frozenset({1}),
+    "ppy_str_list_insert": frozenset({2}),
+    "ppy_io_push_text": frozenset({0}),
+}
+
+#: Operations that read a handle and leave the caller's reference with it.
+_LENDS = frozenset({"core.call_extern", "core.call"})
+
+
+def _takes(user: object, index: int) -> bool:
+    """Whether this use of a handle may take the caller's reference to it."""
+    if not isinstance(user, Operation) or user.name not in _LENDS:
+        return True  # a store, a return, a branch argument, anything unknown
+    if user.name == "core.call_extern":
+        callee = str(user.attributes.get("callee", ""))
+        return index in _TAKES_REFERENCE.get(callee, frozenset())
+    return False
+
+
+def _block_of(value: Value) -> Block | None:
+    owner = value.owner
+    return owner if isinstance(owner, Block) else owner.parent
+
+
+def _still_owned(handle: Value, site: Block, tree, registry) -> bool:  # type: ignore[no-untyped-def]
+    """Whether `handle` is certainly the caller's at the end of `site`."""
+    defined = _block_of(handle)
+    if defined is None or not tree.dominates(defined, site):
+        return False
+    for user, index in handle.uses:
+        if not _takes(user, index):
+            continue
+        used = user.parent if isinstance(user, Operation) else None
+        if used is None or used is site or used is defined:
+            return False
+        # A use that takes it, from which the edge is reachable without
+        # passing the definition again (which makes a new one).
+        seen = {id(defined)}
+        pending = list(used.successors_for(registry))
+        while pending:
+            block = pending.pop()
+            if block is site:
+                return False
+            if id(block) in seen:
+                continue
+            seen.add(id(block))
+            pending.extend(block.successors_for(registry))
+    return True
+
+
+class OwnedTemporaries:  # pylint: disable=too-few-public-methods
+    """Which owned handles a statement holds, for the raise edges' clean up.
+
+    First among the lowering's bases, so that it sees every owned handle any
+    of them makes: each is noted when made and forgotten when its statement
+    ends; `ExceptionLowering._go_raise` lets go of the ones still owned.
+    """
+
+    def _handle(self, node: ast.expr) -> tuple[Value, bool]:
+        handle, owned = super()._handle(node)  # type: ignore[misc]
+        live: list[Value] = getattr(self, "_live", [])
+        if owned and all(held is not handle for held in live):
+            live.append(handle)
+        return handle, owned
+
+    def _statement(self, node: ast.stmt) -> None:
+        live: list[Value] = getattr(self, "_live", [])
+        mark = len(live)
+        try:
+            super()._statement(node)  # type: ignore[misc]
+        finally:
+            del live[mark:]
 
 
 def _calls_super_init(node: ast.FunctionDef) -> bool:

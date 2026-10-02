@@ -91,7 +91,14 @@ def emit_module(module: IRModule, target: TargetInfo | None = None) -> str:
     so a cross build lowers for its target, and the lowering cache keys
     on it.
     """
-    from llvmlite import ir
+    try:
+        from llvmlite import ir
+    except ImportError as error:
+        from .jit import LlvmUnavailable
+
+        raise LlvmUnavailable(
+            "llvmlite is not installed, so the LLVM backend is unavailable"
+        ) from error
 
     try:
         return str(_ModuleEmitter(ir, module, target or host_target()).run())

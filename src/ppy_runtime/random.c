@@ -471,20 +471,71 @@ double ppy_random_expo(int8_t *state, double lambd) {
 
 /* `gauss(mu, sigma)`, with the value it holds back, in a standalone binary. */
 double ppy_random_gauss(int8_t *state, double mu, double sigma) {
-    int64_t *cell = ppy_random_cell();
+    return ppy_random_gauss_held(state, mu, sigma, (int8_t *)(ppy_random_cell() + 3));
+}
+
+/* `gauss`, the value it holds back in `held`: [0] whether there is one,
+   [1] its bits. */
+double ppy_random_gauss_held(int8_t *state, double mu, double sigma, int8_t *where) {
+    int64_t *held = (int64_t *)where;
     double z;
-    if (cell[3]) {
-        memcpy(&z, &cell[4], sizeof z);
-        cell[3] = 0;
+    if (held[0]) {
+        memcpy(&z, &held[1], sizeof z);
+        held[0] = 0;
     } else {
         double x2pi = ppy_random_double(state) * 6.283185307179586;
         double g2rad = sqrt(-2.0 * log(1.0 - ppy_random_double(state)));
         z = cos(x2pi) * g2rad;
         double next = sin(x2pi) * g2rad;
-        memcpy(&cell[4], &next, sizeof next);
-        cell[3] = 1;
+        memcpy(&held[1], &next, sizeof next);
+        held[0] = 1;
     }
     return mu + z * sigma;
+}
+
+/* A `random.Random` of its own: a sequence of 316 words, the state in the
+   first 2500 bytes, what `gauss` holds back in words 313 and 314, and 0 in
+   word 315 (`ppy_random_external`), seeded from `seed` (`given`) or from
+   the operating system. */
+int8_t *ppy_random_new(int64_t given, int64_t seed) {
+    int8_t *made = ppy_seq_new(316, 1, 0, 0);
+    ppy_random_seed_instance(made, given, seed);
+    return made;
+}
+
+/* `r.seed(a)`, `r.seed()`: the state, and what `gauss` held back, forgotten. */
+void ppy_random_seed_instance(int8_t *made, int64_t given, int64_t seed) {
+    int8_t *state = ppy_seq_at(made, 0);
+    if (given) {
+        ppy_random_seed_int(state, seed);
+    } else {
+        ppy_random_seed_system(state);
+    }
+    ((int64_t *)state)[313] = 0;
+}
+
+/* A `random.Random` Python lends: the same sequence, its word 315 the
+   address of the object's own state, which draws move in place. */
+int8_t *ppy_random_external(int64_t address) {
+    int8_t *made = ppy_seq_new(316, 1, 0, 0);
+    ((int64_t *)ppy_seq_at(made, 0))[315] = address;
+    return made;
+}
+
+/* Whether an instance is one Python lent: its `gauss` and `seed` touch
+   `gauss_next`, which Python keeps. */
+int64_t ppy_random_instance_lent(int8_t *made) {
+    return ((int64_t *)ppy_seq_at(made, 0))[315] != 0;
+}
+
+/* An instance's state, and where `gauss` holds back a value. */
+int8_t *ppy_random_instance_state(int8_t *made) {
+    int64_t lent = ((int64_t *)ppy_seq_at(made, 0))[315];
+    return lent ? (int8_t *)(intptr_t)lent : ppy_seq_at(made, 0);
+}
+
+int8_t *ppy_random_instance_held(int8_t *made) {
+    return (int8_t *)((int64_t *)ppy_seq_at(made, 0) + 313);
 }
 
 /* `paretovariate(alpha)`: `(1 - random()) ** (-1 / alpha)`, drawn before the

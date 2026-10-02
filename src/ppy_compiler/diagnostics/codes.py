@@ -110,6 +110,10 @@ CODES: dict[str, str] = {
         "needed (`E1206`, or `E1301` for a parameter that does not take `None`). The program "
         "runs; if the value is `None`, CPython raises there and so does native code."
     ),
+    "W2012": (
+        "The LLVM backend (llvmlite) is not installed, so `ppy run` ran the program on CPython; "
+        "install `ppy-lang[llvm]` for native code."
+    ),
     "R3003": "A list parameter is close to being a borrowed buffer but something blocks it.",
     "W2101": (
         "The build cache index was damaged; it was quarantined and rebuilt, "

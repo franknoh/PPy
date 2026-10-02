@@ -239,8 +239,10 @@ def test_an_empty_display_takes_the_type_of_what_fills_it(write, codes):
 
 @requires_llvm
 def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path):
-    """A closure lowers with the function it is defined in, so it has no entry
-    of its own; its statements count once, under itself."""
+    """A closure lowers with the function it is defined in; its statements count
+    once, under itself. One that shares nothing with a function that stays in
+    Python has a native entry of its own; one that shares a variable stays
+    with it."""
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
     (tmp_path / "nest.ppy").write_text(
         textwrap.dedent(
@@ -255,11 +257,16 @@ def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path
                 return total
 
 
-            def shown(n: int) -> None:
-                def show(x: int) -> None:
-                    print(x)
+            def shown(n: int, **options: int) -> None:
+                k = options.get("k", 1)
 
-                show(n)
+                def show(x: int) -> None:
+                    print(x * k)
+
+                def plain(x: int) -> int:
+                    return x + 1
+
+                show(plain(n))
             """
         ).lstrip("\n"),
         encoding="utf-8",
@@ -268,7 +275,9 @@ def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path
     assert done.returncode == 0, done.stderr
     functions = {f["qualname"].rpartition(".")[2]: f for f in json.loads(done.stdout)["functions"]}
     assert functions["times"]["tier"] in {"native", "internal"}
+    assert functions["shown"]["tier"] == "python"
+    assert functions["plain"]["tier"] in {"native", "internal"}
     assert functions["show"]["tier"] == "python"
-    assert functions["show"]["reason"] == "the function around it stays in Python"
+    assert "shares `k` with the function around it" in functions["show"]["reason"]
     assert functions["scaled"]["statements"] == 5
     assert functions["times"]["statements"] == 1
