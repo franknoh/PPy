@@ -340,7 +340,56 @@ def main() -> None:
 main()
 """
 
+#: A list parameter a closure reads is held by handle: a buffer lent for the
+#: call has no handle for the closure's cell (it read an empty cell, and
+#: crashed, before).
+SHARED_PARAMETERS = """
+from typing import Callable
+
+
+def total(dims: list[int]) -> int:
+    def at(i: int) -> int:
+        return dims[i]
+
+    s = 0
+    for i in range(len(dims)):
+        s += at(i)
+    return s
+
+
+def scaled(xs: list[float], k: float) -> float:
+    f: Callable[[int], float] = lambda i: xs[i] * k
+    return sum(f(i) for i in range(len(xs)))
+
+
+def picker(xs: list[int]) -> Callable[[int], int]:
+    return lambda i: xs[i] + len(xs)
+
+
+def keyed(xs: list[int], ws: list[int]) -> list[int]:
+    return sorted(range(len(xs)), key=lambda i: -xs[i] * ws[i])
+
+
+def use(n: int) -> int:
+    f = picker(list(range(n)))
+    return f(1) + f(n - 1)
+
+
+def main() -> None:
+    print(total([1, 2, 3, 4]), scaled([1.0, 2.5], 2.0), use(5), keyed([3, 1, 2], [1, 5, 1]))
+    try:
+        empty: list[int] = []
+        print(total(empty))
+        print(picker([1])(3))
+    except IndexError as e:
+        print("IndexError", e)
+
+
+main()
+"""
+
 PROGRAMS = {
+    "shared_parameters": (SHARED_PARAMETERS, ["total", "scaled", "picker", "keyed", "use"]),
     "loops": (LOOPS, ["captured", "walked"]),
     "held": (HELD, ["dispatch", "rules"]),
     "basics": (BASICS, ["apply", "use_named", "use_lambda", "counter", "make_adder", "adders"]),
@@ -507,3 +556,51 @@ def test_python_calls_a_function_using_closures_natively(tmp_path: Path):
     for name in ("apply", "make_adder"):
         found = module.functions.get(f"prog.{name}")
         assert found is None or not found.exposed, name
+
+
+LENT_TO_A_CLOSURE = """
+import ppy
+
+
+@ppy.native
+def total(dims: list[int]) -> int:
+    def at(i: int) -> int:
+        return dims[i]
+
+    s = 0
+    for i in range(len(dims)):
+        s += at(i) * (i + 1)
+    return s
+
+
+@ppy.native
+def weighted(xs: list[float], ws: list[float]) -> float:
+    def term(i: int) -> float:
+        return xs[i] * ws[i]
+
+    return sum(term(i) for i in range(len(xs)))
+
+
+dims = list(range(1, 50))
+print(total(dims), total([]), dims[:3])
+print(weighted([1.0, 2.0, 3.5], [0.5, 0.25, 2.0]))
+try:
+    weighted([1.0, 2.0], [1.0])
+except IndexError as e:
+    print("IndexError", e)
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_python_lends_a_list_a_nested_function_reads(tmp_path: Path):
+    """Python passes a list to a native function whose nested function reads
+    it: the list crosses by handle, which the closure's cell holds."""
+    expected = _expected(tmp_path, LENT_TO_A_CLOSURE)
+    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    assert _output(done).strip() == expected
+    for function in ("total", "weighted"):
+        explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
+        assert "llvm backend: native" in explained.stdout, (function, explained.stdout)
+        assert "python boundary" in explained.stdout, (function, explained.stdout)

@@ -890,8 +890,57 @@ def main() -> None:
 main()
 """
 
+#: `r.choice(xs)` is an element `xs` keeps, not a new string: concatenated
+#: onto, bound, appended, and returned, it is never let go of (it was, once
+#: per draw, freed under the list and drawn again).
+CHOSEN = """
+import random
+
+
+def words(rng: random.Random, parts: list[str], n: int) -> list[str]:
+    out: list[str] = []
+    for _ in range(n):
+        word = ""
+        for _ in range(3):
+            word += rng.choice(parts)
+        out.append(word)
+    return out
+
+
+def picks(rng: random.Random, parts: list[str], n: int) -> list[str]:
+    out: list[str] = []
+    for _ in range(n):
+        w = rng.choice(parts)
+        out.append(w)
+        out.append(rng.choice(parts) + "!")
+    return out
+
+
+def one(rng: random.Random, parts: list[str]) -> str:
+    return rng.choice(parts)
+
+
+def chosen(seed: int) -> str:
+    rng = random.Random(seed)
+    parts = [str(i) * (i + 1) for i in range(6)]
+    a = words(rng, parts, 200)
+    b = picks(rng, parts, 100)
+    other = random.Random(seed + 1)
+    c = one(other, parts)
+    return f"{a[-3:]} {b[-4:]} {c} {one(rng, parts)} {len(''.join(a))}"
+
+
+def main() -> None:
+    print(chosen(3))
+    print(chosen(11))
+
+
+main()
+"""
+
 #: name -> (source, the functions `ppy explain` must call native).
 PROGRAMS = {
+    "chosen": (CHOSEN, ("words", "picks", "one", "chosen")),
     "random": (RANDOM, ("draws",)),
     "heaps": (HEAPS, ("heaps", "dijkstra", "searches")),
     "errors": (ERRORS, ("errs",)),
@@ -1326,6 +1375,46 @@ def test_a_generator_python_lends_is_drawn_from_in_place(tmp_path: Path):
     for function in ("walk", "overflow_after_draw", "with_gauss"):
         explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
         assert "llvm backend: native" in explained.stdout, (function, explained.stdout)
+
+
+LENT_CHOICE = """
+import random
+
+SYLLABLES = ["ka", "lo", "mi", "ne", "ru"]
+
+
+def make_words(rng: random.Random, count: int) -> list[str]:
+    words: list[str] = []
+    for _ in range(count):
+        word = ""
+        for _ in range(3):
+            word += rng.choice(SYLLABLES)
+        words.append(word)
+    return words
+
+
+def main() -> None:
+    rng = random.Random(3)
+    words = make_words(rng, 3000)
+    print(words[:4], len(set(words)), rng.random())
+    print(make_words(rng, 5), SYLLABLES)
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_choice_from_a_module_list_python_lends_is_kept_by_the_list(tmp_path: Path):
+    """A generator Python passes, drawing from a module-level `list[str]`: each
+    string drawn is concatenated and the list keeps it (it segfaulted)."""
+    expected = _expected(tmp_path, LENT_CHOICE)
+    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    assert _output(done).strip() == expected
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.make_words")
+    assert "llvm backend: native" in explained.stdout, explained.stdout
 
 
 AS_DICT = """
