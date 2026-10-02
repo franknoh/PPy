@@ -22,6 +22,7 @@ __all__ = [
     "MODULE_ATTRIBUTES",
     "LIBRARY_MAPPINGS",
     "MAPPING_OWN",
+    "cache_attribute",
     "call",
     "instance_attribute",
     "lookup",
@@ -368,6 +369,7 @@ _opaque("fractions", ("Fraction",))
 _opaque("uuid", ("UUID",))
 _opaque("io", ("TextIOWrapper", "BytesIO", "StringIO", "BufferedReader", "BufferedWriter"))
 _opaque("types", ("ModuleType", "FunctionType", "SimpleNamespace"))
+_opaque("functools", ("_CacheInfo", "partial"))
 _opaque("enum", ("Enum", "IntEnum", "Flag", "IntFlag"))
 _opaque("argparse", ("Namespace", "ArgumentParser"))
 _opaque("subprocess", ("CompletedProcess", "Popen"))
@@ -609,6 +611,10 @@ def instance_attribute(
     return T.substitute(known[0], bindings), known[1]
 
 
+#: The wrapper `functools.cache` and `lru_cache` make, and what `cache_info` gives.
+_CACHE_WRAPPER = "functools._lru_cache_wrapper"
+_CACHE_INFO = "functools._CacheInfo"
+
 #: Callables the analyzer knows the result type and effects of.
 _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "pathlib.Path": _fn("pathlib.Path", _PATH, _ALLOC),
@@ -721,8 +727,27 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "functools.reduce": _fn(
         "functools.reduce", T.ANY, _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK)
     ),
+    # A cached function's wrapper: its counts, and emptying it.
+    f"{_CACHE_WRAPPER}.cache_info": _fn(
+        f"{_CACHE_WRAPPER}.cache_info", _library(_CACHE_INFO), EffectSet.of(Effect.READ_GLOBAL)
+    ),
+    f"{_CACHE_WRAPPER}.cache_clear": _fn(
+        f"{_CACHE_WRAPPER}.cache_clear", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)
+    ),
+    f"{_CACHE_WRAPPER}.cache_parameters": _fn(
+        f"{_CACHE_WRAPPER}.cache_parameters", T.dict_of(T.STR, T.ANY), _ALLOC
+    ),
     **_math(),
 }
+
+
+def cache_attribute(function: T.Callable_, attribute: str) -> T.Type | None:
+    """What `f.cache_info` and the rest are of a function `functools.cache` or
+    `lru_cache` wraps; `f.__wrapped__` is the function itself."""
+    if attribute == "__wrapped__":
+        return function
+    found = _FUNCTIONS.get(f"{_CACHE_WRAPPER}.{attribute}")
+    return found[0] if found is not None else None
 
 #: Module attributes with a known type.
 MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {

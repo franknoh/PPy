@@ -3498,6 +3498,12 @@ class _Checker:
                 return Binding(dunder)
             return Binding(T.UNKNOWN)
         base = T.strip_literal(owner.type)
+        if isinstance(base, T.Callable_) and base.qualname in self.project.functions:
+            decorators = self.project.functions[base.qualname].decorators
+            if {"functools.cache", "functools.lru_cache"} & set(decorators):
+                cached = stdlib.cache_attribute(base, node.attr)
+                if cached is not None:
+                    return Binding(cached)
         if isinstance(base, T.Instance) and base.name == "type":
             # A class held as a value, whichever class: what every class
             # object exposes is known, the rest is that class's business.

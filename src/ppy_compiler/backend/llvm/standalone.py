@@ -26,7 +26,21 @@ from .lowering import LoweringResult, called_back_only, eligible
 __all__ = ["build_standalone", "standalone_ir"]
 
 #: Standard-library modules whose calls the runtime has natively.
-_NATIVE_MODULES = frozenset({"random", "heapq", "bisect", "itertools", "string", "collections"})
+_NATIVE_MODULES = frozenset(
+    {"random", "heapq", "bisect", "itertools", "string", "collections", "functools", "operator"}
+)
+
+#: What `from functools import ...` and `from operator import ...` may name.
+_LIBRARY_NAMES = {
+    "functools": frozenset({"cache", "lru_cache", "reduce", "partial", "cmp_to_key"}),
+    "operator": frozenset(
+        {
+            "add", "sub", "mul", "truediv", "floordiv", "mod", "pow", "neg", "pos", "abs",
+            "and_", "or_", "xor", "lshift", "rshift", "not_", "truth", "eq", "ne", "lt",
+            "le", "gt", "ge", "itemgetter", "attrgetter", "index", "contains", "concat",
+        }
+    ),  # fmt: skip
+}
 
 #: What `from collections import ...` may name in a standalone module.
 _COLLECTIONS = frozenset({"deque", "defaultdict", "Counter", "OrderedDict"})
@@ -464,6 +478,8 @@ def _module_shape(
             if names == "math" and all(name in _MATH_NAMES for name in listed):
                 continue
             if names == "collections" and set(listed) <= _COLLECTIONS:
+                continue
+            if names in _LIBRARY_NAMES and set(listed) <= _LIBRARY_NAMES[names]:
                 continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))
