@@ -141,6 +141,9 @@ class MemoLowering:  # pylint: disable=attribute-defined-outside-init
         for parameter in info.params:
             if parameter.global_of:
                 continue  # a settled global: the same at every call
+            if parameter.has_default:
+                # `f(5)` and `f(5, 2)` are two keys to CPython's cache.
+                raise Unsupported("a cached function with defaults keeps its cache in Python")
             kinds = _words(parameter.type)
             if kinds is None or parameter.kind != "positional_or_keyword":
                 raise Unsupported(
