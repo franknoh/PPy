@@ -839,6 +839,42 @@ def main() -> None:
 main()
 """
 
+VALUES = """
+import operator
+from collections.abc import Callable
+from functools import partial
+from operator import itemgetter
+
+
+def fold(f: Callable[[int, int], int], xs: list[int], start: int) -> int:
+    acc = start
+    for x in xs:
+        acc = f(acc, x)
+    return acc
+
+
+def scale(k: int, x: int) -> int:
+    return k * x
+
+
+def apply_all(n: int) -> str:
+    a = fold(operator.add, [1, 2, 3], n)
+    b = fold(operator.mul, [1, 2, 3], n)
+    c = fold(max, [4, 9, 2], n)
+    g: Callable[[int], int] = partial(scale, 3)
+    pairs = [[3, 1], [1, 2], [2, 0]]
+    first: Callable[[list[int]], int] = itemgetter(0)
+    keyed = first(pairs[1]) + first(pairs[2])
+    return f"{a} {b} {c} {g(5)} {keyed}"
+
+
+def main() -> None:
+    print(apply_all(10))
+
+
+main()
+"""
+
 #: name -> (source, the functions `ppy explain` must call native).
 PROGRAMS = {
     "random": (RANDOM, ("draws",)),
@@ -861,6 +897,8 @@ PROGRAMS = {
     "counted": (COUNTED, ("majority_vote", "inplace", "solution")),
     # Native code's own: passed between native functions by handle.
     "passed": (PASSED, ("fill", "tally", "drain", "pick", "run")),
+    # `operator.add`, `max`, and a `partial` passed where a function goes.
+    "values": (VALUES, ("fold", "apply_all")),
 }
 
 

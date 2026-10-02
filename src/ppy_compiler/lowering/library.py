@@ -168,6 +168,13 @@ class LibraryLowering:
         return super()._made(kind, node)  # type: ignore[misc,no-any-return]
 
     def _handle(self, node: ast.expr) -> tuple[Value, bool]:
+        if isinstance(node, (ast.Attribute, ast.Call)):
+            lambda_ = self._as_lambda(node)
+            if lambda_ is not None:
+                # `operator.add`, `itemgetter(0)` passed as a function value.
+                made = self._function_value(lambda_)
+                assert made is not None
+                return made, True
         if isinstance(node, ast.Call) and self._called_target(node) == _RANDOM:
             return self._new_generator(node), True
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
