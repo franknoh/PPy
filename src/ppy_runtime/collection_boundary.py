@@ -882,7 +882,6 @@ def _generator_layout() -> bool:
     asked once, of a generator made for it."""
     if not _LAYOUT:
         import random  # pylint: disable=import-outside-toplevel
-        import sys  # pylint: disable=import-outside-toplevel
 
         found = False
         if sys.implementation.name == "cpython":
