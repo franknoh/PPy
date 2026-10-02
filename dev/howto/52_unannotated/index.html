@@ -4678,11 +4678,11 @@ checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultr
 <tbody>
 <tr>
 <td><code>python numbers.ppy</code></td>
-<td style="text-align: right;">7.22</td>
+<td style="text-align: right;">7.27</td>
 </tr>
 <tr>
 <td><code>ppy run numbers.ppy</code>, after the first run built the cache</td>
-<td style="text-align: right;">1.96</td>
+<td style="text-align: right;">0.50</td>
 </tr>
 </tbody>
 </table>
@@ -4714,18 +4714,14 @@ checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultr
 <tr>
 <td><code>mean([float(digit_sum(n)) for n in range(1_000_000)])</code></td>
 <td style="text-align: right;">0.21</td>
-<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">0.11</td>
 </tr>
 </tbody>
 </table>
-<p>The last line is slower under <code>ppy run</code>. Its comprehension runs in Python
-and calls <code>digit_sum(n)</code> a million times, leaving <code>base</code> to its default.
-A call from Python that leaves out a default, or names an argument, is
-bound by the boundary in Python against the function's signature, which
-costs about 1.5 µs; the same call with both arguments, <code>digit_sum(n, 10)</code>,
-costs about 70 ns, against about 155 ns for CPython's own call. A loop
-that calls a native function many times from Python should pass every
-argument by position, or move into a function of its own.</p>
+<p>The last line's comprehension runs in Python and calls <code>digit_sum(n)</code> a
+million times, leaving <code>base</code> to its default. The generated wrapper binds
+such a call itself, from the parameter names and <code>__defaults__</code>, so it
+costs what <code>digit_sum(n, 10)</code> does.</p>
 <p>The program has no <code>main()</code>, so there is no standalone build of it; a
 standalone binary needs a native <code>main</code> to start from.</p>
 <h2 id="where-the-code-comes-from">Where the code comes from<a class="headerlink" href="#where-the-code-comes-from" title="Permanent link">&para;</a></h2>

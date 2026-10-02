@@ -4807,9 +4807,13 @@ learning which argument shapes repeat).</p>
   barrier or a write that failed.</li>
 <li>A function that reads settled module globals keeps a Python frame that
   reads them, which then calls the C entry.</li>
-<li>A call with keywords, or with defaults left out, is bound in Python
-  against the function's signature (<code>binding.keyed</code>) and then calls the C
-  entry in order.</li>
+<li>A call with keywords, or with defaults left out, is bound in C: the
+  wrapper matches <code>kwnames</code> against the Python function's parameter names
+  (read from its code object when the wrapper is bound) and fills what is
+  left out from its <code>__defaults__</code> and <code>__kwdefaults__</code>. A call that does
+  not bind that way goes to the Python function, which raises CPython's
+  <code>TypeError</code>; a guard that refuses the bound arguments hands Python the
+  call as it was spelled.</li>
 </ul>
 <p>A two-int call costs 29 ns through the wrapper, against 30 ns for CPython's
 own call. <a href="../../guide/native-lowering/#what-a-call-costs">What a call costs</a>

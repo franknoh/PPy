@@ -4717,6 +4717,16 @@ program as <code>ppy run</code> runs it; the CPython column is the same program 
 <td style="text-align: right;">30</td>
 </tr>
 <tr>
+<td>the same, <code>y</code> passed by keyword</td>
+<td style="text-align: right;">38</td>
+<td style="text-align: right;">34</td>
+</tr>
+<tr>
+<td>the same, <code>y</code> left to its default</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">32</td>
+</tr>
+<tr>
 <td>a loop of 100 additions</td>
 <td style="text-align: right;">65</td>
 <td style="text-align: right;">886</td>
@@ -4894,11 +4904,12 @@ the method stay in Python.</p>
 out, the boundary binds the call by the Python function's own signature,
 with its own default values, and calls the native entry in order. A call
 that does not bind goes to the Python function, which raises CPython's
-<code>TypeError</code>. The binding runs in Python, so such a call costs more than one
-with every argument by position: about 1.5 µs for <code>digit_sum(n)</code> of
-<code>def digit_sum(number: int, base: int = 10)</code>, against 68 ns for
-<code>digit_sum(n, 10)</code> and 155 ns for CPython's call. A Python loop that calls
-a native function many times should pass every argument by position.</p>
+<code>TypeError</code>. The generated C wrapper does this binding itself: it matches
+the call's keyword names against the parameter names and takes left-out
+values from the function's <code>__defaults__</code> and <code>__kwdefaults__</code>, so such a
+call costs about what a positional one does (<a href="#what-a-call-costs">the table
+above</a>). When a guard refuses the bound arguments,
+Python gets the call as it was written.</p>
 <p>A function whose writes all happen inside a callee it handed a buffer to
 lowers too: the write lands in the caller's memory either way. The reverse
 also lowers: filling memory you allocated and then passing it on.</p>
