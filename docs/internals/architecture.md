@@ -174,9 +174,13 @@ The same wrapper carries what used to need Python frames:
   barrier or a write that failed.
 - A function that reads settled module globals keeps a Python frame that
   reads them, which then calls the C entry.
-- A call with keywords, or with defaults left out, is bound in Python
-  against the function's signature (`binding.keyed`) and then calls the C
-  entry in order.
+- A call with keywords, or with defaults left out, is bound in C: the
+  wrapper matches `kwnames` against the Python function's parameter names
+  (read from its code object when the wrapper is bound) and fills what is
+  left out from its `__defaults__` and `__kwdefaults__`. A call that does
+  not bind that way goes to the Python function, which raises CPython's
+  `TypeError`; a guard that refuses the bound arguments hands Python the
+  call as it was spelled.
 
 A two-int call costs 29 ns through the wrapper, against 30 ns for CPython's
 own call. [What a call costs](../guide/native-lowering.md#what-a-call-costs)

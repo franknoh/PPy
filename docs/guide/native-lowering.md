@@ -57,6 +57,8 @@ program as `ppy run` runs it; the CPython column is the same program under
 |---|---:|---:|
 | `x + y` of two ints, kept in Python by the cost model | 29 | 30 |
 | `x + y` of two ints, `@ppy.native` | 29 | 30 |
+| the same, `y` passed by keyword | 38 | 34 |
+| the same, `y` left to its default | 32 | 32 |
 | a loop of 100 additions | 65 | 886 |
 | `sum` of a borrowed buffer of 100 ints | 67 | 254 |
 | a guard that fails, so the Python body runs | 82 | 36 |
@@ -227,9 +229,8 @@ that does not bind goes to the Python function, which raises CPython's
 `TypeError`. The generated C wrapper does this binding itself: it matches
 the call's keyword names against the parameter names and takes left-out
 values from the function's `__defaults__` and `__kwdefaults__`, so such a
-call costs about what a positional one does (33 ns with a default left out
-and 38 ns with a keyword, against 32 ns by position, in
-`examples/bench_boundary.py`). When a guard refuses the bound arguments,
+call costs about what a positional one does ([the table
+above](#what-a-call-costs)). When a guard refuses the bound arguments,
 Python gets the call as it was written.
 
 A function whose writes all happen inside a callee it handed a buffer to
