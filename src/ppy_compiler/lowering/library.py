@@ -279,9 +279,7 @@ class LibraryLowering:
         b.at_end(missing)
         if kind.flavor == _COUNTER:
             # `Counter.__missing__`: 0, and the key is not added.
-            zero = self._alloca(I64, "count.zero")  # type: ignore[attr-defined]
-            core.store(b, self._word(0), zero)  # type: ignore[attr-defined]
-            core.store(b, core.cast(b, zero, HANDLE), slot)
+            core.store(b, rt("ppy_counter_zero", (), HANDLE), slot)
         else:
             # `defaultdict.__missing__`: the factory's value, then the entry.
             value = self._default_value(shape, handle)
@@ -609,7 +607,23 @@ class LibraryLowering:
         self._add_formatted(builder, node, -1, "")
         return self._rt("ppy_str_finish", (builder,), HANDLE)  # type: ignore[attr-defined,no-any-return]
 
+    def _empty_library(self, node: ast.expr) -> str | None:
+        """`deque()`, `Counter()`, `OrderedDict()` shown where they are made,
+        holding nothing yet: their text."""
+        if not isinstance(node, ast.Call) or node.args or node.keywords:
+            return None
+        if self._kind_of(node) is not None:  # type: ignore[attr-defined]
+            return None
+        lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
+        found = lexical.targets_at(node.func) if isinstance(lexical, LexicalBindings) else set()
+        texts = {_DEQUE: "deque([])", _COUNTER: "Counter()", _ORDERED: "OrderedDict()"}
+        return texts.get(next(iter(found))) if len(found) == 1 else None
+
     def _add_formatted(self, builder: Value, node: ast.expr, conversion: int, spec: str) -> None:
+        empty = self._empty_library(node)
+        if empty is not None and not spec:
+            self._add_text(builder, empty)  # type: ignore[attr-defined]
+            return
         common = self._counter_call(node, "most_common")
         if common is not None:
             if spec:

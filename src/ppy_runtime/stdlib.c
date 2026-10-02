@@ -972,3 +972,10 @@ int64_t ppy_map_end_entry(int8_t *handle, int64_t last) {
     }
     return ppy_map_back(handle, ((int64_t *)handle)[3]);
 }
+
+/* A count of 0, read where a `Counter` has no entry for the key. */
+int8_t *ppy_counter_zero(void) {
+    static int64_t zero[1];
+    zero[0] = 0;
+    return (int8_t *)zero;
+}

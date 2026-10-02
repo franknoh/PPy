@@ -225,6 +225,10 @@ def _dict(args: Sequence[Arg]) -> BuiltinResult:
         base = T.strip_literal(args[0].type)
         if isinstance(base, T.Instance) and base.name == "dict" and len(base.args) == 2:
             return BuiltinResult(base, Facts(), _ALLOC)
+        if isinstance(base, T.Instance) and base.name in _LIBRARY_MAPPINGS and base.args:
+            # A copy of a `defaultdict`, an `OrderedDict`, or a `Counter`'s counts.
+            value = T.INT if base.name == "collections.Counter" else base.args[-1]
+            return BuiltinResult(T.dict_of(base.args[0], value), Facts(), _ALLOC)
     return BuiltinResult(T.dict_of(T.ANY, T.ANY), Facts(), _ALLOC)
 
 

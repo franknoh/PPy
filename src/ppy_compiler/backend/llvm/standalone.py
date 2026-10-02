@@ -26,7 +26,10 @@ from .lowering import LoweringResult, called_back_only, eligible
 __all__ = ["build_standalone", "standalone_ir"]
 
 #: Standard-library modules whose calls the runtime has natively.
-_NATIVE_MODULES = frozenset({"random", "heapq", "bisect", "itertools", "string"})
+_NATIVE_MODULES = frozenset({"random", "heapq", "bisect", "itertools", "string", "collections"})
+
+#: What `from collections import ...` may name in a standalone module.
+_COLLECTIONS = frozenset({"deque", "defaultdict", "Counter", "OrderedDict"})
 
 #: What `from math import ...` may name in a standalone module.
 _MATH_NAMES = (
@@ -460,7 +463,7 @@ def _module_shape(
                 continue
             if names == "math" and all(name in _MATH_NAMES for name in listed):
                 continue
-            if names == "collections" and listed == ["deque"]:
+            if names == "collections" and set(listed) <= _COLLECTIONS:
                 continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))
