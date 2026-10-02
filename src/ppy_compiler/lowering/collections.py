@@ -710,12 +710,16 @@ class CollectionLowering:
         Where a subclass overrides the method, the call goes by the class the
         object was made as, which its tag says.
         """
-        if keywords:
-            raise Unsupported(f"`{attr}` takes positional arguments natively")
         function, signature, qualname = self._method(shape, attr)
         rest = _Parameters(tuple(signature.parameters[1:]))  # type: ignore[attr-defined]
+        spelled = self._spelled_of(qualname, arguments, keywords, 1)  # type: ignore[attr-defined]
+        if spelled is not arguments and not exact and self._overrides(shape, attr):
+            # An override binds the call by its own parameters.
+            raise Unsupported(
+                f"`{attr}` takes positional arguments natively where it is overridden"
+            )
         waiting = len(self._temporaries)  # type: ignore[attr-defined]
-        values = self._call_arguments(rest, arguments, qualname)  # type: ignore[attr-defined]
+        values = self._call_arguments(rest, spelled, qualname)  # type: ignore[attr-defined]
         temporaries = self._temporaries[waiting:]  # type: ignore[attr-defined]
         del self._temporaries[waiting:]  # type: ignore[attr-defined]
         results = function.results  # type: ignore[attr-defined]

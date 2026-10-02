@@ -448,15 +448,17 @@ def _bind(
         owner=owner,
     )
 
+    arity = len(signature.parameters)
     if fast_entry is not None:
         # The generated wrapper does the parsing, the guards, the specialization
         # choice, the call, and the boxing in C; `NotImplemented` is its signal
         # that a guard failed. While the function is still learning which
         # argument shapes repeat, Python watches alongside.
         def fast_wrapper(*args: object, **keywords: object) -> object:
-            if keywords:
-                # Python binds keywords; the native code takes its arguments in order.
-                return fallback(*args, **keywords)
+            if keywords or len(args) != arity:
+                # Python binds keywords and defaults; the native code takes
+                # its arguments in order.
+                return _keyword_call(fallback, fast_wrapper, arity, args, keywords)
             if binding.observing:
                 _watch(binding, signature, args, policy, specializer, info, register)
             result = fast_entry(*args)
@@ -474,7 +476,7 @@ def _bind(
 
     def wrapper(*args: object, **keywords: object) -> object:
         if keywords or len(args) != len(expanders):
-            return fallback(*args, **keywords)
+            return _keyword_call(fallback, wrapper, len(expanders), args, keywords)
         atoms: list[object] = []
         # `borrowed` keeps each unboxed buffer alive for the duration of the call.
         borrowed: list[object] = []
@@ -540,6 +542,55 @@ def _bind(
     return binding
 
 
+#: Each Python function's signature, as `_keyword_call` binds by it; None
+#: where the native entry cannot take what it binds.
+_SIGNATURES: dict[int, tuple[object, Any]] = {}
+
+
+def _binder(fallback: Callable[..., object], count: int) -> Any:
+    """The `inspect.Signature` a call to `fallback` binds by, where its
+    parameters are the native entry's `count` ones in order: no `*args`, no
+    `**kwargs`. None otherwise."""
+    found = _SIGNATURES.get(id(fallback))
+    if found is not None and found[0] is fallback:
+        return found[1]
+    import inspect  # pylint: disable=import-outside-toplevel
+
+    try:
+        signature = inspect.signature(fallback)
+    except (TypeError, ValueError):
+        signature = None
+    if signature is not None:
+        kinds = [p.kind for p in signature.parameters.values()]
+        variadic = (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        if len(kinds) != count or any(kind in variadic for kind in kinds):
+            signature = None
+    _SIGNATURES[id(fallback)] = (fallback, signature)
+    return signature
+
+
+def _keyword_call(
+    fallback: Callable[..., object],
+    entry: Callable[..., object],
+    count: int,
+    args: tuple,
+    keywords: dict[str, object],
+) -> object:
+    """A call Python spelled with keywords, or with defaults left out: bound
+    as Python binds it, then made in order through the native entry. A call
+    that does not bind is the Python function's, which raises CPython's
+    `TypeError` for it."""
+    signature = _binder(fallback, count)
+    if signature is None:
+        return fallback(*args, **keywords)
+    try:
+        bound = signature.bind(*args, **keywords)
+    except TypeError:
+        return fallback(*args, **keywords)
+    bound.apply_defaults()
+    return entry(*bound.arguments.values())
+
+
 def _namespace(function: object) -> dict | None:
     """The globals a Python function reads: its module's, or, for the one
     `_bind_globals` makes, those of the function it stands for. The wrapper
@@ -590,7 +641,7 @@ def _bind_globals(  # type: ignore[no-untyped-def]
 
     def wrapper(*args: object, **keywords: object) -> object:
         if keywords or len(args) != count:
-            return fallback(*args, **keywords)
+            return _keyword_call(fallback, wrapper, count, args, keywords)
         try:
             values = [read(module, name) for module, name in places]
         except KeyError:
@@ -685,7 +736,7 @@ def _bind_collections(  # type: ignore[no-untyped-def]
 
     def wrapper(*args: object, **keywords: object) -> object:
         if keywords or len(args) != len(expanders):
-            return fallback(*args, **keywords)
+            return _keyword_call(fallback, wrapper, len(expanders), args, keywords)
         boundary = crossing.Boundary(rt, classes)
         try:
             if effects is not None:

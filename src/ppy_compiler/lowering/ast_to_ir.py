@@ -92,6 +92,7 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
+from .calls import CallBinding
 from .closures import ClosureLowering
 from .collections import HANDLE, Held, crossing_classes, records_of
 from .containers import ContainerLowering
@@ -1468,6 +1469,7 @@ class _GuardSite:
 
 class _FunctionLowering(  # pylint: disable=too-many-ancestors
     OwnedTemporaries,
+    CallBinding,
     StdlibLowering,
     ExpressionLowering,
     FrameLowering,
@@ -3107,7 +3109,10 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             reduced = self._reduction(target, node)
             if reduced is not None:
                 return reduced
-        if node.keywords:
+        if node.keywords and not self._binds_keywords(node):
+            through = self._effect_python_call(node, discard_result)
+            if through is not None:
+                return through
             raise Unsupported("keyword arguments have no native ABI")
         if self.frontend.standalone:
             read = self._standalone_read(node)
@@ -3228,12 +3233,13 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         A collection argument is typed by what the checker said of it, since
         its handle says nothing of what it holds, and it is passed by handle.
         """
-        if len(node.args) != len(info.params):
+        spelled = self._spelled(qualname, node)
+        if len(spelled) != len(info.params):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         values: list[Value] = []
         temporaries: list[Value] = []
         bindings: dict[T.TypeVar_, T.Type] = {}
-        for argument, param in zip(node.args, info.params, strict=True):
+        for argument, param in zip(spelled, info.params, strict=True):
             if self._is_collection(argument) or self._string_of(argument) is not None:
                 handle, owned = self._handle(argument)
                 if owned:
@@ -4544,11 +4550,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if aio_dialect.is_async(function):
             if not aio_dialect.is_async(self.function):
                 raise Unsupported(f"`{qualname}` is a coroutine; only a coroutine awaits it")
-            started = self._call_arguments(signature, node.args, qualname)
+            started = self._call_arguments(signature, self._spelled(qualname, node), qualname)
             inner = function.results[0] if function.results else VOID
             return aio_dialect.create(self.b, function.name, tuple(started), inner)
         waiting = len(self._temporaries)
-        arguments = self._call_arguments(signature, node.args, qualname)
+        arguments = self._call_arguments(signature, self._spelled(qualname, node), qualname)
         temporaries = self._temporaries[waiting:]
         del self._temporaries[waiting:]
         if signature.returns_tuple:

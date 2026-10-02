@@ -28,9 +28,11 @@ boundary's C wrapper, which knows nothing of held output, is not used for it.
 from __future__ import annotations
 
 import ast
+import sys
 from dataclasses import dataclass, field
 
 from ..analysis import types as T
+from ..analysis.effects import Effect
 from ..analysis.lexical import LexicalBindings
 from ..backend.llvm.lowering import Unsupported
 from ..ir import (
@@ -51,7 +53,29 @@ from .collections import HANDLE, STR, class_tag
 __all__ = ["EffectLowering", "EffectSummary", "check_effects", "wants_exceptions"]
 
 #: The kinds of `pyio.c`.
-_NONE, _INT, _FLOAT, _BOOL, _STR, _OBJECT = 0, 1, 2, 3, 4, 5
+_NONE, _INT, _FLOAT, _BOOL, _STR, _OBJECT, _KEYWORD = 0, 1, 2, 3, 4, 5, 6
+
+#: A tuple result's kind: this bit, the count, and each item's kind (`pyio.c`).
+_TUPLE = 8
+
+#: Effects a callee may have and still be run twice unseen: it reads, allocates,
+#: and may raise, and changes nothing.
+_RERUNNABLE = frozenset(
+    {Effect.ALLOC, Effect.READ_OBJECT, Effect.READ_MEMORY, Effect.READ_GLOBAL, Effect.MAY_RAISE}
+)
+
+#: Builtins that, given numbers, bools, strings, and `None`, run no code of the
+#: program and change nothing: a call to one is run again unseen.
+_PURE_BUILTINS = frozenset(
+    {
+        "abs", "all", "any", "ascii", "bin", "bool", "chr", "divmod", "float", "format",
+        "hash", "hex", "int", "isinstance", "len", "max", "min", "oct", "ord", "pow",
+        "repr", "round", "str", "sum",
+    }
+)  # fmt: skip
+
+#: Builtins whose result is always of the type the checker gives it.
+_CERTAIN_BUILTINS = frozenset({"input", "repr", "ascii", "str", "chr", "bin", "hex", "oct"})
 
 #: `open`'s parameters in order, and what each is when not given.
 _OPEN = ("file", "mode", "buffering", "encoding", "errors", "newline")
@@ -133,6 +157,22 @@ def wants_exceptions(nodes: list[ast.AST]) -> bool:
             if inner.func.id == "print" and any(k.arg == "flush" for k in inner.keywords):
                 return True
     return False
+
+
+def _result_kind(returned: T.Type) -> int:
+    """The `pyio.c` kind a result of this type is taken back as, or -1."""
+    found = {T.INT: _INT, T.FLOAT: _FLOAT, T.BOOL: _BOOL, T.STR: _STR}.get(returned)  # type: ignore[call-overload]
+    if found is not None:
+        return found  # type: ignore[no-any-return]
+    if isinstance(returned, T.Tuple_) and not returned.homogeneous and 0 < len(returned.items) <= 8:
+        kind = _TUPLE | len(returned.items) << 4
+        for index, item in enumerate(returned.items):
+            item_kind = {T.INT: _INT, T.FLOAT: _FLOAT, T.BOOL: _BOOL}.get(T.strip_literal(item))  # type: ignore[call-overload]
+            if item_kind is None:
+                return -1
+            kind |= item_kind << (8 + 4 * index)
+        return kind
+    return -1
 
 
 def _plain(t: T.Type) -> bool:
@@ -493,10 +533,18 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
     def _effect_python_call(self, node: ast.Call, discard: bool) -> Value | None:
         """A call to a function native code has no lowering for, made through
         Python: a function of this module that stayed in Python, one of a
-        module imported, or a builtin. Its arguments are numbers, bools, and
-        strings, boxed; its result one of those, or nothing. None where the
-        call is not one of these."""
-        if not self._effects_on() or node.keywords:
+        module imported, or a builtin. Its arguments are numbers, bools,
+        strings, and `None`, boxed, by position or by keyword; its result one
+        of those, a tuple of numbers, or nothing. None where the call is not
+        one of these.
+
+        A callee that changes nothing a second run could see (`_rerunnable`)
+        is no barrier: its result is checked to be exactly what the checker
+        said, and where it is not, the native call falls back and Python runs
+        it all again. Any other callee is a barrier, after which nothing may
+        fall back, so its result is taken only where it cannot be anything
+        but what native code holds (`_certain`)."""
+        if not self._effects_on():
             return None
         func = node.func
         probe = func
@@ -519,37 +567,117 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
             return None
         if any(isinstance(a, ast.Starred) for a in node.args):
             raise Unsupported("a call into Python with `*arguments` has no native lowering")
+        if any(k.arg is None for k in node.keywords):
+            raise Unsupported("a call into Python with `**keywords` has no native lowering")
         returned = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
+        pure = self._rerunnable(node)
         kind = _NONE
         if not discard and returned != T.NONE:
-            kind = {T.FLOAT: _FLOAT, T.BOOL: _BOOL, T.STR: _STR}.get(returned, -1)  # type: ignore[call-overload]
-            if kind < 0:
-                raise Unsupported(
-                    f"`{ast.unparse(func)}` stays in Python and gives `{returned}`, which a "
-                    "native caller cannot take back through Python (an int may not fit 64 bits)"
+            kind = _result_kind(returned)
+            if kind < 0 or (not pure and not self._certain(node, returned)):
+                why = (
+                    "which native code has no value for"
+                    if kind < 0
+                    else "which Python does not promise, and after the call native code "
+                    "cannot fall back to take something else"
                 )
-        arguments: list[tuple[int, Value, bool]] = []
-        for argument in node.args:
-            if isinstance(argument, ast.Constant) and argument.value is None:
-                arguments.append((_NONE, self._word(0), False))  # type: ignore[attr-defined]
-                continue
-            if self._string_of(argument) is not None:  # type: ignore[attr-defined]
-                handle, owned = self._handle(argument)  # type: ignore[attr-defined]
-                arguments.append((_STR, handle, owned))
-                continue
-            value = self._expr(argument)  # type: ignore[attr-defined]
-            argument_kind = {I64: _INT, F64: _FLOAT}.get(value.type)
-            if argument_kind is None and value.type == BOOL:
-                argument_kind = _BOOL
-            if argument_kind is None:
                 raise Unsupported(
-                    f"`{ast.unparse(argument)}` crosses into Python only as a number, a bool, "
-                    "or a string"
+                    f"`{ast.unparse(func)}` stays in Python and gives `{returned}`, {why}"
                 )
-            arguments.append((argument_kind, value, False))
+        arguments = [self._crossing(argument) for argument in node.args]
+        for keyword in node.keywords:
+            assert keyword.arg is not None
+            name = self._string_literal(keyword.arg)  # type: ignore[attr-defined]
+            arguments.append((_KEYWORD, name, False))
+            arguments.append(self._crossing(keyword.value))
         module = self.info.module  # type: ignore[attr-defined]
-        made = self._python_call(f"{module}:{ast.unparse(func)}", arguments, kind)
+        made = self._python_call(f"{module}:{ast.unparse(func)}", arguments, kind, pure=pure)
         return made if made is not None else self._word(0)  # type: ignore[attr-defined,no-any-return]
+
+    def _crossing(self, argument: ast.expr) -> tuple[int, Value, bool]:
+        """One argument of a call into Python: its kind, its value, and whether
+        the caller owns it."""
+        if isinstance(argument, ast.Constant) and argument.value is None:
+            return (_NONE, self._word(0), False)  # type: ignore[attr-defined]
+        if self._string_of(argument) is not None:  # type: ignore[attr-defined]
+            handle, owned = self._handle(argument)  # type: ignore[attr-defined]
+            return (_STR, handle, owned)
+        value = self._expr(argument)  # type: ignore[attr-defined]
+        argument_kind = {I64: _INT, F64: _FLOAT}.get(value.type)
+        if argument_kind is None and value.type == BOOL:
+            argument_kind = _BOOL
+        if argument_kind is None:
+            raise Unsupported(
+                f"`{ast.unparse(argument)}` crosses into Python only as a number, a bool, "
+                "or a string"
+            )
+        return (argument_kind, value, False)
+
+    def _rerunnable(self, node: ast.Call) -> bool:
+        """Whether a second run of the callee could not be told from the first:
+        a builtin given numbers and strings, a `math` function, or a function
+        of this module whose effects are only reading and allocating. Such a
+        call is no barrier, and the native call may fall back after it."""
+        func = node.func
+        symbols = self.frontend.analysis.symbols  # type: ignore[attr-defined]
+        if isinstance(func, ast.Name):
+            info = symbols.functions.get(func.id)
+            if info is not None:
+                effects = info.effects
+                return effects.is_known() and not (set(effects.effects) - _RERUNNABLE)
+            return func.id in _PURE_BUILTINS and func.id not in symbols.imports
+        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+            binding = symbols.imports.get(func.value.id)
+            return binding is not None and binding.canonical == "math"
+        return False
+
+    def _certain(self, node: ast.Call, returned: T.Type) -> bool:
+        """Whether a barrier callee's result can only be of the type the checker
+        gave it, which native code holds: a builtin or a modelled library
+        function's own result (CPython keeps those promises), or a function of
+        this module every `return` of which gives exactly that type. An `int`
+        never is, whatever its callee: Python's may not fit 64 bits."""
+        if returned not in (T.STR, T.BOOL, T.FLOAT):
+            return False
+        func = node.func
+        symbols = self.frontend.analysis.symbols  # type: ignore[attr-defined]
+        if isinstance(func, ast.Name):
+            info = symbols.functions.get(func.id)
+            if info is not None:
+                return self._returns_exactly(info.node, returned)
+            if func.id in symbols.imports:
+                return False
+            return func.id in _CERTAIN_BUILTINS
+        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+            binding = symbols.imports.get(func.value.id)
+            if binding is None:
+                return False
+            return binding.canonical.partition(".")[0] in sys.stdlib_module_names
+        return False
+
+    def _returns_exactly(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef, wanted: T.Type
+    ) -> bool:
+        """Whether every way out of `node` returns a value of exactly `wanted`."""
+        if isinstance(node, ast.AsyncFunctionDef) or not node.body:
+            return False
+        if not isinstance(node.body[-1], (ast.Return, ast.Raise)):
+            return False  # it may fall off the end and give `None`
+        pending: list[ast.AST] = list(node.body)
+        while pending:
+            inner = pending.pop()
+            if isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            if isinstance(inner, (ast.Yield, ast.YieldFrom)):
+                return False
+            if isinstance(inner, ast.Return):
+                if inner.value is None:
+                    return False
+                given = T.strip_literal(self._type_of(inner.value))  # type: ignore[attr-defined]
+                if given != wanted:
+                    return False
+            pending.extend(ast.iter_child_nodes(inner))
+        return True
 
     def _effect_locals(self) -> frozenset[str]:
         """Names the function binds itself: a call to one is not to a module's."""
@@ -577,12 +705,16 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         kind: int,
         *,
         method: bool = False,
+        pure: bool = False,
     ) -> Value | None:
         """Call the Python callable `module:name` with the arguments boxed, and
-        unbox its result as `kind`; what it raises is raised natively."""
+        unbox its result as `kind`; what it raises is raised natively. A `pure`
+        call is no barrier, and falls back where its result is not `kind`."""
         rt = self._rt  # type: ignore[attr-defined]
         for argument_kind, value, _owned in arguments:
-            if argument_kind == _NONE:
+            if argument_kind == _KEYWORD:
+                rt("ppy_io_push", (self._word(_KEYWORD), core.cast(self.b, value, I64)), None)  # type: ignore[attr-defined]
+            elif argument_kind == _NONE:
                 rt("ppy_io_push", (self._word(_NONE), self._word(0)), None)  # type: ignore[attr-defined]
             elif argument_kind == _STR:
                 rt("ppy_io_push_text", (value,), None)
@@ -592,11 +724,27 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
                 word = value if value.type == I64 else core.cast(self.b, value, I64)  # type: ignore[attr-defined]
                 rt("ppy_io_push", (self._word(argument_kind), word), None)  # type: ignore[attr-defined]
         data, length = self._text_data(spelled)  # type: ignore[attr-defined]
-        status = rt("ppy_io_call", (data, length, self._word(kind), self._word(int(method))))  # type: ignore[attr-defined]
+        call = "ppy_io_call_pure" if pure else "ppy_io_call"
+        status = rt(call, (data, length, self._word(kind), self._word(int(method))))  # type: ignore[attr-defined]
         for argument_kind, value, owned in arguments:
             if argument_kind == _STR and owned:
                 self._release(value)  # type: ignore[attr-defined]
-        self._after_barrier(status)
+        if pure:
+            self._after_pure_call(status)
+        else:
+            self._after_barrier(status)
+        if kind & _TUPLE:
+            items = []
+            for index in range((kind >> 4) & 0xF):
+                item_kind = (kind >> (8 + 4 * index)) & 0xF
+                word = rt("ppy_io_result_at", (self._word(index),))  # type: ignore[attr-defined]
+                if item_kind == _FLOAT:
+                    items.append(core.cast(self.b, word, F64))  # type: ignore[attr-defined]
+                elif item_kind == _BOOL:
+                    items.append(core.cmp(self.b, "ne", word, self._word(0)))  # type: ignore[attr-defined]
+                else:
+                    items.append(word)
+            return core.tuple_make(self.b, *items)  # type: ignore[attr-defined,no-any-return]
         if kind == _STR:
             return rt("ppy_io_result_text", (), HANDLE)  # type: ignore[no-any-return]
         if kind == _FLOAT:
@@ -607,6 +755,23 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         if kind in {_INT, _OBJECT}:
             return rt("ppy_io_result", ())  # type: ignore[no-any-return]
         return None
+
+    def _after_pure_call(self, status: Value) -> None:
+        """A pure call's status: 0; 1 where its result was of another kind, and
+        the native call falls back; or -1 with Python's exception pending."""
+        mismatched = core.cmp(self.b, "ne", status, self._word(1))  # type: ignore[attr-defined]
+        core.guard(self.b, mismatched, "contract", "a call into Python gave another type")  # type: ignore[attr-defined]
+        answered = core.cmp(self.b, "eq", status, self._word(0))  # type: ignore[attr-defined]
+        if not self._exceptions_on():  # type: ignore[attr-defined]
+            # Nothing was crossed: Python runs the call again and raises it.
+            core.guard(self.b, answered, "contract", "Python raised")  # type: ignore[attr-defined]
+            return
+        kept = self._block("effect.ok")  # type: ignore[attr-defined]
+        failed = self._block("effect.raised")  # type: ignore[attr-defined]
+        core.cond_br(self.b, answered, Successor(kept), Successor(failed))  # type: ignore[attr-defined]
+        self.b.at_end(failed)  # type: ignore[attr-defined]
+        self._go_raise()  # type: ignore[attr-defined]
+        self.b.at_end(kept)  # type: ignore[attr-defined]
 
     def _after_barrier(self, status: Value) -> None:
         """A barrier's status: 0, or -1 with Python's exception pending natively."""
