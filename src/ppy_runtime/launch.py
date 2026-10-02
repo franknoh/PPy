@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from .abi import NativeSignature
-from .binding import as_method, bind, bind_globals, remember, value_class_types
+from .binding import as_method, bind, bind_globals, keyed, remember, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
@@ -128,12 +128,15 @@ class PrebuiltBinder(LibraryBinder):
             named = getattr(self._wrappers, f"bind_{index}")(*given)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
-        if named is not None:
-            # A copy that answers to the function's own name and docstring.
-            return named
-        # The entry point bears the function's qualified name in the library
-        # `ppy build` writes beside the manifest.
-        return getattr(self._wrappers, signature.qualname, None)
+        if named is None:
+            # The entry point bears the function's qualified name in the library
+            # `ppy build` writes beside the manifest.
+            named = getattr(self._wrappers, signature.qualname, None)
+        keyed_set = getattr(self._wrappers, f"keyed_{index}", None)
+        if named is not None and spelled is None and keyed_set is not None:
+            # Keywords and defaults bound as Python binds them, then the entry.
+            keyed_set(keyed(fallback, named, len(signature.parameters)))
+        return named
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
         signature = self._entries.get(module, {}).get(function)

@@ -316,6 +316,7 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
         parts.append(_function(index, signature))
         methods.append(f'    {{"bind_{index}", ppy_bind_{index}, METH_VARARGS, NULL}},')
         methods.append(f'    {{"specialize_{index}", ppy_specialize_{index}, METH_VARARGS, NULL}},')
+        methods.append(f'    {{"keyed_{index}", ppy_keyed_set_{index}, METH_VARARGS, NULL}},')
         # The entry point stands in the module's namespace in the function's
         # place, so it bears the function's qualified name (`mod.f`,
         # `mod.Class.method`) rather than an index.
@@ -595,6 +596,7 @@ static ppy_spec ppy_specs_{index}[PPY_MAX_SPECS];
 static int ppy_spec_count_{index} = 0;
 static PyObject *ppy_types_{index} = NULL;
 static PyObject *ppy_fallback_{index} = NULL;
+static PyObject *ppy_keyed_{index} = NULL;
 {type_slots}
 {name_slots}
 {builder}
@@ -627,6 +629,20 @@ static PyObject *ppy_bind_{index}(PyObject *self, PyObject *args) {{
     Py_RETURN_NONE;
 }}
 
+static PyObject *ppy_keyed_set_{index}(PyObject *self, PyObject *args) {{
+    PyObject *keyed = NULL;
+    if (!PyArg_ParseTuple(args, "O", &keyed)) {{
+        return NULL;
+    }}
+    Py_INCREF(keyed);
+    Py_XDECREF(ppy_keyed_{index});
+    ppy_keyed_{index} = keyed == Py_None ? NULL : keyed;
+    if (keyed == Py_None) {{
+        Py_DECREF(keyed);
+    }}
+    Py_RETURN_NONE;
+}}
+
 static PyObject *ppy_specialize_{index}(PyObject *self, PyObject *args) {{
     int added = ppy_add_spec(ppy_specs_{index}, &ppy_spec_count_{index}, args);
     if (added < 0) {{
@@ -638,14 +654,19 @@ static PyObject *ppy_specialize_{index}(PyObject *self, PyObject *args) {{
 static PyObject *ppy_call_{index}(
     PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames
 ) {{
-    if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0) {{
-        /* Python binds keywords; the native code takes its arguments in order. */
+    if ((kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0)
+        || (ppy_target_{index} != NULL && nargs != {len(signature.parameters)})) {{
+        /* Python binds keywords and defaults (`binding.keyed`), then calls
+           this entry in order; without a binder the Python function runs. */
+        if (ppy_keyed_{index} != NULL) {{
+            return PyObject_Vectorcall(ppy_keyed_{index}, args, nargs, kwnames);
+        }}
         if (ppy_fallback_{index} == NULL) {{
             Py_RETURN_NOTIMPLEMENTED;
         }}
         return PyObject_Vectorcall(ppy_fallback_{index}, args, nargs, kwnames);
     }}
-    if (ppy_target_{index} == NULL || nargs != {len(signature.parameters)}) {{
+    if (ppy_target_{index} == NULL) {{
         return ppy_handoff(ppy_fallback_{index}, args, nargs);
     }}
     {pointer} chosen = ppy_target_{index};

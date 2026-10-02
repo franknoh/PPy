@@ -1275,7 +1275,12 @@ class _Binder(LibraryBinder):
                     from ppy_runtime.collection_boundary import resolver
 
                     direct = wrappers.bind(
-                        qualname, address, types, fallback, resolver(signature, fallback)
+                        qualname,
+                        address,
+                        types,
+                        fallback,
+                        resolver(signature, fallback),
+                        arity=len(signature.parameters),
                     )
                     if direct is not None:
                         binding = adopt(signature, direct, fallback, owner=(engine, wrappers))

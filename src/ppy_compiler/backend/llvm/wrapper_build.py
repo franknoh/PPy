@@ -36,7 +36,13 @@ class BuiltWrappers:
         return self.module is not None
 
     def bind(  # type: ignore[no-untyped-def]
-        self, qualname: str, address: int, types: tuple, fallback=None, resolve=None
+        self,
+        qualname: str,
+        address: int,
+        types: tuple,
+        fallback=None,
+        resolve=None,
+        arity: int = 0,
     ) -> object | None:
         """Point one wrapper at its native code, and hand back the fast entry.
 
@@ -44,6 +50,8 @@ class BuiltWrappers:
         invokes it from C when a guard refuses the call; without one it returns
         `NotImplemented` and the caller must watch for it. `resolve` finds the
         Python classes of the objects that cross (`collection_boundary.resolver`).
+        With `arity`, the entry's parameter count, a call with keywords or
+        defaults left out is bound in Python and made through the entry.
         """
         index = self.entries.get(qualname)
         if self.module is None or index is None:
@@ -57,11 +65,20 @@ class BuiltWrappers:
             named = getattr(self.module, f"bind_{index}")(*given)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
-        if named is not None:
-            return named
-        # A wrapper module built before the entry points carried their names
-        # still answers to the index.
-        return getattr(self.module, qualname, None) or getattr(self.module, f"call_{index}", None)
+        found = named
+        if found is None:
+            # A wrapper module built before the entry points carried their names
+            # still answers to the index.
+            found = getattr(self.module, qualname, None) or getattr(
+                self.module, f"call_{index}", None
+            )
+        keyed_set = getattr(self.module, f"keyed_{index}", None)
+        if found is not None and fallback is not None and arity and keyed_set is not None:
+            from ppy_runtime.binding import keyed  # pylint: disable=import-outside-toplevel
+
+            # Keywords and defaults bound as Python binds them, then the entry.
+            keyed_set(keyed(fallback, found, arity))
+        return found
 
     def attach_runtime(self, library=None) -> bool:  # type: ignore[no-untyped-def]
         """Point the wrappers that copy containers at the collections runtime."""

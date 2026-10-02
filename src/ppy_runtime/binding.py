@@ -32,6 +32,7 @@ __all__ = [
     "as_method",
     "bind",
     "bind_globals",
+    "keyed",
     "observation_wanted",
     "python_of",
     "value_class_types",
@@ -646,6 +647,19 @@ def _keyword_call(
         return fallback(*args, **keywords)
     bound.apply_defaults()
     return entry(*bound.arguments.values())
+
+
+def keyed(
+    fallback: Callable[..., object], entry: Callable[..., object], count: int
+) -> Callable[..., object]:
+    """What a generated C entry point calls for a call spelled with keywords or
+    with defaults left out: `_keyword_call`, which binds it as Python does
+    and calls `entry` in order."""
+
+    def call(*args: object, **keywords: object) -> object:
+        return _keyword_call(fallback, entry, count, args, keywords)
+
+    return call
 
 
 def _namespace(function: object) -> dict | None:
