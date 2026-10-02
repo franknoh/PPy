@@ -1310,3 +1310,36 @@ def test_a_generator_python_lends_is_drawn_from_in_place(tmp_path: Path):
     for function in ("walk", "overflow_after_draw", "with_gauss"):
         explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
         assert "llvm backend: native" in explained.stdout, (function, explained.stdout)
+
+
+AS_DICT = """
+from collections import Counter, defaultdict
+
+
+def counts(text: str) -> dict[str, int]:
+    return Counter(text)
+
+
+def groups(words: list[str]) -> dict[int, list[str]]:
+    found: defaultdict[int, list[str]] = defaultdict(list)
+    for word in words:
+        found[len(word)].append(word)
+    return found
+
+
+def main() -> None:
+    print(counts("banana"), groups(["a", "bb", "cc"]))
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_library_mapping_goes_where_a_dict_is_declared(tmp_path: Path):
+    """A `Counter[str]` is a `dict[str, int]` to the checker, as it is to CPython."""
+    expected = _expected(tmp_path, AS_DICT)
+    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    assert _output(done).strip() == expected

@@ -753,6 +753,12 @@ def is_assignable(source: Type, target: Type) -> bool:
     return False
 
 
+#: `collections`' mappings, which are dicts with more to them.
+_LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+
+
 def _instance_assignable(source: Instance, target: Instance) -> bool:
     if target.name == "object":
         return True
@@ -770,6 +776,10 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
         return True
     if target.name not in source.resolved_mro:
         return False
+    if source.name != target.name and source.name in _LIBRARY_MAPPINGS and source.args:
+        # A `Counter[str]` held as the dict it is: a `dict[str, int]`.
+        arguments = (*source.args, INT) if source.name == "collections.Counter" else source.args
+        source = Instance("dict", arguments, BUILTIN_MRO.get("dict", ("dict", "object")))
     if source.name != target.name and source.name in GENERIC_BASES:
         # A project class held as one of its bases: `Counted[int]` as a
         # `Stack[int]`, `IntStack` as a `Stack[int]`, by what it gives the base.
