@@ -133,7 +133,7 @@ def _inline_key(call: ast.Call, lambda_: ast.Lambda) -> bool:
     return isinstance(func, ast.Attribute) and func.attr == "sort"
 
 
-def closure_nodes(node: ast.FunctionDef) -> list[Scope]:
+def closure_nodes(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[Scope]:
     """The nested functions and lambdas directly in `node`'s scope that become
     closures: every one but a sort key's lambda, whose body runs in place."""
     inline: set[int] = set()
