@@ -4767,25 +4767,35 @@ stay what they were.</p>
   fields set. <code>__init__</code> does not run again, because native code already
   ran it.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Node</span><span class="p">:</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">next</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">bump</span><span class="p">(</span><span class="n">head</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="k">while</span> <span class="n">head</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        <span class="n">head</span><span class="o">.</span><span class="n">value</span> <span class="o">+=</span> <span class="mi">1</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="n">head</span> <span class="o">=</span> <span class="n">head</span><span class="o">.</span><span class="n">next</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Node</span><span class="p">:</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">next</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">native</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">bump</span><span class="p">(</span><span class="n">head</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="k">while</span> <span class="n">head</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>        <span class="n">head</span><span class="o">.</span><span class="n">value</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>        <span class="n">head</span> <span class="o">=</span> <span class="n">head</span><span class="o">.</span><span class="n">next</span>
 </code></pre></div>
 <p>Called from Python, <code>bump(a)</code> runs natively and leaves each node's <code>value</code>
 one higher. <code>bump(None)</code> is native too, since the parameter allows <code>None</code>.</p>
-<p>The copy costs time in proportion to what crosses. So Python calls the
-native body only when the function does work in proportion to it: a loop
-that follows a field (<code>head = head.next</code>), a loop over a container of
-objects, or a call to itself on a field (<code>height(node.left)</code>). Native
-callers pass objects by handle and copy nothing. <code>ppy explain</code> gives the
-reason for each function.</p>
+<p>The copy costs time in proportion to what crosses, about 100 ns an object
+in and as much back after a write, where CPython reads a field in a few
+nanoseconds. So Python calls the native body only when the function does
+work in proportion to it, and more than a few operations of it per object:
+a loop that follows a field (<code>head = head.next</code>), a loop over a container
+of objects, or a call to itself on a field (<code>height(node.left)</code>), each
+doing six operations or more on what it reaches. Without <code>@ppy.native</code>,
+<code>bump</code> above, which adds one to each node, would run its Python body when
+Python calls it; the directive asks for the crossing whatever it costs.
+Native callers pass objects by handle and copy nothing. <code>ppy explain</code> gives the reason for each function.</p>
+<p>A method of a class that crosses this way is bound like a method: <code>node.f(x)</code>
+passes <code>node</code> to the native code, and a <code>@staticmethod</code> stays static.</p>
 <p>Python runs the function's own body instead when an argument's class is not
 one the signature describes. That covers a class made at run time, a
 subclass from another module, and an object missing a field.</p>

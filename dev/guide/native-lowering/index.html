@@ -4516,9 +4516,57 @@ a function may contain to lower.</p>
 </ul>
 <p>A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit <code>@ppy.native</code>/<code>@ppy.jit</code>/<code>@ppy.specialize</code>/<code>@ppy.parallel</code> gets the
-boundary. A two-instruction helper stays on the Python side (remarked as
-<code>R3004</code>). Native callers still call its native symbol directly, boundary or
-not.</p>
+boundary. Native callers call its native symbol directly, boundary or not.</p>
+<p>The generated wrapper's call costs about what a Python call does: 31 ns for
+<code>def add(x: int, y: int) -&gt; int: return x + y</code> called from Python, against
+33 ns for CPython's own call of it, measured with <code>examples/bench_boundary.py</code>.
+So straight-line work pays from two operations (<code>0.5 * base * height</code>), and
+a one-operation helper stays on the Python side (remarked as <code>R3004</code>). The
+rest costs more:</p>
+<table>
+<thead>
+<tr>
+<th>what crosses</th>
+<th>straight-line work it takes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>numbers, tuples of numbers</td>
+<td>2 operations</td>
+</tr>
+<tr>
+<td>a <code>str</code> parameter or result</td>
+<td>4 more each: a native string is made for it</td>
+</tr>
+<tr>
+<td>a value class</td>
+<td>1 more per field</td>
+</tr>
+<tr>
+<td>output held while the call runs (a <code>print</code>)</td>
+<td>a loop: one line written through Python costs more than CPython's <code>print</code>, many cost much less</td>
+</tr>
+<tr>
+<td>a module global the function reads</td>
+<td>6 more: a Python frame reads it for the wrapper</td>
+</tr>
+<tr>
+<td>a call that draws from <code>random</code></td>
+<td>16: the Python-level binding saves its state</td>
+</tr>
+</tbody>
+</table>
+<p>A straight-line function that calls itself, as <code>power(b, e - 1)</code> does,
+stays off the boundary: how deep it goes is the argument's to decide, and
+CPython raises <code>RecursionError</code> where native code has no limit to stop at.</p>
+<p>A function that returns nothing gets the boundary where it loops over what
+it is given, or fills a container the caller passed. A function that only
+checks its arguments and raises stays a native caller's, and so does a
+<code>main()</code> that takes nothing: it runs once, and what it calls goes native on
+its own terms.</p>
+<p>A container or an object is copied whole on each call, so the body has to
+do work in proportion to it (<a href="../containers/#between-functions">Lists, dicts, and sets</a>).</p>
 <p><code>ppy explain FILE.ppy:name</code> reports the decision and, when the answer is no,
 the first blocking construct.</p>
 <h2 id="byte-wide-buffers">Byte-wide buffers<a class="headerlink" href="#byte-wide-buffers" title="Permanent link">&para;</a></h2>
@@ -4720,11 +4768,13 @@ over the <code>sorts</code> folder of TheAlgorithms/Python, trimmed:</p>
 <p><code>--json</code> gives every function with its tier and reason, for a script or a
 dashboard. See <a href="../../cli/#ppy-explain">the command</a>.</p>
 <h2 id="threads">Threads<a class="headerlink" href="#threads" title="Permanent link">&para;</a></h2>
-<p>The generated wrapper releases the GIL around the native call, so
-<code>@ppy.native</code> functions scale across threads. A function that prints, reads,
-or calls into Python is bound through the Python boundary instead, which
-writes out its held output, and takes the GIL where it reaches Python
-(<a href="../native-effects/">Effects in native code</a>).</p>
+<p>The generated wrapper releases the GIL around a native call that loops or
+calls another function, so <code>@ppy.native</code> functions scale across threads. A
+short straight-line body keeps it: dropping the GIL and taking it back costs
+about 20 ns, what two operations cost. A function that prints, reads, or
+calls into Python keeps the GIL too: its wrapper holds its output until the
+call ends and writes it out then, and the call takes the GIL where it
+reaches Python (<a href="../native-effects/">Effects in native code</a>).</p>
 <p>Reading input is its own guide: <a href="../input/">Reading input</a>.</p>
 <p>Examples: <a href="../../howto/15_algorithms/">Algorithms</a>,
 <a href="../../howto/12_buffers_and_jit/">Buffers and JIT</a>.</p>

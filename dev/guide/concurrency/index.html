@@ -4519,8 +4519,8 @@ CPU's pause hint.</p>
 <p><code>E1642</code> names a misuse. Native code links pthreads for these. A target
 without them is refused with the reason.</p>
 <h2 id="native-functions-on-python-threads">Native functions on Python threads<a class="headerlink" href="#native-functions-on-python-threads" title="Permanent link">&para;</a></h2>
-<p>Generated wrappers release the GIL around native calls, so <code>@ppy.native</code>
-functions scale on ordinary Python threads too. Measured: 1.95× on two
+<p>Generated wrappers release the GIL around native calls that loop, so
+<code>@ppy.native</code> functions scale on ordinary Python threads too. Measured: 1.95× on two
 threads, against 0.98× for the same code on plain CPython
 (<a href="../../howto/28_threads/">Threads</a>).</p>
 <p>Examples: <a href="../../howto/34_atomics_and_threads/">Atomics and threads</a>,

@@ -3951,6 +3951,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.python_of" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;python_of
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.as_method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;as_method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_runtime.binding.signature_of" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3977,6 +3999,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;bind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.keyed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;keyed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.bind_globals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;bind_globals
       
     </span>
   </a>
@@ -4089,6 +4133,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;crosses_collections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.NativeSignature.returns_none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;returns_none
       
     </span>
   </a>
@@ -5291,6 +5346,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.python_of" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;python_of
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.as_method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;as_method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_runtime.binding.signature_of" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5317,6 +5394,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;bind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.keyed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;keyed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.bind_globals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;bind_globals
       
     </span>
   </a>
@@ -5429,6 +5528,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;crosses_collections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.NativeSignature.returns_none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;returns_none
       
     </span>
   </a>
@@ -6381,7 +6491,7 @@ and its machinery is imported only when it is actually used.</p>
 
 
 <h3 id="ppy_runtime.binding.value_class_types" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">value_class_types</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">fallback</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">value_class_types</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">fallback</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">globals_read</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 <a href="#ppy_runtime.binding.value_class_types" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -6390,7 +6500,8 @@ and its machinery is imported only when it is actually used.</p>
 
         <p>The runtime classes a generated wrapper guards value parameters on.</p>
 <p>Resolved from the defining module, so a class the wrapper cannot see means
-no fast entry rather than a wrong one.</p>
+no fast entry rather than a wrong one. A function passed module globals
+has one only where the caller reads them for it (<code>bind_globals</code>).</p>
 
 
     </div>
@@ -6401,14 +6512,54 @@ no fast entry rather than a wrong one.</p>
 
 
 <h3 id="ppy_runtime.binding.remember" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">remember</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">signature</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">remember</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">signature</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#ppy_runtime.binding.remember" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Record that <code>entry</code>, a generated C entry point, runs <code>signature</code> natively.</p>
+        <p>Record that <code>entry</code>, a generated C entry point, runs <code>signature</code> natively,
+standing for the Python function <code>fallback</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_runtime.binding.python_of" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">python_of</span><span class="p">(</span><span class="n">function</span><span class="p">)</span></code>
+
+<a href="#ppy_runtime.binding.python_of" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The Python function a native entry point stands for, whose source a tool
+like <code>ppy.grad</code> reads; <code>function</code> itself where it is one.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_runtime.binding.as_method" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">as_method</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">fallback</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span></code>
+
+<a href="#ppy_runtime.binding.as_method" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>A generated C entry point that stands in a class body for a plain method,
+made an instance method: a builtin function does not bind, so <code>obj.f(x)</code>
+would not pass <code>obj</code>. A static method's entry is left as it is.</p>
 
 
     </div>
@@ -6469,6 +6620,46 @@ statistics are not collected on this path.</p>
 <p>A function that draws random numbers draws from <code>random</code>'s own generator:
 its state is saved before the call and put back before a fallback, so
 the Python rerun draws what the native call drew.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_runtime.binding.keyed" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">keyed</span><span class="p">(</span><span class="n">fallback</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span></code>
+
+<a href="#ppy_runtime.binding.keyed" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>What a generated C entry point calls for a call spelled with keywords or
+with defaults left out: <code>_keyword_call</code>, which binds it as Python does
+and calls <code>entry</code> in order.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_runtime.binding.bind_globals" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">bind_globals</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">address</span><span class="p">,</span> <span class="n">fallback</span><span class="p">,</span> <span class="n">owner</span><span class="p">,</span> <span class="n">entry_for</span><span class="p">)</span></code>
+
+<a href="#ppy_runtime.binding.bind_globals" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p><code>_bind_globals</code> over a generated C entry point: <code>entry_for(spelled)</code> binds
+the entry, which takes the globals after Python's arguments, with
+<code>spelled</code> as its fallback. None where it binds none.</p>
 
 
     </div>
@@ -6759,6 +6950,29 @@ collection's element.</p>
     <div class="doc doc-contents ">
 
         <p>Whether a collection crosses the boundary, in or out.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="ppy_runtime.abi.NativeSignature.returns_none" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">returns_none</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#ppy_runtime.abi.NativeSignature.returns_none" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The function returns <code>None</code>: its native entry fills a placeholder
+word, and the boundary hands back <code>None</code>.</p>
 
     </div>
 
