@@ -745,3 +745,230 @@ void ppy_iter_range(int8_t *made, int64_t start, int64_t stop, int64_t step) {
         *(int64_t *)ppy_seq_push_back(made) = (int64_t)((__int128)start + (__int128)step * i);
     }
 }
+
+/* -- `collections`' mappings: a `defaultdict`'s factory, a `Counter`'s
+   counts, an `OrderedDict`'s moves. Each is a dict (family 2): a `Counter`'s
+   value is its count, one word. ---------------------------------------- */
+
+/* A `defaultdict`'s factory, a closure: the map takes the reference given. */
+void ppy_map_set_factory(int8_t *handle, int8_t *factory) {
+    ((int64_t *)handle)[25] = (int64_t)(intptr_t)factory;
+}
+
+/* The factory a `defaultdict` was made with, or null for a class (`int`,
+   `list`), whose value the lowering makes itself. */
+int8_t *ppy_map_factory(int8_t *handle) {
+    return (int8_t *)(intptr_t)((int64_t *)handle)[25];
+}
+
+/* `counter[key] += delta`: the entry made with a count of 0 where there was
+   none. A count past a word stays as it was, and the fault is 1. */
+void ppy_counter_add(int8_t *handle, const int8_t *key, int64_t delta) {
+    int64_t entry = ppy_map_put(handle, key);
+    int64_t *count = (int64_t *)ppy_map_value_at(handle, entry);
+    int64_t sum = 0;
+    if (__builtin_add_overflow(*count, delta, &sum)) {
+        ppy_math_cell()[0] = 1;
+        return;
+    }
+    *count = sum;
+}
+
+/* Every count of `other` (a `Counter` or a dict of ints) added to
+   `handle`'s, times `sign`, in `other`'s order: `update` and `subtract`. */
+void ppy_counter_merge(int8_t *handle, int8_t *other, int64_t sign) {
+    int64_t n = ((int64_t *)other)[0];
+    int64_t keys = ((int64_t *)other)[13] & 0xFFFFFFFF;
+    int64_t *words = (int64_t *)calloc((size_t)(n * (keys + 1) + 1), 8);
+    if (words == NULL) {
+        ppy_coll_fail();
+    }
+    int64_t i = 0;
+    for (int64_t e = ppy_coll_step(other, -1); e >= 0; e = ppy_coll_step(other, e), i++) {
+        memcpy(words + i * (keys + 1), ppy_coll_record(other, e), (size_t)(keys * 8));
+        words[i * (keys + 1) + keys] = *ppy_coll_value_words(other, e);
+    }
+    for (int64_t j = 0; j < i; j++) {
+        int64_t count = words[j * (keys + 1) + keys];
+        int64_t delta = count;
+        if (sign < 0 && __builtin_sub_overflow((int64_t)0, count, &delta)) {
+            ppy_math_cell()[0] = 1;
+            continue;
+        }
+        ppy_counter_add(handle, (const int8_t *)(words + j * (keys + 1)), delta);
+    }
+    free(words);
+}
+
+/* The live entries in the order `most_common()` gives them: the highest
+   count first, equal counts in insertion order (a stable sort, as
+   `sorted(..., reverse=True)` is). A new `list[int]` of entry numbers. */
+int8_t *ppy_counter_ranked(int8_t *handle) {
+    int64_t n = ((int64_t *)handle)[0];
+    int64_t *entries = (int64_t *)calloc((size_t)(n + 1), 8);
+    int64_t *spare = (int64_t *)calloc((size_t)(n + 1), 8);
+    if (entries == NULL || spare == NULL) {
+        ppy_coll_fail();
+    }
+    int64_t count = 0;
+    for (int64_t e = ppy_coll_step(handle, -1); e >= 0; e = ppy_coll_step(handle, e)) {
+        entries[count++] = e;
+    }
+    for (int64_t width = 1; width < count; width *= 2) {
+        for (int64_t low = 0; low < count; low += 2 * width) {
+            int64_t middle = low + width < count ? low + width : count;
+            int64_t high = low + 2 * width < count ? low + 2 * width : count;
+            int64_t i = low, j = middle, k = low;
+            while (i < middle && j < high) {
+                int64_t left = *ppy_coll_value_words(handle, entries[i]);
+                int64_t right = *ppy_coll_value_words(handle, entries[j]);
+                spare[k++] = right > left ? entries[j++] : entries[i++];
+            }
+            while (i < middle) {
+                spare[k++] = entries[i++];
+            }
+            while (j < high) {
+                spare[k++] = entries[j++];
+            }
+        }
+        int64_t *swap = entries;
+        entries = spare;
+        spare = swap;
+    }
+    int8_t *made = ppy_seq_new(0, 1, 0, 0);
+    for (int64_t i = 0; i < count; i++) {
+        *(int64_t *)ppy_seq_push_back(made) = entries[i];
+    }
+    free(entries);
+    free(spare);
+    return made;
+}
+
+/* `total()`: the sum of the counts; past a word, the fault is 1. */
+int64_t ppy_counter_total(int8_t *handle) {
+    int64_t total = 0;
+    for (int64_t e = ppy_coll_step(handle, -1); e >= 0; e = ppy_coll_step(handle, e)) {
+        if (__builtin_add_overflow(total, *ppy_coll_value_words(handle, e), &total)) {
+            ppy_math_cell()[0] = 1;
+            return 0;
+        }
+    }
+    return total;
+}
+
+/* `elements()` into the empty list `made`: each key as many times as its
+   count, in insertion order; a count below one gives none. */
+void ppy_counter_elements(int8_t *made, int8_t *handle) {
+    int64_t keys = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    for (int64_t e = ppy_coll_step(handle, -1); e >= 0; e = ppy_coll_step(handle, e)) {
+        int64_t count = *ppy_coll_value_words(handle, e);
+        for (int64_t i = 0; i < count; i++) {
+            int8_t *slot = ppy_seq_push_back(made);
+            memcpy(slot, ppy_coll_record(handle, e), (size_t)(keys * 8));
+            ppy_coll_retain_words(made, slot);
+        }
+    }
+}
+
+/* `a + b`, `a - b`, `a | b`, `a & b` of two `Counter`s (`op` 0 to 3), into
+   the empty `made`, as `Counter`'s methods do them: `a`'s keys first, with
+   `b`'s count for each (0 where it has none), kept where the result is
+   positive; then, for `+`, `-`, and `|`, `b`'s keys `a` does not have. */
+void ppy_counter_combine(int8_t *made, int8_t *a, int8_t *b, int64_t op) {
+    int64_t keys = ((int64_t *)a)[13] & 0xFFFFFFFF;
+    for (int64_t e = ppy_coll_step(a, -1); e >= 0; e = ppy_coll_step(a, e)) {
+        const int8_t *key = (const int8_t *)ppy_coll_record(a, e);
+        int64_t mine = *ppy_coll_value_words(a, e);
+        int64_t at = ppy_map_find(b, key);
+        int64_t theirs = at >= 0 ? *ppy_coll_value_words(b, at) : 0;
+        int64_t made_count = 0;
+        if (op == 0 && __builtin_add_overflow(mine, theirs, &made_count)) {
+            ppy_math_cell()[0] = 1;
+            return;
+        }
+        if (op == 1 && __builtin_sub_overflow(mine, theirs, &made_count)) {
+            ppy_math_cell()[0] = 1;
+            return;
+        }
+        if (op == 2) {
+            made_count = mine < theirs ? theirs : mine;
+        }
+        if (op == 3) {
+            made_count = mine < theirs ? mine : theirs;
+        }
+        if (made_count > 0) {
+            ppy_counter_add(made, key, made_count);
+        }
+    }
+    if (op == 3) {
+        return;
+    }
+    for (int64_t e = ppy_coll_step(b, -1); e >= 0; e = ppy_coll_step(b, e)) {
+        const int8_t *key = (const int8_t *)ppy_coll_record(b, e);
+        int64_t theirs = *ppy_coll_value_words(b, e);
+        if (ppy_map_find(a, key) >= 0) {
+            continue;
+        }
+        if (op == 1 && theirs < 0 && theirs != INT64_MIN) {
+            ppy_counter_add(made, key, -theirs);
+        } else if (op == 1 && theirs == INT64_MIN) {
+            ppy_math_cell()[0] = 1;
+            return;
+        } else if (op != 1 && theirs > 0) {
+            ppy_counter_add(made, key, theirs);
+        }
+    }
+    (void)keys;
+}
+
+/* `move_to_end(key, last)`: the entry for `key` made the last one (or the
+   first), the others in their order. 0 where there is no such key. */
+int64_t ppy_map_move(int8_t *handle, const int8_t *key, int64_t last) {
+    int64_t *header = (int64_t *)handle;
+    int64_t found = ppy_map_find(handle, key);
+    if (found < 0) {
+        return 0;
+    }
+    int64_t stride = header[15];
+    int64_t alive = (header[13] & 0xFFFFFFFF) + header[8];
+    int64_t used = header[3];
+    int64_t *records = (int64_t *)calloc((size_t)(header[1] * stride), 8);
+    if (records == NULL) {
+        ppy_coll_fail();
+    }
+    int64_t kept = 0;
+    if (!last) {
+        memcpy(records, ppy_coll_record(handle, found), (size_t)(stride * 8));
+        kept = 1;
+    }
+    for (int64_t e = 0; e < used; e++) {
+        int64_t *record = ppy_coll_record(handle, e);
+        if (e == found || !record[alive]) {
+            continue;
+        }
+        memcpy(records + kept * stride, record, (size_t)(stride * 8));
+        kept++;
+    }
+    if (last) {
+        memcpy(records + kept * stride, ppy_coll_record(handle, found), (size_t)(stride * 8));
+        kept++;
+    }
+    free((void *)(intptr_t)header[2]);
+    header[2] = (int64_t)(intptr_t)records;
+    header[3] = kept;
+    header[6]++;
+    ppy_map_reindex(handle, header[5]);
+    return 1;
+}
+
+/* The entry `popitem(last)` takes: the last live one, or the first; -1 where
+   the map is empty. */
+int64_t ppy_map_end_entry(int8_t *handle, int64_t last) {
+    if (((int64_t *)handle)[0] == 0) {
+        return -1;
+    }
+    if (!last) {
+        return ppy_coll_step(handle, -1);
+    }
+    return ppy_map_back(handle, ((int64_t *)handle)[3]);
+}

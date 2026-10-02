@@ -39,6 +39,12 @@ _IO = EffectSet.of(Effect.IO)
 _STORAGE_ONLY = frozenset({"i8", "u8"})
 
 
+#: `collections`' mappings, which iterate over their keys as a dict does.
+_LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+
+
 def _element_of(t: T.Type) -> T.Type:
     found = _element_storage(t)
     if isinstance(found, T.Instance) and found.name in _STORAGE_ONLY:
@@ -85,7 +91,8 @@ def _element_storage(t: T.Type) -> T.Type:
             return base.args[0]
         if base.name in C.ITERABLE and base.args:
             return C.element_of(base)
-        if base.name == "dict" and base.args:
+        if base.name in {"dict", "collections.deque", *_LIBRARY_MAPPINGS} and base.args:
+            # A deque hands out its elements, a mapping its keys.
             return base.args[0]
         if base.name in {"tuple", "list", "set", "frozenset", "dict", "Sequence", "Iterable"}:
             # Unparameterized: what `isinstance(x, tuple)` leaves, or a

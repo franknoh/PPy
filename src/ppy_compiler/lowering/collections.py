@@ -85,6 +85,12 @@ FAMILY = {
 #: Python's containers, by the name the checker gives them.
 BUILTINS = {"list": "List", "dict": "Dict", "set": "Set"}
 
+#: `collections`' mappings: dicts natively, with a flavor (`Kind.flavor`).
+_LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+_LIBRARY_KINDS = _LIBRARY_MAPPINGS | {"collections.deque"}
+
 #: `floor`, `ceiling`, `lower`, `higher`, as `ppy_tree_bound` numbers them.
 _BOUNDS = {"floor": 0, "ceiling": 1, "lower": 2, "higher": 3}
 
@@ -185,6 +191,10 @@ class Kind:
     name: str
     value: Shape | None
     key: Shape | None = None
+    #: The `collections` type a `Deque` or a `Dict` is, where it is not the
+    #: plain one: "collections.deque", "collections.defaultdict",
+    #: "collections.OrderedDict", or "collections.Counter" (`lowering/stdlib.py`).
+    flavor: str = ""
 
     @property
     def family(self) -> str:
@@ -213,6 +223,10 @@ def spelled(kind: Kind) -> str:
         return item.kind
 
     parts = [shape(part) for part in (kind.key, kind.value) if part is not None]
+    if kind.flavor:
+        # As the checker writes the type: `collections.Counter[str]`.
+        shown = parts[:1] if kind.flavor == "collections.Counter" else parts
+        return f"{kind.flavor}[{', '.join(shown)}]"
     python = {value: name for name, value in BUILTINS.items()}.get(kind.name)
     if python is not None:
         return f"{python}[{', '.join(parts)}]"
@@ -285,7 +299,7 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
         return None
     if not isinstance(base, T.Instance):
         return None
-    if base.name.startswith("ppy.") or base.name in BUILTINS:
+    if base.name.startswith("ppy.") or base.name in BUILTINS or base.name in _LIBRARY_KINDS:
         kind = kind_of(base, records)
         return Shape("collection", collection=kind) if kind is not None else None
     found = records.get(base.name)
@@ -312,7 +326,17 @@ def kind_of(t: T.Type, records: Records) -> Kind | None:
         # `collections.deque` is the runtime's `Deque`; `lowering/stdlib.py`
         # gives it Python's method names.
         element = shape_of(base.args[0], records)
-        return Kind("Deque", element) if element is not None else None
+        return Kind("Deque", element, flavor=base.name) if element is not None else None
+    if isinstance(base, T.Instance) and base.name in _LIBRARY_MAPPINGS:
+        # A `defaultdict`, an `OrderedDict`, or a `Counter` is a dict, with
+        # what it does beyond one lowered in `lowering/stdlib.py`.
+        arguments = (*base.args, T.INT) if base.name == "collections.Counter" else base.args
+        if len(arguments) != 2:
+            return None
+        found = _builtin_kind(T.instance("dict", *arguments), records)
+        if found is None:
+            return None
+        return Kind("Dict", found.value, found.key, flavor=base.name)
     if not isinstance(base, T.Instance) or not base.name.startswith("ppy."):
         return None
     name = base.name.removeprefix("ppy.")

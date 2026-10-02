@@ -165,9 +165,17 @@ class AliasInfo:
 
 
 class _Analyzer:
-    def __init__(self, params: frozenset[str], immutable: frozenset[str]) -> None:
+    def __init__(
+        self,
+        params: frozenset[str],
+        immutable: frozenset[str],
+        fresh: frozenset[str] = frozenset(),
+    ) -> None:
         self.params = params
         self.immutable = immutable
+        #: Calls, spelled as written, that make a new collection of their
+        #: argument's elements: `deque(xs)`, `collections.Counter(xs)`.
+        self.fresh = fresh
         self.at: dict[int, _State | list[_State]] = {}
         self.holds: dict[str, set[str]] = {}
 
@@ -457,6 +465,15 @@ class _Analyzer:
                 self.eval(keyword.value, state)
             if isinstance(node.func, ast.Attribute) and node.func.attr in _CONTAINER_METHODS:
                 return self.method(node, state)
+            if self.fresh and ast.unparse(node.func) in self.fresh:
+                head = node.func
+                while isinstance(head, ast.Attribute):
+                    head = head.value
+                if isinstance(head, ast.Name) and head.id not in state:
+                    alloc = self.site(node)
+                    if node.args and not ast.unparse(node.func).endswith("defaultdict"):
+                        self.store_into(alloc, self.elements_of(self.eval(node.args[0], state)))
+                    return alloc
             if isinstance(node.func, ast.Name) and node.func.id not in state:
                 if node.func.id in _FRESH_FROM_ELEMENTS:
                     alloc = self.site(node)
@@ -543,6 +560,7 @@ def analyze_aliases(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     immutable_params: frozenset[str] = frozenset(),
     settled_globals: frozenset[str] = frozenset(),
+    fresh_calls: frozenset[str] = frozenset(),
 ) -> AliasInfo:
     """Analyze one function. Nested function bodies are left out: a name they
     capture is not re-bound here, and what they do with it is the effect
@@ -552,6 +570,8 @@ def analyze_aliases(
     in place; an augmented assignment through one of those is a rebinding.
     `settled_globals` names module globals the body reads that no one rebinds:
     each is rooted as a parameter is, since native code is handed it as one.
+    `fresh_calls` are the calls, as spelled here, that make a new collection
+    (`deque`, `collections.Counter`): the module's imports decide them.
     """
     params = (
         frozenset(
@@ -566,4 +586,4 @@ def analyze_aliases(
         )
         | settled_globals
     )
-    return _Analyzer(params, immutable_params & params).run(node)
+    return _Analyzer(params, immutable_params & params, fresh_calls).run(node)

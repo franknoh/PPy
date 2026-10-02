@@ -20,9 +20,12 @@ __all__ = [
     "EXTERNAL_TYPES",
     "INSTANCE_ATTRS",
     "MODULE_ATTRIBUTES",
+    "LIBRARY_MAPPINGS",
+    "MAPPING_OWN",
     "call",
     "instance_attribute",
     "lookup",
+    "mapping_of",
 ]
 
 #: `array` type codes and the element type each denotes.
@@ -498,6 +501,31 @@ for _mapping in ("collections.OrderedDict", "collections.defaultdict"):
     )
 
 
+#: `collections`' mappings: a dict with more to it, whose subscripts, views,
+#: and plain dict methods are a dict's.
+LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+
+#: The methods each has beyond a dict's, or in place of one.
+MAPPING_OWN: dict[str, frozenset[str]] = {
+    "collections.Counter": frozenset({"most_common", "elements", "total", "update", "subtract"}),
+    "collections.OrderedDict": frozenset({"move_to_end", "popitem"}),
+    "collections.defaultdict": frozenset(),
+}
+
+
+def mapping_of(t: T.Type) -> tuple[T.Type, T.Type] | None:
+    """The key and value types of a `defaultdict`, an `OrderedDict`, or a
+    `Counter` (whose values are ints); None for anything else."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or base.name not in LIBRARY_MAPPINGS:
+        return None
+    if base.name == "collections.Counter":
+        return (base.args[0], T.INT) if len(base.args) == 1 else None
+    return (base.args[0], base.args[1]) if len(base.args) == 2 else None
+
+
 def _library(name: str) -> T.Instance:
     return T.Instance(name, (), EXTERNAL_MRO.get(name, (name, "object")))
 
@@ -576,6 +604,8 @@ def instance_attribute(
         _ELEMENT: args[0] if args else T.ANY,
         _VALUE: args[1] if len(args) > 1 else T.ANY,
     }
+    if name == "collections.Counter":
+        bindings[_VALUE] = T.INT
     return T.substitute(known[0], bindings), known[1]
 
 

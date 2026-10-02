@@ -26,6 +26,7 @@ from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
 from ..ir.raising import OVERFLOW, said
 from .collections import HANDLE, Kind, _pointer, kind_of
+from .library import LibraryLowering
 
 __all__ = ["StdlibLowering"]
 
@@ -79,7 +80,7 @@ _FLOAT_ARGUMENTS = {
 }
 
 
-class StdlibLowering:
+class StdlibLowering(LibraryLowering):
     """The standard library's calls; mixed into `_FunctionLowering`."""
 
     def _make_collection(self, name: str, value: ast.expr, declared: T.Type | None = None) -> bool:

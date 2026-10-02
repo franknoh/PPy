@@ -15,6 +15,8 @@
      [20] collector: state
      [21] the elements' or keys' `__lt__`, compiled   [22] the keys' `__hash__`
      [23] the keys' `__eq__`                         [24] which key words are objects
+     [25] a map's own reference: a `defaultdict`'s factory, a closure
+          (not in a string's header, whose bytes start at word 25)
 
    An element or a value is `value words` eight-byte words: an int64_t or a
    double each (a set bit in the float mask), or a collection handle (a set
@@ -354,7 +356,13 @@ void ppy_coll_release(int8_t *handle) {
             }
         }
     }
+    ppy_coll_release(ppy_coll_extra(header));
     ppy_coll_free(handle);
+}
+
+/* What word 25 of a map's header holds: a `defaultdict`'s factory, or null. */
+int8_t *ppy_coll_extra(const int64_t *header) {
+    return header[12] == 2 ? (int8_t *)(intptr_t)header[25] : NULL;
 }
 
 /* The collector: trial deletion over this thread's holders, as CPython's
@@ -389,6 +397,10 @@ int64_t ppy_coll_collect(void) {
                 }
             }
         }
+        int64_t *extra = (int64_t *)ppy_coll_extra(h);
+        if (extra != NULL && extra[20] == 1) {
+            extra[19]--;
+        }
     }
     int64_t top = 0;
     for (int64_t *h = ppy_coll_seen(heap[0]); h != NULL; h = ppy_coll_seen(h[17])) {
@@ -409,6 +421,11 @@ int64_t ppy_coll_collect(void) {
                     stack[top++] = child;
                 }
             }
+        }
+        int64_t *extra = (int64_t *)ppy_coll_extra(h);
+        if (extra != NULL && extra[20] == 1) {
+            extra[20] = 2;
+            stack[top++] = extra;
         }
     }
     int64_t garbage = 0;
@@ -439,6 +456,15 @@ int64_t ppy_coll_collect(void) {
                 } else {
                     ppy_coll_release((int8_t *)child);
                 }
+            }
+        }
+        int64_t *extra = (int64_t *)ppy_coll_extra(h);
+        if (extra != NULL) {
+            h[25] = 0;
+            if (extra[20] == 3) {
+                extra[11]--;
+            } else {
+                ppy_coll_release((int8_t *)extra);
             }
         }
     }
@@ -501,7 +527,7 @@ int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t float
         ppy_coll_track(text);
         return (int8_t *)text;
     }
-    int64_t *header = (int64_t *)calloc(25, sizeof(int64_t));
+    int64_t *header = (int64_t *)calloc(26, sizeof(int64_t));
     int64_t room = capacity > 0 ? capacity : 1;
     int64_t *records = (int64_t *)calloc((size_t)(room * (stride > 0 ? stride : 1)), 8);
     int64_t spare = 2 * (words > keys ? (words > 0 ? words : 1) : keys);
@@ -1681,6 +1707,10 @@ int8_t *ppy_coll_copy(int8_t *handle) {
     int64_t count = header[12] == 0 ? header[0] : header[1];
     int64_t keys = header[13] & 0xFFFFFFFF;
     ppy_coll_inherit(made, handle);
+    if (ppy_coll_extra(header) != NULL) {
+        copy[25] = header[25];
+        ppy_coll_retain(ppy_coll_extra(header));
+    }
     for (int64_t i = 0; (header[10] != 0 || ppy_coll_held_keys(handle) != 0) && i < count; i++) {
         int64_t *value = ppy_coll_live(made, i);
         if (value != NULL) {
