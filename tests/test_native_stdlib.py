@@ -521,6 +521,20 @@ def flag(n: int) -> bool:
     return n % 3 == 0
 
 
+@lru_cache(maxsize=40)
+def churn(n: int) -> int:
+    return n * 7 % 1000
+
+
+def churned(n: int) -> int:
+    # Entries let go of and put again, many times over: the removed slots
+    # are laid out again at the same size, and a hit keeps its entry longest.
+    total = 0
+    for i in range(n):
+        total = (total * 3 + churn(i * 37 % 211) + churn(i % 17)) % 1000003
+    return total
+
+
 def drive(n: int) -> int:
     total = 0
     for i in [1, 2, 3, 1, 4, 1, 2, 5, 3]:
@@ -537,6 +551,7 @@ def main() -> None:
     print(breaks("abcdababcd", 0), breaks("abx", 0))
     print(drive(25))
     print(noisy(1), noisy(9))
+    print(churned(3000), paths(300, 300))
 
 
 main()
@@ -888,7 +903,7 @@ PROGRAMS = {
     "deque": (DEQUE, ("queues", "bfs", "empty")),
     "mappings": (MAPPINGS, ("defaults", "counts", "ordered", "queue", "errors")),
     # Each cached function's entry looks its arguments up before the body runs.
-    "memo": (MEMO, ("paths", "breaks", "noisy", "label", "never", "flag")),
+    "memo": (MEMO, ("paths", "breaks", "noisy", "label", "never", "flag", "churn", "churned")),
     "functional": (FUNCTIONAL, ("ops", "jobs", "errs", "combine")),
     "compared": (COMPARED, ("parts",)),
     "generators": (GENERATORS, ("roll", "draws")),
