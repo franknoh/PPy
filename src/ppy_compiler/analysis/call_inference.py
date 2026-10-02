@@ -274,6 +274,8 @@ class CallSiteInference:
             # A call the checker did not type: Python runs it, through the
             # wrapper. The name still says which function, if it is one.
             qualname = self.symbols.resolver(module).canonical(func)
+            if qualname is None:
+                return []
             if qualname in functions and not functions[qualname].is_method:
                 return [_Target(qualname, 0)]
             if qualname in self.symbols.classes:
@@ -593,10 +595,13 @@ def _literal_type(node: ast.expr, scope: dict[str, T.Type]) -> T.Type | None:
             return None
         return T.list_of(element) if isinstance(node, ast.List) else T.set_of(element)
     if isinstance(node, ast.Tuple):
-        items = [_literal_type(e, scope) for e in node.elts]
-        if not items or any(i is None for i in items):
-            return None
-        return T.Tuple_(tuple(items))  # type: ignore[arg-type]
+        items: list[T.Type] = []
+        for element in node.elts:
+            found = _literal_type(element, scope)
+            if found is None:
+                return None
+            items.append(found)
+        return T.Tuple_(tuple(items)) if items else None
     if isinstance(node, ast.Dict):
         if not node.keys or any(k is None for k in node.keys):
             return None
@@ -656,6 +661,8 @@ def _doctest_target(symbols, module, node: ast.Call, scope) -> _Target | None:  
     func = node.func
     if isinstance(func, ast.Name):
         qualname = symbols.resolver(module).canonical(func)
+        if qualname is None:
+            return None
         if qualname in symbols.functions and not symbols.functions[qualname].is_method:
             return _Target(qualname, 0)
         if qualname in symbols.classes:
@@ -680,7 +687,7 @@ def _doctest_receiver(symbols, module, node: ast.expr, scope) -> T.Type | None: 
         if node.id in scope:
             return scope[node.id]
         qualname = symbols.resolver(module).canonical(node)
-        if qualname in symbols.classes:
+        if qualname is not None and qualname in symbols.classes:
             return T.ClassObject(qualname, symbols.classes[qualname].instance())
         return None
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
