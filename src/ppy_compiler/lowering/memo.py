@@ -28,9 +28,10 @@ import hashlib
 
 from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
-from ..ir import BOOL, F64, I64, Successor, TupleType, Value
+from ..analysis.closures import is_plain_callable
+from ..ir import BOOL, F64, I64, PtrType, Successor, TupleType, Value
 from ..ir.dialects import core
-from .collections import HANDLE, STR, _pointer
+from .collections import HANDLE, STR, _pointer, shape_of
 
 __all__ = ["CACHE_ATTRIBUTES", "MemoLowering", "cache_bound", "cached_decorator", "define_cached"]
 
@@ -52,17 +53,18 @@ def cached_decorator(info) -> ast.expr | None:  # type: ignore[no-untyped-def]
     return None
 
 
-def cache_bound(info) -> int | None:  # type: ignore[no-untyped-def]
+def cache_bound(info, nested: bool = False) -> int:  # type: ignore[no-untyped-def]
     """How many entries a cached function's table keeps: -1 for no bound.
     Raises `Unsupported` for a decorator written in a way this does not
-    read, and for a function the table cannot cache."""
+    read, and for a function the table cannot cache. A nested function's
+    table is its closure's (`nested`)."""
     decorator = cached_decorator(info)
     assert decorator is not None
     others = [n for n in info.decorators if n not in _CACHES and not n.startswith("ppy.")]
     if others or sum(n in _CACHES for n in info.decorators) > 1:
         raise Unsupported("a cached function with other decorators keeps its cache in Python")
-    if info.owner or info.enclosing:
-        raise Unsupported("a cached method or nested function keeps its cache in Python")
+    if info.owner or (info.enclosing and not nested):
+        raise Unsupported("a cached method keeps its cache in Python")
     canonical = info.decorators[info.node.decorator_list.index(decorator)]
     if canonical == "functools.cache":
         return -1
@@ -114,8 +116,16 @@ def _mask(words: list[str], kind: str) -> int:
 class MemoLowering:  # pylint: disable=attribute-defined-outside-init
     """The entry of a cached function; mixed into `_FunctionLowering`."""
 
-    def memo_run(self, node: ast.FunctionDef, body: str, results: tuple, bound: int) -> None:
-        """The entry: the table looked up, and the body called on a miss."""
+    def memo_run(
+        self,
+        node: ast.FunctionDef,
+        body: str,
+        results: tuple,
+        bound: int,
+        held_at: int | None = None,
+    ) -> None:
+        """The entry: the table looked up, and the body called on a miss. A
+        nested function's table is word `held_at` of its closure."""
         info = self.info  # type: ignore[attr-defined]
         self.entry = self.function.add_entry_block()  # type: ignore[attr-defined]
         b = self.b  # type: ignore[attr-defined]
@@ -139,19 +149,19 @@ class MemoLowering:  # pylint: disable=attribute-defined-outside-init
             keys.extend(zip(kinds, self._argument_words(parameter.name, kinds), strict=True))
         key_kinds = [kind for kind, _ in keys]
         key_buffer = self._words_buffer("memo.key", keys)
-        table = rt(
-            "ppy_memo_table",
-            (
-                word(_table_id(info.qualname)),
-                word(len(key_kinds)),
-                word(len(returned)),
-                word(_mask(key_kinds, "str")),
-                word(_mask(returned, "str")),
-                word(_mask(key_kinds, "float")),
-                word(bound),
-            ),
-            HANDLE,
-        )
+        if held_at is None:
+            table = rt(
+                "ppy_memo_table",
+                (word(_table_id(info.qualname)), *self._table_layout(info, bound)),
+                HANDLE,
+            )
+        else:
+            closure = self._closure_env  # type: ignore[attr-defined]
+            record = core.cast(b, self._field_address(closure, 0), PtrType(I64))  # type: ignore[attr-defined]
+            address = core.ptr_offset(b, record, word(held_at))
+            table = rt(
+                "ppy_memo_of", (core.load(b, core.cast(b, address, PtrType(HANDLE))),), HANDLE
+            )
         found = rt("ppy_memo_find", (table, key_buffer))
         hit = self._block("memo.hit")  # type: ignore[attr-defined]
         miss = self._block("memo.miss")  # type: ignore[attr-defined]
@@ -180,6 +190,50 @@ class MemoLowering:  # pylint: disable=attribute-defined-outside-init
         rt("ppy_memo_store", (table, key_buffer, value_buffer), None)
         self._memo_return(value)
         self._finish_exceptions()  # type: ignore[attr-defined]
+
+    def _table_layout(self, info, bound: int) -> tuple[Value, ...]:  # type: ignore[no-untyped-def]
+        """What `ppy_memo_make` takes: the key's and the result's words, which
+        of them are strings, which key words are floats, and the bound."""
+        word = self._word  # type: ignore[attr-defined]
+        returned = _words(info.ret) or []
+        key_kinds: list[str] = []
+        for parameter in info.params:
+            if not parameter.global_of:
+                key_kinds.extend(_words(parameter.type) or [])
+        return (
+            word(len(key_kinds)),
+            word(len(returned)),
+            word(_mask(key_kinds, "str")),
+            word(_mask(returned, "str")),
+            word(_mask(key_kinds, "float")),
+            word(bound),
+        )
+
+    def _define_closure(self, node: ast.FunctionDef) -> None:
+        """`@cache def inner(...)` inside a function: a closure whose entry looks
+        the arguments up in a table of its own, made each time the `def` runs,
+        as CPython makes a new cache each time."""
+        qualname = f"{self.info.qualname}.<locals>.{node.name}"  # type: ignore[attr-defined]
+        info = self.frontend.analysis.symbols.nested.get(qualname)  # type: ignore[attr-defined]
+        if info is None or info.node is not node or cached_decorator(info) is None:
+            super()._define_closure(node)  # type: ignore[misc]
+            return
+        bound = cache_bound(info, nested=True)
+        args = node.args
+        if args.vararg or args.kwarg or args.kwonlyargs or args.defaults or args.posonlyargs:
+            raise Unsupported(f"a nested `{node.name}` with defaults or special parameters")
+        typed = T.Callable_(tuple(T.Param(p.name, p.type) for p in info.params), info.ret)
+        if not is_plain_callable(typed):
+            raise Unsupported(f"`{node.name}` is not a function a closure can hold")
+        captured = self._captured(node)  # type: ignore[attr-defined]
+        entry = _cached_closure_code(self.frontend, info, node, captured, bound)  # type: ignore[attr-defined]
+        made = self._closure(entry, captured)  # type: ignore[attr-defined]
+        # The closure keeps its table one word past its cells, and lets go of it.
+        table = self._rt("ppy_memo_instance", self._table_layout(info, bound), HANDLE)  # type: ignore[attr-defined]
+        made = self._rt("ppy_memo_closure", (made, table), HANDLE)  # type: ignore[attr-defined]
+        shape = shape_of(T.Callable_(typed.params, typed.ret), self._records())  # type: ignore[attr-defined]
+        assert shape is not None
+        self._bind(node.name, shape, made, owned=True)  # type: ignore[attr-defined]
 
     def _memo_return(self, value: Value) -> None:
         self._check_thread_failures()  # type: ignore[attr-defined]
@@ -269,3 +323,39 @@ def define_cached(frontend, info, node: ast.FunctionDef, constants: dict) -> lis
         frontend.module.functions.pop(body.name, None)
         raise
     return lowering.proved
+
+
+def _cached_closure_code(frontend, info, node: ast.FunctionDef, captured: dict, bound: int) -> str:  # type: ignore[no-untyped-def]
+    """A nested cached function's two halves: its body, the closure entry
+    `closure_code` makes, and the entry its closure calls, which looks the
+    arguments up first. The entry's name."""
+    from dataclasses import replace as dataclass_replace  # pylint: disable=import-outside-toplevel
+
+    from ppy_runtime._record import replace  # pylint: disable=import-outside-toplevel
+
+    from .ast_to_ir import _FunctionLowering  # pylint: disable=import-outside-toplevel
+
+    made: dict[int, str] = frontend.__dict__.setdefault("_memo_closures", {})
+    found = made.get(id(node))
+    if found is not None:
+        return found
+    body, signature = frontend.closure_code(info, node, captured)
+    if not signature.results:
+        raise Unsupported("a cached function that returns nothing keeps its cache in Python")
+    symbol = f"{signature.symbol}_memo"
+    entry_signature = replace(
+        signature,
+        symbol=symbol,
+        native=replace(signature.native, symbol=symbol) if signature.native is not None else None,
+    )
+    spelled = f"{signature.qualname}_memo"
+    entry = frontend.declare(dataclass_replace(info, qualname=spelled), entry_signature)
+    frontend.declared.pop(spelled, None)
+    try:
+        lowering = _FunctionLowering(frontend, entry, entry_signature, info, {})
+        lowering.memo_run(node, body.name, tuple(entry.results), bound, held_at=len(captured) + 1)
+    except Unsupported:
+        frontend.module.functions.pop(entry.name, None)
+        raise
+    made[id(node)] = entry.name
+    return entry.name

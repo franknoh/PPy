@@ -1026,6 +1026,46 @@ int8_t *ppy_memo_table(int64_t id, int64_t keys, int64_t values, int64_t key_tex
     if (i == 4096) {
         ppy_coll_fail();
     }
+    int8_t *table = ppy_memo_make(keys, values, key_text, value_text, key_floats, bound);
+    tables[2 * i] = id;
+    tables[2 * i + 1] = (int64_t)(intptr_t)table;
+    return table;
+}
+
+/* A nested cached function's table, made each time its `def` runs: held in
+   a one-word sequence the closure keeps, which frees the table with it
+   (word 25 of its header says so). */
+int8_t *ppy_memo_instance(int64_t keys, int64_t values, int64_t key_text, int64_t value_text,
+                          int64_t key_floats, int64_t bound) {
+    int8_t *made = ppy_seq_new(1, 1, 0, 0);
+    int8_t *table = ppy_memo_make(keys, values, key_text, value_text, key_floats, bound);
+    *(int64_t *)ppy_seq_at(made, 0) = (int64_t)(intptr_t)table;
+    ((int64_t *)made)[25] = 1;
+    return made;
+}
+
+/* The table a nested cached function's sequence holds. */
+int8_t *ppy_memo_of(int8_t *made) {
+    return (int8_t *)(intptr_t)*(int64_t *)ppy_seq_at(made, 0);
+}
+
+/* A table and every copy it keeps, let go of. */
+void ppy_memo_free(int8_t *handle) {
+    int64_t *table = (int64_t *)handle;
+    int64_t stride = ppy_memo_stride(table);
+    int64_t *slots = ppy_memo_slots(table);
+    for (int64_t s = 0; s < table[0]; s++) {
+        if (slots[s * stride] == 1) {
+            ppy_memo_drop(table, slots + s * stride);
+        }
+    }
+    free(slots);
+    free(table);
+}
+
+/* A new, empty table. */
+int8_t *ppy_memo_make(int64_t keys, int64_t values, int64_t key_text, int64_t value_text,
+                      int64_t key_floats, int64_t bound) {
     int64_t *table = (int64_t *)calloc(11, 8);
     if (table == NULL) {
         ppy_coll_fail();
@@ -1042,8 +1082,6 @@ int8_t *ppy_memo_table(int64_t id, int64_t keys, int64_t values, int64_t key_tex
         ppy_coll_fail();
     }
     table[7] = (int64_t)(intptr_t)slots;
-    tables[2 * i] = id;
-    tables[2 * i + 1] = (int64_t)(intptr_t)table;
     return (int8_t *)table;
 }
 
@@ -1320,4 +1358,17 @@ void ppy_counter_inplace(int8_t *handle, int8_t *other, int64_t op) {
         ppy_coll_hold_key(handle, gone + i * keys, -1);
     }
     free(gone);
+}
+
+/* A closure made one word longer, to keep a nested cached function's table
+   past its cells: a new closure, the old one let go. */
+int8_t *ppy_memo_closure(int8_t *closure, int8_t *table) {
+    int64_t *header = (int64_t *)closure;
+    int64_t words = header[8];
+    int8_t *made = ppy_seq_new(1, words + 1, 0, header[10] | ((int64_t)1 << words));
+    memcpy(ppy_seq_at(made, 0), ppy_seq_at(closure, 0), (size_t)(words * 8));
+    ppy_coll_retain_words(made, ppy_seq_at(made, 0));
+    ((int64_t *)ppy_seq_at(made, 0))[words] = (int64_t)(intptr_t)table;
+    ppy_coll_release(closure);
+    return made;
 }

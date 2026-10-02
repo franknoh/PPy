@@ -15,7 +15,8 @@
      [20] collector: state
      [21] the elements' or keys' `__lt__`, compiled   [22] the keys' `__hash__`
      [23] the keys' `__eq__`                         [24] which key words are objects
-     [25] a map's own reference: a `defaultdict`'s factory, a closure
+     [25] a map's own reference: a `defaultdict`'s factory, a closure; in a
+          sequence, 1 where its one word is a cached function's table
           (not in a string's header, whose bytes start at word 25)
 
    An element or a value is `value words` eight-byte words: an int64_t or a
@@ -152,6 +153,10 @@ void ppy_coll_untrack(int64_t *header) {
 void ppy_coll_free(int8_t *handle) {
     int64_t *header = (int64_t *)handle;
     ppy_coll_untrack(header);
+    if (header[12] == 0 && header[25] == 1) {
+        /* A nested cached function's table (`ppy_memo_instance`). */
+        ppy_memo_free(ppy_memo_of(handle));
+    }
     if (header[12] == 2) {
         free((void *)(intptr_t)header[4]);
         free((void *)(intptr_t)header[7]);

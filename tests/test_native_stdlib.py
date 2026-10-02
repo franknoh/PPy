@@ -681,6 +681,122 @@ def main() -> None:
 main()
 """
 
+NESTED_MEMO = """
+import functools
+
+
+def min_distance_up_bottom(word1: str, word2: str) -> int:
+    len_word1 = len(word1)
+    len_word2 = len(word2)
+
+    @functools.cache
+    def min_distance(index1: int, index2: int) -> int:
+        if index1 >= len_word1:
+            return len_word2 - index2
+        if index2 >= len_word2:
+            return len_word1 - index1
+        diff = int(word1[index1] != word2[index2])
+        return min(
+            1 + min_distance(index1 + 1, index2),
+            1 + min_distance(index1, index2 + 1),
+            diff + min_distance(index1 + 1, index2 + 1),
+        )
+
+    return min_distance(0, 0)
+
+
+def fib_terms(n: int) -> list[int]:
+    @functools.lru_cache(maxsize=None)
+    def term(i: int) -> int:
+        if i < 0:
+            raise ValueError("n is negative")
+        if i < 2:
+            return i
+        return term(i - 1) + term(i - 2)
+
+    if n < 0:
+        raise ValueError("n is negative")
+    return [term(i) for i in range(n + 1)]
+
+
+def counted(n: int) -> str:
+    calls: list[int] = []
+
+    @functools.lru_cache(maxsize=2)
+    def square(x: int) -> int:
+        calls.append(x)
+        return x * x
+
+    total = 0
+    for x in [1, 2, 1, 3, 1, 2, 2]:
+        total += square(x)
+    return f"{total} {calls} {n}"
+
+
+def main() -> None:
+    print(min_distance_up_bottom("intention", "execution"))
+    print(min_distance_up_bottom("zooicoarchaeologist", "zoologist" * 3))
+    print(fib_terms(90)[-3:])
+    print(counted(1))
+    try:
+        fib_terms(-1)
+    except ValueError as e:
+        print(e)
+
+
+main()
+"""
+
+COUNTED = """
+from collections import Counter, defaultdict
+
+
+def majority_vote(votes: list[int], votes_needed_to_win: int) -> list[int]:
+    majority_candidate_counter: Counter[int] = Counter()
+    for vote in votes:
+        majority_candidate_counter[vote] += 1
+        if len(majority_candidate_counter) == votes_needed_to_win:
+            majority_candidate_counter -= Counter(set(majority_candidate_counter))
+    majority_candidate_counter = Counter(
+        vote for vote in votes if vote in majority_candidate_counter
+    )
+    return [
+        vote
+        for vote in majority_candidate_counter
+        if majority_candidate_counter[vote] > len(votes) / votes_needed_to_win
+    ]
+
+
+def inplace(words: list[str]) -> str:
+    a = Counter(words)
+    b = Counter(["x", "x", "y", "zz"])
+    a += b
+    a -= Counter(["x", "q"])
+    c = Counter(words)
+    c |= b
+    d = Counter(words)
+    d &= b
+    return f"{a} {c} {d}"
+
+
+def solution(limit: int) -> int:
+    frequencies: defaultdict = defaultdict(int)
+    for perimeter in range(1, limit):
+        frequencies[perimeter % 37] += 1
+    return sum(1 for frequency in frequencies.values() if frequency == 3)
+
+
+def main() -> None:
+    print(majority_vote([1, 2, 2, 3, 1, 3, 2], 3))
+    print(majority_vote([1, 2, 2, 3, 1, 3, 2], 2))
+    print(majority_vote([1, 2, 2, 3, 1, 3, 2], 4))
+    print(inplace(["x", "y", "x", "w", "y", "y"]))
+    print(solution(100))
+
+
+main()
+"""
+
 #: name -> (source, the functions `ppy explain` must call native).
 PROGRAMS = {
     "random": (RANDOM, ("draws",)),
@@ -698,6 +814,9 @@ PROGRAMS = {
     "functional": (FUNCTIONAL, ("ops", "jobs", "errs", "combine")),
     "compared": (COMPARED, ("parts",)),
     "generators": (GENERATORS, ("roll", "draws")),
+    # A nested cached function's table is its closure's, new each time.
+    "nested_memo": (NESTED_MEMO, ("min_distance_up_bottom", "fib_terms", "counted")),
+    "counted": (COUNTED, ("majority_vote", "inplace", "solution")),
 }
 
 
