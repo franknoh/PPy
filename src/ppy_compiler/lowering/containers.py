@@ -58,7 +58,7 @@ class ContainerLowering(CollectionApiLowering):
 
     def _alias(self, kind: Kind) -> Kind:
         """The runtime collection a container shares its methods with."""
-        return Kind(_ALIASES[kind.name], kind.value, kind.key)
+        return Kind(_ALIASES[kind.name], kind.value, kind.key, kind.flavor)
 
     # -- making ------------------------------------------------------------------------
 

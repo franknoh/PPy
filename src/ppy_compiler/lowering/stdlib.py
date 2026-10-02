@@ -26,6 +26,8 @@ from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
 from ..ir.raising import OVERFLOW, said
 from .collections import HANDLE, Kind, _pointer, kind_of
+from .library import LibraryLowering
+from .memo import MemoLowering
 
 __all__ = ["StdlibLowering"]
 
@@ -41,6 +43,9 @@ _DEQUE_METHODS = {
     "clear": "clear",
     "copy": "copy",
 }
+
+#: `functools`' calls lowered here.
+_FUNCTOOLS = frozenset({"functools.reduce"})
 
 #: `math`'s constants.
 _CONSTANTS = {
@@ -79,7 +84,7 @@ _FLOAT_ARGUMENTS = {
 }
 
 
-class StdlibLowering:
+class StdlibLowering(LibraryLowering, MemoLowering):
     """The standard library's calls; mixed into `_FunctionLowering`."""
 
     def _make_collection(self, name: str, value: ast.expr, declared: T.Type | None = None) -> bool:
@@ -241,6 +246,8 @@ class StdlibLowering:
         if qualname.startswith("math."):
             name = qualname.removeprefix("math.")
             return qualname if name in MATH_NATIVE or name in _MATH_INTRINSICS else None
+        if qualname in _FUNCTOOLS:
+            return qualname
         return qualname if qualname in MODELS else None
 
     def _stdlib_call(self, node: ast.Call, discard_result: bool) -> Value | None:
@@ -248,6 +255,8 @@ class StdlibLowering:
         qualname = self._stdlib_target(node)
         if qualname is None:
             return None
+        if qualname == "functools.reduce":
+            return self._reduce(node)
         module, _, name = qualname.partition(".")
         if module == "math":
             if self.device or self.info.directive("xla.jit") is not None:  # type: ignore[attr-defined]
@@ -289,7 +298,23 @@ class StdlibLowering:
         self.frontend.module.require("math", 1)  # type: ignore[attr-defined]
         return math_dialect.call(self.b, name, value)  # type: ignore[attr-defined,no-any-return]
 
+    def _own_generator(self, instance: Value, name: str) -> None:
+        """`r.seed` and `r.gauss` of a generator Python lent touch its
+        `gauss_next`, which only Python has: such a call falls back."""
+        lent = self._rt("ppy_random_instance_lent", (instance,))  # type: ignore[attr-defined]
+        core.guard(
+            self.b,  # type: ignore[attr-defined]
+            core.cmp(self.b, "eq", lent, self._word(0)),  # type: ignore[attr-defined]
+            "contract",
+            f"`Random.{name}` of a generator Python lent",
+        )
+
     def _state(self) -> Value:
+        """The generator a draw moves: a `random.Random`'s own, where a method of
+        one is lowering, or the module's."""
+        instance = self.__dict__.get("_random_instance")
+        if instance is not None:
+            return self._rt("ppy_random_instance_state", (instance,), HANDLE)  # type: ignore[attr-defined,no-any-return]
         return self._rt("ppy_random_state", (), HANDLE)  # type: ignore[attr-defined,no-any-return]
 
     # -- random ------------------------------------------------------------------
@@ -305,6 +330,11 @@ class StdlibLowering:
         if name == "seed":
             given = word(1 if args else 0)
             value = self._int_argument(args[0]) if args else word(0)
+            instance = self.__dict__.get("_random_instance")
+            if instance is not None:
+                self._own_generator(instance, "seed")
+                rt("ppy_random_seed_instance", (instance, given, value), None)
+                return word(0)
             rt("ppy_random_reseed", (self._state(), given, value), None)
             return word(0)
         if name == "getrandbits":
@@ -529,6 +559,12 @@ class StdlibLowering:
         if name in {"gauss", "normalvariate", "lognormvariate"}:
             mu, sigma = floats or (self._float(0.0), self._float(1.0))
             if name == "gauss":
+                instance = self.__dict__.get("_random_instance")
+                if instance is not None:
+                    # A generator of its own holds its value back itself.
+                    self._own_generator(instance, "gauss")
+                    held = rt("ppy_random_instance_held", (instance,), HANDLE)
+                    return rt("ppy_random_gauss_held", (self._state(), mu, sigma, held), F64)  # type: ignore[no-any-return]
                 if not self.frontend.standalone:  # type: ignore[attr-defined]
                     raise Unsupported(
                         "`random.gauss` holds a value back in Python's generator under `ppy run`"

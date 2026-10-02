@@ -19,10 +19,14 @@ __all__ = [
     "ARRAY_TYPECODES",
     "EXTERNAL_TYPES",
     "INSTANCE_ATTRS",
+    "LIBRARY_MAPPINGS",
+    "MAPPING_OWN",
     "MODULE_ATTRIBUTES",
+    "cache_attribute",
     "call",
     "instance_attribute",
     "lookup",
+    "mapping_of",
 ]
 
 #: `array` type codes and the element type each denotes.
@@ -365,6 +369,8 @@ _opaque("fractions", ("Fraction",))
 _opaque("uuid", ("UUID",))
 _opaque("io", ("TextIOWrapper", "BytesIO", "StringIO", "BufferedReader", "BufferedWriter"))
 _opaque("types", ("ModuleType", "FunctionType", "SimpleNamespace"))
+_opaque("functools", ("_CacheInfo", "partial"))
+_opaque("random", ("Random",))
 _opaque("enum", ("Enum", "IntEnum", "Flag", "IntFlag"))
 _opaque("argparse", ("Namespace", "ArgumentParser"))
 _opaque("subprocess", ("CompletedProcess", "Popen"))
@@ -498,6 +504,49 @@ for _mapping in ("collections.OrderedDict", "collections.defaultdict"):
     )
 
 
+#: `collections`' mappings: a dict with more to it, whose subscripts, views,
+#: and plain dict methods are a dict's.
+LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+
+#: The methods each has beyond a dict's, or in place of one.
+MAPPING_OWN: dict[str, frozenset[str]] = {
+    "collections.Counter": frozenset({"most_common", "elements", "total", "update", "subtract"}),
+    "collections.OrderedDict": frozenset({"move_to_end", "popitem"}),
+    "collections.defaultdict": frozenset(),
+}
+
+
+def mapping_of(t: T.Type) -> tuple[T.Type, T.Type] | None:
+    """The key and value types of a `defaultdict`, an `OrderedDict`, or a
+    `Counter` (whose values are ints); None for anything else."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or base.name not in LIBRARY_MAPPINGS:
+        return None
+    if base.name == "collections.Counter":
+        return (base.args[0], T.INT) if len(base.args) == 1 else None
+    return (base.args[0], base.args[1]) if len(base.args) == 2 else None
+
+
+def _random_methods() -> dict[str, tuple[T.Type, EffectSet]]:
+    """`random.Random`'s methods: the module's functions, drawing from the
+    instance's own state, which is a write to it."""
+    from .native_stdlib import MODELS  # pylint: disable=import-outside-toplevel
+
+    found: dict[str, tuple[T.Type, EffectSet]] = {}
+    for qualname, (typed, effects) in MODELS.items():
+        module, _, name = qualname.partition(".")
+        if module != "random":
+            continue
+        assert isinstance(typed, T.Callable_)
+        drawn = EffectSet.of(Effect.WRITE_OBJECT, raises=tuple(effects.raises))
+        if Effect.ALLOC in effects:
+            drawn = drawn.add(Effect.ALLOC)
+        found[name] = (T.Callable_((), typed.ret, f"random.Random.{name}"), drawn)
+    return found
+
+
 def _library(name: str) -> T.Instance:
     return T.Instance(name, (), EXTERNAL_MRO.get(name, (name, "object")))
 
@@ -576,8 +625,14 @@ def instance_attribute(
         _ELEMENT: args[0] if args else T.ANY,
         _VALUE: args[1] if len(args) > 1 else T.ANY,
     }
+    if name == "collections.Counter":
+        bindings[_VALUE] = T.INT
     return T.substitute(known[0], bindings), known[1]
 
+
+#: The wrapper `functools.cache` and `lru_cache` make, and what `cache_info` gives.
+_CACHE_WRAPPER = "functools._lru_cache_wrapper"
+_CACHE_INFO = "functools._CacheInfo"
 
 #: Callables the analyzer knows the result type and effects of.
 _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
@@ -691,8 +746,28 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "functools.reduce": _fn(
         "functools.reduce", T.ANY, _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK)
     ),
+    # A cached function's wrapper: its counts, and emptying it.
+    f"{_CACHE_WRAPPER}.cache_info": _fn(
+        f"{_CACHE_WRAPPER}.cache_info", _library(_CACHE_INFO), EffectSet.of(Effect.READ_GLOBAL)
+    ),
+    f"{_CACHE_WRAPPER}.cache_clear": _fn(
+        f"{_CACHE_WRAPPER}.cache_clear", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)
+    ),
+    f"{_CACHE_WRAPPER}.cache_parameters": _fn(
+        f"{_CACHE_WRAPPER}.cache_parameters", T.dict_of(T.STR, T.ANY), _ALLOC
+    ),
     **_math(),
 }
+
+
+def cache_attribute(function: T.Callable_, attribute: str) -> T.Type | None:
+    """What `f.cache_info` and the rest are of a function `functools.cache` or
+    `lru_cache` wraps; `f.__wrapped__` is the function itself."""
+    if attribute == "__wrapped__":
+        return function
+    found = _FUNCTIONS.get(f"{_CACHE_WRAPPER}.{attribute}")
+    return found[0] if found is not None else None
+
 
 #: Module attributes with a known type.
 MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
@@ -895,3 +970,6 @@ def call(qualname: str, args: list[tuple[T.Type, Facts]]) -> tuple[T.Type, Effec
             _ALLOC | EffectSet.of(raises=("ValueError", "TypeError")),
         )
     return None
+
+
+INSTANCE_ATTRS["random.Random"] = _random_methods()

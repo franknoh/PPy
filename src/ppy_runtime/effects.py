@@ -35,7 +35,15 @@ _HOOK = ctypes.CFUNCTYPE(
 )
 
 #: The kinds of `pyio.c`.
-_NONE, _INT, _FLOAT, _BOOL, _STR, _OBJECT = range(6)
+_NONE, _INT, _FLOAT, _BOOL, _STR, _OBJECT, _KEYWORD = range(7)
+
+#: A tuple result's kind has this bit; its count and items' kinds above it.
+_TUPLE = 8
+
+#: A pure call's kind has this bit where the callee promises the result.
+_PROMISED_BIT = 2 << 40
+
+_KIND_NAMES = {_INT: "int", _FLOAT: "float", _BOOL: "bool", _STR: "str"}
 
 _I64_LOW = -(1 << 63)
 _I64_HIGH = (1 << 63) - 1
@@ -48,6 +56,7 @@ _SIGNATURES: dict[str, tuple[Any, tuple[Any, ...]]] = {
     "ppy_io_discard": (None, ()),
     "ppy_io_state": (ctypes.POINTER(ctypes.c_int64), ()),
     "ppy_io_answer": (None, (ctypes.c_int64, ctypes.c_int64)),
+    "ppy_io_answer_at": (None, (ctypes.c_int64, ctypes.c_int64)),
     "ppy_io_answer_text": (None, (ctypes.c_char_p, ctypes.c_int64)),
     "ppy_io_pending": (
         None,
@@ -226,13 +235,23 @@ class Effects:
                 stream = sys.stdout if a == 1 else sys.stderr
                 if stream is not None:
                     stream.flush()
-            elif op in {3, 4}:
-                arguments = self._arguments()
+            elif op in {3, 4, 6, 7}:
+                arguments, keywords = self._arguments()
                 name = _text(a, b)
-                if op == 4:
-                    result = getattr(arguments[0], name)(*arguments[1:])
+                if op in {4, 7}:
+                    result = getattr(arguments[0], name)(*arguments[1:], **keywords)
                 else:
-                    result = _resolve(name)(*arguments)
+                    result = _resolve(name)(*arguments, **keywords)
+                if op in {6, 7}:
+                    # A callee a second run cannot tell from the first: a result
+                    # of another kind is the native call's to fall back on, or
+                    # a broken promise where the result was promised.
+                    promised = bool(c & _PROMISED_BIT)
+                    if self._answer_exactly(result, c & ~_PROMISED_BIT):
+                        return 0
+                    if promised:
+                        raise _mismatch(name, _KIND_NAMES.get(c & ~_PROMISED_BIT, "?"), result)
+                    return 1
                 self._answer(result, c, name)
             elif op == 5:
                 self._objects().pop(a, None)
@@ -241,12 +260,17 @@ class Effects:
             self._pend(error)
             return -1
 
-    def _arguments(self) -> list[object]:
+    def _arguments(self) -> tuple[list[object], dict[str, object]]:
         state = self.lib.ppy_io_state()
         count = min(state[8], 32)
         values: list[object] = []
+        keywords: dict[str, object] = {}
+        named: str | None = None
         for index in range(count):
             kind, word = state[18 + 2 * index], state[19 + 2 * index]
+            if kind == _KEYWORD:
+                named = self._string(word)
+                continue
             if kind == _INT:
                 values.append(word)
             elif kind == _FLOAT:
@@ -259,7 +283,11 @@ class Effects:
                 values.append(self._objects()[word])
             else:
                 values.append(None)
-        return values
+            if named is not None:
+                # The value just read goes in as the keyword named before it.
+                keywords[named] = values.pop()
+                named = None
+        return values, keywords
 
     def _answer(self, result: object, kind: int, name: str) -> None:
         lib = self.lib
@@ -289,6 +317,38 @@ class Effects:
             objects[number] = result
             lib.ppy_io_answer(_OBJECT, number)
 
+    def _answer_exactly(self, result: object, kind: int) -> bool:
+        """A pure callee's result, where it is exactly of `kind`: answered, and True.
+        False where it is not, with nothing answered."""
+        lib = self.lib
+        if kind & _TUPLE:
+            count = (kind >> 4) & 0xF
+            kinds = [(kind >> (8 + 4 * i)) & 0xF for i in range(count)]
+            if type(result) is not tuple or len(result) != count:
+                return False
+            words = [_exact_word(item, wanted) for item, wanted in zip(result, kinds, strict=True)]
+            if any(word is None for word in words):
+                return False
+            for index, word in enumerate(words):
+                lib.ppy_io_answer_at(index, word)
+            lib.ppy_io_answer(kind, 0)
+            return True
+        if kind == _NONE:
+            lib.ppy_io_answer(_NONE, 0)
+            return True
+        if kind == _STR:
+            if type(result) is not str:
+                return False
+            data = result.encode("utf-8", "surrogatepass")
+            lib.ppy_io_answer_text(data, len(data))
+            lib.ppy_io_answer(_STR, 0)
+            return True
+        word = _exact_word(result, kind)
+        if word is None:
+            return False
+        lib.ppy_io_answer(kind, word)
+        return True
+
     def _pend(self, error: BaseException) -> None:
         traceback = error.__traceback__
         if traceback is not None and traceback.tb_frame.f_code is Effects._dispatch.__code__:
@@ -314,6 +374,21 @@ def _mismatch(name: str, wanted: str, result: object) -> TypeError:
     return TypeError(
         f"`{name}` returned {type(result).__name__}, where the compiled caller expects {wanted}"
     )
+
+
+def _exact_word(value: object, kind: int) -> int | None:
+    """The word of a number or bool exactly of `kind`, or None: an `int` that
+    fits 64 bits (not a `bool`), a `float`, a `bool`."""
+    exact = type(value)
+    if kind == _INT:
+        if isinstance(value, int) and exact is int and _I64_LOW <= value <= _I64_HIGH:
+            return value
+        return None
+    if kind == _FLOAT:
+        return _bits(value) if isinstance(value, float) and exact is float else None
+    if kind == _BOOL:
+        return int(value) if isinstance(value, bool) else None
+    return None
 
 
 def _float(word: int) -> float:

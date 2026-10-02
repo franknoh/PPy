@@ -544,6 +544,12 @@ def _is_inspecting_builtin(node: ast.Call, env: Env) -> bool:
 #: Types whose `+=`/`-=`/... mutate the object rather than rebinding.
 _IN_PLACE_MUTABLE = frozenset({"list", "set", "dict", "bytearray", "collections.deque"})
 
+#: What `functools.cmp_to_key` makes of each element.
+_KEY_WRAPPER = "functools.KeyWrapper"
+
+#: The `collections` types whose methods native code has (`lowering/stdlib.py`).
+_NATIVE_LIBRARY = frozenset({"collections.deque", "random.Random", *stdlib.LIBRARY_MAPPINGS})
+
 
 def _mutates_in_place(t: T.Type) -> bool:
     base = T.strip_literal(t)
@@ -715,6 +721,52 @@ def _one_member(t: T.Type) -> T.Type:
         members = [m for m in base.members if m != T.NONE]
         return T.strip_literal(members[0]) if len(members) == 1 else base
     return base
+
+
+def _mapping_pairs(t: T.Type) -> tuple[T.Type, T.Type] | None:
+    """A dict's or a library mapping's key and value types."""
+    base = T.strip_literal(t)
+    if isinstance(base, T.Instance) and base.name == "dict" and len(base.args) == 2:
+        return base.args[0], base.args[1]
+    return stdlib.mapping_of(base)
+
+
+def _pairs_of(t: T.Type) -> tuple[T.Type, T.Type] | None:
+    """The key and value of `(k, v)` pairs."""
+    base = T.strip_literal(t)
+    if isinstance(base, T.Tuple_) and not base.homogeneous and len(base.items) == 2:
+        return base.items[0], base.items[1]
+    return None
+
+
+#: What calling each class `defaultdict` may take as its factory gives.
+_FACTORIES: dict[str, T.Type] = {
+    "int": T.INT,
+    "float": T.FLOAT,
+    "str": T.STR,
+    "bool": T.BOOL,
+    "list": T.list_of(T.NEVER),
+    "set": T.instance("set", T.NEVER),
+    "dict": T.instance("dict", T.NEVER, T.NEVER),
+}
+
+
+def _factory_value(factory: T.Type) -> T.Type | None:
+    """What a `defaultdict`'s factory makes: a class (`int`, `list`) or a
+    function of no arguments (`lambda: -1`)."""
+    if isinstance(factory, T.ClassObject):
+        short = (
+            factory.name.rpartition(".")[2]
+            if factory.name.startswith("builtins.")
+            else factory.name
+        )
+        return _FACTORIES.get(short)
+    if isinstance(factory, T.Callable_):
+        if any(not p.has_default for p in factory.params):
+            return None
+        ret = T.strip_literal(factory.ret)
+        return None if isinstance(ret, (T.UnknownType, T.AnyType, T.NeverType)) else ret
+    return None
 
 
 def receiver_bindings(
@@ -1057,10 +1109,11 @@ class _Checker:
         # parameter: native code is handed it at the boundary, and a write
         # through it lands in the module's object as a parameter's does.
         settled = _settled_names(info, self.symbols.settled_globals)
-        cached = self.project.alias_cache.get((id(info.node), immutable, settled))
+        fresh = self._fresh_calls()
+        cached = self.project.alias_cache.get((id(info.node), immutable, settled, fresh))
         if cached is None:
-            cached = analyze_aliases(info.node, immutable, settled)
-            self.project.alias_cache[(id(info.node), immutable, settled)] = cached
+            cached = analyze_aliases(info.node, immutable, settled, fresh)
+            self.project.alias_cache[(id(info.node), immutable, settled, fresh)] = cached
         self._aliases = cached  # type: ignore[assignment]
         if info.dynamic:
             self._dynamic_depth += 1
@@ -1385,7 +1438,7 @@ class _Checker:
         types from there: `f: Callable[[int], int] = lambda x: x + 1`, and a
         list or dict of them written out in place."""
         wanted = T.strip_literal(expected)
-        if isinstance(node, ast.Lambda) and isinstance(wanted, T.Callable_):
+        if self._lambda_like(node) and isinstance(wanted, T.Callable_):
             self._lambda_expected[id(node)] = tuple(p.type for p in wanted.params)
         elif (
             isinstance(node, (ast.List, ast.Set)) and isinstance(wanted, T.Instance) and wanted.args
@@ -1456,6 +1509,7 @@ class _Checker:
             return
         resolved = self.annotations.resolve(node.annotation)
         declared = Binding(resolved.type, resolved.facts)
+        bound_type = resolved.type
         if node.value is not None:
             value = self._expr_expecting(node.value, env, resolved.type)
             if _display_fits(node.value, value.type, resolved.type):
@@ -1478,9 +1532,20 @@ class _Checker:
             else:
                 declared = Binding(resolved.type, self._merge_declared(resolved.facts, value.facts))
                 declared = Binding(declared.type, self._check_width(declared, node.value))
-        self._bind_target(
-            node.target, declared, env, declared_type=resolved.type, source=node.value
-        )
+            made = T.strip_literal(value.type)
+            if (
+                isinstance(resolved.type, T.Instance)
+                and not resolved.type.args
+                and resolved.type.name in {"collections.deque", *stdlib.LIBRARY_MAPPINGS}
+                and isinstance(made, T.Instance)
+                and made.name == resolved.type.name
+                and made.args
+            ):
+                # `counts: defaultdict = defaultdict(int)`: what the annotation
+                # leaves out, the value and the writes after it say.
+                declared = Binding(made, declared.facts)
+                bound_type = made
+        self._bind_target(node.target, declared, env, declared_type=bound_type, source=node.value)
         if isinstance(node.target, ast.Name) and any(
             fact is not None
             for fact in (resolved.facts.dtype, resolved.facts.shape, resolved.facts.ownership)
@@ -2240,10 +2305,115 @@ class _Checker:
             env.set(pattern.name, Binding(T.list_of(B.element_type(subject.type))))
 
     def _expr(self, node: ast.expr, env: Env) -> Binding:
+        if isinstance(node, ast.Call) and self._cmp_to_key(node) is not None:
+            binding = self._key_of_comparison(node, env)
+            self._record(node, binding)
+            return binding
+        lambda_ = self._library_lambda(node)
+        if lambda_ is not None:
+            # `operator.add`, `itemgetter(1)`: the lambda each is, typed as a
+            # lambda written in its place would be.
+            if id(node) in self._lambda_expected:
+                self._lambda_expected[id(lambda_)] = self._lambda_expected[id(node)]
+            binding = self._expr(lambda_, env)
+            self._record(node, binding)
+            return binding
         method = getattr(self, f"_expr_{type(node).__name__}", None)
         binding = Binding(T.UNKNOWN) if method is None else method(node, env)
         self._record(node, binding)
         return binding
+
+    def _library_lambda(self, node: ast.expr) -> ast.Lambda | None:
+        if not isinstance(node, (ast.Attribute, ast.Name, ast.Call)):
+            return None
+        if isinstance(node, ast.Name) and node.id in self._function_locals:
+            return None
+        resolver = self.project.resolver(self.symbols)
+
+        def canonical(expr: ast.expr) -> str | None:
+            found = resolver.canonical(expr)
+            if found in {"builtins.max", "builtins.min"}:
+                # Only a bare `max` the module leaves alone is the one the
+                # lambda's body calls by that name.
+                found = None
+            if (
+                found is None
+                and isinstance(expr, ast.Name)
+                and expr.id in {"max", "min"}
+                and expr.id not in self.symbols.functions
+                and expr.id not in self.symbols.imports
+                and expr.id not in self.symbols.globals
+            ):
+                return f"builtins.{expr.id}"
+            return found
+
+        def arity(qualname: str) -> int | None:
+            info = self.project.functions.get(qualname)
+            if info is None or info.owner or info.enclosing:
+                return None
+            if any(p.kind != "positional_or_keyword" or p.has_default for p in info.params):
+                return None
+            return len(info.params)
+
+        def stable(name: str) -> bool:
+            # A parameter the function never rebinds, or a settled global.
+            current = self._current
+            if current is None:
+                return False
+            if name in {p.name for p in current.params}:
+                return not any(
+                    isinstance(child, ast.Name)
+                    and child.id == name
+                    and isinstance(child.ctx, (ast.Store, ast.Del))
+                    for child in current.nodes
+                )
+            return name not in self._function_locals and name in self.symbols.settled_globals
+
+        return native_stdlib.library_lambda(node, canonical, arity, stable)
+
+    def _lambda_like(self, node: ast.expr) -> bool:
+        """A lambda, a library function that stands for one, or a sort key
+        made of a comparison (`cmp_to_key(f)`)."""
+        return (
+            isinstance(node, ast.Lambda)
+            or self._library_lambda(node) is not None
+            or self._cmp_to_key(node) is not None
+        )
+
+    def _cmp_to_key(self, node: ast.expr) -> ast.expr | None:
+        """`cmp_to_key(f)`: its `f`."""
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, (ast.Name, ast.Attribute))
+            and len(node.args) == 1
+            and not node.keywords
+            and self.project.resolver(self.symbols).canonical(node.func) == "functools.cmp_to_key"
+        ):
+            return node.args[0]
+        return None
+
+    def _key_of_comparison(self, node: ast.Call, env: Env) -> Binding:
+        """`cmp_to_key(f)` where a sort key goes: `f` compares two elements, and
+        the key it makes takes one."""
+        known = self._lambda_parameters
+        self._lambda_parameters = None
+        element = known[0] if known is not None and len(known) == 1 else T.UNKNOWN
+        compare = node.args[0]
+        self._expr(node.func, env)
+        if self._lambda_like(compare):
+            self._lambda_parameters = (element, element)
+        called = self._expr(compare, env)
+        self._lambda_parameters = None
+        typed = T.strip_literal(called.type)
+        if isinstance(typed, T.Callable_):
+            own = self.project.functions.get(typed.qualname)
+            if own is not None:
+                self._effects = self._effects | own.effects
+                self._calls.add(own.qualname)
+        else:
+            self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
+        made = T.Instance(_KEY_WRAPPER, (), (_KEY_WRAPPER, "object"))
+        return Binding(T.Callable_((T.Param("obj", element),), made, "functools.cmp_to_key"))
 
     def _record_empty_display(self, node: ast.expr, actual: T.Type, declared: T.Type) -> None:
         """`return []` from a `-> list[int]`: the empty display is a `list[int]`,
@@ -2517,6 +2687,9 @@ class _Checker:
         native = self._native_call(node, env)
         if native is not None:
             return native
+        reduced = self._reduce_call(node, env)
+        if reduced is not None:
+            return reduced
         dialect = self._dialect_call(node, env)
         if dialect is not None:
             return dialect
@@ -2605,6 +2778,15 @@ class _Checker:
                 if decided is not None and callee.type.qualname in native_stdlib.MUTATES_FIRST:
                     self._note_mutation(node.args[0], env)
                     self._widen_heap(callee.type.qualname, node, args, env)
+                if decided is not None and callee.type.qualname.startswith("random.Random."):
+                    if isinstance(node.func, ast.Attribute) and not isinstance(
+                        node.func.value, ast.Call
+                    ):
+                        # A draw moves the instance's own state; one made for
+                        # the call is nobody else's.
+                        self._note_mutation(node.func.value, env)
+                    if callee.type.qualname == "random.Random.shuffle" and node.args:
+                        self._note_mutation(node.args[0], env)
             if decided is not None:
                 self._add_summarized_effects(decided[1])
                 return Binding(decided[0])
@@ -2619,6 +2801,10 @@ class _Checker:
                 return Binding(callee.type.ret)
             if callee.type.qualname.startswith(tuple(f"{c}." for c in C.COLLECTIONS)):
                 return self._collection_call(callee.type, node, args, keywords, env)
+            if callee.type.qualname.startswith("collections.deque.") and isinstance(
+                node.func, ast.Attribute
+            ):
+                self._widen_empty_container(node.func, callee.type.qualname, args, env)
             if callee.type.qualname in _MUTATING_METHODS:
                 self._effects = self._effects.add(
                     Effect.WRITE_OBJECT, raises=("IndexError", "KeyError")
@@ -2697,10 +2883,26 @@ class _Checker:
     def _widen_empty_container(
         self, func: ast.Attribute, qualname: str, args: list[Binding], env: Env
     ) -> None:
-        """`out = []` followed by `out.append(x)` gives `out` an element type."""
-        if not isinstance(func.value, ast.Name) or not args:
+        """`out = []` followed by `out.append(x)` gives `out` an element type,
+        and so does `q = deque()` followed by `q.append(x)`, and
+        `groups = defaultdict(list)` followed by `groups[k].append(x)` the
+        mapping's value."""
+        if not args:
             return
-        binding = env.get(func.value.id)
+        owner = func.value
+        mapping = None
+        if isinstance(owner, ast.Subscript) and isinstance(owner.value, ast.Name):
+            # `groups[k].append(x)`: the value of a library mapping.
+            mapping = owner.value
+            held = env.get(mapping.id)
+            pairs = stdlib.mapping_of(held.type) if held is not None else None
+            if pairs is None:
+                return
+            binding: Binding | None = Binding(pairs[1])
+        elif isinstance(owner, ast.Name):
+            binding = env.get(owner.id)
+        else:
+            return
         if binding is None:
             return
         base = T.strip_literal(binding.type)
@@ -2709,20 +2911,75 @@ class _Checker:
         added = T.strip_literal(args[0].type)
         if isinstance(added, (T.UnknownType, T.AnyType, T.NeverType)):
             return
-        if qualname in {"list.append", "list.insert", "set.add"}:
+        single = {"list.append", "list.insert", "set.add"}
+        single |= {f"collections.deque.{name}" for name in ("append", "appendleft")}
+        many = {"list.extend", "set.update"}
+        many |= {f"collections.deque.{name}" for name in ("extend", "extendleft")}
+        if qualname in single:
             element = T.strip_literal(args[-1].type)
-        elif qualname in {"list.extend", "set.update"}:
+        elif qualname in many:
             element = T.strip_literal(B.element_type(added))
         else:
             return
-        if base.name in {"list", "set"} and isinstance(base.args[0], T.NeverType):
-            env.set(func.value.id, Binding(T.instance(base.name, element), binding.facts))
+        if isinstance(element, (T.UnknownType, T.AnyType, T.NeverType)):
+            return
+        if base.name not in {"list", "set", "collections.deque"} or not isinstance(
+            base.args[0], T.NeverType
+        ):
+            return
+        widened = T.Instance(base.name, (element,), base.mro)
+        if mapping is None:
+            assert isinstance(owner, ast.Name)
+            env.set(owner.id, Binding(widened, binding.facts))
+            return
+        held = env.get(mapping.id)
+        assert held is not None
+        whole = T.strip_literal(held.type)
+        assert isinstance(whole, T.Instance)
+        env.set(
+            mapping.id,
+            Binding(T.Instance(whole.name, (whole.args[0], widened), whole.mro), held.facts),
+        )
+
+    def _widen_library_key(
+        self, owner: ast.expr, container: T.Instance, key: Binding, env: Env
+    ) -> T.Type:
+        """`groups = defaultdict(list)` followed by `groups[k]`: the first key
+        written or read gives the mapping its key type."""
+        mapping = stdlib.mapping_of(container)
+        if mapping is None or not isinstance(owner, ast.Name):
+            return container
+        added = T.strip_literal(key.type)
+        if not isinstance(mapping[0], T.NeverType) or isinstance(
+            added, (T.UnknownType, T.AnyType, T.NeverType)
+        ):
+            return container
+        widened = T.Instance(container.name, (added, *container.args[1:]), container.mro)
+        binding = env.get(owner.id)
+        env.set(owner.id, Binding(widened, binding.facts if binding else Facts()))
+        return widened
 
     def _widen_empty_dict(
         self, owner: ast.expr, container: T.Type, key: Binding, value: Binding, env: Env
     ) -> T.Type:
         """`seen = {}` followed by `seen[k] = v` gives `seen` its key and value
         types, as `append` does for a list."""
+        if isinstance(container, T.Instance) and stdlib.mapping_of(container) is not None:
+            widened = self._widen_library_key(owner, container, key, env)
+            assert isinstance(widened, T.Instance)
+            mapping = stdlib.mapping_of(widened)
+            written = T.strip_literal(value.type)
+            if (
+                mapping is not None
+                and isinstance(mapping[1], T.NeverType)
+                and isinstance(owner, ast.Name)
+                and widened.name == "collections.OrderedDict"
+                and not isinstance(written, (T.UnknownType, T.AnyType, T.NeverType))
+            ):
+                widened = T.Instance(widened.name, (mapping[0], written), widened.mro)
+                binding = env.get(owner.id)
+                env.set(owner.id, Binding(widened, binding.facts if binding else Facts()))
+            return widened
         if not (
             isinstance(owner, ast.Name)
             and isinstance(container, T.Instance)
@@ -2753,6 +3010,9 @@ class _Checker:
             short = cls.name.rpartition(".")[2]
             if short in T.BUILTIN_MRO:
                 return Binding(T.instance(short))
+            library = self._library_collection(cls.name, node, args, keywords)
+            if library is not None:
+                return Binding(library)
             return Binding(cls.instance_type or T.UNKNOWN)
         init = info.methods.get("__init__")
         if init is not None:
@@ -2771,6 +3031,137 @@ class _Checker:
             if inferred is not None:
                 return Binding(info.instance(inferred), facts)
         return Binding(info.instance(), facts)
+
+    def _fresh_calls(self) -> frozenset[str]:
+        """The calls, spelled as this module writes them, that make a new
+        `collections` container: `deque`, `collections.Counter`, and so on."""
+        made = {"collections.deque", "random.Random", *stdlib.LIBRARY_MAPPINGS}
+        spelled: set[str] = set()
+        for local, binding in self.symbols.imports.items():
+            canonical = binding.canonical
+            if canonical in made:
+                spelled.add(local)
+            elif canonical in {"collections", "random"}:
+                spelled.update(
+                    f"{local}.{name.rpartition('.')[2]}"
+                    for name in made
+                    if name.startswith(f"{canonical}.")
+                )
+        return frozenset(spelled)
+
+    def _reduce_call(self, node: ast.Call, env: Env) -> Binding | None:
+        """`functools.reduce(f, xs[, initial])`: `f` typed as a function of the
+        running value and an element, and the result what `f` gives. A lambda,
+        a library function (`operator.add`), and a function of the program
+        are what native code calls."""
+        if not isinstance(node.func, (ast.Name, ast.Attribute)):
+            return None
+        if self.project.resolver(self.symbols).canonical(node.func) != "functools.reduce":
+            return None
+        if node.keywords or not 2 <= len(node.args) <= 3:
+            return None
+        if any(isinstance(a, ast.Starred) for a in node.args):
+            return None
+        self._expr(node.func, env)
+        items = self._expr(node.args[1], env)
+        element = T.strip_literal(self._iteration_element(items, node.args[1]).type)
+        initial = self._expr(node.args[2], env) if len(node.args) == 3 else None
+        running = T.strip_literal(initial.type) if initial is not None else element
+        function = node.args[0]
+        if self._lambda_like(function):
+            self._lambda_parameters = (running, element)
+        called = self._expr(function, env)
+        self._lambda_parameters = None
+        self._mark_call_arguments(node, env)
+        self._effects = self._effects.add(raises=("TypeError",))
+        typed = T.strip_literal(called.type)
+        if not isinstance(typed, T.Callable_):
+            self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
+            return Binding(T.ANY)
+        own = self.project.functions.get(typed.qualname)
+        if own is not None:
+            self._effects = self._effects | own.effects
+            self._calls.add(own.qualname)
+        elif typed.qualname and not self._lambda_like(function):
+            self._effects = self._effects.add(Effect.PYTHON_CALLBACK)
+            self._native_blockers.append(f"`functools.reduce` calls `{typed.qualname}`")
+        ret = T.strip_literal(typed.ret)
+        if initial is None:
+            # One element is the answer, not called with anything.
+            return Binding(T.join(ret, element))
+        return Binding(T.join(ret, running))
+
+    def _library_collection(
+        self,
+        name: str,
+        node: ast.Call,
+        args: list[Binding],
+        keywords: dict[str | None, Binding],
+    ) -> T.Type | None:
+        """`deque([1, 2])`, `Counter(words)`, `defaultdict(list)`, `OrderedDict()`:
+        the type arguments from where the new collection goes, or else from
+        what it is made of. What is not known yet is `Never`, which the first
+        write widens, as it widens `[]`."""
+        if name == "random.Random":
+            # Seeded from an int, or from the operating system.
+            plain = not keywords and (
+                not args or (len(args) == 1 and T.strip_literal(args[0].type) in (T.INT, T.BOOL))
+            )
+            return T.Instance(name, (), (name, "object")) if plain else None
+        if name not in {"collections.deque", *stdlib.LIBRARY_MAPPINGS}:
+            return None
+        arity = 1 if name in {"collections.deque", "collections.Counter"} else 2
+        expected = _one_member(self._expected.get(id(node), T.UNKNOWN))
+        if (
+            isinstance(expected, T.Instance)
+            and expected.name == name
+            and len(expected.args) == arity
+        ):
+            return expected
+
+        mro = stdlib.EXTERNAL_MRO.get(name, (name, "object"))
+
+        def made(*arguments: T.Type) -> T.Type:
+            return T.Instance(name, arguments, mro)
+
+        def known(t: T.Type) -> bool:
+            return not isinstance(t, (T.UnknownType, T.AnyType))
+
+        given = [T.strip_literal(a.type) for a in args]
+        if name == "collections.deque":
+            if not given:
+                return made(T.NEVER)
+            element = B.element_type(given[0])
+            return made(element) if known(element) else None
+        if name == "collections.Counter":
+            if keywords or len(given) > 1:
+                return None
+            if not given:
+                return made(T.NEVER)
+            pairs = _mapping_pairs(given[0])
+            if pairs is not None:
+                return made(pairs[0])
+            element = B.element_type(given[0])
+            return made(element) if known(element) else None
+        if name == "collections.OrderedDict":
+            if keywords or len(given) > 1:
+                return None
+            if not given:
+                return made(T.NEVER, T.NEVER)
+            pairs = _mapping_pairs(given[0]) or _pairs_of(B.element_type(given[0]))
+            return made(*pairs) if pairs is not None else None
+        # A `defaultdict`'s first argument makes the value a missing key gets.
+        if keywords or not given or len(given) > 2:
+            return None
+        value = _factory_value(given[0])
+        if value is None:
+            return None
+        if len(given) == 2:
+            pairs = _mapping_pairs(given[1])
+            if pairs is None:
+                return None
+            return made(pairs[0], value)
+        return made(T.NEVER, value)
 
     def _inferred_arguments(
         self,
@@ -3297,6 +3688,12 @@ class _Checker:
                 return Binding(dunder)
             return Binding(T.UNKNOWN)
         base = T.strip_literal(owner.type)
+        if isinstance(base, T.Callable_) and base.qualname in self.project.functions:
+            decorators = self.project.functions[base.qualname].decorators
+            if {"functools.cache", "functools.lru_cache"} & set(decorators):
+                cached = stdlib.cache_attribute(base, node.attr)
+                if cached is not None:
+                    return Binding(cached)
         if isinstance(base, T.Instance) and base.name == "type":
             # A class held as a value, whichever class: what every class
             # object exposes is known, the rest is that class's business.
@@ -3369,11 +3766,28 @@ class _Checker:
         raised_args = _exception_args(base, node.attr)
         if raised_args is not None:
             return raised_args
+        mapping = stdlib.mapping_of(base)
+        if (
+            mapping is not None
+            and isinstance(base, T.Instance)
+            and node.attr not in stdlib.MAPPING_OWN[base.name]
+        ):
+            # A dict's own methods, on a dict with more to it.
+            inherited = self._builtin_method(T.instance("dict", *mapping), node.attr)
+            if inherited is not None:
+                self._effects = self._effects.add(Effect.READ_OBJECT)
+                if node.attr == "copy":
+                    inherited = T.Callable_((), base, f"{base.name}.copy")
+                return Binding(inherited)
         known = (
             stdlib.instance_attribute(base.name, node.attr, base.args)
             if isinstance(base, T.Instance)
             else None
         )
+        if known is not None and isinstance(base, T.Instance) and base.name in _NATIVE_LIBRARY:
+            # Their methods lower natively, each where the lowering knows it.
+            self._add_summarized_effects(known[1])
+            return Binding(known[0])
         if known is not None:
             self._add_summarized_effects(known[1])
             if known[1].violations():
@@ -3852,6 +4266,19 @@ class _Checker:
             if base.name == "dict":
                 self._effects = self._effects.add(raises=("KeyError",))
                 return Binding(base.args[1] if len(base.args) == 2 else T.UNKNOWN)
+            mapping = stdlib.mapping_of(base)
+            if mapping is not None and not is_slice:
+                if base.name == "collections.defaultdict":
+                    # A missing key is added with the factory's value.
+                    self._effects = self._effects.add(Effect.WRITE_OBJECT)
+                    self._note_mutation(node.value, env)
+                    self._widen_library_key(node.value, base, index, env)
+                elif base.name == "collections.OrderedDict":
+                    self._effects = self._effects.add(raises=("KeyError",))
+                return Binding(mapping[1])
+            if base.name == "collections.deque" and base.args and not is_slice:
+                self._effects = self._effects.add(raises=("IndexError",))
+                return Binding(base.args[0])
             if base.name == "str":
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(T.STR)
@@ -3949,7 +4376,7 @@ class _Checker:
             and node.func.id in {"map", "filter"}
             and node.func.id not in env
             and len(values) >= 2
-            and isinstance(values[0], ast.Lambda)
+            and self._lambda_like(values[0])
         ):
             rest = [self._expr(value, env) for value in values[1:]]
             self._lambda_parameters = tuple(
@@ -3968,7 +4395,7 @@ class _Checker:
         found: list[Binding] = []
         for index, value in enumerate(values):
             expected = T.strip_literal(params[index]) if index < len(params) else None
-            if isinstance(value, ast.Lambda) and isinstance(expected, T.Callable_):
+            if self._lambda_like(value) and isinstance(expected, T.Callable_):
                 self._lambda_parameters = tuple(p.type for p in expected.params)
             found.append(self._expr(value, env))
             self._lambda_parameters = None
@@ -4005,7 +4432,7 @@ class _Checker:
         if not isinstance(called, T.Callable_):
             return False
         return (
-            isinstance(node.args[0], ast.Lambda)
+            self._lambda_like(node.args[0])
             or called.qualname in self.project.functions
             or not called.qualname
         )
@@ -4017,7 +4444,7 @@ class _Checker:
         is an element of `xs`."""
         if (
             keyword.arg != "key"
-            or not isinstance(keyword.value, ast.Lambda)
+            or not self._lambda_like(keyword.value)
             or not isinstance(node.func, ast.Name)
             or node.func.id not in {"sorted", "min", "max"}
             or node.func.id in env
@@ -4030,7 +4457,7 @@ class _Checker:
         """A collection's or a list's `sort(key=lambda x: ...)`: the lambda's parameter
         is an element."""
         wanted = callee.type
-        if keyword.arg != C.KEY_PARAMETER or not isinstance(keyword.value, ast.Lambda):
+        if keyword.arg != C.KEY_PARAMETER or not self._lambda_like(keyword.value):
             return None
         if not isinstance(wanted, T.Callable_) or not (
             wanted.qualname.startswith("ppy.") or wanted.qualname == "list.sort"

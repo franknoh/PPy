@@ -158,6 +158,18 @@ class Ring:
 
 """
 
+#: What a program that calls the standard library adds: a cached function,
+#: whose recursion goes through its cache.
+_STDLIB_PRELUDE = """\
+@functools.lru_cache(maxsize=None)
+def _cached(n: int) -> int:
+    if n < 2:
+        return n
+    return (_cached(n - 1) + _cached(n - 2)) % 1000003
+
+
+"""
+
 #: What a program with module state adds: objects Python makes and native
 #: code walks. `ppy run` passes both across its boundary; a standalone build
 #: has no Python to hold them, so those programs run on the paths that do.
@@ -226,9 +238,18 @@ class _Generator:
         prints: bool = False,
         state: bool = False,
         stdlib: bool = False,
+        calls: bool = False,
         unannotated: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: Whether functions take defaults and keyword-only parameters, and
+        #: `main` calls them by keyword and leaves defaults out, drawn from a
+        #: sequence of their own so the rest of the program stays the same.
+        self.calls = calls
+        self.call_rng = random.Random(seed ^ 0xCA11)
+        #: Per function: its parameters, their kinds, their defaults, and
+        #: where the keyword-only ones start.
+        self.signatures: dict[str, tuple[list[str], list[str], dict[str, str], int]] = {}
         #: Functions without annotations, whose types `--no-strict` infers
         #: from the calls `main` makes; Python then calls them with others.
         self.unannotated = unannotated
@@ -368,11 +389,48 @@ class _Generator:
             return f"math.factorial({self.small(scope, depth, 22)})"
         if roll < 0.82:
             return f"math.isqrt({self.int_expr(scope, depth + 1)})"
-        if roll < 0.9:
+        if roll < 0.86:
             return (
                 f"bisect.bisect_left(sorted({self.int_list(scope, depth)}), {self.int_literal()})"
             )
-        return f"len(list(itertools.combinations(range({self.small(scope, depth, 8)}), 2)))"
+        if roll < 0.88:
+            return f"len(list(itertools.combinations(range({self.small(scope, depth, 8)}), 2)))"
+        return self.library_int(scope, depth)
+
+    def library_int(self, scope: _Scope, depth: int) -> str:
+        """`collections`, `functools`, `operator`, and a `random.Random` of its own."""
+        rng = self.rng
+        roll = rng.random()
+        items = self.int_list(scope, depth)
+        if roll < 0.12:
+            start = self.int_expr(scope, depth + 1)
+            return (
+                f"functools.reduce(operator.{rng.choice(('add', 'sub', 'xor'))}, {items}, {start})"
+            )
+        if roll < 0.2:
+            return f"functools.reduce({rng.choice(('max', 'min'))}, {items})"
+        if roll < 0.3:
+            return f"collections.Counter({items})[{self.int_expr(scope, depth + 1)}]"
+        if roll < 0.38:
+            return f"collections.Counter({items}).most_common(1)[0][{rng.randint(0, 1)}]"
+        if roll < 0.46:
+            return f"collections.Counter({items}).total()"
+        if roll < 0.56:
+            low = self.int_expr(scope, depth + 1)
+            return (
+                f"random.Random({self.seed}).randint({low}, {low} + {self.small(scope, depth, 30)})"
+            )
+        if roll < 0.64:
+            return (
+                f"random.Random({self.int_expr(scope, depth + 1)}).randrange({rng.randint(1, 90)})"
+            )
+        if roll < 0.74:
+            return f"_cached({self.small(scope, depth, 60)})"
+        if roll < 0.84:
+            return f"collections.deque({items})[{rng.randint(-1, 0)}]"
+        if roll < 0.92:
+            return f"max({items}, key=operator.neg)"
+        return f"sorted({items}, key=functools.cmp_to_key(lambda a, b: b - a))[0]"
 
     def stdlib_float(self, scope: _Scope, depth: int) -> str:
         rng = self.rng
@@ -412,6 +470,45 @@ class _Generator:
         w.put(f"bisect.insort({heap}, {self.int_expr(scope, 2)})")
         w.put(f"{total} += sum({heap}) + {heap}[0]")
         scope.ints.append(total)
+        if self.chance(0.6):
+            self.library_statements(w, scope, total)
+
+    def library_statements(self, w: _Writer, scope: _Scope, total: str) -> None:
+        """A `defaultdict`, a `Counter`, an `OrderedDict`, and a `deque` filled
+        and read, and shown, whose text CPython's `repr` decides."""
+        rng = self.rng
+        table = self.name("d")
+        factory = rng.choice(("int", "lambda: -1"))
+        w.put(f"{table}: collections.defaultdict[int, int] = collections.defaultdict({factory})")
+        for _ in range(rng.randint(1, 4)):
+            w.put(f"{table}[{self.small(scope, 2, 6)}] += {self.int_expr(scope, 2)}")
+        w.put(f"{total} += {table}[{self.small(scope, 2, 8)}] + len({table})")
+        counts = self.name("c")
+        w.put(f"{counts} = collections.Counter({self.int_list(scope, 2)})")
+        w.put(f"{counts}.update({self.int_list(scope, 2)})")
+        if self.chance(0.5):
+            w.put(f"{counts}.subtract({self.int_list(scope, 2)})")
+        ordered = self.name("od")
+        w.put(f"{ordered}: collections.OrderedDict[int, int] = collections.OrderedDict()")
+        moved = self.name("k")
+        w.put(f"{moved}: int = {self.small(scope, 2, 5)}")
+        w.put(f"{ordered}[{moved}] = {self.int_expr(scope, 2)}")
+        for _ in range(rng.randint(1, 4)):
+            w.put(f"{ordered}[{self.small(scope, 2, 5)}] = {self.int_expr(scope, 2)}")
+        w.put(f"{ordered}.move_to_end({moved}, last={rng.choice(('True', 'False'))})")
+        queue = self.name("q")
+        w.put(f"{queue} = collections.deque({self.int_list(scope, 2)})")
+        w.put(f"{queue}.rotate({rng.randint(-3, 3)})")
+        w.put(f"{queue}.appendleft({self.int_expr(scope, 2)})")
+        if factory == "int":
+            shown = self.name("s")
+            w.put(
+                f"{shown}: str = str({table}) + str({counts}) + str({counts}.most_common(2))"
+                f" + str({ordered}) + str({queue})"
+            )
+            scope.strs.append(shown)
+        else:
+            w.put(f"{total} += sum({counts}.values()) + sum({ordered}.values()) + {queue}[0]")
 
     def bool_expr(self, scope: _Scope, depth: int = 0) -> str:
         rng = self.rng
@@ -1102,8 +1199,10 @@ class _Generator:
         ret = rng.choice(("int", "int", "float", "str", "bool"))
         params = [self.name("a") for _ in kinds]
         signature = ", ".join(f"{p}: {k}" for p, k in zip(params, kinds, strict=True))
+        if self.calls:
+            signature = self.call_signature(name, params, kinds)
         if self.unannotated:
-            w.put(f"def {name}({', '.join(params)}):")
+            w.put(f"def {name}({_unannotated(signature)}):")
         else:
             w.put(f"def {name}({signature}) -> {ret}:")
         w.depth += 1
@@ -1119,6 +1218,58 @@ class _Generator:
         w.put("")
         w.put("")
         return kinds, ret
+
+    def call_signature(self, name: str, params: list[str], kinds: list[str]) -> str:
+        """Parameters with constant defaults on the last few, and the last ones
+        keyword-only now and then."""
+        rng = self.call_rng
+        defaulted = rng.randint(0, len(params))
+        defaults = {
+            p: self.constant(k)
+            for p, k in list(zip(params, kinds, strict=True))[len(params) - defaulted :]
+        }
+        keyword_only = rng.randint(1, len(params)) if rng.random() < 0.3 else len(params)
+        self.signatures[name] = (params, kinds, defaults, keyword_only)
+        parts = []
+        for index, (param, kind) in enumerate(zip(params, kinds, strict=True)):
+            if index == keyword_only:
+                parts.append("*")
+            default = defaults.get(param)
+            parts.append(f"{param}: {kind}" + (f" = {default}" if default is not None else ""))
+        return ", ".join(parts)
+
+    def constant(self, kind: str) -> str:
+        """A literal of `kind`, as a default may be."""
+        rng = self.call_rng
+        if kind == "int":
+            return str(rng.randint(-9, 9))
+        if kind == "float":
+            return rng.choice(_FLOATS)
+        if kind == "str":
+            return repr(rng.choice(_WORDS))
+        return rng.choice(("True", "False"))
+
+    def call(self, name: str, kinds: list[str]) -> str:
+        """A call of `name`: by position, or with keywords and defaults left out."""
+        found = self.signatures.get(name)
+        if found is None:
+            return f"{name}({', '.join(self.argument(k) for k in kinds)})"
+        params, kinds, defaults, keyword_only = found
+        rng = self.call_rng
+        positional: list[str] = []
+        named: list[str] = []
+        by_name = False
+        for index, (param, kind) in enumerate(zip(params, kinds, strict=True)):
+            if param in defaults and rng.random() < 0.4:
+                by_name = True  # left out: whatever follows is named
+                continue
+            if index >= keyword_only or by_name or rng.random() < 0.3:
+                by_name = True
+                named.append(f"{param}={self.argument(kind)}")
+            else:
+                positional.append(self.argument(kind))
+        rng.shuffle(named)
+        return f"{name}({', '.join([*positional, *named])})"
 
     def argument(self, kind: str) -> str:
         rng = self.rng
@@ -1210,19 +1361,20 @@ class _Generator:
             w.lines.append(UNANNOTATED_MARK)
         if self.stdlib:
             w.lines.extend(["import bisect", "import heapq", "import itertools", "import random"])
+            w.lines.extend(["import functools", "import operator"])
+            w.lines.append("import collections")
         w.lines.extend(_PRELUDE.splitlines())
+        if self.stdlib:
+            w.lines.extend(_STDLIB_PRELUDE.splitlines())
         if self.with_state:
             w.lines.extend(_STATE_PRELUDE.splitlines())
             self.state_globals(w)
         calls: list[str] = []
-        foreign: list[str] = []
+        foreign: list[tuple[str, str]] = []
         for _ in range(self.rng.randint(3, 6)):
             name = self.name("fn")
             kinds, _ret = self.function(w, name)
-            calls.extend(
-                f"{name}({', '.join(self.argument(k) for k in kinds)})"
-                for _ in range(self.rng.randint(1, 3))
-            )
+            calls.extend(self.call(name, kinds) for _ in range(self.rng.randint(1, 3)))
             if self.unannotated:
                 foreign.append(self.foreign_call(name, kinds))
         after = self.state_part(w) if self.with_state else []
@@ -1288,11 +1440,22 @@ class _Generator:
 UNANNOTATED_MARK = "# fuzz: unannotated"
 
 
+def _unannotated(signature: str) -> str:
+    """A parameter list with its annotations taken out, defaults kept."""
+    tree = ast.parse(f"def f({signature}): pass")
+    function = tree.body[0]
+    assert isinstance(function, ast.FunctionDef)
+    for argument in (*function.args.posonlyargs, *function.args.args, *function.args.kwonlyargs):
+        argument.annotation = None
+    return ast.unparse(function.args)
+
+
 def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     seed: int,
     prints: bool = False,
     state: bool = False,
     stdlib: bool = False,
+    calls: bool = False,
     unannotated: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
@@ -1300,11 +1463,15 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     it also reads and writes module globals and walks objects Python made,
     which only the paths with a Python boundary run (`STATE_PATHS`). With
     `stdlib`, functions also draw seeded random numbers and call `math`,
-    `heapq`, `bisect`, and `itertools`. With `unannotated`, the functions have
-    no annotations and the program runs without strict mode, which infers
-    their types from `main`'s calls; Python then calls each with arguments
-    of other types, which the native entry must hand to the Python body."""
-    return _Generator(seed, prints, state, stdlib, unannotated).program()
+    `heapq`, `bisect`, `itertools`, `functools`, `operator`, and
+    `collections`' containers, and a `random.Random` of their own. With
+    `calls`, functions take defaults and keyword-only parameters, and `main`
+    calls them by keyword and leaves defaults out. With `unannotated`, the
+    functions have no annotations and the program runs without strict mode,
+    which infers their types from `main`'s calls; Python then calls each
+    with arguments of other types, which the native entry must hand to the
+    Python body."""
+    return _Generator(seed, prints, state, stdlib, calls, unannotated).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
