@@ -1413,6 +1413,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="random">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#randomrandom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        random.Random
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1464,6 +1481,39 @@
     <span class="md-ellipsis">
       
         collections.deque
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#defaultdict-counter-and-ordereddict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        defaultdict, Counter, and OrderedDict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#functools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        functools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        operator
       
     </span>
   </a>
@@ -4338,6 +4388,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="random">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#randomrandom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        random.Random
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4396,6 +4463,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#defaultdict-counter-and-ordereddict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        defaultdict, Counter, and OrderedDict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#functools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        functools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        operator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-stays-in-python" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4427,11 +4527,13 @@
 
 
 <h1 id="the-standard-library-natively">The standard library natively<a class="headerlink" href="#the-standard-library-natively" title="Permanent link">&para;</a></h1>
-<p>A function that calls <code>random</code>, <code>math</code>, <code>heapq</code>, <code>bisect</code>, <code>itertools</code>, or
-<code>collections.deque</code>, or reads a <code>string</code> constant, lowers to native code under <code>ppy run</code>, in a
-standalone binary, and in emitted C and C++. It gives CPython's answer on
-every path: the same random numbers from the same seed, the same heap after
-the same pushes, the same last bit of a <code>math.fsum</code>.</p>
+<p>A function that calls <code>random</code>, <code>math</code>, <code>heapq</code>, <code>bisect</code>, <code>itertools</code>,
+<code>functools</code>, or <code>operator</code>, uses <code>collections</code>' <code>deque</code>, <code>defaultdict</code>,
+<code>Counter</code>, or <code>OrderedDict</code>, or reads a <code>string</code> constant, lowers to native
+code under <code>ppy run</code>, in a standalone binary, and in emitted C and C++. It
+gives CPython's answer on every path: the same random numbers from the same
+seed, the same heap after the same pushes, the same last bit of a
+<code>math.fsum</code>, the same <code>repr</code> of a <code>Counter</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">bisect</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">heapq</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
@@ -4469,6 +4571,36 @@ the same pushes, the same last bit of a <code>math.fsum</code>.</p>
 <a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>    <span class="n">ordered</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">([</span><span class="n">i</span> <span class="o">*</span> <span class="mi">37</span> <span class="o">%</span> <span class="mi">11</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)])</span>
 <a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>    <span class="n">bisect</span><span class="o">.</span><span class="n">insort</span><span class="p">(</span><span class="n">ordered</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
 <a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>    <span class="k">return</span> <span class="n">bisect</span><span class="o">.</span><span class="n">bisect_left</span><span class="p">(</span><span class="n">ordered</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">math</span><span class="o">.</span><span class="n">comb</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ordered</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
+</code></pre></div>
+<p>The containers of <code>collections</code>, a cache, and the functions of <code>functools</code>
+and <code>operator</code> used as values:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">Counter</span><span class="p">,</span> <span class="n">defaultdict</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cache</span><span class="p">,</span> <span class="n">reduce</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">operator</span><span class="w"> </span><span class="kn">import</span> <span class="n">itemgetter</span><span class="p">,</span> <span class="n">mul</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="nd">@cache</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">paths</span><span class="p">(</span><span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="k">if</span> <span class="n">rows</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">cols</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="k">return</span> <span class="mi">1</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="k">return</span> <span class="n">paths</span><span class="p">(</span><span class="n">rows</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span> <span class="o">+</span> <span class="n">paths</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">tally</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">lengths</span><span class="p">:</span> <span class="n">defaultdict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">counts</span><span class="p">:</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="n">lengths</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">word</span><span class="p">)]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">word</span><span class="p">)</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">top</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">word</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">word</span><span class="p">,</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">counts</span><span class="o">.</span><span class="n">most_common</span><span class="p">(</span><span class="mi">2</span><span class="p">)]</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">counts</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">lengths</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">top</span><span class="si">}</span><span class="s2">"</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="k">def</span><span class="w"> </span><span class="nf">dice</span><span class="p">(</span><span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">rolls</span> <span class="o">=</span> <span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">rng</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">)]</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="n">best</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">rolls</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">rolls</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">best</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="n">r</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">rolls</span><span class="p">],</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
 </code></pre></div>
 <h2 id="random"><code>random</code><a class="headerlink" href="#random" title="Permanent link">&para;</a></h2>
 <p>The generator is CPython's own: the Mersenne Twister, seeded the way
@@ -4534,8 +4666,17 @@ back as it was before the call, so the Python rerun draws the same numbers.
 it stays in Python under <code>ppy run</code>.</p>
 <p>A program that never seeds draws different numbers on each run, on every
 path, as in CPython.</p>
-<p><code>random.Random(seed)</code> objects, <code>randbytes</code>, <code>getstate</code>, <code>setstate</code>, a string
-seed, <code>vonmisesvariate</code>, and <code>binomialvariate</code> stay in Python.</p>
+<p><code>randbytes</code>, <code>getstate</code>, <code>setstate</code>, a string seed, <code>vonmisesvariate</code>, and
+<code>binomialvariate</code> stay in Python.</p>
+<h3 id="randomrandom"><code>random.Random</code><a class="headerlink" href="#randomrandom" title="Permanent link">&para;</a></h3>
+<p><code>random.Random(seed)</code> and <code>random.Random()</code> are generators of their own,
+seeded as CPython seeds them, with every method the module's functions
+above have: <code>r.randint(1, 6)</code> draws what <code>random.Random(seed).randint(1, 6)</code>
+draws in CPython, whatever the module's generator is doing. <code>r.seed(n)</code>
+reseeds the instance, and <code>r.gauss</code> holds its second value back in the
+instance, so it is native under <code>ppy run</code> as well. An instance can be passed
+to another native function; it does not cross into Python, so a function
+that takes one from Python, or hands one back, stays in Python.</p>
 <h2 id="math"><code>math</code><a class="headerlink" href="#math" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -4605,17 +4746,134 @@ items. <code>r</code> is a constant. <code>count</code>, <code>cycle</code>, and
 <code>hexdigits</code>, <code>octdigits</code>, <code>punctuation</code>, <code>whitespace</code>, and <code>printable</code> are
 string literals in native code.</p>
 <h2 id="collectionsdeque"><code>collections.deque</code><a class="headerlink" href="#collectionsdeque" title="Permanent link">&para;</a></h2>
-<p>A deque whose annotation says what it holds (<code>q: deque[int] = deque()</code>, or
-<code>deque([...])</code> given to an annotated name) is the runtime's <code>Deque</code>:
-<code>append</code>, <code>appendleft</code>, <code>pop</code>, <code>popleft</code>, <code>extend</code>, <code>extendleft</code>, <code>rotate</code>,
-<code>clear</code>, <code>copy</code>, <code>len</code>, <code>in</code>, a <code>for</code> loop, and <code>q[i]</code> counted from either
-end. Popping an empty deque raises CPython's <code>IndexError</code>. <code>maxlen</code>,
-<code>q[i] = x</code>, and <code>list(q)</code> stay in Python.</p>
+<p>A deque is the runtime's <code>Deque</code>: <code>append</code>, <code>appendleft</code>, <code>pop</code>, <code>popleft</code>,
+<code>extend</code>, <code>extendleft</code>, <code>rotate</code>, <code>clear</code>, <code>copy</code>, <code>len</code>, <code>in</code>, a <code>for</code>
+loop, <code>list(q)</code>, <code>sorted(q)</code>, and <code>q[i]</code> and <code>q[i] = x</code> counted from either
+end. What it holds comes from its annotation (<code>q: deque[int] = deque()</code>), or
+from what it is made of (<code>deque([1, 2])</code>, <code>deque(range(n))</code>), or from the
+first <code>append</code> to an empty one. <code>print(q)</code> and <code>repr(q)</code> give
+<code>deque([1, 2])</code>. Popping an empty deque raises CPython's <code>IndexError</code>.
+<code>maxlen</code> stays in Python.</p>
+<h2 id="defaultdict-counter-and-ordereddict"><code>defaultdict</code>, <code>Counter</code>, and <code>OrderedDict</code><a class="headerlink" href="#defaultdict-counter-and-ordereddict" title="Permanent link">&para;</a></h2>
+<p>Each is a dict natively, in insertion order, so a subscript, <code>in</code>, <code>len</code>, a
+loop over it or its <code>keys()</code>, <code>values()</code>, and <code>items()</code>, <code>get</code>, <code>pop</code>,
+<code>setdefault</code>, <code>update</code>, <code>copy</code>, and <code>dict(d)</code> work as they do on a dict.
+Their own behavior:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>defaultdict(int)</code>, <code>defaultdict(list)</code>, <code>defaultdict(set)</code>, ...</td>
+<td>a missing key gets the factory's value and is added before the read</td>
+</tr>
+<tr>
+<td><code>defaultdict(lambda: -1)</code>, <code>defaultdict(f)</code></td>
+<td>the function is called for each missing key, as in CPython</td>
+</tr>
+<tr>
+<td><code>Counter(xs)</code>, <code>Counter("text")</code>, <code>Counter(d)</code></td>
+<td>counts an iterable's elements, or copies a mapping's counts</td>
+</tr>
+<tr>
+<td><code>c[k]</code></td>
+<td>0 for a missing key, which is not added</td>
+</tr>
+<tr>
+<td><code>c.most_common()</code>, <code>c.most_common(n)</code></td>
+<td>the counts from highest, equal counts in insertion order</td>
+</tr>
+<tr>
+<td><code>c.update(xs)</code>, <code>c.subtract(xs)</code></td>
+<td>an iterable counted, or a mapping's counts added or taken away</td>
+</tr>
+<tr>
+<td><code>c.elements()</code>, <code>c.total()</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>a + b</code>, <code>a - b</code>, <code>a \| b</code>, <code>a &amp; b</code></td>
+<td><code>Counter</code>'s operators: only positive counts are kept</td>
+</tr>
+<tr>
+<td><code>od.move_to_end(k)</code>, <code>od.move_to_end(k, last=False)</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>od.popitem()</code>, <code>od.popitem(last=False)</code></td>
+<td>for keys and values that are numbers</td>
+</tr>
+</tbody>
+</table>
+<p><code>repr</code> is CPython's: <code>defaultdict(&lt;class 'int'&gt;, {0: 3})</code>,
+<code>Counter({'l': 3, 'o': 2})</code> in <code>most_common</code> order, and <code>OrderedDict({1:
+2})</code> (<code>OrderedDict([(1, 2)])</code> before Python 3.12). A <code>defaultdict</code> whose
+factory is a function is shown by Python, which names the function by its
+address. <code>==</code> between two <code>Counter</code>s or two <code>OrderedDict</code>s stays in Python,
+since the first ignores counts of zero and the second compares order. A
+string-keyed <code>most_common</code> is walked by a loop, a comprehension, or <code>print</code>;
+kept as a list, it stays in Python, since a list of <code>(str, int)</code> tuples has
+no native form.</p>
+<p>Like a deque, these are passed between native functions by handle and do
+not cross into Python.</p>
+<h2 id="functools"><code>functools</code><a class="headerlink" href="#functools" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>@cache</code>, <code>@lru_cache(maxsize=None)</code></td>
+<td>every result kept</td>
+</tr>
+<tr>
+<td><code>@lru_cache</code>, <code>@lru_cache(maxsize=n)</code></td>
+<td>at most <code>n</code> (128 by default), the one used longest ago let go first</td>
+</tr>
+<tr>
+<td><code>reduce(f, xs)</code>, <code>reduce(f, xs, start)</code></td>
+<td>with <code>f</code> a lambda, a function of the program, <code>max</code>, <code>min</code>, or an <code>operator</code> function</td>
+</tr>
+<tr>
+<td><code>partial(f, a, ...)</code></td>
+<td>where a function value is used, with constant arguments or ones that keep one value</td>
+</tr>
+<tr>
+<td><code>cmp_to_key(f)</code></td>
+<td>as a <code>sort</code> or <code>sorted</code> key, over numbers, strings, and objects</td>
+</tr>
+</tbody>
+</table>
+<p>A cached function lowers to its body and an entry that looks its arguments
+up in a table first. A call in the body to the function itself is a call to
+the entry, so a dynamic program computes each subproblem once, natively.
+Under <code>ppy run</code> the entry is what Python's callers call too, so they share
+the table. The arguments are numbers, bools, strings, and tuples of
+numbers, and so is the result. A cached function defined inside another
+gets a new table each time its <code>def</code> runs, as CPython makes a new cache, and
+the closure holds it. A function whose <code>cache_info</code>, <code>cache_clear</code>, or
+<code>__wrapped__</code> the module reads keeps CPython's cache and stays in Python, so
+the counts it reports are CPython's. A cached method stays in Python, and
+so does a cached function with default arguments, since <code>f(5)</code> and
+<code>f(5, 2)</code> are two entries in CPython's cache.</p>
+<h2 id="operator"><code>operator</code><a class="headerlink" href="#operator" title="Permanent link">&para;</a></h2>
+<p><code>add</code>, <code>sub</code>, <code>mul</code>, <code>truediv</code>, <code>floordiv</code>, <code>mod</code>, <code>pow</code>, the bitwise and
+shift operators, <code>neg</code>, <code>pos</code>, <code>invert</code>, <code>not_</code>, <code>truth</code>, <code>abs</code>, the
+comparisons, <code>contains</code>, <code>getitem</code>, <code>itemgetter</code>, and <code>attrgetter</code> are the
+lambdas they stand for wherever a function value is used: a <code>key=</code>, <code>map</code>,
+<code>filter</code>, <code>reduce</code>, or a <code>Callable</code> parameter. <code>itemgetter(1)</code> is
+<code>lambda x: x[1]</code>, and <code>attrgetter("weight")</code> is <code>lambda x: x.weight</code>.</p>
 <h2 id="what-stays-in-python">What stays in Python<a class="headerlink" href="#what-stays-in-python" title="Permanent link">&para;</a></h2>
-<p><code>defaultdict</code>, <code>Counter</code>, and <code>OrderedDict</code>, <code>functools.reduce</code>,
-<code>functools.lru_cache</code> and <code>cache</code>, and <code>operator</code>'s functions are not
-lowered yet. A function that calls them runs in Python, and <code>ppy explain
---summary</code> names the call.</p>
+<p><code>ChainMap</code>, <code>namedtuple</code>, <code>deque(maxlen=...)</code>, <code>functools.singledispatch</code>,
+<code>cached_property</code>, and <code>operator.methodcaller</code> are not lowered. A function
+that uses them runs in Python, and <code>ppy explain --summary</code> names the call.</p>
 
 
 
