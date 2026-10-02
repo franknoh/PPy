@@ -219,3 +219,53 @@ programs that draw are compared too. 357 match, 33 differ, and 10 were
 skipped as nondeterministic or slow under CPython. Of the programs that
 import `random` and ran, all but two match. All 33 differences also differ
 on the tree before this change, with the same seed: none is new.
+
+## With all of 0.6.0
+
+The same summary over the same tree, with everything 0.6.0 lowers: effects
+in native code, module globals and objects across the boundary, the new
+expressions and loops, and the standard library.
+
+| tier | functions | statements |
+|---|---:|---:|
+| native, called from Python | 523 (11%) | 5,312 (14%) |
+| native, called from native code | 713 (15%) | 3,161 (9%) |
+| Python | 3,450 (74%) | 28,496 (77%) |
+
+Against 0.5.0, the functions Python calls natively went from 231 to 523, and
+all compiled functions from 652 to 1,236.
+
+Several reasons left the table: calls with unknown effects (840 functions)
+and I/O (355), which native code now holds as effects; `isinstance` (154);
+random numbers (138); calls back into Python (91); generators that are
+returned or passed on (72); `for` over a tuple (55); and chained comparisons
+(49). Reading a module global that can change fell from 217 functions to 61.
+
+Some freed functions stop at the next reason in their body, so the top of
+the table is now:
+
+| statements | functions | reason |
+|---:|---:|---|
+| 3,008 | 428 | a parameter or result with no annotation the checker could infer |
+| 2,059 | 202 | writes to a parameter native code copies |
+| 1,803 | 140 | writes to an object native code does not own |
+| 905 | 143 | a `numpy.ndarray` parameter |
+| 731 | 79 | a `list[Any]` parameter |
+| 630 | 94 | a nested function whose enclosing function stays in Python |
+| 615 | 61 | reads a module global that can change |
+| 540 | 41 | writes through a name the compiler cannot follow |
+| 396 | 36 | calls a Python function whose result native code cannot take back |
+| 388 | 41 | keyword arguments have no native ABI |
+
+Of the compiled functions Python does not call natively, 329 are too small
+for the boundary to pay off and 208 do less with their collections than
+copying them in costs.
+
+The 400-script comparison, run again on the same programs: 387 match and 13
+are skipped as nondeterministic or slow under CPython. None differs, down
+from 34 when the 0.6.0 work began. The last eight were programs `ppy run`
+refused at compile time under `strict = false`: an import of a sibling
+module that CPython also fails to find, a `MutableSequence[T]` parameter, a
+generator expression assigned to a bare `Generator`, and `globals()` passed
+to `timeit`. Under `--no-strict` these are now warnings, and that code runs
+on CPython.

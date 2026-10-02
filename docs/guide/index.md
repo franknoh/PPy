@@ -23,6 +23,7 @@ path.
 | [Functions as values](closures.md) | Nested functions, `lambda`, `nonlocal`, `Callable` values, keys, `map` and `filter` in native code. |
 | [Strings](strings.md) | `str` in native code: methods, f-strings and format specs, parsing numbers, strings as keys. |
 | [Lists, dicts, and sets](containers.md) | Python's own containers in native code, with no rewrite: displays, comprehensions, methods, and the Python boundary. |
+| [The standard library](stdlib.md) | `random`, `math`, `heapq`, `bisect`, `itertools`, `deque`, and `string` in native code, draw for draw with CPython. |
 | [Collections](collections.md) | `Vec`, `Deque`, `Heap`, `LinkedList`, `HashMap`, `HashSet`, `TreeMap`, `TreeSet`: containers that compile, with no pointers. |
 | [Native memory and FFI](native.md) | `ppy.native` pointers, stack allocation, `extern` and `export`, and `ppy.ffi` over them. |
 | [Lanes and the machine](simd-cpu.md) | `ppy.simd` vectors and `ppy.cpu` features, hints, and targets. |

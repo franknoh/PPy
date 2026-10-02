@@ -153,6 +153,9 @@ def test_the_warm_path_runs_only_what_nothing_since_has_changed(tmp_path: Path, 
     program.write_text("print(1)\n", encoding="utf-8")
     os.utime(program, ns=(0, 0))
     assert not fastrun.current(str(program), sources, directories, taken, racy)
+    # The directory's clock is coarse: set its time back, so that a file made
+    # within the same tick as `remember` still changes it.
+    os.utime(project, ns=(0, 0))
     fastrun.remember(str(program), str(manifest))
     _version, sources, directories, taken, _manifest, _light, racy = index()
     (project / "shadow.ppy").write_text("", encoding="utf-8")
