@@ -1532,6 +1532,10 @@ def compare(results: dict[str, Result]) -> list[Mismatch]:
             found.append(Mismatch(path, "stdout differs", expected, result))
         elif (result.status == 0) != (expected.status == 0):
             found.append(Mismatch(path, "exit status differs", expected, result))
+        elif expected.status < 0 and result.status == expected.status:
+            # Both killed by the same signal (the memory cap, say): neither
+            # wrote a last line of its own to compare.
+            continue
         elif expected.status != 0 and result.last_error != expected.last_error:
             found.append(Mismatch(path, "the error differs", expected, result))
     return found
