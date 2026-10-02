@@ -1,0 +1,121 @@
+import math
+import random
+
+
+class Census:
+    def __init__(self) -> None:
+        self.alive = 0
+        self.born = 0
+        self.died = 0
+
+    def count(self, was: int, now: int) -> None:
+        if was == 1 and now == 0:
+            self.died += 1
+        elif was == 0 and now == 1:
+            self.born += 1
+        self.alive += now
+
+
+class Body:
+    def __init__(self, x: float, y: float, vx: float, vy: float, mass: float) -> None:
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.mass = mass
+
+    def kick(self, ax: float, ay: float, dt: float) -> None:
+        self.vx += ax * dt
+        self.vy += ay * dt
+
+    def drift(self, dt: float) -> None:
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+
+
+def neighbours(grid: list[list[int]], r: int, c: int) -> int:
+    rows = len(grid)
+    cols = len(grid[0])
+    n = 0
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            if dr != 0 or dc != 0:
+                n += grid[(r + dr) % rows][(c + dc) % cols]
+    return n
+
+
+def advance(grid: list[list[int]], generations: int) -> Census:
+    rows = len(grid)
+    cols = len(grid[0])
+    census = Census()
+    for _ in range(generations):
+        census.alive = 0
+        nxt = [[0] * cols for _ in range(rows)]
+        for r in range(rows):
+            for c in range(cols):
+                n = neighbours(grid, r, c)
+                if n == 3 or (n == 2 and grid[r][c] == 1):
+                    nxt[r][c] = 1
+                census.count(grid[r][c], nxt[r][c])
+        for r in range(rows):
+            for c in range(cols):
+                grid[r][c] = nxt[r][c]
+    return census
+
+
+def orbit(bodies: list[Body], dt: float, steps: int) -> None:
+    for _ in range(steps):
+        for i, a in enumerate(bodies):
+            ax = 0.0
+            ay = 0.0
+            for j, b in enumerate(bodies):
+                if i != j:
+                    dx = b.x - a.x
+                    dy = b.y - a.y
+                    d2 = dx * dx + dy * dy + 0.01
+                    f = b.mass / (d2 * math.sqrt(d2))
+                    ax += f * dx
+                    ay += f * dy
+            a.kick(ax, ay, dt)
+        for a in bodies:
+            a.drift(dt)
+
+
+def energy(bodies: list[Body]) -> float:
+    total = 0.0
+    for i, a in enumerate(bodies):
+        total += 0.5 * a.mass * (a.vx * a.vx + a.vy * a.vy)
+        for b in bodies[i + 1 :]:
+            dx = b.x - a.x
+            dy = b.y - a.y
+            total -= a.mass * b.mass / math.sqrt(dx * dx + dy * dy + 0.01)
+    return total
+
+
+def main() -> None:
+    rng = random.Random(3)
+    grid = [[1 if rng.random() < 0.3 else 0 for _ in range(128)] for _ in range(128)]
+    for turn in range(1, 6):
+        census = advance(grid, 40)
+        alive = sum(map(sum, grid))
+        print(
+            f"generation {40 * turn:3}: {census.alive:4} alive ({alive} by Python's count),"
+            f" {census.born:5} born, {census.died:5} died"
+        )
+
+    bodies = [
+        Body(rng.uniform(-1, 1), rng.uniform(-1, 1), 0.0, 0.0, rng.uniform(0.5, 2.0))
+        for _ in range(60)
+    ]
+    first = bodies[0]
+    print(f"energy at the start: {energy(bodies):.6f}")
+    for turn in range(1, 6):
+        orbit(bodies, 0.0005, 400)
+        print(
+            f"step {400 * turn:4}: energy {energy(bodies):.6f},"
+            f" first body at ({first.x:.4f}, {first.y:.4f})"
+        )
+    print("the first body is the same object:", first is bodies[0])
+
+
+main()
