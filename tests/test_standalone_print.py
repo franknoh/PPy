@@ -156,7 +156,6 @@ def test_standalone_print_evaluates_arguments_before_writing(write, backend):
         # A spec with a field of its own is Python's; a literal spec is native.
         ('print(f"{1:{4}}")', "a format spec with fields has no native lowering"),
         ('print(f"{1:q}")', "the format spec `q` has no native lowering"),
-        ("identity(x=42)", "keyword arguments have no native ABI"),
     ],
 )
 def test_standalone_print_rejects_unsupported_calls(write, command, call: str, message: str):
@@ -195,12 +194,14 @@ def test_standalone_print_flush_false_needs_no_flush_shim(write):
 
 
 @pytest.mark.parametrize("command", [("build",), ("emit", "c")])
-def test_shadowed_print_keeps_generic_keyword_rejection(write, command):
+def test_shadowed_print_binds_its_keywords_as_any_function_does(write, command):
+    """A program's own `print` is a function like any other: its keyword is
+    bound to its parameter when the module is compiled."""
     path = write(
         "app.ppy",
         "def print(n: int, flush: bool = False) -> int:\n    return n + int(flush)\n\n"
-        "def main() -> None:\n    print(7, flush=True)\n\nmain()\n",
+        "def main() -> None:\n    print(7, flush=True)\n    identity(x=42)\n\n"
+        "def identity(x: int) -> int:\n    return x\n\nmain()\n",
     )
     result = _ppy(path.parent, *command, "--standalone", "app.ppy")
-    assert result.returncode == 1, result.stderr
-    assert "E1803" in result.stderr and "keyword arguments have no native ABI" in result.stderr
+    assert result.returncode == 0, result.stderr

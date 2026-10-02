@@ -591,19 +591,20 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
                 raise Unsupported(
                     f"`{ast.unparse(func)}` stays in Python and gives `{returned}`, {why}"
                 )
-        arguments = [self._crossing(argument) for argument in node.args]
+        callee = ast.unparse(func)
+        arguments = [self._crossing(argument, callee) for argument in node.args]
         for keyword in node.keywords:
             assert keyword.arg is not None
             name = self._string_literal(keyword.arg)  # type: ignore[attr-defined]
             arguments.append((_KEYWORD, name, False))
-            arguments.append(self._crossing(keyword.value))
+            arguments.append(self._crossing(keyword.value, callee))
         module = self.info.module  # type: ignore[attr-defined]
         made = self._python_call(
             f"{module}:{ast.unparse(func)}", arguments, kind, pure=pure, checked=not certain
         )
         return made if made is not None else self._word(0)  # type: ignore[attr-defined,no-any-return]
 
-    def _crossing(self, argument: ast.expr) -> tuple[int, Value, bool]:
+    def _crossing(self, argument: ast.expr, callee: str) -> tuple[int, Value, bool]:
         """One argument of a call into Python: its kind, its value, and whether
         the caller owns it."""
         if isinstance(argument, ast.Constant) and argument.value is None:
@@ -611,15 +612,19 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         if self._string_of(argument) is not None:  # type: ignore[attr-defined]
             handle, owned = self._handle(argument)  # type: ignore[attr-defined]
             return (_STR, handle, owned)
+        refused = Unsupported(
+            f"`{callee}` stays in Python, and `{ast.unparse(argument)}` crosses into Python "
+            "only as a number, a bool, or a string"
+        )
+        given = T.strip_literal(self._type_of(argument))  # type: ignore[attr-defined]
+        if given not in (T.INT, T.FLOAT, T.BOOL):
+            raise refused
         value = self._expr(argument)  # type: ignore[attr-defined]
         argument_kind = {I64: _INT, F64: _FLOAT}.get(value.type)
         if argument_kind is None and value.type == BOOL:
             argument_kind = _BOOL
         if argument_kind is None:
-            raise Unsupported(
-                f"`{ast.unparse(argument)}` crosses into Python only as a number, a bool, "
-                "or a string"
-            )
+            raise refused
         return (argument_kind, value, False)
 
     def _rerunnable(self, node: ast.Call) -> bool:
