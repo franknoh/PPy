@@ -15,6 +15,31 @@ ppy build --standalone clinic.ppy -o dist && ./dist/clinic
 ```
 
 <!-- outputs:start -->
+## What it prints
+
+**`python  clinic.ppy`**, **`ppy run clinic.ppy`**, **`ppy build --standalone clinic.ppy -o dist && ./dist/clinic`**
+
+```text
+6 doctors:
+  day   0: 395 seen, 202 late, longest wait 382.6 min
+  day 500: 442 seen, 266 late, longest wait 486.3 min
+  day 1000: 403 seen, 179 late, longest wait 362.4 min
+  day 1500: 378 seen, 193 late, longest wait 382.4 min
+  2000 days, 799475 patients, 55.67% late, mean wait 180.7 min, worst 632.7 min
+7 doctors:
+  day   0: 395 seen, 109 late, longest wait 201.3 min
+  day 500: 442 seen, 254 late, longest wait 344.2 min
+  day 1000: 403 seen, 29 late, longest wait 138.8 min
+  day 1500: 378 seen, 78 late, longest wait 174.0 min
+  2000 days, 799475 patients, 39.34% late, mean wait 97.0 min, worst 504.6 min
+8 doctors:
+  day   0: 395 seen, 0 late, longest wait 38.5 min
+  day 500: 442 seen, 197 late, longest wait 201.4 min
+  day 1000: 403 seen, 0 late, longest wait 80.2 min
+  day 1500: 378 seen, 0 late, longest wait 60.9 min
+  2000 days, 799475 patients, 10.75% late, mean wait 40.2 min, worst 364.4 min
+```
+
 <!-- outputs:end -->
 
 ## The program
@@ -70,9 +95,18 @@ ppy build --standalone clinic.ppy -o dist && ./dist/clinic
 
 ## Timing
 
-Wall time for the whole program, measured from a checkout under `/tmp`:
+Wall time for the whole program, the mean of five runs, measured from a
+checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):
 
-TIMING-TABLE
+| | seconds |
+|---|---:|
+| `python clinic.ppy` | 2.95 |
+| `ppy run clinic.ppy`, after the first run built the cache | 1.17 |
+| `./dist/clinic`, the standalone binary | 1.13 |
+
+`ppy run` includes the compiler's own start-up and checking the file, which
+the standalone binary does not pay.
 
 ## Where the code comes from
 
