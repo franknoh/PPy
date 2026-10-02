@@ -63,7 +63,7 @@ def _summary(options: argparse.Namespace, reporter: Reporter) -> int:
         for target in missing:
             reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
         return 2
-    project = open_project(targets[0])
+    project = open_project(targets[0], config_overrides=_overrides(options))
     entries = sorted({entry for target in targets for entry in collect_sources(target)})
     bundle = analyze_paths(project, entries, backend="llvm")
     failures: dict[str, str] = {}
@@ -81,8 +81,13 @@ def _summary(options: argparse.Namespace, reporter: Reporter) -> int:
     return 0
 
 
+def _overrides(options: argparse.Namespace) -> dict[str, object]:
+    """`--no-strict`, given to `explain` or before it, is the mode explained."""
+    return {"strict": False} if getattr(options, "no_strict", False) else {}
+
+
 def _analyze(target: Path, options: argparse.Namespace) -> AnalysisBundle:
-    project = open_project(target)
+    project = open_project(target, config_overrides=_overrides(options))
     entries = collect_sources(target)
     return analyze_paths(project, entries, backend="llvm")
 

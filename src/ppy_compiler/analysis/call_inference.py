@@ -86,6 +86,9 @@ class CallSiteInference:
     def __init__(self, symbols) -> None:  # type: ignore[no-untyped-def]
         self.symbols = symbols
         self.family = _families(symbols)
+        self._groups: dict[str, list[str]] = {}
+        for qualname, key in self.family.items():
+            self._groups.setdefault(key, []).append(qualname)
         #: qualname -> the parameter indices with no annotation and no type.
         self.candidates = self._candidates()
         #: Families whose inference made the checker report an error.
@@ -95,7 +98,7 @@ class CallSiteInference:
     # -- which functions -------------------------------------------------
 
     def _candidates(self) -> dict[str, list[int]]:
-        values = _used_as_values(self.symbols)
+        rebound = _rebound(self.symbols)
         found: dict[str, list[int]] = {}
         for qualname, info in self.symbols.functions.items():
             if info.enclosing is not None or info.is_async or info.is_property:
@@ -105,9 +108,7 @@ class CallSiteInference:
             name = info.name
             if name.startswith("__") and name.endswith("__") and name != "__init__":
                 continue  # called by Python's protocols, with arguments no call shows
-            if (name in values.attributes if info.is_method else name in values.names):
-                continue
-            if not info.is_method and name in values.rebound.get(info.module, set()):
+            if not info.is_method and name in rebound.get(info.module, set()):
                 continue
             receiver = 1 if info.is_method and not info.is_static else 0
             unknown = [
@@ -135,16 +136,18 @@ class CallSiteInference:
         """Type each candidate parameter from the calls the last analysis
         typed. True if any parameter moved."""
         evidence, spread = self._evidence(analysis)
+        valued = self._values(analysis)
         changed = False
         for qualname, indices in self.candidates.items():
             info = self.symbols.functions.get(qualname)
             key = self.family.get(qualname, qualname)
-            if info is None or key in self.retracted or key in spread:
+            if info is None or key in self.retracted:
                 continue
+            closed = key in spread or key in valued
             for index in indices:
                 param = info.params[index]
                 found = evidence.get((qualname, index))
-                settled, origin = _settle(param, found)
+                settled, origin = (None, "") if closed else _settle(param, found)
                 if settled is None:
                     settled, origin = T.UNKNOWN, ""
                 if param.type != settled:
@@ -193,11 +196,34 @@ class CallSiteInference:
         self._add_doctests(evidence, reached)
         return evidence, spread
 
+    def _values(self, analysis) -> set[str]:  # type: ignore[no-untyped-def]
+        """The families of the functions the program takes as a value where
+        native code may hold it: `key=f`, `map(f, xs)`, `g = obj.method`.
+
+        Only a typed reference counts. A function value native code calls is
+        one the analysis typed; a reference it could not type is in code
+        that runs as Python, and a call made from there crosses the wrapper.
+        """
+        found: set[str] = set()
+        for module_name, module in self.symbols.modules.items():
+            checked = analysis.modules.get(module_name)
+            if checked is None:
+                continue
+            called = {id(n.func) for n in module.module.nodes if isinstance(n, ast.Call)}
+            for node in module.module.nodes:
+                if not isinstance(node, (ast.Name, ast.Attribute)) or id(node) in called:
+                    continue
+                if not isinstance(node.ctx, ast.Load):
+                    continue
+                seen = T.strip_literal(checked.type_of(node))
+                for member in T.members_of(seen):
+                    if isinstance(member, T.Callable_) and member.qualname in self.symbols.functions:
+                        found.add(self.family.get(member.qualname, member.qualname))
+        return found
+
     def _members(self, qualname: str) -> list[str]:
         key = self.family.get(qualname)
-        if key is None:
-            return [qualname]
-        return [q for q, k in self.family.items() if k == key]
+        return [qualname] if key is None else self._groups[key]
 
     def _targets(self, module, checked, node: ast.Call, owners) -> list[_Target]:  # type: ignore[no-untyped-def]
         """The project functions a call may run."""
@@ -323,9 +349,21 @@ class CallSiteInference:
                             blamed.update(m for m in self._members(target.qualname))
         blamed &= inferred
         if not blamed:
-            # An error nothing here explains: take everything back rather
-            # than report what the source does not say.
-            blamed = inferred
+            # An error no inferred function or call on its line explains
+            # came through a field or a return type: take back what the
+            # module of the error infers, and what its calls reach.
+            paths = {path for path, _line in errors}
+            blamed = {q for q in inferred if self.symbols.functions[q].path in paths}
+            for module in self.symbols.modules.values():
+                checked = analysis.modules.get(module.name)
+                if module.path not in paths or checked is None:
+                    continue
+                owners = _method_owners(module)
+                for node in module.module.nodes:
+                    if isinstance(node, ast.Call):
+                        for target in self._targets(module, checked, node, owners):
+                            blamed.update(self._members(target.qualname))
+            blamed &= inferred
         if not blamed:
             return False
         for qualname in blamed:
@@ -337,7 +375,20 @@ class CallSiteInference:
         self.retracted.update(self.family.get(q, q) for q in self.candidates)
         self._reset()
 
+    def remember_fields(self) -> None:
+        """What the classes' fields were before anything was inferred: a
+        field typed from an inferred parameter (`self.n = n`) only ever
+        widens, so taking the parameter back must take the field back too."""
+        self._fields = {
+            name: dict(cls.fields) for name, cls in self.symbols.classes.items()
+        }
+
     def _reset(self) -> None:
+        for name, fields in getattr(self, "_fields", {}).items():
+            cls = self.symbols.classes.get(name)
+            if cls is not None:
+                cls.fields.clear()
+                cls.fields.update(fields)
         for qualname, indices in self.candidates.items():
             if self.family.get(qualname, qualname) not in self.retracted:
                 continue
@@ -482,41 +533,20 @@ def _families(symbols) -> dict[str, str]:  # type: ignore[no-untyped-def]
     return {q: find(q) for q in parent}
 
 
-@dataclass(slots=True)
-class _Values:
-    #: Names read as a value somewhere: a function passed, stored, or returned.
-    names: set[str] = field(default_factory=set)
-    #: Attributes read without being called: a bound method passed on.
-    attributes: set[str] = field(default_factory=set)
-    #: Per module, names its body binds again or declares `global`.
-    rebound: dict[str, set[str]] = field(default_factory=dict)
-
-
-def _used_as_values(symbols) -> _Values:  # type: ignore[no-untyped-def]
-    found = _Values()
+def _rebound(symbols) -> dict[str, set[str]]:  # type: ignore[no-untyped-def]
+    """Per module, the names its code binds again, declares `global`, or
+    defines twice: a call of such a name may reach another function."""
+    found: dict[str, set[str]] = {}
     for module_name, module in symbols.modules.items():
-        called: set[int] = set()
-        for node in module.module.nodes:
-            if isinstance(node, ast.Call):
-                called.add(id(node.func))
-        rebound = found.rebound.setdefault(module_name, set())
+        rebound = found.setdefault(module_name, set())
         defined: dict[str, int] = {}
         for node in module.module.nodes:
-            if isinstance(node, ast.Name):
-                if isinstance(node.ctx, ast.Load) and id(node) not in called:
-                    found.names.add(node.id)
-                elif not isinstance(node.ctx, ast.Load):
-                    rebound.add(node.id)
-            elif isinstance(node, ast.Attribute):
-                if isinstance(node.ctx, ast.Load) and id(node) not in called:
-                    found.attributes.add(node.attr)
-                elif not isinstance(node.ctx, ast.Load):
-                    found.attributes.add(node.attr)
+            if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+                rebound.add(node.id)
             elif isinstance(node, (ast.Global, ast.Nonlocal)):
                 rebound.update(node.names)
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 defined[node.name] = defined.get(node.name, 0) + 1
-        # A name defined twice is two functions, and calls reach whichever ran last.
         rebound.update(name for name, count in defined.items() if count > 1)
     return found
 

@@ -209,6 +209,7 @@ def _infer_parameters(project: Project, symbols: ProjectSymbols) -> ProjectAnaly
         )
 
     baseline = analysis = check(None)
+    inference.remember_fields()
     for attempt in range(_RETRACTIONS + 1):
         for _round in range(_INFERENCE_ROUNDS):
             if not inference.step(analysis):
