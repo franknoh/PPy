@@ -154,6 +154,19 @@ void ppy_io_unpark(const int64_t *saved) {
     heap[8] = saved[3];
 }
 
+/* The boundary's calls in progress on this thread ([0]), and whether one of
+   them reached Python for more than output since the outermost began ([1]):
+   the objects and exceptions it left are the boundary's to forget once the
+   outermost call is done. */
+int64_t *ppy_io_calls(void) {
+#ifdef __cplusplus
+    static thread_local int64_t calls[2];
+#else
+    static _Thread_local int64_t calls[2];
+#endif
+    return calls;
+}
+
 /* The hook, with the heap parked around it. */
 int64_t ppy_io_hook(int64_t op, int64_t a, int64_t b, int64_t c) {
     int64_t hook = *ppy_io_hook_slot();
@@ -164,6 +177,9 @@ int64_t ppy_io_hook(int64_t op, int64_t a, int64_t b, int64_t c) {
     ppy_io_park(saved);
     int64_t done = ((int64_t (*)(int64_t, int64_t, int64_t, int64_t))(intptr_t)hook)(op, a, b, c);
     ppy_io_unpark(saved);
+    if (op >= 3 || done != 0) {
+        ppy_io_calls()[1] = 1;
+    }
     return done;
 }
 
@@ -216,6 +232,7 @@ int64_t ppy_io_enter(void) {
     int64_t *state = ppy_io_state();
     int64_t crossed = state[5];
     state[5] = 0;
+    ppy_io_calls()[0]++;
     return crossed;
 }
 
@@ -224,6 +241,7 @@ int64_t ppy_io_leave(int64_t outer) {
     int64_t *state = ppy_io_state();
     int64_t crossed = state[5];
     state[5] = outer;
+    ppy_io_calls()[0]--;
     return crossed;
 }
 

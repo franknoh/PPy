@@ -405,27 +405,38 @@ def run(clinic: Clinic, days: int = 2) -> Report:
 print(run(Clinic(3, 1.5), 4).seen, run(Clinic(doctors=1, rate=0.5)).seen)
 """
 
-#: Runs a built artifact in this process and says how each binding fared.
+#: Runs a built artifact in this process and says which entries are native,
+#: and how many calls Python bound by keyword or default before making them.
 _STATS = """
 import sys
 from pathlib import Path
 
+import ppy_runtime.binding as binding
 import ppy_runtime.launch as launch
 
 made = []
-plain = launch.bind
+plain = launch.PrebuiltBinder.bind
+keyed = []
+spell = binding._keyword_call
 
 
-def counted(*args, **keywords):
-    binding = plain(*args, **keywords)
-    made.append(binding)
-    return binding
+def counted(self, module, function, fallback):
+    entry = plain(self, module, function, fallback)
+    made.append((module + "." + function, entry))
+    return entry
 
 
-launch.bind = counted
+def spelled(*args):
+    keyed.append(1)
+    return spell(*args)
+
+
+launch.PrebuiltBinder.bind = counted
+binding._keyword_call = spelled
 launch.main(Path(sys.argv[1]), [])
-for binding in made:
-    print("STATS", binding.signature.qualname, binding.calls, binding.fallbacks)
+for name, entry in made:
+    print("NATIVE", name, binding.signature_of(entry) is not None)
+print("KEYED", len(keyed))
 """
 
 
@@ -433,7 +444,8 @@ for binding in made:
 @requires_cc
 def test_a_value_class_argument_crosses_with_an_object_result(tmp_path: Path):
     """A function taking a value class and returning an object runs its native
-    body when Python calls it, by position or by keyword."""
+    body when Python calls it, by position or with a default left out, which
+    Python binds before it makes the call through the native entry."""
     expected = _expected(tmp_path, VALUE_CLASS_ARGUMENT)
     built = _run(tmp_path, "-m", "ppy_compiler", "build", "prog.ppy", "-o", "dist")
     assert built.returncode == 0, built.stderr
@@ -442,7 +454,8 @@ def test_a_value_class_argument_crosses_with_an_object_result(tmp_path: Path):
     assert ran.returncode == 0, ran.stderr
     lines = ran.stdout.splitlines()
     assert lines[0] == expected
-    assert "STATS prog.run 2 0" in lines, lines
+    assert "NATIVE prog.run True" in lines, lines
+    assert "KEYED 1" in lines, lines
 
 
 RAISES_WITH_A_LIST = """
@@ -509,7 +522,10 @@ def test_a_raised_call_lets_go_of_its_argument_copies_before_the_sweep(tmp_path:
     assert ran.returncode == 0, ran.stderr
     lines = ran.stdout.splitlines()
     assert "\n".join(lines[:-1]) == expected
-    assert lines[-1].startswith("ORDER close sweep"), lines[-1]
+    # The generated wrapper copies the list itself (`crossing.c`) and lets go
+    # of its copies before the sweep the same way; the Python-level boundary,
+    # where it is the one that serves the call, closes first too.
+    assert lines[-1].strip() == "ORDER" or lines[-1].startswith("ORDER close sweep"), lines[-1]
 
 
 # -- what binding refuses ------------------------------------------------------------

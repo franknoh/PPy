@@ -254,7 +254,15 @@ class NativeSignature:
     @property
     def crosses_collections(self) -> bool:
         """Whether a collection crosses the boundary, in or out."""
-        return bool(self.returned) or any(p.is_handle for p in self.parameters)
+        return (bool(self.returned) and not self.returns_none) or any(
+            p.is_handle for p in self.parameters
+        )
+
+    @property
+    def returns_none(self) -> bool:
+        """The function returns `None`: its native entry fills a placeholder
+        word, and the boundary hands back `None`."""
+        return self.returned == "None"
 
     @property
     def reads_globals(self) -> bool:

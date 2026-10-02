@@ -293,7 +293,12 @@ def _lowering_outcome(bundle: AnalysisBundle, info: FunctionInfo) -> str | None:
     if info.qualname in module.functions:
         # The body lowered: that is the answer, whatever the contract feared.
         rule = getattr(module, "effects", {}).get(info.qualname)
-        return f"native; {rule}" if rule else "native"
+        found = f"native; {rule}" if rule else "native"
+        withheld = getattr(module.functions[info.qualname], "withheld", "")
+        if withheld:
+            # Native callers call it natively; Python's call runs its body.
+            found += f"; called from Python, its Python body runs: it {withheld}"
+        return found
     reason = module.rejected.get(info.qualname)
     return f"boxed: {reason}" if reason else None
 

@@ -60,6 +60,12 @@ arguments after the first have no effect of their own. A later argument
 that calls something that could print or change what an earlier one shows
 keeps the function in Python.
 
+The generated wrapper does this in C: holding the output costs a call
+nothing measurable, and writing it out is one `write` through Python for
+each run of lines to one stream, however many lines the run holds. That is also why a function that prints once
+and does little else stays in Python: one write through Python costs more
+than CPython's `print` of one line.
+
 The output of a native call appears when the call returns, or at the next
 barrier (below). A long native loop that prints progress shows it at the
 end, where CPython would show it as it goes. Use `flush=True` where the
@@ -91,9 +97,11 @@ over the whole function before it lets the function go native:
   can follow a barrier;
 - a loop counts: a check in a loop body after a barrier, or before it, in
   the next iteration, follows it;
-- a function called from Python that takes a list, a dict, a set, or an
-  object by copy stays in Python if it has a barrier. Python code that runs
+- a function that takes a list, a dict, a set, or an object by copy and has
+  a barrier runs its Python body when Python calls it. Python code that runs
   at the barrier would read or change the caller's object, not the copy.
+  Native callers pass their own, and call it natively. A `str` is copied
+  too, but cannot change, and does not count.
 
 The same holds across calls. A caller that calls a function with a barrier
 has crossed one when the call returns, and the rule applies to what follows

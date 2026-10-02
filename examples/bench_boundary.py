@@ -45,6 +45,43 @@ def summed(xs: Buffer[int]) -> int:
     return sum(xs)
 
 
+@ppy.native
+def scaled(xs: list[int]) -> int:
+    for i in range(len(xs)):
+        xs[i] = xs[i] * 3 % 1000
+    return len(xs)
+
+
+@ppy.native
+def weighed(d: dict[int, int]) -> int:
+    s = 0
+    for k, v in d.items():
+        s += k * v
+    return s
+
+
+class Link:
+    def __init__(self, value: int) -> None:
+        self.value = value
+        self.next: Link | None = None
+
+
+@ppy.native
+def chained(head: Link) -> int:
+    s = 0
+    node: Link | None = head
+    while node is not None:
+        s += node.value
+        node = node.next
+    return s
+
+
+@ppy.native
+def filled(xs: list[int]) -> None:
+    for i in range(len(xs)):
+        xs[i] = i
+
+
 # Module-level aliases and per-iteration-varying arguments: both defeat the
 # optimizer, which happily folds a small pure call with constant arguments
 # into its answer -- and a folded call measures nothing.
@@ -55,6 +92,15 @@ buffered = summed
 values = array.array("q", range(100))
 overflowing: list[int] = [1 << 100]
 big: int = overflowing[0]
+listed: list[int] = list(range(100))
+mapped: dict[int, int] = {i: i for i in range(100)}
+links: list[Link] = [Link(i) for i in range(10)]
+for left, right in zip(links, links[1:]):
+    left.next = right
+scale = scaled
+weigh = weighed
+chain = chained
+fill = filled
 
 
 def drive_plain(i: int) -> None:
@@ -77,6 +123,22 @@ def drive_guard(i: int) -> None:
     native(big, i)
 
 
+def drive_list(i: int) -> None:
+    scale(listed)
+
+
+def drive_dict(i: int) -> None:
+    weigh(mapped)
+
+
+def drive_objects(i: int) -> None:
+    chain(links[0])
+
+
+def drive_none(i: int) -> None:
+    fill(listed)
+
+
 def rate(label: str, call: Callable[[int], None], rounds: int) -> None:
     started = time.perf_counter()
     for i in range(rounds):
@@ -91,6 +153,10 @@ def main() -> None:
     rate("native loop, n=100", drive_loop, 200000)
     rate("borrowed buffer, n=100", drive_buffer, 200000)
     rate("guard failure -> fallback", drive_guard, 200000)
+    rate("list[int] written, n=100", drive_list, 50000)
+    rate("dict[int, int] read, n=100", drive_dict, 50000)
+    rate("10 linked objects", drive_objects, 50000)
+    rate("returns None, n=100", drive_none, 50000)
 
 
 main()

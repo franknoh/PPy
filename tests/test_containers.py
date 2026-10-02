@@ -550,7 +550,10 @@ def grow(xs: list[int], n: int) -> None:
 
 def same(xs: list[list[int]]) -> list[int]:
     for row in xs:
-        row.append(len(row))
+        total = 0
+        for v in row:
+            total += v * v + 1
+        row.append(total % 10 + len(row))
     return xs[0]
 
 
@@ -609,7 +612,7 @@ def test_python_calls_container_functions_natively(tmp_path: Path):
     inner = [7]
     rows = [inner, [8, 9]]
     assert native("same").wrapper(rows) is inner
-    assert rows == [[7, 1], [8, 9, 2]] and rows[0] is inner
+    assert rows == [[7, 1], [8, 9, 9]] and rows[0] is inner
     assert native("kept").wrapper({1, 5, 9}, 6) == 2
     assert histogram.wrapper(["x", 3]) is None
     assert fell == ["histogram"] and histogram.fallbacks == 1

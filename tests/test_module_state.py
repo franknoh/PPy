@@ -252,6 +252,7 @@ def test_ppy_run_passes_globals_across_modules(tmp_path: Path):
     _write(
         tmp_path,
         """
+        import ppy
         import tables
 
         OFFSETS: list[int] = [o + 1 for o in range(4)]
@@ -270,7 +271,9 @@ def test_ppy_run_passes_globals_across_modules(tmp_path: Path):
             print(score(50), len(tables.SEEN), tables.SEEN[49])
             tables.WEIGHTS[0] = 100
             print(score(50))
-            print(hasattr(score, "__ppy_native__"), hasattr(tables.weigh, "__ppy_native__"))
+            # `weigh` copies `SEEN` in and back at each call from Python, which
+            # costs more than its loop saves; `score` calls it natively.
+            print(ppy.native.compiled(score))
 
 
         main()
@@ -283,7 +286,7 @@ def test_ppy_run_passes_globals_across_modules(tmp_path: Path):
     assert ran.returncode == 0, ran.stderr
     lines = [line for line in ran.stdout.splitlines() if not line.startswith("compiling")]
     assert lines[:2] == python.stdout.splitlines()[:2]
-    assert lines[2] == "True True"
+    assert lines[2] == "True"
 
 
 REBOUND_AT_A_BARRIER = """

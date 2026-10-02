@@ -319,12 +319,16 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
         exposed, why = should_lower_native(info, _analysis, layouts, signature.classes)
+        withheld = reused.withheld.get(qualname, "")
+        if withheld:
+            exposed, why = False, withheld
         functions[qualname] = LoweredFunction(
             info,
             signature,
             exposed=exposed,
             exposure_reason=why,
             boundary=reused.boundaries.get(qualname),
+            withheld=withheld,
         )
         sources[qualname] = (info, node)
     return NativeModule(
@@ -1232,7 +1236,7 @@ class _Binder(LibraryBinder):
         return binding.wrapper
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
-        from ppy_runtime.binding import adopt, observation_wanted, value_class_types
+        from ppy_runtime.binding import adopt, as_method, observation_wanted, value_class_types
 
         from .runtime import bind as make_binding
 
@@ -1243,8 +1247,22 @@ class _Binder(LibraryBinder):
         policy = SpecializationPolicy.of(info) if info is not None else None
         fast_entry = None
         register = None
-        if wrappers is not None and wrappers.ok and not signature.effects:
+        if (
+            wrappers is not None
+            and wrappers.ok
+            and (not signature.effects or wrappers.attach_effects())
+            and (not signature.crosses_collections or wrappers.attach_runtime())
+        ):
+            if signature.reads_globals:
+                read = self._reading_globals(entry, fallback)
+                if read is not None:
+                    return read
             types = value_class_types(signature, fallback)
+            if types is not None and signature.effects:
+                from ppy_runtime.effects import register_function
+
+                # Where its calls into Python find what they name.
+                register_function(signature.qualname, fallback)
             if types is not None:
                 register = wrappers.registrar(qualname)
                 # A function that draws needs `random`'s state saved around it,
@@ -1254,11 +1272,20 @@ class _Binder(LibraryBinder):
                 ):
                     # Nothing to watch for: the wrapper holds the fallback in C
                     # and no Python frame stands on the call path at all.
-                    direct = wrappers.bind(qualname, address, types, fallback)
+                    from ppy_runtime.collection_boundary import resolver
+
+                    direct = wrappers.bind(
+                        qualname,
+                        address,
+                        types,
+                        fallback,
+                        resolver(signature, fallback),
+                        arity=len(signature.parameters),
+                    )
                     if direct is not None:
                         binding = adopt(signature, direct, fallback, owner=(engine, wrappers))
                         self.bindings.append(binding)
-                        return self._recorded(qualname, direct)
+                        return self._recorded(qualname, as_method(direct, fallback, function))
                 fast_entry = wrappers.bind(qualname, address, types)
         binding = make_binding(
             signature,
@@ -1271,6 +1298,35 @@ class _Binder(LibraryBinder):
             owner=(engine, wrappers),
             register=register,
         )
+        self.bindings.append(binding)
+        return self._recorded(qualname, binding.wrapper)
+
+    def _reading_globals(self, entry, fallback):  # type: ignore[no-untyped-def]
+        """A function passed the module globals it reads, served by its C entry
+        point: Python reads the globals and passes them after its arguments."""
+        from ppy_runtime.binding import bind_globals, observation_wanted, value_class_types
+        from ppy_runtime.collection_boundary import resolver
+
+        signature, address, specializer, info, wrappers, qualname, engine = entry
+        policy = SpecializationPolicy.of(info) if info is not None else None
+        types = value_class_types(signature, fallback, globals_read=True)
+        if types is None or signature.draws or observation_wanted(specializer, policy, info):
+            return None
+        if signature.effects:
+            from ppy_runtime.effects import register_function
+
+            register_function(signature.qualname, fallback)
+        binding = bind_globals(
+            signature,
+            address,
+            fallback,
+            (engine, wrappers),
+            lambda spelled: wrappers.bind(
+                qualname, address, types, spelled, resolver(signature, fallback)
+            ),
+        )
+        if binding is None:
+            return None
         self.bindings.append(binding)
         return self._recorded(qualname, binding.wrapper)
 

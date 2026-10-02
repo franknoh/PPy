@@ -8,6 +8,7 @@
     uv run python scripts/fuzz.py --unannotated --count 25   # inferred parameter types
     uv run python scripts/fuzz.py --replay           # every saved regression
     uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
+    uv run python scripts/fuzz.py --boundary --count 25  # writes through shared containers
 
 Each seed is a program from `ppy_compiler.testing.fuzz.generate_program`. It
 runs under CPython (the reference) and each path asked for, one at a time,
@@ -18,7 +19,10 @@ also print between checks that may fall back, and a path that prints a
 line more often than CPython does is a failure of its own. With `--state`,
 each program also reads and writes module globals and walks objects Python
 made, and runs on the paths with a Python boundary (CPython, `ppy`, and
-`ppy run`). With `--unannotated`, the functions have no annotations, run
+`ppy run`). With `--boundary`, a function Python calls natively writes
+through containers and objects Python made, shared and nested, which the
+generated wrapper copies in and back; those run on the same paths.
+With `--unannotated`, the functions have no annotations, run
 without strict mode, and are called from Python with arguments of other
 types than the ones their types were inferred from, on the paths with a
 Python boundary.
@@ -68,9 +72,12 @@ def _still_fails(path: str, reason: str):  # type: ignore[no-untyped-def]
     return check
 
 
-def _save(seed: int, path: str, reason: str, source: str, state: bool = False) -> Path:
+def _save(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    seed: int, path: str, reason: str, source: str, state: bool = False, boundary: bool = False
+) -> Path:
     REGRESSIONS.mkdir(parents=True, exist_ok=True)
-    target = REGRESSIONS / f"seed{seed}{'_state' if state else ''}_{path}.ppy"
+    domain = "_state" if state else "_boundary" if boundary else ""
+    target = REGRESSIONS / f"seed{seed}{domain}_{path}.ppy"
     target.write_text(f"# fuzz: path={path} seed={seed} ({reason})\n{source}", encoding="utf-8")
     return target
 
@@ -85,11 +92,14 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     stdlib: bool = False,
     calls: bool = False,
     unannotated: bool = False,
+    boundary: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
     for current in range(seed, seed + count):
-        source = generate_program(current, prints, state, stdlib, calls, unannotated)
+        source = generate_program(
+            current, prints, state, stdlib, calls, unannotated, boundary=boundary
+        )
         results = run_program(source, paths, timeout=60.0)
         mismatches = printed_twice(results) + compare(results)
         if not mismatches:
@@ -107,7 +117,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         reduced = source
         if shrink and first.reason != "did not build":
             reduced = minimize(source, _still_fails(first.path, first.reason), attempts=60)
-        saved = _save(current, first.path, first.reason, reduced, state)
+        saved = _save(current, first.path, first.reason, reduced, state, boundary)
         print(f"      saved {saved.relative_to(REGRESSIONS.parent.parent)}", flush=True)
     elapsed = time.monotonic() - started
     print(f"{count - failures}/{count} programs agree on {', '.join(paths)} ({elapsed:.0f}s)")
@@ -133,6 +143,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--paths", default=None)
     parser.add_argument(
         "--state", action="store_true", help="add module globals and objects (paths with Python)"
+    )
+    parser.add_argument(
+        "--boundary",
+        action="store_true",
+        help="write through shared containers and objects Python passes (paths with Python)",
     )
     parser.add_argument("--no-minimize", action="store_true")
     parser.add_argument("--replay", action="store_true")
@@ -165,14 +180,15 @@ def main(argv: list[str] | None = None) -> int:
             options.stdlib,
             options.calls,
             options.unannotated,
+            boundary=options.boundary,
         )
         print(shown, end="")
         return 0
     if options.replay:
         return replay()
-    # A program with module state, or one Python calls by name, runs where
-    # there is a Python boundary.
-    python_only = options.state or options.unannotated
+    # A program with module state, one Python calls by name, or one that
+    # writes through what Python passes runs where there is a Python boundary.
+    python_only = options.state or options.unannotated or options.boundary
     paths = options.paths or ",".join(STATE_PATHS if python_only else ALL_PATHS)
     return fuzz(
         options.seed,
@@ -184,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         options.stdlib,
         options.calls,
         options.unannotated,
+        options.boundary,
     )
 
 

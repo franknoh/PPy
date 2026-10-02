@@ -320,8 +320,9 @@ PROGRAMS: dict[str, tuple[str, str, list[str], list[str]]] = {
     "kept_in_python": (
         KEPT_IN_PYTHON,
         "x\n42\nzz\nb\n",
-        [],
-        ["after", "parse", "key", "copied"],
+        # `copied` is native for native callers; Python's call runs its body.
+        ["copied"],
+        ["after", "parse", "key"],
     ),
     "uncaught": (UNCAUGHT, "a\nb\n", ["lines"], []),
     "python_calls": (PYTHON_CALLS, "", ["log", "hyp", "work", "bad"], []),

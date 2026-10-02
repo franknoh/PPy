@@ -233,6 +233,9 @@ class CanonicalFunction:
     #: The entry Python calls when it is not the function itself: a thunk that
     #: takes and gives strings as UTF-8 bytes around the function's handles.
     boundary: NativeSignature | None = None
+    #: Why Python's calls run the Python body whatever the cost model says
+    #: (the barrier rule, `_check_effects`); empty where nothing withholds it.
+    withheld: str = ""
 
 
 @dataclass(slots=True)
@@ -1359,15 +1362,21 @@ class Frontend:
                     p.name
                     for p in native.parameters
                     if p.kind in {"list", "sequence", "object", "handle"}
+                    and not (p.is_handle and p.element == "str")
                 ),
                 None,
             )
             if copied is not None and function.name not in broken:
                 # The boundary copies it in and back out; Python that runs at
                 # the barrier would see, or change, the object and not the copy.
-                broken[function.name] = (
+                # A native caller passes its own, so only Python's call runs
+                # the Python body. A string cannot change, and is read the same.
+                withheld = (
                     f"takes `{copied}` by copy, which Python could read or change at "
                     f"{summary.why.get('barrier', 'a barrier')}"
+                )
+                lowered.functions[qualname] = replace(
+                    entry, exposed=False, exposure_reason=withheld, boundary=None, withheld=withheld
                 )
         for name, why in broken.items():
             qualname = names.get(name)

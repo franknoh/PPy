@@ -7233,6 +7233,10 @@ class _Checker:
                 else:
                     self._local_writes.update(roots - {EXTERNAL})
                 return
+            if node is root and self._flat_copy(root):
+                # `perms(nums.copy())`: a write into a copy of numbers made for
+                # the call reaches nothing anyone else holds.
+                return
         if isinstance(node, ast.Name):
             roots = self._roots(node, node.id)
             params = (
@@ -7276,6 +7280,23 @@ class _Checker:
         self._foreign_writes = True
         self._external_writes = True
         self._blockers.append(f"mutates `{ast.unparse(node)}`")
+
+    def _flat_copy(self, node: ast.expr) -> bool:
+        """`xs.copy()`, `list(xs)`, or a display, of numbers or strings only: a
+        new container nothing else holds, whose elements no write can reach."""
+        copied = (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "copy"
+            and not node.args
+        )
+        if not (copied or _is_fresh_allocation(node)):
+            return False
+        base = T.strip_literal(self.module.node_types.get(id(node), T.UNKNOWN))
+        if not (isinstance(base, T.Instance) and base.name in {"list", "dict", "set"}):
+            return False
+        flat = {T.INT, T.FLOAT, T.BOOL, T.STR}
+        return bool(base.args) and all(T.strip_literal(a) in flat for a in base.args)
 
     def _super_receiver(self, node: ast.expr) -> str | None:
         """The receiver `super()` stands for in a method: its first parameter."""

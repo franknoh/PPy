@@ -51,6 +51,11 @@ def distance(x1: f64, y1: f64, x2: f64, y2: f64) -> f64:
 
 
 @ppy.pure
+def half(x: f64) -> f64:
+    return x * 0.5
+
+
+@ppy.pure
 def total(xs: list[int]) -> int:
     result: int = 0
     for x in xs:
@@ -93,9 +98,9 @@ def test_build_writes_a_binding_manifest(project: Path):
     assert manifest["calling_convention"] == "c"
 
     entries = {entry["python_qualname"]: entry for entry in manifest["entries"]}
-    # `distance` is native-eligible but too small to pay for the boundary;
+    # `half` is native-eligible but too small to pay for the boundary;
     # the manifest lists only what Python callers should cross into.
-    assert "app.distance" not in entries
+    assert "app.half" not in entries
     assert "app.total" in entries
 
     total = entries["app.total"]
@@ -142,10 +147,10 @@ def test_build_emits_objects_and_links_a_library(project: Path):
         check=False,
     )
     if symbols.returncode == 0:
-        # `total` crosses the Python boundary and is public; `distance` has
+        # `total` crosses the Python boundary and is public; `half` has
         # native callers only, so the program keeps it to itself.
         assert "ppy_app_total" in symbols.stdout
-        assert "ppy_app_distance" not in symbols.stdout
+        assert "ppy_app_half" not in symbols.stdout
 
 
 @requires_toolchain
