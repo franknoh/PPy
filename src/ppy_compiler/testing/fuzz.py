@@ -492,6 +492,23 @@ class _Generator:
         scope.ints.append(total)
         if self.chance(0.6):
             self.library_statements(w, scope, total)
+        if self.chance(0.4):
+            self.drawn_text(w, scope)
+
+    def drawn_text(self, w: _Writer, scope: _Scope) -> None:
+        """Strings a `random.Random` of its own draws from a list of strings
+        the function made, concatenated: each is the list's, not the draw's."""
+        rng = self.rng
+        parts, drawn, text = self.name("parts"), self.name("r"), self.name("t")
+        w.put(f"{parts}: list[str] = [str(x) * {rng.randint(1, 4)} for x in range({rng.randint(1, 6)})]")
+        w.put(f"{drawn} = random.Random({self.int_expr(scope, 2)})")
+        w.put(f'{text}: str = ""')
+        w.put(f"for _ in range({rng.randint(1, 5)}):")
+        w.put(f"    {text} += {drawn}.choice({parts})")
+        if self.chance(0.5):
+            w.put(f"{parts}.append({drawn}.choice({parts}) + {text})")
+            w.put(f"{text} += {parts}[-1]")
+        scope.strs.append(text)
 
     def library_statements(self, w: _Writer, scope: _Scope, total: str) -> None:
         """A `defaultdict`, a `Counter`, an `OrderedDict`, and a `deque` filled
@@ -1097,6 +1114,13 @@ class _Generator:
             if self.chance(0.3):
                 key = self.int_expr(scope, 2) if keyed == "int" else self.str_expr(scope, 2)
                 w.put(f"{d}.pop({key}, 0)")
+            if self.chance(0.2):
+                # `None` on a miss: no number holds that natively.
+                key = self.int_expr(scope, 2) if keyed == "int" else self.str_expr(scope, 2)
+                found, got = self.name("v"), self.name("n")
+                w.put(f"{found} = {d}.get({key})")
+                w.put(f"{got}: int = -1 if {found} is None else {found}")
+                scope.ints.append(got)
             if self.chance(0.2) and keyed == "int":
                 w.put(f"{d} = {{k: v * 2 for k, v in {d}.items() if v != 0}}")
             w.put(f"{total}: int = len({d}) * 100")
@@ -1521,6 +1545,24 @@ class _Generator:
         w.put("")
         w.put("")
 
+    def lent_function(self, w: _Writer, name: str) -> None:
+        """A function Python calls natively with a list it only reads, lent
+        for the call, that a nested function or a lambda reads too."""
+        rng = self.crossing
+        w.put("@ppy.native")
+        w.put(f"def {name}(xs: list[int], k: int) -> int:")
+        if rng.random() < 0.5:
+            w.put("    def at(i: int) -> int:")
+            w.put(f"        return xs[i] * {rng.randint(1, 5)} + k")
+        else:
+            w.put(f"    at: Callable[[int], int] = lambda i: xs[i] - k * {rng.randint(1, 5)}")
+        w.put("    total = len(xs)")
+        w.put("    for i in range(len(xs)):")
+        w.put("        total = total * 3 + at(i)")
+        w.put("    return total")
+        w.put("")
+        w.put("")
+
     def boundary_part(self, w: _Writer) -> list[str]:
         """The functions with boundary writes, and what `main` does with them:
         arguments that share rows, a row both in the list and in the dict, the
@@ -1528,6 +1570,8 @@ class _Generator:
         rng = self.crossing
         name = self.name("bw")
         self.boundary_function(w, name)
+        lent = self.name("lent")
+        self.lent_function(w, lent)
         after = [
             f"row = [{', '.join(str(rng.randint(0, 9)) for _ in range(rng.randint(1, 4)))}]",
             rng.choice(("g = [row, [4, 5], row]", "g = [row] * 3", "g = [[1, 2], row, []]")),
@@ -1539,6 +1583,7 @@ class _Generator:
             rng.choice(("b2.peer = b1", "b2.peer = b2", "b2.peer = None")),
             rng.choice(("boxes = [b1, b2, b1]", "boxes = [b2]", "boxes = []")),
         ]
+        after.append(f"print({lent}(row, {rng.randint(-3, 9)}), {lent}([], 1), row)")
         for _ in range(rng.randint(1, 3)):
             after.append(f"print({name}(g, d, s, boxes, {rng.randint(-3, 9)}))")
             after.append(

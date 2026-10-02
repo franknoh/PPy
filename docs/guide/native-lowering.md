@@ -224,11 +224,13 @@ When Python calls a native function with keywords or with defaults left
 out, the boundary binds the call by the Python function's own signature,
 with its own default values, and calls the native entry in order. A call
 that does not bind goes to the Python function, which raises CPython's
-`TypeError`. The binding runs in Python, so such a call costs more than one
-with every argument by position: about 1.5 µs for `digit_sum(n)` of
-`def digit_sum(number: int, base: int = 10)`, against 68 ns for
-`digit_sum(n, 10)` and 155 ns for CPython's call. A Python loop that calls
-a native function many times should pass every argument by position.
+`TypeError`. The generated C wrapper does this binding itself: it matches
+the call's keyword names against the parameter names and takes left-out
+values from the function's `__defaults__` and `__kwdefaults__`, so such a
+call costs about what a positional one does (33 ns with a default left out
+and 38 ns with a keyword, against 32 ns by position, in
+`examples/bench_boundary.py`). When a guard refuses the bound arguments,
+Python gets the call as it was written.
 
 A function whose writes all happen inside a callee it handed a buffer to
 lowers too: the write lands in the caller's memory either way. The reverse
