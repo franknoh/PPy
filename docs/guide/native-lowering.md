@@ -31,6 +31,10 @@ rest costs more:
 | a module global the function reads | 6 more: a Python frame reads it for the wrapper |
 | a call that draws from `random` | 16: the Python-level binding saves its state |
 
+A straight-line function that calls itself, as `power(b, e - 1)` does,
+stays off the boundary: how deep it goes is the argument's to decide, and
+CPython raises `RecursionError` where native code has no limit to stop at.
+
 A function that returns nothing gets the boundary where it loops over what
 it is given, or fills a container the caller passed. A function that only
 checks its arguments and raises stays a native caller's, and so does a

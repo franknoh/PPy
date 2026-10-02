@@ -56,6 +56,10 @@ def triangle(base: float, height: float) -> float:
     return 0.5 * base * height
 
 
+def power(base: int, exponent: int) -> int:
+    return base * power(base, exponent - 1) if exponent else 1
+
+
 def greet(name: str) -> int:
     return len(name) + 1
 
@@ -144,6 +148,9 @@ def test_work_that_grows_with_the_argument_crosses(exposure, name: str):  # type
     [
         # The generated wrapper costs what a Python call does: two operations gain.
         ("triangle", True, "straight-line work"),
+        # Its depth is the argument's: CPython raises `RecursionError` where
+        # native code has no limit to stop at.
+        ("power", False, "recursion limit"),
         # A string is made natively on the way in, which a short body does not repay.
         ("greet", False, "crossing costs more"),
         # One line printed through Python costs more than CPython's `print`.

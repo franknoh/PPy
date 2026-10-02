@@ -858,6 +858,10 @@ def should_lower_native(
         if isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension)):
             return True, "contains a loop"
     work = sum(isinstance(child, _WORK_NODES) for child in ast.walk(info.node))
+    if _calls_itself(info):
+        # Its depth is the argument's to decide, and native code has no
+        # recursion limit to raise `RecursionError` at: CPython's frames do.
+        return False, "calls itself without a loop; CPython's recursion limit stays in force"
     if work >= _crossing_cost(info, analysis, layouts, written):
         return True, f"straight-line work ({work} operations)"
     return False, "the boundary crossing costs more than the body saves"
@@ -1027,6 +1031,19 @@ def _releases_gil(analysis: FunctionAnalysis) -> bool:
     the same guarantee NumPy relies on.
     """
     return not any(effect in analysis.effects for effect in _NEEDS_GIL)
+
+
+def _calls_itself(info: FunctionInfo) -> bool:
+    """Whether the body calls the function by its own name (or `self.name`)."""
+    for child in ast.walk(info.node):
+        if not isinstance(child, ast.Call):
+            continue
+        func = child.func
+        if isinstance(func, ast.Name) and func.id == info.name:
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == info.name and info.owner:
+            return True
+    return False
 
 
 def _loops(node: ast.AST) -> bool:
