@@ -769,6 +769,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What the compiler accepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types-from-call-sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Types from call sites
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4355,6 +4372,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What the compiler accepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types-from-call-sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Types from call sites
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4528,12 +4562,58 @@ never arrives on that path. Strict mode refuses this (<code>E1301</code>, <code>
 <code>None</code> after all, the program raises where CPython raises: native code checks
 every field read and method call through such a value and raises CPython's
 <code>AttributeError</code>.</p>
-<p>Without strict mode, a module-private function (one whose name starts with
-<code>_</code>) that has unannotated parameters takes their types from its call sites,
-when every use of it is a direct call in its own module. <code>_scale(xs, k)</code>
-called only as <code>_scale([1, 2, 3], 2)</code> has <code>xs: list[int]</code> and <code>k: int</code>, and
-compiles like an annotated function. A call from elsewhere with other types,
-through reflection or <code>doctest</code>, runs the function's Python body.</p>
+<h3 id="types-from-call-sites">Types from call sites<a class="headerlink" href="#types-from-call-sites" title="Permanent link">&para;</a></h3>
+<p>Without strict mode, a function or method with unannotated parameters takes
+their types from the calls the project makes to it. <code>count_divisors(n)</code>
+called as <code>count_divisors(28)</code> and <code>count_divisors(36)</code> has <code>n: int</code>, and
+compiles like an annotated function:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">count_divisors</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="k">while</span> <span class="n">i</span> <span class="o">*</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="n">n</span><span class="p">:</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>            <span class="n">count</span> <span class="o">+=</span> <span class="mi">2</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="k">return</span> <span class="n">count</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="nb">print</span><span class="p">(</span><span class="n">count_divisors</span><span class="p">(</span><span class="mi">28</span><span class="p">),</span> <span class="n">count_divisors</span><span class="p">(</span><span class="mi">36</span><span class="p">))</span>
+</code></pre></div>
+<p>Every call in every file of the project counts, and they must agree. An
+<code>int</code> on one call and a <code>float</code> on another make a <code>float</code>, as a declared
+<code>float</code> takes an <code>int</code>. Other mixes, and <code>int | None</code>, leave the parameter
+unknown. More evidence:</p>
+<ul>
+<li>A default value is a call that passes it: <code>def f(xs, lo=0)</code> with
+  <code>f(ys, 2)</code> has <code>lo: int</code>.</li>
+<li>A method takes the calls made to it through any class of its family:
+  <code>shape.area(2)</code> with <code>shape: Shape</code> may run <code>Square.area</code>, so both take an
+  <code>int</code>.</li>
+<li>A parameter no call in the project types takes the type its doctests
+  pass as literals: <code>&gt;&gt;&gt; digit_sum(1234)</code> gives <code>n: int</code>, and
+  <code>&gt;&gt;&gt; s = Stack()</code> then <code>&gt;&gt;&gt; s.push(3)</code> gives <code>value: int</code>. An example
+  that expects an exception is not counted.</li>
+<li>A result takes the type of the body's <code>return</code> statements, a recursive
+  function's too (<code>fib(n - 1) + fib(n - 2)</code>).</li>
+</ul>
+<p>Nothing is inferred for a function the program uses as a value (<code>key=f</code>,
+<code>map(f, xs)</code>, <code>g = obj.method</code>), one with a decorator, one called with
+<code>*args</code> or <code>**kwargs</code>, a nested function, or a dunder method other than
+<code>__init__</code>. An inferred type that makes the checker report an error
+(<code>x + y</code> on a path the program never takes, with <code>y</code> now an <code>int</code>) is taken
+back, and the function runs on CPython as before.</p>
+<p>An inferred type is guarded like a declared one. A Python caller (a doctest,
+another program that imports the module, a call through <code>getattr</code>) goes
+through the function's native entry, which checks the exact type of each
+argument and runs the function's Python body when one does not match. So
+<code>count_divisors(True)</code> from Python prints CPython's answer. <code>ppy explain</code>
+says which types were inferred and from where:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>inferred (not annotated):
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  n: int, from 2 calls (prog.py:11)
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  (the Python boundary checks these at each call, and runs the Python body otherwise)
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  return: int, from the body's return statements
+</code></pre></div>
+<p>Strict mode does not infer: an unannotated parameter is still <code>E1201</code>.</p>
 <h2 id="accepted-forms-of-ordinary-python">Accepted forms of ordinary Python<a class="headerlink" href="#accepted-forms-of-ordinary-python" title="Permanent link">&para;</a></h2>
 <p>These are valid Python that the checker accepts and types:</p>
 <ul>
