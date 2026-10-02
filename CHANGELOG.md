@@ -88,8 +88,72 @@ or slow and none differing.
   `string` constants run natively.
 - Fixed: `math.sqrt`, `log`, `exp`, `pow`, and `sin` of arguments outside
   their domain gave a NaN or an infinity in native code instead of raising.
+- `collections.defaultdict`, `Counter`, and `OrderedDict` run natively,
+  with CPython's missing-key behavior, `most_common` order, operators, and
+  `repr`. An unannotated `deque(...)` is native, and so are `list(q)`,
+  `q[i] = x`, and `repr(q)`.
+- `functools.cache` and `lru_cache` are native, with a native table that
+  recursion goes through. `cache_info()` and `cache_clear()` keep CPython's
+  cache.
+- Fixed: under `ppy run`, a cached function that lowered natively ran
+  without its cache, so cached recursion took exponential time.
+- `functools.reduce`, `partial`, and `cmp_to_key`, and `operator` functions
+  (`add`, `itemgetter`, `attrgetter`, ...) are native where a function value
+  is used.
+- `random.Random(seed)` instances are native generators, draw for draw with
+  CPython. One that Python passes in is drawn from in place and put back
+  before a fallback.
+- Fixed: copying a string-keyed map in the collections runtime asked for
+  about 64 GiB of scratch memory.
 - `scripts/fuzz.py --stdlib` fuzzes seeded random numbers and these modules.
 - New guide page: The standard library.
+
+### Calls
+
+- Native calls bind keyword arguments and constant defaults, and a Python
+  caller's keywords and defaults reach the native entry instead of the
+  Python body.
+- Native code takes back results from Python functions that change nothing,
+  falling back on a mismatch, and results from other callees only where
+  their type is certain. Before, a `float`, `bool`, or `str` result was
+  taken on trust, so `def f() -> float: return 1` called from native code
+  raised a `TypeError` CPython does not.
+- A nested function that shares no variable with the function around it
+  runs natively even when that function stays in Python.
+- Module-level tuples of numbers are constants, indexable at run time, also
+  in standalone builds.
+- Fixed: a nested function with the name of a module-level function called
+  the module one.
+- Fixed: temporaries were leaked when a check raised inside a `try` that
+  native code catches.
+- New example `51_clinic`: a seeded clinic simulation with `random`,
+  `heapq`, `math`, dataclasses crossing the boundary, and prints from native
+  code.
+
+### The Python boundary
+
+- Python calls of native functions that take lists, dicts, sets, or objects
+  are about 8 to 35 times faster. The generated wrapper copies them in C,
+  keeping shared and cyclic structure and the identity of what did not
+  change.
+- A write through a container argument reaches every container that came
+  in, including one the call removed from its parent.
+- Functions that print, read input, or read module globals are called
+  through the generated wrapper. A call costs tens of nanoseconds instead of
+  microseconds.
+- Small straight-line functions get a Python boundary from two operations,
+  and a function that returns `None` and loops over its arguments gets one
+  too. A function whose boundary costs more than it saves stays in Python,
+  priced per element of the containers it takes.
+- Fixed: a native function with container arguments that raised crashed
+  `ppy run` with a double free.
+- Fixed: a self-recursive function past the recursion limit crashed where
+  CPython raises `RecursionError`.
+- `ppy.grad` works on a function that has a native entry, and a native
+  method binds its instance.
+- `ppy run` without the LLVM extra runs the program on CPython with one
+  warning (`W2012`). Native-only commands say how to install
+  `ppy-lang[llvm]`.
 
 ### The checker
 
@@ -106,8 +170,6 @@ or slow and none differing.
 - `--no-strict` reports a value that may be `None` as `W2011` and runs the
   program. Native code raises CPython's `AttributeError` where the `None`
   arrives.
-- `--no-strict` infers a private helper's unannotated parameters from its
-  call sites.
 - `return []` beside a declared return type no longer keeps a function in
   Python.
 - Fixed: `(-2) ** c` printed `-(2 ** c)` under the Python backend after
@@ -120,15 +182,34 @@ or slow and none differing.
   `ImportError` or `ModuleNotFoundError`.
 - `MutableSequence` is accepted in annotations, and a bare `Generator`
   accepts a generator expression.
+- A value stored into a list or dict element is checked against the element
+  type: `E1301` in strict mode, and `W2010` with the function on CPython
+  otherwise.
+
+### Unannotated code
+
+- Without strict mode, unannotated parameters of any function or method take
+  their types from the project's calls, default values, and doctests, and
+  compile natively. A Python caller passing other types runs the Python
+  body.
+- `ppy explain` says which types were inferred and from where.
+- Fixed: `ppy explain --summary --no-strict` analyzed in strict mode.
+- `scripts/fuzz.py --unannotated` fuzzes inferred parameter types.
+- Fixed: the Python backend removed or folded expressions that raise
+  (`y = x + 12` with a string `x`, `'a' if 1 // n else 'a'` with `n == 0`,
+  and f-strings with a format spec).
+- Fixed: a generator held in a name and walked by a `for` without `break`
+  stopped after one value in native code.
 
 ### Known limitations
 
-- `defaultdict`, `Counter`, `OrderedDict`, `functools`, `operator`, and
-  `random.Random` instances stay in Python. So does a `deque` the checker
-  sees without its element type, and `list(q)` and `q[i] = x` of a deque.
-- A temporary list that is live when a check raises inside a `try` that
-  native code catches is leaked (`[1, 2][5]` inside `try`/`except
-  IndexError`).
+- `*args` parameters, cached methods, cached functions with default
+  arguments, `deque(maxlen=...)`, and `ChainMap` stay in Python.
+- A function that writes to `self` of a class with unannotated or NumPy
+  fields stays in Python, and so does one that takes a bare `list` or
+  `dict`.
+- `ppy` collections (`Vec`, `HashMap`, ...) and functions that draw from
+  `random` still cross the Python boundary through the slower Python path.
 - On Python 3.14 a standalone binary prints the generic `math domain error`
   where 3.14's message includes the value.
 
