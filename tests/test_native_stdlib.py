@@ -375,6 +375,312 @@ def main() -> None:
 main()
 """
 
+
+MAPPINGS = """
+from collections import Counter, OrderedDict, defaultdict, deque
+
+
+def defaults(n: int) -> str:
+    d: defaultdict[int, int] = defaultdict(int)
+    for i in range(n):
+        d[i % 4] += i
+    groups: defaultdict[str, list[int]] = defaultdict(list)
+    for i in range(n):
+        groups["odd" if i % 2 else "even"].append(i)
+    seen = defaultdict(lambda: -1)
+    for i in range(5):
+        if seen[i % 3] < 0:
+            seen[i % 3] = i * 10
+    f: defaultdict[int, float] = defaultdict(float)
+    f[3] += 1.5
+    s: defaultdict[int, str] = defaultdict(str)
+    s[1] += "ab"
+    s[2] += s[1] + "c"
+    sets: defaultdict[int, set[int]] = defaultdict(set)
+    sets[1].add(5)
+    sets[1].add(3)
+    total = 0
+    for k, v in d.items():
+        total += k * v
+    return f"{d} {groups} {dict(seen)} {f} {s} {sets} {total} {len(d)} {3 in d} {9 in d} {d.get(7, -5)}"
+
+
+def counts(text: str) -> str:
+    c = Counter(text)
+    words = Counter(["a", "b", "a", "c", "b", "a"])
+    nums = Counter([3, 1, 3, 2, 3, 1])
+    top = nums.most_common(2)
+    out: list[str] = []
+    for w, k in words.most_common():
+        out.append(f"{w}{k}")
+    c.update("zzz")
+    c.subtract("ll")
+    words.update(["d"])
+    both = nums + Counter([1, 1, 4])
+    less = nums - Counter([3, 3, 3, 3, 1])
+    least = nums & Counter([3, 2, 2])
+    most = nums | Counter([2, 2, 5])
+    return (
+        f"{c} {c['q']} {c['z']} {words} {top} {out} {nums.total()} {sorted(nums.elements())} "
+        f"{both} {less} {least} {most} {c.most_common(3)} {len(c)} {list(words)}"
+    )
+
+
+def ordered(n: int) -> str:
+    od: OrderedDict[str, int] = OrderedDict()
+    for i in range(n):
+        od[str(i)] = i * i
+    od.move_to_end("1")
+    od.move_to_end("3", last=False)
+    k, v = 0, 0
+    nums: OrderedDict[int, int] = OrderedDict()
+    for i in range(6):
+        nums[i] = i + 10
+    k, v = nums.popitem()
+    a, b = nums.popitem(last=False)
+    return f"{od} {list(od)} {k} {v} {a} {b} {nums} {OrderedDict()}"
+
+
+def queue(n: int) -> str:
+    q = deque([1, 2, 3])
+    q.extend(range(n))
+    q[1] = 50
+    q.rotate(2)
+    return f"{q} {list(q)} {deque()}"
+
+
+def errors(n: int) -> list[str]:
+    out: list[str] = []
+    od: OrderedDict[int, int] = OrderedDict()
+    try:
+        od.popitem()
+    except KeyError as e:
+        out.append(str(e))
+    try:
+        od.move_to_end(n)
+    except KeyError as e:
+        out.append(str(e))
+    return out
+
+
+def main() -> None:
+    print(defaults(10))
+    print(counts("hello world"))
+    print(ordered(5))
+    print(queue(4))
+    print(errors(7))
+
+
+main()
+"""
+
+MEMO = """
+import functools
+from functools import cache, lru_cache
+
+
+@cache
+def paths(r: int, c: int) -> int:
+    if r == 0 or c == 0:
+        return 1
+    return (paths(r - 1, c) + paths(r, c - 1)) % 1000000007
+
+
+@lru_cache(maxsize=None)
+def breaks(word: str, start: int) -> bool:
+    if start == len(word):
+        return True
+    for end in range(start + 1, len(word) + 1):
+        piece = word[start:end]
+        if (piece == "ab" or piece == "abc" or piece == "c" or piece == "d") and breaks(word, end):
+            return True
+    return False
+
+
+@functools.lru_cache(maxsize=3)
+def noisy(n: int) -> int:
+    print("computing", n)
+    return n * n
+
+
+@lru_cache
+def label(n: int, x: float) -> str:
+    print("label", n, x)
+    return f"{n}:{x}"
+
+
+@lru_cache(maxsize=0)
+def never(n: int) -> int:
+    print("never", n)
+    return n + 1
+
+
+@cache
+def flag(n: int) -> bool:
+    print("flag", n)
+    return n % 3 == 0
+
+
+def drive(n: int) -> int:
+    total = 0
+    for i in [1, 2, 3, 1, 4, 1, 2, 5, 3]:
+        total += noisy(i)
+    for i in range(3):
+        total += never(i) + never(i)
+    print(label(1, 0.5), label(1, 0.5), label(2, -0.0), label(2, 0.0))
+    print(flag(3), flag(3), flag(4))
+    return total + paths(n, n)
+
+
+def main() -> None:
+    print(paths(40, 40))
+    print(breaks("abcdababcd", 0), breaks("abx", 0))
+    print(drive(25))
+    print(noisy(1), noisy(9))
+
+
+main()
+"""
+
+FUNCTIONAL = """
+import functools
+import operator
+from functools import reduce
+from operator import attrgetter, itemgetter
+
+
+class Job:
+    def __init__(self, name: str, weight: int) -> None:
+        self.name = name
+        self.weight = weight
+
+
+def combine(a: int, b: int) -> int:
+    return a * 31 + b
+
+
+def ops(xs: list[int], pairs: list[tuple[int, int]]) -> str:
+    total = functools.reduce(operator.add, xs, 0)
+    prod = reduce(lambda a, b: a * b, xs)
+    folded = reduce(combine, xs, 7)
+    biggest = reduce(max, xs)
+    words = reduce(operator.add, ["ab", "c", "de"], "")
+    joined = reduce(lambda s, w: s + "-" + w, ["x", "y", "z"])
+    ordered = sorted(pairs, key=itemgetter(1))
+    best = max(pairs, key=operator.itemgetter(1))
+    least = min(pairs, key=itemgetter(0, 1))
+    m = list(map(operator.neg, xs))
+    f = list(filter(operator.truth, [0, 1, 2, 0, 3]))
+    xs.sort(key=operator.neg)
+    floats = reduce(operator.truediv, [100.0, 4.0, 5.0])
+    return f"{total} {prod} {folded} {biggest} {words} {joined} {ordered} {best[0]} {best[1]} {least[0]} {m} {f} {xs} {floats}"
+
+
+def jobs(n: int) -> str:
+    js = [Job("a", 3), Job("b", 1), Job("c", 2)]
+    js.sort(key=attrgetter("weight"))
+    out = ""
+    for j in js:
+        out += j.name
+    return out + str(n)
+
+
+def errs(n: int) -> list[str]:
+    out: list[str] = []
+    empty: list[int] = []
+    try:
+        reduce(operator.add, empty)
+    except TypeError as e:
+        out.append(str(e))
+    try:
+        reduce(operator.floordiv, [n, 0])
+    except ZeroDivisionError as e:
+        out.append(str(e))
+    return out
+
+
+def main() -> None:
+    print(ops([3, 1, 2], [(5, 2), (6, 1), (7, 3)]))
+    print(jobs(4))
+    print(errs(5))
+
+
+main()
+"""
+
+COMPARED = """
+from functools import cmp_to_key, partial, reduce
+
+
+def scale(factor: int, offset: int, x: int) -> int:
+    return factor * x + offset
+
+
+def by_last_digit(a: int, b: int) -> int:
+    if a % 10 != b % 10:
+        return a % 10 - b % 10
+    return b - a
+
+
+def parts(xs: list[int], k: int) -> str:
+    doubled = list(map(partial(scale, 2, k), xs))
+    total = reduce(partial(scale, 3), xs, 1)
+    picked = sorted(xs, key=partial(scale, -1, 0))
+    ordered = sorted(xs, key=cmp_to_key(by_last_digit))
+    xs.sort(key=cmp_to_key(lambda a, b: a - b), reverse=True)
+    words = sorted(["bb", "a", "ccc", "dd"], key=cmp_to_key(lambda s, t: len(s) - len(t)))
+    return f"{doubled} {total} {picked} {ordered} {xs} {words}"
+
+
+def main() -> None:
+    print(parts([13, 21, 3, 42, 11, 33], 5))
+
+
+main()
+"""
+
+GENERATORS = """
+import random
+
+
+def roll(rng: random.Random, n: int) -> int:
+    total = 0
+    for _ in range(n):
+        total = total * 7 + rng.randint(1, 6)
+    return total
+
+
+def draws(seed: int) -> str:
+    r = random.Random(seed)
+    s = random.Random(seed + 1)
+    xs = [r.randint(-50, 50) for _ in range(20)]
+    r.shuffle(xs)
+    a = r.choice(xs)
+    b = r.randrange(7) + s.randrange(3, 90) + r.randrange(100, 3, -7)
+    c = r.getrandbits(40)
+    ys = r.sample(xs, 5)
+    zs = s.sample(range(1000), 6)
+    ws = r.choices(xs, k=4)
+    vs = s.choices(["a", "b", "c"], [1, 5, 2], k=6)
+    g = r.random() + r.uniform(-2.0, 3.5) + s.gauss(0.0, 1.0) + s.gauss(1.0, 2.0) + s.gauss()
+    h = r.triangular(0.0, 10.0, 7.0) + r.normalvariate(5.0, 2.0) + r.expovariate(3.0)
+    j = r.gammavariate(2.5, 1.0) + r.betavariate(2.0, 3.0) + r.paretovariate(2.5)
+    t = roll(r, 5)
+    r.seed(99)
+    k = r.random()
+    random.seed(5)
+    m = random.random()
+    return f"{xs} {a} {b} {c} {ys} {zs} {ws} {vs} {g!r} {h!r} {j!r} {t} {k!r} {m!r}"
+
+
+def main() -> None:
+    print(draws(12345))
+    print(draws(-7))
+
+
+main()
+"""
+
 #: name -> (source, the functions `ppy explain` must call native).
 PROGRAMS = {
     "random": (RANDOM, ("draws",)),
@@ -386,6 +692,12 @@ PROGRAMS = {
     "math": (MATH, ("integers", "floats", "sums")),
     "itertools": (ITERTOOLS, ("walks", "letters")),
     "deque": (DEQUE, ("queues", "bfs", "empty")),
+    "mappings": (MAPPINGS, ("defaults", "counts", "ordered", "queue", "errors")),
+    # Each cached function's entry looks its arguments up before the body runs.
+    "memo": (MEMO, ("paths", "breaks", "noisy", "label", "never", "flag")),
+    "functional": (FUNCTIONAL, ("ops", "jobs", "errs", "combine")),
+    "compared": (COMPARED, ("parts",)),
+    "generators": (GENERATORS, ("roll", "draws")),
 }
 
 
@@ -658,3 +970,83 @@ def test_draws_on_both_sides_of_a_call_into_python(tmp_path: Path):
     for function in ("mixed", "fallback_after_draw"):
         explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
         assert "llvm backend: native" in explained.stdout, (function, explained.stdout)
+
+
+CACHE_INFO = """
+from functools import lru_cache
+
+
+@lru_cache(maxsize=None)
+def fib(n: int) -> int:
+    if n < 2:
+        return n
+    total = 0
+    for k in range(1, 3):
+        total += fib(n - k)
+    return total
+
+
+def main() -> None:
+    print(fib(80))
+    print(fib.cache_info())
+    fib.cache_clear()
+    print(fib.cache_info())
+    print(fib(10), fib.cache_info().misses)
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_cache_the_program_reads_stays_in_python(tmp_path: Path):
+    """`cache_info` and `cache_clear` read Python's cache: the function keeps
+    it, and `ppy run` prints CPython's counts."""
+    expected = _expected(tmp_path, CACHE_INFO)
+    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    assert _output(done).strip() == expected
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.fib")
+    assert "reads the cache Python keeps" in explained.stdout, explained.stdout
+
+
+SHARED_CACHE = """
+from functools import cache
+
+
+@cache
+def ways(n: int, k: int) -> int:
+    if n == 0:
+        return 1
+    if n < 0 or k == 0:
+        return 0
+    total = 0
+    for part in range(2):
+        if part == 0:
+            total += ways(n - k, k)
+        else:
+            total += ways(n, k - 1)
+    return total % 1000000007
+
+
+def main() -> None:
+    print(ways(120, 120))
+    print(ways(300, 300))
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_recursion_goes_through_the_native_table(tmp_path: Path):
+    """A dynamic program that is exponential without its cache: the entry
+    everything calls, Python's callers included, looks each subproblem up."""
+    expected = _expected(tmp_path, SHARED_CACHE)
+    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    assert _output(done).strip() == expected
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.ways")
+    assert "llvm backend: native" in explained.stdout, explained.stdout

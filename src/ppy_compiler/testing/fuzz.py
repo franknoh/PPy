@@ -157,6 +157,18 @@ class Ring:
 
 """
 
+#: What a program that calls the standard library adds: a cached function,
+#: whose recursion goes through its cache.
+_STDLIB_PRELUDE = """\
+@functools.lru_cache(maxsize=None)
+def _cached(n: int) -> int:
+    if n < 2:
+        return n
+    return (_cached(n - 1) + _cached(n - 2)) % 1000003
+
+
+"""
+
 #: What a program with module state adds: objects Python makes and native
 #: code walks. `ppy run` passes both across its boundary; a standalone build
 #: has no Python to hold them, so those programs run on the paths that do.
@@ -358,11 +370,42 @@ class _Generator:
             return f"math.factorial({self.small(scope, depth, 22)})"
         if roll < 0.82:
             return f"math.isqrt({self.int_expr(scope, depth + 1)})"
-        if roll < 0.9:
+        if roll < 0.86:
             return (
                 f"bisect.bisect_left(sorted({self.int_list(scope, depth)}), {self.int_literal()})"
             )
-        return f"len(list(itertools.combinations(range({self.small(scope, depth, 8)}), 2)))"
+        if roll < 0.88:
+            return f"len(list(itertools.combinations(range({self.small(scope, depth, 8)}), 2)))"
+        return self.library_int(scope, depth)
+
+    def library_int(self, scope: _Scope, depth: int) -> str:
+        """`collections`, `functools`, `operator`, and a `random.Random` of its own."""
+        rng = self.rng
+        roll = rng.random()
+        items = self.int_list(scope, depth)
+        if roll < 0.12:
+            start = self.int_expr(scope, depth + 1)
+            return f"functools.reduce(operator.{rng.choice(('add', 'sub', 'xor'))}, {items}, {start})"
+        if roll < 0.2:
+            return f"functools.reduce({rng.choice(('max', 'min'))}, {items})"
+        if roll < 0.3:
+            return f"collections.Counter({items})[{self.int_expr(scope, depth + 1)}]"
+        if roll < 0.38:
+            return f"collections.Counter({items}).most_common(1)[0][{rng.randint(0, 1)}]"
+        if roll < 0.46:
+            return f"collections.Counter({items}).total()"
+        if roll < 0.56:
+            low = self.int_expr(scope, depth + 1)
+            return f"random.Random({self.seed}).randint({low}, {low} + {self.small(scope, depth, 30)})"
+        if roll < 0.64:
+            return f"random.Random({self.int_expr(scope, depth + 1)}).randrange({rng.randint(1, 90)})"
+        if roll < 0.74:
+            return f"_cached({self.small(scope, depth, 60)})"
+        if roll < 0.84:
+            return f"collections.deque({items})[{rng.randint(-1, 0)}]"
+        if roll < 0.92:
+            return f"max({items}, key=operator.neg)"
+        return f"sorted({items}, key=functools.cmp_to_key(lambda a, b: b - a))[0]"
 
     def stdlib_float(self, scope: _Scope, depth: int) -> str:
         rng = self.rng
@@ -402,6 +445,45 @@ class _Generator:
         w.put(f"bisect.insort({heap}, {self.int_expr(scope, 2)})")
         w.put(f"{total} += sum({heap}) + {heap}[0]")
         scope.ints.append(total)
+        if self.chance(0.6):
+            self.library_statements(w, scope, total)
+
+    def library_statements(self, w: _Writer, scope: _Scope, total: str) -> None:
+        """A `defaultdict`, a `Counter`, an `OrderedDict`, and a `deque` filled
+        and read, and shown, whose text CPython's `repr` decides."""
+        rng = self.rng
+        table = self.name("d")
+        factory = rng.choice(("int", "lambda: -1"))
+        w.put(f"{table}: collections.defaultdict[int, int] = collections.defaultdict({factory})")
+        for _ in range(rng.randint(1, 4)):
+            w.put(f"{table}[{self.small(scope, 2, 6)}] += {self.int_expr(scope, 2)}")
+        w.put(f"{total} += {table}[{self.small(scope, 2, 8)}] + len({table})")
+        counts = self.name("c")
+        w.put(f"{counts} = collections.Counter({self.int_list(scope, 2)})")
+        w.put(f"{counts}.update({self.int_list(scope, 2)})")
+        if self.chance(0.5):
+            w.put(f"{counts}.subtract({self.int_list(scope, 2)})")
+        ordered = self.name("od")
+        w.put(f"{ordered}: collections.OrderedDict[int, int] = collections.OrderedDict()")
+        moved = self.name("k")
+        w.put(f"{moved}: int = {self.small(scope, 2, 5)}")
+        w.put(f"{ordered}[{moved}] = {self.int_expr(scope, 2)}")
+        for _ in range(rng.randint(1, 4)):
+            w.put(f"{ordered}[{self.small(scope, 2, 5)}] = {self.int_expr(scope, 2)}")
+        w.put(f"{ordered}.move_to_end({moved}, last={rng.choice(('True', 'False'))})")
+        queue = self.name("q")
+        w.put(f"{queue} = collections.deque({self.int_list(scope, 2)})")
+        w.put(f"{queue}.rotate({rng.randint(-3, 3)})")
+        w.put(f"{queue}.appendleft({self.int_expr(scope, 2)})")
+        if factory == "int":
+            shown = self.name("s")
+            w.put(
+                f"{shown}: str = str({table}) + str({counts}) + str({counts}.most_common(2))"
+                f" + str({ordered}) + str({queue})"
+            )
+            scope.strs.append(shown)
+        else:
+            w.put(f"{total} += sum({counts}.values()) + sum({ordered}.values()) + {queue}[0]")
 
     def bool_expr(self, scope: _Scope, depth: int = 0) -> str:
         rng = self.rng
@@ -1195,7 +1277,11 @@ class _Generator:
         w = _Writer()
         if self.stdlib:
             w.lines.extend(["import bisect", "import heapq", "import itertools", "import random"])
+            w.lines.extend(["import functools", "import operator"])
+            w.lines.append("import collections")
         w.lines.extend(_PRELUDE.splitlines())
+        if self.stdlib:
+            w.lines.extend(_STDLIB_PRELUDE.splitlines())
         if self.with_state:
             w.lines.extend(_STATE_PRELUDE.splitlines())
             self.state_globals(w)
@@ -1249,7 +1335,8 @@ def generate_program(
     it also reads and writes module globals and walks objects Python made,
     which only the paths with a Python boundary run (`STATE_PATHS`). With
     `stdlib`, functions also draw seeded random numbers and call `math`,
-    `heapq`, `bisect`, and `itertools`."""
+    `heapq`, `bisect`, `itertools`, `functools`, `operator`, and
+    `collections`' containers, and a `random.Random` of their own."""
     return _Generator(seed, prints, state, stdlib).program()
 
 
