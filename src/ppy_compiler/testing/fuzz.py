@@ -43,6 +43,7 @@ __all__ = [
     "ALL_PATHS",
     "OVERFLOW_64",
     "TIMED_OUT",
+    "UNANNOTATED_MARK",
     "Mismatch",
     "Result",
     "compare",
@@ -219,10 +220,19 @@ class _Scope:
 
 
 class _Generator:
-    def __init__(
-        self, seed: int, prints: bool = False, state: bool = False, stdlib: bool = False
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        seed: int,
+        prints: bool = False,
+        state: bool = False,
+        stdlib: bool = False,
+        unannotated: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: Functions without annotations, whose types `--no-strict` infers
+        #: from the calls `main` makes; Python then calls them with others.
+        self.unannotated = unannotated
+        self.foreign = random.Random(seed ^ 0xA77)
         self.fresh = 0
         self.seed = seed
         #: Whether functions print too, between checks that may fall back.
@@ -1092,7 +1102,10 @@ class _Generator:
         ret = rng.choice(("int", "int", "float", "str", "bool"))
         params = [self.name("a") for _ in kinds]
         signature = ", ".join(f"{p}: {k}" for p, k in zip(params, kinds, strict=True))
-        w.put(f"def {name}({signature}) -> {ret}:")
+        if self.unannotated:
+            w.put(f"def {name}({', '.join(params)}):")
+        else:
+            w.put(f"def {name}({signature}) -> {ret}:")
         w.depth += 1
         scope = _Scope()
         for param, kind in zip(params, kinds, strict=True):
@@ -1193,6 +1206,8 @@ class _Generator:
 
     def program(self) -> str:
         w = _Writer()
+        if self.unannotated:
+            w.lines.append(UNANNOTATED_MARK)
         if self.stdlib:
             w.lines.extend(["import bisect", "import heapq", "import itertools", "import random"])
         w.lines.extend(_PRELUDE.splitlines())
@@ -1200,6 +1215,7 @@ class _Generator:
             w.lines.extend(_STATE_PRELUDE.splitlines())
             self.state_globals(w)
         calls: list[str] = []
+        foreign: list[str] = []
         for _ in range(self.rng.randint(3, 6)):
             name = self.name("fn")
             kinds, _ret = self.function(w, name)
@@ -1207,6 +1223,8 @@ class _Generator:
                 f"{name}({', '.join(self.argument(k) for k in kinds)})"
                 for _ in range(self.rng.randint(1, 3))
             )
+            if self.unannotated:
+                foreign.append(self.foreign_call(name, kinds))
         after = self.state_part(w) if self.with_state else []
         w.put("def main() -> None:")
         if self.stdlib:
@@ -1218,7 +1236,31 @@ class _Generator:
         w.put("")
         w.put("")
         w.put("main()")
+        if foreign:
+            # Python calls each function by a name the analysis cannot follow,
+            # with other types: the native entry must refuse them and run the
+            # Python body, which prints what CPython prints.
+            w.put("if __name__ == \"__main__\":")
+            w.put("    import sys")
+            w.put("")
+            w.put("    here = sys.modules[__name__]")
+            for call in foreign:
+                w.put("    try:")
+                w.put(f"        print(getattr(here, {call[0]!r})({call[1]}))")
+                w.put("    except Exception as e:")
+                w.put("        print(type(e).__name__)")
         return "\n".join(w.lines) + "\n"
+
+    def foreign_call(self, name: str, kinds: list[str]) -> tuple[str, str]:
+        """A call of `name` with arguments of other types than `main` passes."""
+        rng = self.foreign
+        others = {
+            "int": ("True", "2.5", "'7'", "-3"),
+            "float": ("3", "True", "'x'", "-0.5"),
+            "str": ("4", "b'ab'", "'ok'"),
+            "bool": ("1", "0", "'y'", "False"),
+        }
+        return name, ", ".join(rng.choice(others[k]) for k in kinds)
 
     def state_part(self, w: _Writer) -> list[str]:
         """The functions over module state and objects, and what `main` does with them."""
@@ -1241,16 +1283,28 @@ class _Generator:
         return after
 
 
-def generate_program(
-    seed: int, prints: bool = False, state: bool = False, stdlib: bool = False
+#: The first line of a program whose functions have no annotations; it runs
+#: without strict mode.
+UNANNOTATED_MARK = "# fuzz: unannotated"
+
+
+def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    seed: int,
+    prints: bool = False,
+    state: bool = False,
+    stdlib: bool = False,
+    unannotated: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
     it also reads and writes module globals and walks objects Python made,
     which only the paths with a Python boundary run (`STATE_PATHS`). With
     `stdlib`, functions also draw seeded random numbers and call `math`,
-    `heapq`, `bisect`, and `itertools`."""
-    return _Generator(seed, prints, state, stdlib).program()
+    `heapq`, `bisect`, and `itertools`. With `unannotated`, the functions have
+    no annotations and the program runs without strict mode, which infers
+    their types from `main`'s calls; Python then calls each with arguments
+    of other types, which the native entry must hand to the Python body."""
+    return _Generator(seed, prints, state, stdlib, unannotated).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
@@ -1380,7 +1434,8 @@ def run_program(
     compilers = _compilers()
     with tempfile.TemporaryDirectory(prefix="ppy-fuzz-") as scratch:
         root = Path(scratch)
-        (root / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+        strict = "false" if source.startswith(UNANNOTATED_MARK) else "true"
+        (root / "pyproject.toml").write_text(f"[tool.ppy]\nstrict = {strict}\n", encoding="utf-8")
         (root / "prog.ppy").write_text(source, encoding="utf-8")
         for path in paths:
             results[path] = _run_path(path, root, python, env, compilers, timeout)

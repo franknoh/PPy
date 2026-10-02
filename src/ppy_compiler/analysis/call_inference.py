@@ -67,8 +67,7 @@ class _Evidence:
 
     def add(self, observed: T.Type, site: str) -> None:
         self.seen = observed if self.seen is None else T.join(self.seen, observed)
-        if site not in self.sites:
-            self.sites.append(site)
+        self.sites.append(site)
 
 
 @dataclass(frozen=True, slots=True)
@@ -439,13 +438,15 @@ def _describe(sites: list[str]) -> str:
     doctests = [s.removeprefix("doctest ") for s in sites if s.startswith("doctest ")]
     parts = []
     if calls:
-        shown = ", ".join(calls[:_SHOWN_SITES])
-        more = f", and {len(calls) - _SHOWN_SITES} more" if len(calls) > _SHOWN_SITES else ""
+        shown = ", ".join(list(dict.fromkeys(calls))[:_SHOWN_SITES])
+        unshown = len(dict.fromkeys(calls)) - _SHOWN_SITES
+        more = f", and {unshown} more places" if unshown > 0 else ""
         plural = "s" if len(calls) != 1 else ""
         parts.append(f"{len(calls)} call{plural} ({shown}{more})")
     if doctests:
-        shown = ", ".join(doctests[:_SHOWN_SITES])
-        more = f", and {len(doctests) - _SHOWN_SITES} more" if len(doctests) > _SHOWN_SITES else ""
+        shown = ", ".join(list(dict.fromkeys(doctests))[:_SHOWN_SITES])
+        unshown = len(dict.fromkeys(doctests)) - _SHOWN_SITES
+        more = f", and {unshown} more places" if unshown > 0 else ""
         plural = "s" if len(doctests) != 1 else ""
         parts.append(f"{len(doctests)} doctest call{plural} ({shown}{more})")
     if "the default value" in sites:
@@ -468,6 +469,10 @@ def _usable(t: T.Type) -> T.Type | None:
         if set(members) == {T.INT, T.FLOAT}:
             members = [T.FLOAT]
         if len(members) != 1:
+            return None
+        if len(t.members) > 1 and T.is_exact_builtin(members[0]):
+            # `int | None` has no native form, and the arithmetic on it the
+            # body does after a test for `None` is an error to the checker.
             return None
         t = members[0] if len(members) == len(t.members) else T.union(members[0], T.NONE)
         if not _concrete(members[0]):

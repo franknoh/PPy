@@ -129,6 +129,15 @@ def _makes_new_object(node: ast.expr) -> bool:
 _RAISING_OPERATORS = (ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.LShift, ast.RShift)
 
 
+def _makes_bool(node: ast.expr) -> bool:
+    """Whatever its operands, this expression's value is a `bool`."""
+    if isinstance(node, ast.Compare):
+        return True
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return True
+    return isinstance(node, ast.Constant) and isinstance(node.value, bool)
+
+
 def _cannot_raise(node: ast.expr) -> bool:
     """Pure, and no operator in it can raise: what may be deleted outright, or
     moved to where it runs when the program would not have run it."""
@@ -386,7 +395,10 @@ class Peephole(Pass):
             and isinstance(node.operand.op, ast.Not)
         ):
             inner = node.operand.operand
-            if type_of(inner) == T.BOOL:
+            # Only where the expression itself makes a bool: a name's type
+            # may be inferred from the calls the program makes, and a caller
+            # outside it may pass `1` where the program passes `True`.
+            if type_of(inner) == T.BOOL and _makes_bool(inner):
                 self.context.count("peepholes")
                 return inner
         return node

@@ -68,12 +68,66 @@ never arrives on that path. Strict mode refuses this (`E1301`, `E1206`).
 every field read and method call through such a value and raises CPython's
 `AttributeError`.
 
-Without strict mode, a module-private function (one whose name starts with
-`_`) that has unannotated parameters takes their types from its call sites,
-when every use of it is a direct call in its own module. `_scale(xs, k)`
-called only as `_scale([1, 2, 3], 2)` has `xs: list[int]` and `k: int`, and
-compiles like an annotated function. A call from elsewhere with other types,
-through reflection or `doctest`, runs the function's Python body.
+### Types from call sites
+
+Without strict mode, a function or method with unannotated parameters takes
+their types from the calls the project makes to it. `count_divisors(n)`
+called as `count_divisors(28)` and `count_divisors(36)` has `n: int`, and
+compiles like an annotated function:
+
+```python
+def count_divisors(n):
+    count = 0
+    i = 1
+    while i * i <= n:
+        if n % i == 0:
+            count += 2
+        i += 1
+    return count
+
+
+print(count_divisors(28), count_divisors(36))
+```
+
+Every call in every file of the project counts, and they must agree. An
+`int` on one call and a `float` on another make a `float`, as a declared
+`float` takes an `int`. Other mixes, and `int | None`, leave the parameter
+unknown. More evidence:
+
+- A default value is a call that passes it: `def f(xs, lo=0)` with
+  `f(ys, 2)` has `lo: int`.
+- A method takes the calls made to it through any class of its family:
+  `shape.area(2)` with `shape: Shape` may run `Square.area`, so both take an
+  `int`.
+- A parameter no call in the project types takes the type its doctests
+  pass as literals: `>>> digit_sum(1234)` gives `n: int`, and
+  `>>> s = Stack()` then `>>> s.push(3)` gives `value: int`. An example
+  that expects an exception is not counted.
+- A result takes the type of the body's `return` statements, a recursive
+  function's too (`fib(n - 1) + fib(n - 2)`).
+
+Nothing is inferred for a function the program uses as a value (`key=f`,
+`map(f, xs)`, `g = obj.method`), one with a decorator, one called with
+`*args` or `**kwargs`, a nested function, or a dunder method other than
+`__init__`. An inferred type that makes the checker report an error
+(`x + y` on a path the program never takes, with `y` now an `int`) is taken
+back, and the function runs on CPython as before.
+
+An inferred type is guarded like a declared one. A Python caller (a doctest,
+another program that imports the module, a call through `getattr`) goes
+through the function's native entry, which checks the exact type of each
+argument and runs the function's Python body when one does not match. So
+`count_divisors(True)` from Python prints CPython's answer. `ppy explain`
+says which types were inferred and from where:
+
+```text
+inferred (not annotated):
+  n: int, from 2 calls (prog.py:11)
+  (the Python boundary checks these at each call, and runs the Python body otherwise)
+  return: int, from the body's return statements
+```
+
+Strict mode does not infer: an unannotated parameter is still `E1201`.
 
 ## Accepted forms of ordinary Python
 

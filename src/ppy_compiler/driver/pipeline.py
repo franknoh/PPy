@@ -258,6 +258,15 @@ def module_cache_key(
         for d in info.directives
     ]
     config = bundle.project.config
+    # A parameter typed from its calls depends on the modules that call it,
+    # which the module's own source and imports do not cover.
+    inferred = sorted(
+        f"{info.qualname}|{info.signature()}"
+        for info in bundle.symbols.functions.values()
+        if info.module == module_name and any(p.inferred for p in info.params)
+    )
+    if inferred:
+        extra = (*extra, f"inferred={digest('inferred', tuple(inferred))}")
     if target == "llvm":
         from ..backend.builtin import builtin_backend
 
