@@ -726,7 +726,11 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         if signature.returned and not nothing
         else None
     )
-    if signature.returned and not nothing and returned is None:
+    if (
+        signature.returned
+        and not nothing
+        and (returned is None or returned.kind == "random.Random")
+    ):
         return unbound
     # A value class among the arguments is found in the function's module, as
     # `_bind` finds it: without the namespace, every call would run the
@@ -756,6 +760,8 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         if answered:
             binding.calls += 1
             return answer
+        # A generator an argument lent is put back as it was before Python reruns.
+        boundary.restore()
         binding.fallbacks += 1
         return fallback(*args)
 

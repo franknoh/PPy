@@ -601,10 +601,29 @@ def join(*types: Type) -> Type:
         for t in present
         if not (isinstance(t, Instance) and is_empty_container(t) and t.name in filled)
     ]
+    # `groups = defaultdict(list)`, whose key the first write gives: the
+    # half-known type is the known one's.
+    present = [t for t in present if not any(_fills(other, t) for other in present)]
     first = present[0]
     if all(t == first for t in present):
         return first
     return union(*present)
+
+
+def _fills(known: Type, partial: Type) -> bool:
+    """Whether `known` is `partial` with the arguments `partial` leaves `Never`
+    written in: `defaultdict[str, int]` of `defaultdict[Never, int]`."""
+    return (
+        isinstance(known, Instance)
+        and isinstance(partial, Instance)
+        and known != partial
+        and known.name == partial.name
+        and len(known.args) == len(partial.args)
+        and all(
+            isinstance(mine, NeverType) or mine == theirs or _fills(theirs, mine)
+            for mine, theirs in zip(partial.args, known.args, strict=True)
+        )
+    )
 
 
 def is_empty_container(t: Type) -> bool:
@@ -734,6 +753,12 @@ def is_assignable(source: Type, target: Type) -> bool:
     return False
 
 
+#: `collections`' mappings, which are dicts with more to them.
+_LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+
+
 def _instance_assignable(source: Instance, target: Instance) -> bool:
     if target.name == "object":
         return True
@@ -751,6 +776,10 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
         return True
     if target.name not in source.resolved_mro:
         return False
+    if source.name != target.name and source.name in _LIBRARY_MAPPINGS and source.args:
+        # A `Counter[str]` held as the dict it is: a `dict[str, int]`.
+        arguments = (*source.args, INT) if source.name == "collections.Counter" else source.args
+        source = Instance("dict", arguments, BUILTIN_MRO.get("dict", ("dict", "object")))
     if source.name != target.name and source.name in GENERIC_BASES:
         # A project class held as one of its bases: `Counted[int]` as a
         # `Stack[int]`, `IntStack` as a `Stack[int]`, by what it gives the base.

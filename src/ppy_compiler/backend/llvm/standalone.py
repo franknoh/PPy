@@ -13,7 +13,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from ...analysis.native_stdlib import MATH_NATIVE, STRING_CONSTANTS
+from ...analysis.native_stdlib import MATH_NATIVE, OPERATOR_FUNCTIONS, STRING_CONSTANTS
 from ...analysis.native_stdlib import MODELS as NATIVE_MODELS
 from ...diagnostics import Diagnostic, Severity
 from ...driver.ir_pipeline import value_class_layouts
@@ -26,7 +26,18 @@ from .lowering import LoweringResult, called_back_only, eligible
 __all__ = ["build_standalone", "standalone_ir"]
 
 #: Standard-library modules whose calls the runtime has natively.
-_NATIVE_MODULES = frozenset({"random", "heapq", "bisect", "itertools", "string"})
+_NATIVE_MODULES = frozenset(
+    {"random", "heapq", "bisect", "itertools", "string", "collections", "functools", "operator"}
+)
+
+#: What `from functools import ...` and `from operator import ...` may name.
+_LIBRARY_NAMES = {
+    "functools": frozenset({"cache", "lru_cache", "reduce", "partial", "cmp_to_key"}),
+    "operator": OPERATOR_FUNCTIONS | {"itemgetter", "attrgetter"},
+}
+
+#: What `from collections import ...` may name in a standalone module.
+_COLLECTIONS = frozenset({"deque", "defaultdict", "Counter", "OrderedDict"})
 
 #: What `from math import ...` may name in a standalone module.
 _MATH_NAMES = (
@@ -460,7 +471,9 @@ def _module_shape(
                 continue
             if names == "math" and all(name in _MATH_NAMES for name in listed):
                 continue
-            if names == "collections" and listed == ["deque"]:
+            if names == "collections" and set(listed) <= _COLLECTIONS:
+                continue
+            if names in _LIBRARY_NAMES and set(listed) <= _LIBRARY_NAMES[names]:
                 continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))

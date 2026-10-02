@@ -3,7 +3,7 @@
     uv run python scripts/fuzz.py --seed 0 --count 25
     uv run python scripts/fuzz.py --seed 400 --count 10 --paths run,standalone
     uv run python scripts/fuzz.py --state --count 25 # module globals and objects
-    uv run python scripts/fuzz.py --seed 0 --count 25 --stdlib   # random, math, heapq, bisect
+    uv run python scripts/fuzz.py --seed 0 --count 25 --stdlib   # the standard library
     uv run python scripts/fuzz.py --seed 0 --count 25 --calls    # keywords and defaults
     uv run python scripts/fuzz.py --replay           # every saved regression
     uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
@@ -141,7 +141,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--stdlib",
         action="store_true",
-        help="draw seeded random numbers and call math, heapq, bisect, and itertools",
+        help=(
+            "draw seeded random numbers and call math, heapq, bisect, itertools, functools,"
+            " operator, and collections' containers"
+        ),
     )
     options = parser.parse_args(argv)
     if options.show is not None:
