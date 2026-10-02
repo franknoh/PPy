@@ -824,11 +824,12 @@ def should_lower_native(
             _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
         )
     )
-    if _returns_none(info.ret) and not fills and not _loops(info.node):
+    if _returns_none(info.ret) and not fills and not (info.params and _loops(info.node)):
         # A function with no value to hand back is native code's to call -- a
         # thread's body, a helper, a check that raises -- unless what it does
-        # is fill a collection the caller passed, or loop: a `main` that
-        # prints as it goes is worth one crossing.
+        # is fill a collection the caller passed, or loop over what it is
+        # given. A `main()` that takes nothing runs once, and Python runs it:
+        # what it calls goes native on its own terms.
         return False, "returns nothing, which has no Python boundary"
     returned = _collection_param("", info.ret, layouts)
     if returned is not None and returned.element != "str" and not _crosses(returned, classes):

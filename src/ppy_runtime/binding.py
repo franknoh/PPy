@@ -33,6 +33,7 @@ __all__ = [
     "bind",
     "bind_globals",
     "observation_wanted",
+    "python_of",
     "value_class_types",
 ]
 
@@ -121,12 +122,27 @@ def value_class_types(
 #: The C entry points that stand in a module's namespace themselves. No Python
 #: frame is on their call path, so there is nothing to hang `__ppy_native__` on;
 #: they are known by identity and kept here, as their modules keep them.
-_ADOPTED: dict[int, tuple[object, NativeSignature]] = {}
+_ADOPTED: dict[int, tuple[object, NativeSignature, object]] = {}
 
 
-def remember(entry: Callable[..., object], signature: NativeSignature) -> None:
-    """Record that `entry`, a generated C entry point, runs `signature` natively."""
-    _ADOPTED[id(entry)] = (entry, signature)
+def remember(
+    entry: Callable[..., object], signature: NativeSignature, fallback: object = None
+) -> None:
+    """Record that `entry`, a generated C entry point, runs `signature` natively,
+    standing for the Python function `fallback`."""
+    _ADOPTED[id(entry)] = (entry, signature, fallback)
+
+
+def python_of(function: object) -> object:
+    """The Python function a native entry point stands for, whose source a tool
+    like `ppy.grad` reads; `function` itself where it is one."""
+    found = getattr(function, "__ppy_fallback__", None)
+    if found is not None:
+        return found
+    known = _ADOPTED.get(id(function))
+    if known is not None and known[0] is function and known[2] is not None:
+        return known[2]
+    return function
 
 
 def as_method(entry: Callable[..., object], fallback: object, key: str) -> Callable[..., object]:
@@ -140,7 +156,7 @@ def as_method(entry: Callable[..., object], fallback: object, key: str) -> Calla
     made = _INSTANCE_METHOD(entry)
     known = _ADOPTED.get(id(entry))
     if known is not None and known[0] is entry:
-        remember(made, known[1])
+        remember(made, known[1], known[2])
     return made  # type: ignore[no-any-return]
 
 
@@ -177,7 +193,7 @@ def adopt(
     Nothing stands between the caller and the C entry point, so per-call
     statistics are not collected on this path.
     """
-    remember(entry, signature)
+    remember(entry, signature, fallback)
     return NativeBinding(
         signature=signature, wrapper=entry, fallback=fallback, fast_entry=entry, owner=owner
     )

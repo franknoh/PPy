@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import ast
 import math
+import sys
 import textwrap
 import types
 from collections.abc import Callable
@@ -151,6 +152,10 @@ def _build(
 ) -> Callable[..., Any]:
     import inspect
 
+    runtime = sys.modules.get("ppy_runtime.binding")
+    if runtime is not None:
+        # A native entry point stands for the function; its source is the function's.
+        function = runtime.python_of(function)
     try:
         source = textwrap.dedent(inspect.getsource(function))
     except (OSError, TypeError) as error:

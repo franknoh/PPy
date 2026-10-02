@@ -31,9 +31,11 @@ rest costs more:
 | a module global the function reads | 6 more: a Python frame reads it for the wrapper |
 | a call that draws from `random` | 16: the Python-level binding saves its state |
 
-A function that returns nothing gets the boundary where it loops, or fills
-a container the caller passed. A function that only checks its arguments
-and raises stays a native caller's.
+A function that returns nothing gets the boundary where it loops over what
+it is given, or fills a container the caller passed. A function that only
+checks its arguments and raises stays a native caller's, and so does a
+`main()` that takes nothing: it runs once, and what it calls goes native on
+its own terms.
 
 A container or an object is copied whole on each call, so the body has to
 do work in proportion to it ([Lists, dicts, and sets](containers.md#between-functions)).

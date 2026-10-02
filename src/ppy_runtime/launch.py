@@ -166,7 +166,7 @@ class PrebuiltBinder(LibraryBinder):
             else self._fast_entry(signature, address, fallback)
         )
         if entry is not None:
-            remember(entry, signature)
+            remember(entry, signature, fallback)
             return as_method(entry, fallback, function)
         binding = bind(signature, address, fallback, owner=self._library)
         return binding.wrapper
