@@ -197,6 +197,16 @@ def call(
     """What a call gives where native code makes it, or None where it does not."""
     if qualname.startswith("math."):
         return _math(qualname, args, keywords)
+    if qualname.startswith("random.Random."):
+        # An instance's method: the module's function, on its own state.
+        from .stdlib import INSTANCE_ATTRS  # pylint: disable=import-outside-toplevel
+
+        name = qualname.removeprefix("random.Random.")
+        method = INSTANCE_ATTRS["random.Random"].get(name)
+        if method is None or f"random.{name}" not in MODELS:
+            return None
+        drawn = _random(name, args, keywords)
+        return (drawn, method[1]) if drawn is not None else None
     model = MODELS.get(qualname)
     if model is None:
         return None

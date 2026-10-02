@@ -45,6 +45,18 @@ _COUNTER = "collections.Counter"
 _ORDERED = "collections.OrderedDict"
 _DEQUE = "collections.deque"
 _MAPPINGS = frozenset({_DEFAULTDICT, _COUNTER, _ORDERED})
+_RANDOM = "random.Random"
+
+#: The module's functions an instance has as methods, natively.
+_RANDOM_FUNCTIONS = frozenset(
+    f"random.{name}"
+    for name in (
+        "random", "seed", "getrandbits", "randrange", "randint", "choice", "choices",
+        "sample", "shuffle", "uniform", "triangular", "gauss", "normalvariate",
+        "lognormvariate", "expovariate", "paretovariate", "weibullvariate",
+        "gammavariate", "betavariate",
+    )
+)  # fmt: skip
 
 #: What each class a `defaultdict` may take as its factory makes, as the
 #: shape it is natively: the kind of the shape, and a collection's name and
@@ -114,6 +126,13 @@ class LibraryLowering:
         target = next(iter(found))
         return target if target in _MAPPINGS else None
 
+    def _called_target(self, node: ast.Call) -> str | None:
+        lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
+        if not isinstance(lexical, LexicalBindings):
+            return None
+        found = lexical.targets_at(node.func)
+        return next(iter(found)) if len(found) == 1 else None
+
     def _flavored(self, node: ast.expr) -> Kind | None:
         kind = self._kind_of(node)  # type: ignore[attr-defined]
         return kind if kind is not None and kind.flavor else None
@@ -150,6 +169,13 @@ class LibraryLowering:
         return super()._made(kind, node)  # type: ignore[misc,no-any-return]
 
     def _handle(self, node: ast.expr) -> tuple[Value, bool]:
+        if isinstance(node, ast.Call) and self._called_target(node) == _RANDOM:
+            return self._new_generator(node), True
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            owner = self._flavored(node.func.value)
+            if owner is not None and owner.flavor == _RANDOM:
+                # `r.sample(xs, k)`, `r.choices(xs)`: a new list, the caller's.
+                return self._generator_method(node.func.value, node.func.attr, node), True
         made = self._counter_call(node, "most_common", "elements")
         if made is not None:
             # A new list, the caller's.
@@ -342,8 +368,43 @@ class LibraryLowering:
 
     # -- methods --------------------------------------------------------------------------
 
+    # -- random.Random --------------------------------------------------------------------
+
+    def _new_generator(self, node: ast.Call) -> Value:
+        """`random.Random(seed)`, `random.Random()`: a generator of its own."""
+        if node.keywords or len(node.args) > 1:
+            raise Unsupported("`random.Random` takes an int seed natively")
+        given = self._word(1 if node.args else 0)  # type: ignore[attr-defined]
+        seed = (
+            self._coerce(self._expr(node.args[0]), "int")  # type: ignore[attr-defined]
+            if node.args
+            else self._word(0)  # type: ignore[attr-defined]
+        )
+        return self._rt("ppy_random_new", (given, seed), HANDLE)  # type: ignore[attr-defined,no-any-return]
+
+    def _generator_method(self, receiver: ast.expr, attr: str, node: ast.Call) -> Value:
+        """`r.random()`, `r.randint(a, b)`, and the rest: the module's function,
+        drawing from the instance's state."""
+        if node.keywords and attr != "choices":
+            raise Unsupported(f"`Random.{attr}` with keywords has no native lowering")
+        if any(isinstance(a, ast.Starred) for a in node.args):
+            raise Unsupported(f"`Random.{attr}` with `*` arguments has no native lowering")
+        if self._type_of(node) is None or f"random.{attr}" not in _RANDOM_FUNCTIONS:  # type: ignore[attr-defined]
+            raise Unsupported(f"`Random.{attr}` has no native lowering")
+        _, handle, owned = self._receiver(receiver)  # type: ignore[attr-defined]
+        outer = self.__dict__.get("_random_instance")
+        self.__dict__["_random_instance"] = handle
+        try:
+            made = self._random_call(attr, node)  # type: ignore[attr-defined]
+        finally:
+            self.__dict__["_random_instance"] = outer
+        self._done_with(handle, owned)  # type: ignore[attr-defined]
+        return made  # type: ignore[no-any-return]
+
     def _collection_method(self, receiver: ast.expr, attr: str, node: ast.Call) -> Value:
         kind = self._flavored(receiver)
+        if kind is not None and kind.flavor == _RANDOM:
+            return self._generator_method(receiver, attr, node)
         if kind is not None and kind.flavor == _COUNTER:
             done = self._counter_method(kind, receiver, attr, node)
             if done is not None:

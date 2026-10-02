@@ -299,6 +299,11 @@ class StdlibLowering(LibraryLowering, MemoLowering):
         return math_dialect.call(self.b, name, value)  # type: ignore[attr-defined,no-any-return]
 
     def _state(self) -> Value:
+        """The generator a draw moves: a `random.Random`'s own, where a method of
+        one is lowering, or the module's."""
+        instance = self.__dict__.get("_random_instance")
+        if instance is not None:
+            return self._rt("ppy_random_instance_state", (instance,), HANDLE)  # type: ignore[attr-defined,no-any-return]
         return self._rt("ppy_random_state", (), HANDLE)  # type: ignore[attr-defined,no-any-return]
 
     # -- random ------------------------------------------------------------------
@@ -314,6 +319,10 @@ class StdlibLowering(LibraryLowering, MemoLowering):
         if name == "seed":
             given = word(1 if args else 0)
             value = self._int_argument(args[0]) if args else word(0)
+            instance = self.__dict__.get("_random_instance")
+            if instance is not None:
+                rt("ppy_random_seed_instance", (instance, given, value), None)
+                return word(0)
             rt("ppy_random_reseed", (self._state(), given, value), None)
             return word(0)
         if name == "getrandbits":
@@ -538,6 +547,11 @@ class StdlibLowering(LibraryLowering, MemoLowering):
         if name in {"gauss", "normalvariate", "lognormvariate"}:
             mu, sigma = floats or (self._float(0.0), self._float(1.0))
             if name == "gauss":
+                instance = self.__dict__.get("_random_instance")
+                if instance is not None:
+                    # A generator of its own holds its value back itself.
+                    held = rt("ppy_random_instance_held", (instance,), HANDLE)
+                    return rt("ppy_random_gauss_held", (self._state(), mu, sigma, held), F64)  # type: ignore[no-any-return]
                 if not self.frontend.standalone:  # type: ignore[attr-defined]
                     raise Unsupported(
                         "`random.gauss` holds a value back in Python's generator under `ppy run`"

@@ -370,6 +370,7 @@ _opaque("uuid", ("UUID",))
 _opaque("io", ("TextIOWrapper", "BytesIO", "StringIO", "BufferedReader", "BufferedWriter"))
 _opaque("types", ("ModuleType", "FunctionType", "SimpleNamespace"))
 _opaque("functools", ("_CacheInfo", "partial"))
+_opaque("random", ("Random",))
 _opaque("enum", ("Enum", "IntEnum", "Flag", "IntFlag"))
 _opaque("argparse", ("Namespace", "ArgumentParser"))
 _opaque("subprocess", ("CompletedProcess", "Popen"))
@@ -526,6 +527,24 @@ def mapping_of(t: T.Type) -> tuple[T.Type, T.Type] | None:
     if base.name == "collections.Counter":
         return (base.args[0], T.INT) if len(base.args) == 1 else None
     return (base.args[0], base.args[1]) if len(base.args) == 2 else None
+
+
+def _random_methods() -> dict[str, tuple[T.Type, EffectSet]]:
+    """`random.Random`'s methods: the module's functions, drawing from the
+    instance's own state, which is a write to it."""
+    from .native_stdlib import MODELS  # pylint: disable=import-outside-toplevel
+
+    found: dict[str, tuple[T.Type, EffectSet]] = {}
+    for qualname, (typed, effects) in MODELS.items():
+        module, _, name = qualname.partition(".")
+        if module != "random":
+            continue
+        assert isinstance(typed, T.Callable_)
+        drawn = EffectSet.of(Effect.WRITE_OBJECT, raises=tuple(effects.raises))
+        if Effect.ALLOC in effects:
+            drawn = drawn.add(Effect.ALLOC)
+        found[name] = (T.Callable_((), typed.ret, f"random.Random.{name}"), drawn)
+    return found
 
 
 def _library(name: str) -> T.Instance:
@@ -950,3 +969,6 @@ def call(qualname: str, args: list[tuple[T.Type, Facts]]) -> tuple[T.Type, Effec
             _ALLOC | EffectSet.of(raises=("ValueError", "TypeError")),
         )
     return None
+
+
+INSTANCE_ATTRS["random.Random"] = _random_methods()

@@ -89,7 +89,7 @@ BUILTINS = {"list": "List", "dict": "Dict", "set": "Set"}
 _LIBRARY_MAPPINGS = frozenset(
     {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
 )
-_LIBRARY_KINDS = _LIBRARY_MAPPINGS | {"collections.deque"}
+_LIBRARY_KINDS = _LIBRARY_MAPPINGS | {"collections.deque", "random.Random"}
 
 #: `floor`, `ceiling`, `lower`, `higher`, as `ppy_tree_bound` numbers them.
 _BOUNDS = {"floor": 0, "ceiling": 1, "lower": 2, "higher": 3}
@@ -223,6 +223,8 @@ def spelled(kind: Kind) -> str:
         return item.kind
 
     parts = [shape(part) for part in (kind.key, kind.value) if part is not None]
+    if kind.flavor == "random.Random":
+        return kind.flavor
     if kind.flavor:
         # As the checker writes the type: `collections.Counter[str]`.
         shown = parts[:1] if kind.flavor == "collections.Counter" else parts
@@ -327,6 +329,10 @@ def kind_of(t: T.Type, records: Records) -> Kind | None:
         # gives it Python's method names.
         element = shape_of(base.args[0], records)
         return Kind("Deque", element, flavor=base.name) if element is not None else None
+    if isinstance(base, T.Instance) and base.name == "random.Random":
+        # A generator of its own: its state in a sequence of words
+        # (`ppy_random_new`), drawn from by `lowering/stdlib.py`.
+        return Kind("Vec", Shape("int"), flavor=base.name)
     if isinstance(base, T.Instance) and base.name in _LIBRARY_MAPPINGS:
         # A `defaultdict`, an `OrderedDict`, or a `Counter` is a dict, with
         # what it does beyond one lowered in `lowering/stdlib.py`.

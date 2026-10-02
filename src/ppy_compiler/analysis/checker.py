@@ -548,7 +548,7 @@ _IN_PLACE_MUTABLE = frozenset({"list", "set", "dict", "bytearray", "collections.
 _KEY_WRAPPER = "functools.KeyWrapper"
 
 #: The `collections` types whose methods native code has (`lowering/stdlib.py`).
-_NATIVE_LIBRARY = frozenset({"collections.deque", *stdlib.LIBRARY_MAPPINGS})
+_NATIVE_LIBRARY = frozenset({"collections.deque", "random.Random", *stdlib.LIBRARY_MAPPINGS})
 
 
 def _mutates_in_place(t: T.Type) -> bool:
@@ -2755,6 +2755,12 @@ class _Checker:
                 if decided is not None and callee.type.qualname in native_stdlib.MUTATES_FIRST:
                     self._note_mutation(node.args[0], env)
                     self._widen_heap(callee.type.qualname, node, args, env)
+                if decided is not None and callee.type.qualname.startswith("random.Random."):
+                    if isinstance(node.func, ast.Attribute):
+                        # A draw moves the instance's own state.
+                        self._note_mutation(node.func.value, env)
+                    if callee.type.qualname == "random.Random.shuffle" and node.args:
+                        self._note_mutation(node.args[0], env)
             if decided is not None:
                 self._add_summarized_effects(decided[1])
                 return Binding(decided[0])
@@ -3003,14 +3009,18 @@ class _Checker:
     def _fresh_calls(self) -> frozenset[str]:
         """The calls, spelled as this module writes them, that make a new
         `collections` container: `deque`, `collections.Counter`, and so on."""
-        made = {"collections.deque", *stdlib.LIBRARY_MAPPINGS}
+        made = {"collections.deque", "random.Random", *stdlib.LIBRARY_MAPPINGS}
         spelled: set[str] = set()
         for local, binding in self.symbols.imports.items():
             canonical = binding.canonical
             if canonical in made:
                 spelled.add(local)
-            elif canonical == "collections":
-                spelled.update(f"{local}.{name.rpartition('.')[2]}" for name in made)
+            elif canonical in {"collections", "random"}:
+                spelled.update(
+                    f"{local}.{name.rpartition('.')[2]}"
+                    for name in made
+                    if name.startswith(f"{canonical}.")
+                )
         return frozenset(spelled)
 
     def _reduce_call(self, node: ast.Call, env: Env) -> Binding | None:
@@ -3066,6 +3076,12 @@ class _Checker:
         the type arguments from where the new collection goes, or else from
         what it is made of. What is not known yet is `Never`, which the first
         write widens, as it widens `[]`."""
+        if name == "random.Random":
+            # Seeded from an int, or from the operating system.
+            plain = not keywords and (
+                not args or (len(args) == 1 and T.strip_literal(args[0].type) in (T.INT, T.BOOL))
+            )
+            return T.Instance(name, (), (name, "object")) if plain else None
         if name not in {"collections.deque", *stdlib.LIBRARY_MAPPINGS}:
             return None
         arity = 1 if name in {"collections.deque", "collections.Counter"} else 2
