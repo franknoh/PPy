@@ -83,7 +83,10 @@ def _summary(options: argparse.Namespace, reporter: Reporter) -> int:
 
 def _overrides(options: argparse.Namespace) -> dict[str, object]:
     """`--no-strict`, given to `explain` or before it, is the mode explained."""
-    return {"strict": False} if getattr(options, "no_strict", False) else {}
+    overrides: dict[str, object] = {}
+    if getattr(options, "no_strict", False):
+        overrides["strict"] = False
+    return overrides
 
 
 def _analyze(target: Path, options: argparse.Namespace) -> AnalysisBundle:
