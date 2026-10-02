@@ -161,6 +161,7 @@ nav:
           - howto/48_strings.md
           - howto/49_inheritance.md
           - howto/50_errors_and_generators.md
+          - howto/51_clinic.md
       - Accelerators:
           - howto/38_cuda.md
           - howto/44_tile.md

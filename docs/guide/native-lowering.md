@@ -115,6 +115,45 @@ other `float` parameter takes an `int` up to 2**53, converted exactly.
 
 A module constant written as an expression, such as `MOD = 10**9 + 7` or
 `LIMIT = 1 << 20`, folds into the code rather than staying a global read.
+So does a table of numbers bound once at module level, such as
+`RATES = (0.1, 0.3, 0.6)`: a tuple of up to 16 ints, floats, or bools of
+one type. Native code builds it once per call and reads `RATES[i]` with an
+index known only at run time, after the bounds check CPython makes. Being a
+constant, it reaches a standalone binary too, where a global read does not.
+
+### Calls
+
+A call between native functions may name its arguments and leave some to
+their defaults. The compiler binds the call the way Python would: each
+keyword goes to the parameter it names, including a keyword-only one, and
+each parameter left out takes its default. The call then goes ahead in
+order. This holds for functions, methods, and `__init__`.
+
+```python
+def scale(x: int, factor: int = 3, *, offset: int = 0) -> int:
+    return x * factor + offset
+
+
+def use(n: int) -> int:
+    return scale(n) + scale(x=n, offset=1) + scale(n, factor=4)
+```
+
+Python evaluates arguments in the order they are written. Binding moves a
+keyword argument to its parameter's place, so it may only move where the
+order cannot be seen: at most one of the keyword arguments that change
+places runs any code, and the rest are names, constants, or attributes.
+Python evaluates a default once, when the `def` runs, so the compiler puts a
+default into the call only where it is a constant: a number, a string,
+`None`, or a tuple of those. A call that leaves out a parameter whose
+default is anything else (`xs: list[int] = []`), a call with `*args` or
+`**kwargs`, and a method call bound by keyword where a subclass overrides
+the method stay in Python.
+
+When Python calls a native function with keywords or with defaults left
+out, the boundary binds the call by the Python function's own signature,
+with its own default values, and calls the native entry in order. A call
+that does not bind goes to the Python function, which raises CPython's
+`TypeError`.
 
 A function whose writes all happen inside a callee it handed a buffer to
 lowers too: the write lands in the caller's memory either way. The reverse

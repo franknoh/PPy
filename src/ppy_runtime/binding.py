@@ -728,7 +728,12 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     )
     if signature.returned and not nothing and returned is None:
         return unbound
-    expanders = [None if p.is_handle else _expander_for(p, None) for p in signature.parameters]
+    # A value class among the arguments is found in the function's module, as
+    # `_bind` finds it: without the namespace, every call would run the
+    # Python body.
+    namespace = _namespace(fallback)
+    find = (lambda: namespace) if namespace is not None else None
+    expanders = [None if p.is_handle else _expander_for(p, find) for p in signature.parameters]
     written = [p.is_handle and p.written for p in signature.parameters]
     binding = NativeBinding(
         signature=signature, wrapper=lambda *a: None, fallback=fallback, owner=owner

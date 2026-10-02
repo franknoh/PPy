@@ -78,6 +78,34 @@ the call, and one that falls back takes its caller with it. A closure that
 refers to itself, such as a nested recursive function, is a cycle the
 collector frees.
 
+## A nested function in a Python function
+
+A function that stays in Python can still define nested functions that run
+natively. Where a nested function shares no variable with the functions
+around it, every function object its `def` makes behaves the same, so it
+gets a native entry of its own. Python binds that entry where the `def`
+runs, once per process, and calls it like any other native function.
+
+```python
+def solve(rows: list[tuple[int, int]], **options: int) -> int:
+    def fib(n: int) -> int:
+        if n < 2:
+            return n
+        return fib(n - 1) + fib(n - 2)
+
+    return sum(fib(a % 20) for a, _ in rows)
+```
+
+`solve` stays in Python, since a native function takes no `**options`, but
+`fib` is native. A nested function may call itself by its own name. One that
+reads or writes a variable of the function around it, uses its own name as
+a value, or has a decorator runs as Python with that function, and `ppy
+explain` names the shared variables.
+
+A call by a plain name inside a function follows Python's scopes: a nested
+function the function around it defines is called before a module function
+of the same name.
+
 ## The Python boundary
 
 A function value never crosses to Python. A function that takes or returns

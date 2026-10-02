@@ -148,9 +148,10 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/closures/",
     ),
     _shape(
-        r"the function around it stays in Python",
+        r"the function around it stays in Python|with the function around it",
         "a nested function whose enclosing function stays in Python",
-        "it goes native with the function around it; see that function's reason",
+        "pass it what it reads of the function around it as arguments, or see that "
+        "function's reason",
         "guide/closures/",
     ),
     _shape(
@@ -225,7 +226,8 @@ _SHAPES: tuple[_Shape, ...] = (
     _shape(
         r"stays in Python and gives `([^`]+)`",
         "calls a Python function whose `{0}` result native code cannot take back",
-        "return a float, a bool, a str, or nothing, or keep the call out of the hot function",
+        "call a function that changes nothing (its result is checked, and falls back), "
+        "or keep the call out of the hot function",
         "guide/native-effects/",
     ),
     _shape(
@@ -415,12 +417,12 @@ _ENCLOSED = "the function around it stays in Python"
 
 
 def _place_nested(outcomes: list[FunctionOutcome]) -> None:
-    """A nested function is lowered as part of the one it is defined in, so
-    it has no entry of its own in the backend's result: it runs where the
-    function around it runs."""
+    """A nested function is lowered as part of the one it is defined in, and
+    on its own only where it shares nothing with it: one the backend left in
+    Python runs natively anyway where the function around it is native."""
     by_name = {o.qualname: o for o in outcomes}
     for outcome in outcomes:
-        if outcome.reason != "not lowered" or ".<locals>." not in outcome.qualname:
+        if outcome.tier != "python" or ".<locals>." not in outcome.qualname:
             continue
         outer = by_name.get(outcome.qualname.rpartition(".<locals>.")[0])
         if outer is None:
@@ -428,7 +430,7 @@ def _place_nested(outcomes: list[FunctionOutcome]) -> None:
         if outer.tier in {"native", "internal"}:
             outcome.tier = "internal"
             outcome.reason = _CLOSURE
-        else:
+        elif outcome.reason == "not lowered":
             outcome.reason = _ENCLOSED
 
 

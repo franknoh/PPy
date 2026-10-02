@@ -40,6 +40,7 @@ GROUPS = [
             "48_strings",
             "49_inheritance",
             "50_errors_and_generators",
+            "51_clinic",
         ],
     ),
     ("Accelerators", ["38_cuda", "44_tile", "39_xla", "45_multi_gpu_jax"]),

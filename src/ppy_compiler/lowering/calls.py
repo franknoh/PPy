@@ -247,7 +247,7 @@ def nested_entry_refusal(info: FunctionInfo, enclosing: dict[str, FunctionInfo])
             shared.discard(info.name)
         if shared:
             names = ", ".join(f"`{n}`" for n in sorted(shared))
-            return f"the function around it stays in Python and shares {names} with it"
+            return f"shares {names} with the function around it, so it runs where that one does"
         free -= own_names(outer.node)
         first = False
         outer = enclosing.get(outer.enclosing or "")

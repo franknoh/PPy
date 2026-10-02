@@ -284,7 +284,7 @@ def test_every_path_agrees_and_each_function_goes_native(tmp_path: Path, name: s
 def test_python_around_and_calls_into_python(tmp_path: Path):
     _agrees_and_goes_native(tmp_path, PYTHON_AROUND, PYTHON_AROUND_NATIVE)
     explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.solve.<locals>.scaled")
-    assert "shares `scale` with it" in explained.stdout, explained.stdout
+    assert "shares `scale` with the function around it" in explained.stdout, explained.stdout
 
 
 @requires_standalone
@@ -375,6 +375,74 @@ def test_a_python_caller_s_keywords_and_defaults_reach_the_native_entry(write, a
     assert binding.calls == len(calls) and binding.fallbacks == 0
     with pytest.raises(TypeError, match="unexpected keyword argument 'nope'"):
         binding.wrapper(2, nope=1)
+
+
+VALUE_CLASS_ARGUMENT = """
+from dataclasses import dataclass
+
+
+@dataclass
+class Clinic:
+    doctors: int
+    rate: float
+
+
+@dataclass
+class Report:
+    seen: int = 0
+
+    def add(self, n: int) -> None:
+        self.seen += n
+
+
+def run(clinic: Clinic, days: int = 2) -> Report:
+    report = Report()
+    for d in range(days):
+        report.add(clinic.doctors + d)
+    return report
+
+
+print(run(Clinic(3, 1.5), 4).seen, run(Clinic(doctors=1, rate=0.5)).seen)
+"""
+
+#: Runs a built artifact in this process and says how each binding fared.
+_STATS = """
+import sys
+from pathlib import Path
+
+import ppy_runtime.launch as launch
+
+made = []
+plain = launch.bind
+
+
+def counted(*args, **keywords):
+    binding = plain(*args, **keywords)
+    made.append(binding)
+    return binding
+
+
+launch.bind = counted
+launch.main(Path(sys.argv[1]), [])
+for binding in made:
+    print("STATS", binding.signature.qualname, binding.calls, binding.fallbacks)
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_value_class_argument_crosses_with_an_object_result(tmp_path: Path):
+    """A function taking a value class and returning an object runs its native
+    body when Python calls it, by position or by keyword."""
+    expected = _expected(tmp_path, VALUE_CLASS_ARGUMENT)
+    built = _run(tmp_path, "-m", "ppy_compiler", "build", "prog.ppy", "-o", "dist")
+    assert built.returncode == 0, built.stderr
+    (tmp_path / "stats.py").write_text(_STATS, encoding="utf-8")
+    ran = _run(tmp_path, "stats.py", str(tmp_path / "dist" / "ppy-bindings.json"))
+    assert ran.returncode == 0, ran.stderr
+    lines = ran.stdout.splitlines()
+    assert lines[0] == expected
+    assert "STATS prog.run 2 0" in lines, lines
 
 
 # -- what binding refuses ------------------------------------------------------------
