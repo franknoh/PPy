@@ -2075,6 +2075,8 @@
       
         
       
+        
+      
     
     
     
@@ -2555,6 +2557,34 @@
     
   
     Errors and generators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/51_clinic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A clinic simulation
   
 
     
@@ -4411,6 +4441,11 @@ rest, so you install only what you use.</p>
 </table>
 <p>A missing library only disables its plugin. <code>uv run ppy doctor</code> reports
 what was found and what was not.</p>
+<p>Without the <code>llvm</code> extra, <code>ppy run prog.py</code> prints one warning (<code>W2012</code>)
+saying how to install <code>ppy-lang[llvm]</code>, then runs the program on CPython
+with the same output and exit code. <code>ppy build</code>, <code>ppy run --profile</code>, and
+the other commands that only make native code stop with <code>E1801</code> and the
+same advice.</p>
 <h2 id="toolchain">Toolchain<a class="headerlink" href="#toolchain" title="Permanent link">&para;</a></h2>
 <p>Everything native is compiled on the machine where it runs, by the C
 compiler on <code>PATH</code>. That includes the small C scanner that reads input, the

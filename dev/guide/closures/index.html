@@ -979,6 +979,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-nested-function-in-a-python-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A nested function in a Python function
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-python-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2064,6 +2075,8 @@
       
         
       
+        
+      
     
     
     
@@ -2544,6 +2557,34 @@
     
   
     Errors and generators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/51_clinic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A clinic simulation
   
 
     
@@ -4289,6 +4330,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-nested-function-in-a-python-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A nested function in a Python function
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-python-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4428,6 +4480,28 @@ arguments and result a direct call has. A closure that raises raises through
 the call, and one that falls back takes its caller with it. A closure that
 refers to itself, such as a nested recursive function, is a cycle the
 collector frees.</p>
+<h2 id="a-nested-function-in-a-python-function">A nested function in a Python function<a class="headerlink" href="#a-nested-function-in-a-python-function" title="Permanent link">&para;</a></h2>
+<p>A function that stays in Python can still define nested functions that run
+natively. Where a nested function shares no variable with the functions
+around it, every function object its <code>def</code> makes behaves the same, so it
+gets a native entry of its own. Python binds that entry where the <code>def</code>
+runs, once per process, and calls it like any other native function.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">rows</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]],</span> <span class="o">**</span><span class="n">options</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">fib</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="k">if</span> <span class="n">n</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>            <span class="k">return</span> <span class="n">n</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="k">return</span> <span class="n">fib</span><span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">fib</span><span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">fib</span><span class="p">(</span><span class="n">a</span> <span class="o">%</span> <span class="mi">20</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">)</span>
+</code></pre></div>
+<p><code>solve</code> stays in Python, since a native function takes no <code>**options</code>, but
+<code>fib</code> is native. A nested function may call itself by its own name. One that
+reads or writes a variable of the function around it, uses its own name as
+a value, or has a decorator runs as Python with that function, and <code>ppy
+explain</code> names the shared variables.</p>
+<p>A call by a plain name inside a function follows Python's scopes: a nested
+function the function around it defines is called before a module function
+of the same name.</p>
 <h2 id="the-python-boundary">The Python boundary<a class="headerlink" href="#the-python-boundary" title="Permanent link">&para;</a></h2>
 <p>A function value never crosses to Python. A function that takes or returns
 one runs as Python when Python calls it, and natively when native code calls

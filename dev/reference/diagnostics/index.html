@@ -1968,6 +1968,8 @@
       
         
       
+        
+      
     
     
     
@@ -2448,6 +2450,34 @@
     
   
     Errors and generators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/51_clinic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A clinic simulation
   
 
     
@@ -5082,6 +5112,10 @@ emit. Each diagnostic has a stable code (spec 29.1).</p>
 <tr>
 <td><code>W2011</code></td>
 <td>Under <code>--no-strict</code>, a value that may be <code>None</code> is used where one that is not is needed: an attribute read through it (<code>E1206</code>), or an argument for a parameter that does not take <code>None</code> (<code>E1301</code>). The program runs. If the value is <code>None</code>, CPython raises <code>AttributeError</code> or <code>TypeError</code> there, and so does native code.</td>
+</tr>
+<tr>
+<td><code>W2012</code></td>
+<td>The LLVM backend (llvmlite) is not installed, so <code>ppy run</code> ran the program on CPython, with the same output and exit code. Install <code>ppy-lang[llvm]</code> for native code. Commands that only make native code (<code>ppy build</code>, <code>ppy emit</code> of LLVM IR or objects) stop with <code>E1801</code> instead.</td>
 </tr>
 <tr>
 <td><code>W2101</code></td>

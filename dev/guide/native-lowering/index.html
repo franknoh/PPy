@@ -1426,6 +1426,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calls
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2125,6 +2136,8 @@
       
         
       
+        
+      
     
     
     
@@ -2605,6 +2618,34 @@
     
   
     Errors and generators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/51_clinic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A clinic simulation
   
 
     
@@ -4405,6 +4446,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calls
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4552,7 +4604,40 @@ caller that passes an <code>int</code> to such a parameter stays in Python too, 
 does one that builds a value class with an <code>int</code> for a <code>float</code> field. Every
 other <code>float</code> parameter takes an <code>int</code> up to 2**53, converted exactly.</p>
 <p>A module constant written as an expression, such as <code>MOD = 10**9 + 7</code> or
-<code>LIMIT = 1 &lt;&lt; 20</code>, folds into the code rather than staying a global read.</p>
+<code>LIMIT = 1 &lt;&lt; 20</code>, folds into the code rather than staying a global read.
+So does a table of numbers bound once at module level, such as
+<code>RATES = (0.1, 0.3, 0.6)</code>: a tuple of up to 16 ints, floats, or bools of
+one type. Native code builds it once per call and reads <code>RATES[i]</code> with an
+index known only at run time, after the bounds check CPython makes. Being a
+constant, it reaches a standalone binary too, where a global read does not.</p>
+<h3 id="calls">Calls<a class="headerlink" href="#calls" title="Permanent link">&para;</a></h3>
+<p>A call between native functions may name its arguments and leave some to
+their defaults. The compiler binds the call the way Python would: each
+keyword goes to the parameter it names, including a keyword-only one, and
+each parameter left out takes its default. The call then goes ahead in
+order. This holds for functions, methods, and <code>__init__</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">scale</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">factor</span> <span class="o">+</span> <span class="n">offset</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">use</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="n">scale</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">+</span> <span class="n">scale</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">n</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">scale</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</code></pre></div>
+<p>Python evaluates arguments in the order they are written. Binding moves a
+keyword argument to its parameter's place, so it may only move where the
+order cannot be seen: at most one of the keyword arguments that change
+places runs any code, and the rest are names, constants, or attributes.
+Python evaluates a default once, when the <code>def</code> runs, so the compiler puts a
+default into the call only where it is a constant: a number, a string,
+<code>None</code>, or a tuple of those. A call that leaves out a parameter whose
+default is anything else (<code>xs: list[int] = []</code>), a call with <code>*args</code> or
+<code>**kwargs</code>, and a method call bound by keyword where a subclass overrides
+the method stay in Python.</p>
+<p>When Python calls a native function with keywords or with defaults left
+out, the boundary binds the call by the Python function's own signature,
+with its own default values, and calls the native entry in order. A call
+that does not bind goes to the Python function, which raises CPython's
+<code>TypeError</code>.</p>
 <p>A function whose writes all happen inside a callee it handed a buffer to
 lowers too: the write lands in the caller's memory either way. The reverse
 also lowers: filling memory you allocated and then passing it on.</p>
@@ -4597,22 +4682,22 @@ the largest or smallest word: Python's integers have no largest.</p>
 <p><code>ppy explain --summary</code> answers, for a file, a directory, or a project, how
 much of the code goes native and what keeps the rest in Python. Here it is
 over the <code>sorts</code> folder of TheAlgorithms/Python, trimmed:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>167 functions, 1389 statements
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  native, called from Python              1 functions (  1%)        8 statements (  1%)
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  native, called from native code         0 functions (  0%)        0 statements (  0%)
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  Python                                166 functions ( 99%)     1381 statements ( 99%)
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  (76 of the Python functions are generic: each native caller compiles its own instance)
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>what keeps functions in Python, by statements kept out (a function can count under more than one):
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>      161 statements     13 functions  calls code whose effects are unknown (a library, or a call the checker cannot type)
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>      annotate it, add a stub or plugin, or call it outside the hot function
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>      most often: `dict.fromkeys` (1), `file.readlines` (1), `file.write` (1), `heapq.heapify` (1)
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>      see https://ppy.franknoh.dev/latest/guide/effects/
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>      sorts/benchmark_sorts.py:56 sorts.benchmark_sorts.is_sorted
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>      155 statements      9 functions  writes to a parameter native code copies
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>      return the new value, or take a `Buffer`, a list, or a ppy collection
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>      see https://ppy.franknoh.dev/latest/guide/native/
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>167 functions, 1389 statements
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  native, called from Python              1 functions (  1%)        8 statements (  1%)
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  native, called from native code         0 functions (  0%)        0 statements (  0%)
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  Python                                166 functions ( 99%)     1381 statements ( 99%)
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  (76 of the Python functions are generic: each native caller compiles its own instance)
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>what keeps functions in Python, by statements kept out (a function can count under more than one):
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>      161 statements     13 functions  calls code whose effects are unknown (a library, or a call the checker cannot type)
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>      annotate it, add a stub or plugin, or call it outside the hot function
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>      most often: `dict.fromkeys` (1), `file.readlines` (1), `file.write` (1), `heapq.heapify` (1)
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>      see https://ppy.franknoh.dev/latest/guide/effects/
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>      sorts/benchmark_sorts.py:56 sorts.benchmark_sorts.is_sorted
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>      155 statements      9 functions  writes to a parameter native code copies
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>      return the new value, or take a `Buffer`, a list, or a ppy collection
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>      see https://ppy.franknoh.dev/latest/guide/native/
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
 </code></pre></div>
 <p>Read it from the top down:</p>
 <ul>

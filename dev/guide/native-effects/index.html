@@ -2097,6 +2097,8 @@
       
         
       
+        
+      
     
     
     
@@ -2577,6 +2579,34 @@
     
   
     Errors and generators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/51_clinic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A clinic simulation
   
 
     
@@ -4454,7 +4484,7 @@ timing matters.</p>
 <ul>
 <li><code>input()</code>, which consumes a line of stdin;</li>
 <li><code>print(..., flush=True)</code>;</li>
-<li>a call into Python;</li>
+<li>a call into Python that may change something (see below);</li>
 <li>opening, reading, or writing a file.</li>
 </ul>
 <p>Each of these is a barrier. It first writes out what the call has held, so
@@ -4505,14 +4535,45 @@ that very object, with its traceback. Native code can catch either with
 function of the module that did not compile, a function of an imported
 module, or a builtin. The call goes through Python with the GIL held:</p>
 <ul>
-<li>arguments are numbers, bools, strings, and <code>None</code>, boxed;</li>
-<li>the result is unboxed by the type the checker gave the call: a <code>float</code>, a
-  <code>bool</code>, a <code>str</code>, or nothing. A value of another type raises <code>TypeError</code>;</li>
-<li>what the callee raises is raised natively.</li>
+<li>arguments are numbers, bools, strings, and <code>None</code>, boxed, by position or
+  by keyword;</li>
+<li>what the callee raises is raised natively;</li>
+<li>the result is taken back as the type the checker gave the call: an
+  <code>int</code>, a <code>float</code>, a <code>bool</code>, a <code>str</code>, a tuple of numbers and bools, or
+  nothing.</li>
 </ul>
-<p>An <code>int</code> result is not taken back: a Python function may return an integer
-no word holds, and after the call there is no falling back. A call whose
-result is an <code>int</code> keeps its caller in Python.</p>
+<p>Python promises nothing about a result's type: a function annotated
+<code>-&gt; float</code> may return <code>1</code>, and one annotated <code>-&gt; int</code> may return an
+integer no word holds. CPython carries on with such a value. Native code
+cannot, so what happens to a result that is not what native code holds
+depends on whether the call may be run a second time.</p>
+<p>A callee that changes nothing is no barrier. That is a builtin given
+numbers and strings (<code>len</code>, <code>round</code>, <code>divmod</code>, <code>int</code>, <code>str</code>, <code>abs</code>,
+<code>sum</code>, <code>min</code>, <code>max</code>, <code>pow</code>, <code>hash</code>, <code>format</code>, and the like), a <code>math</code>
+function, or a function of the module whose effects are only reading and
+allocating. Its result must be exactly of the checked type: an <code>int</code> that
+fits 64 bits and is not a <code>bool</code>, a <code>float</code>, a <code>bool</code>, a <code>str</code> and not a
+subclass of one. When it is not, the native call falls back and Python
+runs the whole function again, calling the callee again; nothing it did
+could be seen the first time, so nothing is seen twice.</p>
+<p>Any other callee is a barrier, after which nothing may fall back. Its
+result is taken back only where it cannot be other than the checked
+type:</p>
+<ul>
+<li>a <code>str</code>, a <code>bool</code>, or a <code>float</code> from a builtin or a standard-library
+  function whose result type is fixed (<code>input</code>, <code>str</code>, <code>os.path.exists</code>);</li>
+<li>a <code>str</code>, a <code>bool</code>, or a <code>float</code> from a function of the module each of
+  whose <code>return</code> statements gives exactly that type, with no way to fall
+  off the end and give <code>None</code>. <code>ppy.assume[T](...)</code> counts as the program's
+  promise of <code>T</code>;</li>
+<li>an <code>int</code> never: no callee that may change something promises 64 bits.</li>
+</ul>
+<p>Any other result keeps the caller in Python, and <code>ppy explain</code> says
+"stays in Python and gives <code>T</code>". A result that breaks the promise anyway
+(a function rebound at run time, or a broken <code>ppy.assume</code>) raises
+<code>TypeError</code> naming the function. CPython would not raise there, which is
+why the compiler takes such results only where the promise is the
+checker's or the program's own.</p>
 <p>A function that calls into Python holds the GIL where it does so. It is
 native, but not free-threaded.</p>
 <h2 id="text-files">Text files<a class="headerlink" href="#text-files" title="Permanent link">&para;</a></h2>

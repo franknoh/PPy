@@ -10,29 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/51_clinic/">
       
       
+        <link rel="prev" href="../50_errors_and_generators/">
       
-        <link rel="next" href="getting-started/">
+      
+        <link rel="next" href="../38_cuda/">
       
       
         
       
       
-      <link rel="icon" href="assets/logo.svg">
+      <link rel="icon" href="../../assets/logo.svg">
       <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>PPy</title>
+        <title>A clinic simulation - PPy</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -51,13 +53,13 @@
       
     
     
-      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-      <link rel="stylesheet" href="stylesheets/version.css">
+      <link rel="stylesheet" href="../../stylesheets/version.css">
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -82,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#ppy" class="md-skip">
+        <a href="#a-clinic-simulation" class="md-skip">
           Skip to content
         </a>
       
@@ -102,9 +104,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="PPy" class="md-header__button md-logo" aria-label="PPy" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-header__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  <img src="assets/logo.svg" alt="logo">
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -121,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              A clinic simulation
             
           </span>
         </div>
@@ -227,11 +229,9 @@
   
   
   
-    
   
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="." class="md-tabs__link">
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -252,7 +252,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="getting-started/" class="md-tabs__link">
+        <a href="../../getting-started/" class="md-tabs__link">
           
   
   
@@ -274,7 +274,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="guide/" class="md-tabs__link">
+        <a href="../../guide/" class="md-tabs__link">
           
   
   
@@ -292,11 +292,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="howto/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -318,7 +320,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="reference/" class="md-tabs__link">
+        <a href="../../reference/" class="md-tabs__link">
           
   
   
@@ -340,7 +342,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="internals/" class="md-tabs__link">
+        <a href="../../internals/" class="md-tabs__link">
           
   
   
@@ -360,7 +362,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="changelog/" class="md-tabs__link">
+      <a href="../../changelog/" class="md-tabs__link">
         
   
   
@@ -390,9 +392,7 @@
           
             
               
-                
-              
-              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" hidden>
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
@@ -403,9 +403,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="PPy" class="md-nav__button md-logo" aria-label="PPy" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-nav__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  <img src="assets/logo.svg" alt="logo">
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     PPy
@@ -430,37 +430,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -476,70 +449,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#highlights" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Highlights
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Documentation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#limitations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Limitations
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -609,7 +518,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/" class="md-nav__link">
+      <a href="../../getting-started/" class="md-nav__link">
         
   
   
@@ -637,7 +546,7 @@
   
   
     <li class="md-nav__item">
-      <a href="installing/" class="md-nav__link">
+      <a href="../../installing/" class="md-nav__link">
         
   
   
@@ -743,7 +652,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="guide/" class="md-nav__link ">
+            <a href="../../guide/" class="md-nav__link ">
               
   
   
@@ -787,7 +696,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/subset/" class="md-nav__link">
+      <a href="../../guide/subset/" class="md-nav__link">
         
   
   
@@ -815,7 +724,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/directives/" class="md-nav__link">
+      <a href="../../guide/directives/" class="md-nav__link">
         
   
   
@@ -843,7 +752,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/strings/" class="md-nav__link">
+      <a href="../../guide/strings/" class="md-nav__link">
         
   
   
@@ -871,7 +780,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/containers/" class="md-nav__link">
+      <a href="../../guide/containers/" class="md-nav__link">
         
   
   
@@ -899,7 +808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/collections/" class="md-nav__link">
+      <a href="../../guide/collections/" class="md-nav__link">
         
   
   
@@ -927,7 +836,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/classes/" class="md-nav__link">
+      <a href="../../guide/classes/" class="md-nav__link">
         
   
   
@@ -955,7 +864,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/exceptions-and-generators/" class="md-nav__link">
+      <a href="../../guide/exceptions-and-generators/" class="md-nav__link">
         
   
   
@@ -983,7 +892,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/closures/" class="md-nav__link">
+      <a href="../../guide/closures/" class="md-nav__link">
         
   
   
@@ -1011,7 +920,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/native/" class="md-nav__link">
+      <a href="../../guide/native/" class="md-nav__link">
         
   
   
@@ -1039,7 +948,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/simd-cpu/" class="md-nav__link">
+      <a href="../../guide/simd-cpu/" class="md-nav__link">
         
   
   
@@ -1067,7 +976,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/concurrency/" class="md-nav__link">
+      <a href="../../guide/concurrency/" class="md-nav__link">
         
   
   
@@ -1095,7 +1004,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/parallel/" class="md-nav__link">
+      <a href="../../guide/parallel/" class="md-nav__link">
         
   
   
@@ -1123,7 +1032,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/autodiff/" class="md-nav__link">
+      <a href="../../guide/autodiff/" class="md-nav__link">
         
   
   
@@ -1151,7 +1060,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/aio/" class="md-nav__link">
+      <a href="../../guide/aio/" class="md-nav__link">
         
   
   
@@ -1179,7 +1088,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/gpu/" class="md-nav__link">
+      <a href="../../guide/gpu/" class="md-nav__link">
         
   
   
@@ -1207,7 +1116,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/tensors/" class="md-nav__link">
+      <a href="../../guide/tensors/" class="md-nav__link">
         
   
   
@@ -1235,7 +1144,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/xla/" class="md-nav__link">
+      <a href="../../guide/xla/" class="md-nav__link">
         
   
   
@@ -1263,7 +1172,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/generics/" class="md-nav__link">
+      <a href="../../guide/generics/" class="md-nav__link">
         
   
   
@@ -1291,7 +1200,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/effects/" class="md-nav__link">
+      <a href="../../guide/effects/" class="md-nav__link">
         
   
   
@@ -1319,7 +1228,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/native-effects/" class="md-nav__link">
+      <a href="../../guide/native-effects/" class="md-nav__link">
         
   
   
@@ -1347,7 +1256,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/input/" class="md-nav__link">
+      <a href="../../guide/input/" class="md-nav__link">
         
   
   
@@ -1375,7 +1284,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/native-lowering/" class="md-nav__link">
+      <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
   
@@ -1403,7 +1312,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/regex/" class="md-nav__link">
+      <a href="../../guide/regex/" class="md-nav__link">
         
   
   
@@ -1431,7 +1340,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guide/stdlib/" class="md-nav__link">
+      <a href="../../guide/stdlib/" class="md-nav__link">
         
   
   
@@ -1463,6 +1372,8 @@
       
   
   
+    
+  
   
   
     
@@ -1488,20 +1399,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="howto/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -1519,13 +1433,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1545,7 +1459,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/comparisons/" class="md-nav__link">
+      <a href="../comparisons/" class="md-nav__link">
         
   
   
@@ -1607,17 +1521,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
             
   
   
@@ -1653,7 +1570,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/01_basics/" class="md-nav__link">
+      <a href="../01_basics/" class="md-nav__link">
         
   
   
@@ -1681,7 +1598,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/02_arbitrary_precision/" class="md-nav__link">
+      <a href="../02_arbitrary_precision/" class="md-nav__link">
         
   
   
@@ -1709,7 +1626,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/03_effects_and_contracts/" class="md-nav__link">
+      <a href="../03_effects_and_contracts/" class="md-nav__link">
         
   
   
@@ -1737,7 +1654,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/04_classes/" class="md-nav__link">
+      <a href="../04_classes/" class="md-nav__link">
         
   
   
@@ -1765,7 +1682,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/08_native_data/" class="md-nav__link">
+      <a href="../08_native_data/" class="md-nav__link">
         
   
   
@@ -1793,7 +1710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/10_narrowing/" class="md-nav__link">
+      <a href="../10_narrowing/" class="md-nav__link">
         
   
   
@@ -1821,7 +1738,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/11_numerics/" class="md-nav__link">
+      <a href="../11_numerics/" class="md-nav__link">
         
   
   
@@ -1849,7 +1766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/13_value_classes/" class="md-nav__link">
+      <a href="../13_value_classes/" class="md-nav__link">
         
   
   
@@ -1877,7 +1794,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/14_tuples/" class="md-nav__link">
+      <a href="../14_tuples/" class="md-nav__link">
         
   
   
@@ -1905,7 +1822,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/16_dynamic/" class="md-nav__link">
+      <a href="../16_dynamic/" class="md-nav__link">
         
   
   
@@ -1933,7 +1850,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/17_containers/" class="md-nav__link">
+      <a href="../17_containers/" class="md-nav__link">
         
   
   
@@ -1961,7 +1878,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/18_errors/" class="md-nav__link">
+      <a href="../18_errors/" class="md-nav__link">
         
   
   
@@ -1989,7 +1906,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/19_strings/" class="md-nav__link">
+      <a href="../19_strings/" class="md-nav__link">
         
   
   
@@ -2022,8 +1939,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -2066,18 +1985,21 @@
     
       
       
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
             
   
   
@@ -2095,7 +2017,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2113,7 +2035,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/12_buffers_and_jit/" class="md-nav__link">
+      <a href="../12_buffers_and_jit/" class="md-nav__link">
         
   
   
@@ -2141,7 +2063,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/15_algorithms/" class="md-nav__link">
+      <a href="../15_algorithms/" class="md-nav__link">
         
   
   
@@ -2169,7 +2091,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/28_threads/" class="md-nav__link">
+      <a href="../28_threads/" class="md-nav__link">
         
   
   
@@ -2197,7 +2119,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/32_native_memory/" class="md-nav__link">
+      <a href="../32_native_memory/" class="md-nav__link">
         
   
   
@@ -2225,7 +2147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/33_simd_and_cpu/" class="md-nav__link">
+      <a href="../33_simd_and_cpu/" class="md-nav__link">
         
   
   
@@ -2253,7 +2175,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/34_atomics_and_threads/" class="md-nav__link">
+      <a href="../34_atomics_and_threads/" class="md-nav__link">
         
   
   
@@ -2281,7 +2203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/35_parallel_range/" class="md-nav__link">
+      <a href="../35_parallel_range/" class="md-nav__link">
         
   
   
@@ -2309,7 +2231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/36_autodiff/" class="md-nav__link">
+      <a href="../36_autodiff/" class="md-nav__link">
         
   
   
@@ -2337,7 +2259,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/37_aio/" class="md-nav__link">
+      <a href="../37_aio/" class="md-nav__link">
         
   
   
@@ -2365,7 +2287,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/40_generics/" class="md-nav__link">
+      <a href="../40_generics/" class="md-nav__link">
         
   
   
@@ -2393,7 +2315,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/42_toolbox/" class="md-nav__link">
+      <a href="../42_toolbox/" class="md-nav__link">
         
   
   
@@ -2421,7 +2343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/43_regex/" class="md-nav__link">
+      <a href="../43_regex/" class="md-nav__link">
         
   
   
@@ -2449,7 +2371,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/47_collections/" class="md-nav__link">
+      <a href="../47_collections/" class="md-nav__link">
         
   
   
@@ -2477,7 +2399,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/48_strings/" class="md-nav__link">
+      <a href="../48_strings/" class="md-nav__link">
         
   
   
@@ -2505,7 +2427,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/49_inheritance/" class="md-nav__link">
+      <a href="../49_inheritance/" class="md-nav__link">
         
   
   
@@ -2533,7 +2455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/50_errors_and_generators/" class="md-nav__link">
+      <a href="../50_errors_and_generators/" class="md-nav__link">
         
   
   
@@ -2558,10 +2480,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="howto/51_clinic/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2577,6 +2526,103 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-prints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-runs-natively" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it runs natively
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-code-comes-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the code comes from
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#51_clinicclinicppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        51_clinic/clinic.ppy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2613,17 +2659,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
             
   
   
@@ -2659,7 +2708,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/38_cuda/" class="md-nav__link">
+      <a href="../38_cuda/" class="md-nav__link">
         
   
   
@@ -2687,7 +2736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/44_tile/" class="md-nav__link">
+      <a href="../44_tile/" class="md-nav__link">
         
   
   
@@ -2715,7 +2764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/39_xla/" class="md-nav__link">
+      <a href="../39_xla/" class="md-nav__link">
         
   
   
@@ -2743,7 +2792,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/45_multi_gpu_jax/" class="md-nav__link">
+      <a href="../45_multi_gpu_jax/" class="md-nav__link">
         
   
   
@@ -2811,17 +2860,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
             
   
   
@@ -2857,7 +2909,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/05_numpy/" class="md-nav__link">
+      <a href="../05_numpy/" class="md-nav__link">
         
   
   
@@ -2885,7 +2937,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/06_pydantic/" class="md-nav__link">
+      <a href="../06_pydantic/" class="md-nav__link">
         
   
   
@@ -2913,7 +2965,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/07_parallel/" class="md-nav__link">
+      <a href="../07_parallel/" class="md-nav__link">
         
   
   
@@ -2941,7 +2993,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/09_torch/" class="md-nav__link">
+      <a href="../09_torch/" class="md-nav__link">
         
   
   
@@ -2969,7 +3021,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/46_gpt2/" class="md-nav__link">
+      <a href="../46_gpt2/" class="md-nav__link">
         
   
   
@@ -2997,7 +3049,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/21_training_torch/" class="md-nav__link">
+      <a href="../21_training_torch/" class="md-nav__link">
         
   
   
@@ -3025,7 +3077,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/22_training_jax/" class="md-nav__link">
+      <a href="../22_training_jax/" class="md-nav__link">
         
   
   
@@ -3053,7 +3105,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/25_jax_export/" class="md-nav__link">
+      <a href="../25_jax_export/" class="md-nav__link">
         
   
   
@@ -3081,7 +3133,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/27_uvicorn/" class="md-nav__link">
+      <a href="../27_uvicorn/" class="md-nav__link">
         
   
   
@@ -3109,7 +3161,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/29_flax/" class="md-nav__link">
+      <a href="../29_flax/" class="md-nav__link">
         
   
   
@@ -3137,7 +3189,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/31_torchrun/" class="md-nav__link">
+      <a href="../31_torchrun/" class="md-nav__link">
         
   
   
@@ -3165,7 +3217,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/41_columnar/" class="md-nav__link">
+      <a href="../41_columnar/" class="md-nav__link">
         
   
   
@@ -3219,17 +3271,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
             
   
   
@@ -3265,7 +3320,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/20_inventory/" class="md-nav__link">
+      <a href="../20_inventory/" class="md-nav__link">
         
   
   
@@ -3293,7 +3348,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/23_inference/" class="md-nav__link">
+      <a href="../23_inference/" class="md-nav__link">
         
   
   
@@ -3321,7 +3376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/24_interop/" class="md-nav__link">
+      <a href="../24_interop/" class="md-nav__link">
         
   
   
@@ -3349,7 +3404,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/26_project/" class="md-nav__link">
+      <a href="../26_project/" class="md-nav__link">
         
   
   
@@ -3377,7 +3432,7 @@
   
   
     <li class="md-nav__item">
-      <a href="howto/30_migrate/" class="md-nav__link">
+      <a href="../30_migrate/" class="md-nav__link">
         
   
   
@@ -3455,7 +3510,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="reference/" class="md-nav__link ">
+            <a href="../../reference/" class="md-nav__link ">
               
   
   
@@ -3499,7 +3554,7 @@
   
   
     <li class="md-nav__item">
-      <a href="cli/" class="md-nav__link">
+      <a href="../../cli/" class="md-nav__link">
         
   
   
@@ -3527,7 +3582,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/diagnostics/" class="md-nav__link">
+      <a href="../../reference/diagnostics/" class="md-nav__link">
         
   
   
@@ -3555,7 +3610,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/config/" class="md-nav__link">
+      <a href="../../reference/config/" class="md-nav__link">
         
   
   
@@ -3583,7 +3638,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/performance/" class="md-nav__link">
+      <a href="../../reference/performance/" class="md-nav__link">
         
   
   
@@ -3611,7 +3666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/compatibility/" class="md-nav__link">
+      <a href="../../reference/compatibility/" class="md-nav__link">
         
   
   
@@ -3672,7 +3727,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="api/" class="md-nav__link ">
+            <a href="../../api/" class="md-nav__link ">
               
   
   
@@ -3716,7 +3771,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/ppy/" class="md-nav__link">
+      <a href="../../api/ppy/" class="md-nav__link">
         
   
   
@@ -3744,7 +3799,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/runtime/" class="md-nav__link">
+      <a href="../../api/runtime/" class="md-nav__link">
         
   
   
@@ -3772,7 +3827,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/plugins/" class="md-nav__link">
+      <a href="../../api/plugins/" class="md-nav__link">
         
   
   
@@ -3800,7 +3855,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/backends/" class="md-nav__link">
+      <a href="../../api/backends/" class="md-nav__link">
         
   
   
@@ -3828,7 +3883,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/ir/" class="md-nav__link">
+      <a href="../../api/ir/" class="md-nav__link">
         
   
   
@@ -3914,7 +3969,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="internals/" class="md-nav__link ">
+            <a href="../../internals/" class="md-nav__link ">
               
   
   
@@ -3958,7 +4013,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/architecture/" class="md-nav__link">
+      <a href="../../internals/architecture/" class="md-nav__link">
         
   
   
@@ -3986,7 +4041,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/ir/" class="md-nav__link">
+      <a href="../../internals/ir/" class="md-nav__link">
         
   
   
@@ -4014,7 +4069,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/conversion/" class="md-nav__link">
+      <a href="../../internals/conversion/" class="md-nav__link">
         
   
   
@@ -4042,7 +4097,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/migrating/" class="md-nav__link">
+      <a href="../../internals/migrating/" class="md-nav__link">
         
   
   
@@ -4070,7 +4125,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/plugins/" class="md-nav__link">
+      <a href="../../internals/plugins/" class="md-nav__link">
         
   
   
@@ -4098,7 +4153,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/backends/" class="md-nav__link">
+      <a href="../../internals/backends/" class="md-nav__link">
         
   
   
@@ -4126,7 +4181,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/solver/" class="md-nav__link">
+      <a href="../../internals/solver/" class="md-nav__link">
         
   
   
@@ -4154,7 +4209,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/native-coverage/" class="md-nav__link">
+      <a href="../../internals/native-coverage/" class="md-nav__link">
         
   
   
@@ -4182,7 +4237,7 @@
   
   
     <li class="md-nav__item">
-      <a href="internals/hardware-validation/" class="md-nav__link">
+      <a href="../../internals/hardware-validation/" class="md-nav__link">
         
   
   
@@ -4210,7 +4265,7 @@
   
   
     <li class="md-nav__item">
-      <a href="contributing/" class="md-nav__link">
+      <a href="../../contributing/" class="md-nav__link">
         
   
   
@@ -4245,7 +4300,7 @@
   
   
     <li class="md-nav__item">
-      <a href="changelog/" class="md-nav__link">
+      <a href="../../changelog/" class="md-nav__link">
         
   
   
@@ -4273,9 +4328,7 @@
             
             
               
-                
-              
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" hidden>
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
@@ -4294,10 +4347,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
+  <a href="#run-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install
+        Run it
       
     </span>
   </a>
@@ -4305,10 +4358,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#highlights" class="md-nav__link">
+  <a href="#what-it-prints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Highlights
+        What it prints
       
     </span>
   </a>
@@ -4316,10 +4369,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#documentation" class="md-nav__link">
+  <a href="#the-program" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Documentation
+        The program
       
     </span>
   </a>
@@ -4327,10 +4380,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#limitations" class="md-nav__link">
+  <a href="#how-it-runs-natively" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Limitations
+        How it runs natively
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-code-comes-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the code comes from
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#51_clinicclinicppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        51_clinic/clinic.ppy
       
     </span>
   </a>
@@ -4351,132 +4437,229 @@
               <article class="md-content__inner md-typeset">
                 
                   
-  
-
 
 
   
   
 
 
-<div class="ppy-home">
-<div class="ppy-hero">
-<h1 id="ppy">PP<span class="ppy-y">y</span><a class="headerlink" href="#ppy" title="Permanent link">&para;</a></h1>
-<p class="ppy-hero__text">A compiler for the statically analyzable part of Python</p>
-<p class="ppy-hero__tagline">It reads ordinary Python files and builds them
-into native code, C, CUDA, or StableHLO.</p>
-<p><a class="md-button md-button--primary" href="getting-started/">Get started</a>
-<a class="md-button" href="howto/">Examples</a>
-<a class="md-button" href="reference/performance/">Performance</a></p>
-</div>
-<p>A <code>.ppy</code> file is valid Python. You can run it with <code>python</code> and no compiler
-installed, and that run is the reference answer. The compiler reads the same
-file, proves what it can about the types and effects, lowers it through a
-canonical IR, and hands it to a backend.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">longest</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">best</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">limit</span><span class="p">):</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="n">n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">start</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="n">steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="k">while</span> <span class="n">n</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>            <span class="n">n</span> <span class="o">=</span> <span class="n">n</span> <span class="o">//</span> <span class="mi">2</span> <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">1</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>            <span class="n">steps</span> <span class="o">+=</span> <span class="mi">1</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        <span class="n">best</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">best</span><span class="p">,</span> <span class="n">steps</span><span class="p">)</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="k">return</span> <span class="n">best</span>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="nb">print</span><span class="p">(</span><span class="n">longest</span><span class="p">(</span><span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()))</span>
+<h1 id="a-clinic-simulation">A clinic simulation<a class="headerlink" href="#a-clinic-simulation" title="Permanent link">&para;</a></h1>
+<p>A seeded simulation of a clinic over 2,000 days, run three times with six,
+seven, and eight doctors. Patients arrive at random, wait in order of
+urgency, and are seen by the next free doctor. It uses <code>random</code>, <code>heapq</code>,
+and <code>math</code>, a table of constants at module level, and two dataclasses that
+cross between Python and native code under <code>ppy run</code>.</p>
+<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>clinic.ppy
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>clinic.ppy
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>--standalone<span class="w"> </span>clinic.ppy<span class="w"> </span>-o<span class="w"> </span>dist<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>./dist/clinic
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>python<span class="w">    </span>collatz.ppy<span class="w">      </span><span class="c1"># plain CPython                 1068.8 ms</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w">   </span>collatz.ppy<span class="w">      </span><span class="c1"># LLVM, Python's integers         41.7 ms</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ppy<span class="w"> </span>build<span class="w"> </span>collatz.ppy<span class="w"> </span>-o<span class="w"> </span>dist<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>./dist/collatz<span class="w">   </span><span class="c1"># native    30.8 ms</span>
+<!-- outputs:start -->
+<h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
+<p><strong><code>python  clinic.ppy</code></strong>, <strong><code>ppy run clinic.ppy</code></strong>, <strong><code>ppy build --standalone clinic.ppy -o dist &amp;&amp; ./dist/clinic</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>6 doctors:
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  day   0: 395 seen, 202 late, longest wait 382.6 min
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  day 500: 442 seen, 266 late, longest wait 486.3 min
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  day 1000: 403 seen, 179 late, longest wait 362.4 min
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  day 1500: 378 seen, 193 late, longest wait 382.4 min
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>  2000 days, 799475 patients, 55.67% late, mean wait 180.7 min, worst 632.7 min
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>7 doctors:
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>  day   0: 395 seen, 109 late, longest wait 201.3 min
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>  day 500: 442 seen, 254 late, longest wait 344.2 min
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>  day 1000: 403 seen, 29 late, longest wait 138.8 min
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>  day 1500: 378 seen, 78 late, longest wait 174.0 min
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>  2000 days, 799475 patients, 39.34% late, mean wait 97.0 min, worst 504.6 min
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>8 doctors:
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>  day   0: 395 seen, 0 late, longest wait 38.5 min
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>  day 500: 442 seen, 197 late, longest wait 201.4 min
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>  day 1000: 403 seen, 0 late, longest wait 80.2 min
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>  day 1500: 378 seen, 0 late, longest wait 60.9 min
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>  2000 days, 799475 patients, 10.75% late, mean wait 40.2 min, worst 364.4 min
 </code></pre></div>
-<p>The same loop in C takes 41.9 ms with <code>gcc -O3</code> and 32.8 ms with <code>clang -O3</code>.
-These are ten fresh processes each on one machine. The
-<a href="reference/performance/">performance page</a> has the full table, including
-Numba, Codon, PyPy, Cython, mypyc, and Nuitka.</p>
-<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>add<span class="w"> </span><span class="s2">"ppy-lang[llvm]"</span><span class="w">      </span><span class="c1"># or: pip install "ppy-lang[llvm]"</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>doctor<span class="w">            </span><span class="c1"># reports the compiler, LLVM, the C toolchain, plugin runtimes</span>
-</code></pre></div>
-<p>Then follow <a href="getting-started/">Getting started</a>, which goes from this file
-to a native build in about ten minutes.</p>
-<h2 id="highlights">Highlights<a class="headerlink" href="#highlights" title="Permanent link">&para;</a></h2>
-<div class="grid cards">
+<!-- outputs:end -->
+
+<h2 id="the-program">The program<a class="headerlink" href="#the-program" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Three paths, one answer.</strong> <code>python f.ppy</code> runs plain CPython,
-  <code>ppy f.ppy</code> runs the optimized Python backend, and <code>ppy run f.ppy</code> runs
-  LLVM native code. All three must print the same output. A difference is a
-  compiler bug, and every example is checked for it.</li>
-<li><strong>Falls back instead of guessing.</strong> Code outside the supported subset is
-  reported with its location. A guard that fails at runtime, such as an
-  overflowing multiply, returns to the Python body and finishes there.</li>
-<li><strong>Ahead-of-time builds.</strong> <code>ppy build</code> produces a launcher and a library
-  that keep working after the compiler is uninstalled. <code>ppy build
-  --standalone</code> produces a native executable with no CPython inside.</li>
-<li><strong>Seven backends off one IR.</strong> LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
-  StableHLO, across 19 IR dialects. Other packages can
-  <a href="internals/backends/">register their own backend</a>.</li>
-<li><strong>Strings, classes, and collections.</strong> <a href="guide/strings/"><code>str</code></a>,
-  <a href="guide/classes/">classes with inheritance</a>, and
-  <a href="guide/collections/"><code>Vec</code>, <code>HashMap</code>, <code>TreeMap</code>, and six more</a>
-  compile to native code, reference counted with cycles collected, and
-  give the same answers as CPython.</li>
-<li><strong>Eight library plugins.</strong> NumPy, PyTorch, JAX/Flax, pydantic,
-  FastAPI/Uvicorn, SciPy, pandas, and PyArrow.</li>
-<li><strong>A cheap call boundary.</strong> A native call with two <code>int</code> arguments costs
-  47 ns, against 28 ns for a plain Python call, with no Python frames on the
-  native path.</li>
-<li><strong>Tested.</strong> 1420 test functions on Python 3.12, 3.13, and
-  3.14, with 74% statement coverage. 81 diagnostic codes,
-  each documented in one place.</li>
+<li><code>SHARE</code>, <code>CARE</code>, and <code>LATE</code> are tuples of three floats at module level,
+  one entry per triage level, most urgent first: the share of arrivals,
+  the mean minutes a doctor takes, and how long a patient may wait before
+  the wait counts as late.</li>
+<li><code>Clinic</code> is a dataclass of three numbers: doctors, arrivals per hour, and
+  the seed. <code>Report</code> is a dataclass that adds up the days; <code>add_day</code>
+  writes its fields.</li>
+<li><code>one_day</code> draws the day's arrivals with <code>random.expovariate</code>, gives each
+  a level from <code>random.random()</code> through <code>level_of</code>, and pushes them onto
+  a heap of events. It then pops events in time order. A waiting patient
+  goes on a second heap ordered by level and arrival time. Each time a
+  doctor is free, the most urgent patient is seen for a time drawn from
+  <code>random.lognormvariate</code> around <code>math.log(CARE[level])</code>. The day goes into
+  the report, and every 500th day prints a line.</li>
+<li><code>run(clinic, days=30)</code> seeds the generator from the clinic, makes a
+  <code>Report</code>, runs the days, and returns the report.</li>
+<li><code>main</code> makes a <code>Clinic</code> for each number of doctors, calls
+  <code>run(clinic, days=2000)</code>, and prints the share of late patients and the
+  waits. Every run draws the same arrivals, since every clinic has the same
+  seed, so the three lines differ only in the number of doctors.</li>
 </ul>
-</div>
-<h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
+<h2 id="how-it-runs-natively">How it runs natively<a class="headerlink" href="#how-it-runs-natively" title="Permanent link">&para;</a></h2>
+<p><code>ppy explain clinic.level_of</code>, <code>clinic.one_day</code>, <code>clinic.run</code>, and
+<code>clinic.Report.add_day</code> each say <code>llvm backend: native</code>.</p>
+<ul>
+<li><code>SHARE[level]</code> reads a module-level tuple with an index computed at run
+  time. A tuple of numbers bound once at module level is a constant: native
+  code builds it once per call and picks the item by comparing the index
+  with each position, after the same bounds check CPython makes. Being a
+  constant, it also reaches the standalone binary.</li>
+<li><code>random.expovariate</code>, <code>random.random</code>, and <code>random.lognormvariate</code> are
+  CPython's algorithms on CPython's Mersenne Twister. Under <code>ppy run</code>,
+  native code draws from the generator Python's <code>random</code> uses, so the
+  seed in <code>run</code> gives the same numbers on every path.</li>
+<li><code>heapq.heappush</code> and <code>heappop</code> on lists of tuples make the same
+  comparisons as CPython, so the heaps pop in the same order and ties
+  break the same way.</li>
+<li><code>main</code> returns nothing, so it has no Python boundary of its own: under
+  <code>ppy run</code>, Python runs <code>main</code>, and <code>run</code> is the native call it makes.
+  The <code>Clinic</code> argument crosses as its three fields. <code>days=2000</code> is a
+  keyword argument, which the boundary binds the way Python binds it,
+  with the default for anything left out. The <code>Report</code> that native code
+  made comes back as a new <code>Report</code> instance with its fields set.</li>
+<li><code>one_day(clinic, report, day)</code> leaves <code>hours</code> to its default. Native
+  callers bind keywords and constant defaults when the module is compiled.</li>
+<li>The lines <code>one_day</code> prints are held while <code>run</code> runs and written when it
+  returns, in the order they were printed.</li>
+</ul>
+<h2 id="timing">Timing<a class="headerlink" href="#timing" title="Permanent link">&para;</a></h2>
+<p>Wall time for the whole program, the mean of five runs, measured from a
+checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):</p>
 <table>
 <thead>
 <tr>
 <th></th>
-<th></th>
+<th style="text-align: right;">seconds</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><a href="getting-started/">Getting started</a></td>
-<td>Install, run a file three ways, check it, build it.</td>
+<td><code>python clinic.ppy</code></td>
+<td style="text-align: right;">2.95</td>
 </tr>
 <tr>
-<td><a href="guide/">Guide</a></td>
-<td>The language, one topic per page: the subset, directives, native memory, SIMD, threads, parallel loops, derivatives, coroutines, GPU kernels, XLA, generics, regular expressions.</td>
+<td><code>ppy run clinic.ppy</code>, after the first run built the cache</td>
+<td style="text-align: right;">1.17</td>
 </tr>
 <tr>
-<td><a href="howto/">Examples</a></td>
-<td>51 folders and 61 programs with their commands and output. 18 of them are measured against Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop; the results are collected on the <a href="howto/comparisons/">comparisons page</a>.</td>
-</tr>
-<tr>
-<td><a href="reference/">Reference</a></td>
-<td>The command line, diagnostics, configuration, performance, compatibility, and the Python API.</td>
-</tr>
-<tr>
-<td><a href="internals/">Internals</a></td>
-<td>The pipeline, the IR and its dialects, the cache, the solver.</td>
+<td><code>./dist/clinic</code>, the standalone binary</td>
+<td style="text-align: right;">1.13</td>
 </tr>
 </tbody>
 </table>
-<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
-<p>PPy accepts Python's syntax and works with its ecosystem, but it does not
-support every dynamic behavior. <code>exec</code> and <code>eval</code>, monkey-patching, dynamic
-namespace mutation, and unrestricted runtime reflection are restricted, or
-isolated behind an explicit <code>ppy.dynamic</code> boundary. That is the trade for
-analysis and native code you can rely on.</p>
-<p>To bring an existing Python project over, use <code>ppy migrate</code>
-(<a href="internals/migrating/">how a real project went</a>).</p>
-</div>
+<p><code>ppy run</code> includes the compiler's own start-up and checking the file, which
+the standalone binary does not pay.</p>
+<h2 id="where-the-code-comes-from">Where the code comes from<a class="headerlink" href="#where-the-code-comes-from" title="Permanent link">&para;</a></h2>
+<p><code>clinic.ppy</code> is hand-written.</p>
+<p>Read on: <a href="../../guide/stdlib/">the standard library guide</a> and
+<a href="../../guide/classes/">classes at the boundary</a>.</p>
+<h2 id="51_clinicclinicppy"><code>51_clinic/clinic.ppy</code><a class="headerlink" href="#51_clinicclinicppy" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">heapq</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">SHARE</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">CARE</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">25.0</span><span class="p">,</span> <span class="mf">15.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">LATE</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">30.0</span><span class="p">,</span> <span class="mf">120.0</span><span class="p">)</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nd">@dataclass</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">class</span><span class="w"> </span><span class="nc">Clinic</span><span class="p">:</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">doctors</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">arrivals_per_hour</span><span class="p">:</span> <span class="nb">float</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="nd">@dataclass</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="k">class</span><span class="w"> </span><span class="nc">Report</span><span class="p">:</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>    <span class="n">days</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>    <span class="n">seen</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>    <span class="n">late</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>    <span class="n">worst</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>    <span class="n">total_wait</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">add_day</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seen</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">late</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">longest</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">waited</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">days</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">seen</span> <span class="o">+=</span> <span class="n">seen</span>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">late</span> <span class="o">+=</span> <span class="n">late</span>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">worst</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">worst</span><span class="p">,</span> <span class="n">longest</span><span class="p">)</span>
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">total_wait</span> <span class="o">+=</span> <span class="n">waited</span>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="k">def</span><span class="w"> </span><span class="nf">level_of</span><span class="p">(</span><span class="n">draw</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>    <span class="n">edge</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>    <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>        <span class="n">edge</span> <span class="o">+=</span> <span class="n">SHARE</span><span class="p">[</span><span class="n">level</span><span class="p">]</span>
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>        <span class="k">if</span> <span class="n">draw</span> <span class="o">&lt;</span> <span class="n">edge</span><span class="p">:</span>
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a>            <span class="k">return</span> <span class="n">level</span>
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>    <span class="k">return</span> <span class="mi">2</span>
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="k">def</span><span class="w"> </span><span class="nf">one_day</span><span class="p">(</span><span class="n">clinic</span><span class="p">:</span> <span class="n">Clinic</span><span class="p">,</span> <span class="n">report</span><span class="p">:</span> <span class="n">Report</span><span class="p">,</span> <span class="n">day</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">hours</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a>    <span class="n">rate</span> <span class="o">=</span> <span class="n">clinic</span><span class="o">.</span><span class="n">arrivals_per_hour</span> <span class="o">/</span> <span class="mf">60.0</span>
+<a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>    <span class="n">events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a>    <span class="n">clock</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">expovariate</span><span class="p">(</span><span class="n">rate</span><span class="p">)</span>
+<a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a>    <span class="k">while</span> <span class="n">clock</span> <span class="o">&lt;</span> <span class="n">hours</span> <span class="o">*</span> <span class="mf">60.0</span><span class="p">:</span>
+<a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a>        <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="p">(</span><span class="n">clock</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">level_of</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">())))</span>
+<a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a>        <span class="n">clock</span> <span class="o">+=</span> <span class="n">random</span><span class="o">.</span><span class="n">expovariate</span><span class="p">(</span><span class="n">rate</span><span class="p">)</span>
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a>    <span class="n">waiting</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a>    <span class="n">free</span> <span class="o">=</span> <span class="n">clinic</span><span class="o">.</span><span class="n">doctors</span>
+<a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a>    <span class="n">seen</span> <span class="o">=</span> <span class="n">late</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a>    <span class="n">longest</span> <span class="o">=</span> <span class="n">waited</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a>    <span class="k">while</span> <span class="n">events</span><span class="p">:</span>
+<a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a>        <span class="n">now</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">level</span> <span class="o">=</span> <span class="n">heapq</span><span class="o">.</span><span class="n">heappop</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+<a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a>        <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a>            <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="n">waiting</span><span class="p">,</span> <span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">now</span><span class="p">))</span>
+<a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a>            <span class="n">free</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a>        <span class="k">while</span> <span class="n">free</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">waiting</span><span class="p">:</span>
+<a id="__codelineno-2-61" name="__codelineno-2-61" href="#__codelineno-2-61"></a>            <span class="n">urgency</span><span class="p">,</span> <span class="n">came</span> <span class="o">=</span> <span class="n">heapq</span><span class="o">.</span><span class="n">heappop</span><span class="p">(</span><span class="n">waiting</span><span class="p">)</span>
+<a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a>            <span class="n">wait</span> <span class="o">=</span> <span class="n">now</span> <span class="o">-</span> <span class="n">came</span>
+<a id="__codelineno-2-63" name="__codelineno-2-63" href="#__codelineno-2-63"></a>            <span class="n">waited</span> <span class="o">+=</span> <span class="n">wait</span>
+<a id="__codelineno-2-64" name="__codelineno-2-64" href="#__codelineno-2-64"></a>            <span class="n">longest</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">longest</span><span class="p">,</span> <span class="n">wait</span><span class="p">)</span>
+<a id="__codelineno-2-65" name="__codelineno-2-65" href="#__codelineno-2-65"></a>            <span class="k">if</span> <span class="n">wait</span> <span class="o">&gt;</span> <span class="n">LATE</span><span class="p">[</span><span class="n">urgency</span><span class="p">]:</span>
+<a id="__codelineno-2-66" name="__codelineno-2-66" href="#__codelineno-2-66"></a>                <span class="n">late</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-2-67" name="__codelineno-2-67" href="#__codelineno-2-67"></a>            <span class="n">seen</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-2-68" name="__codelineno-2-68" href="#__codelineno-2-68"></a>            <span class="n">free</span> <span class="o">-=</span> <span class="mi">1</span>
+<a id="__codelineno-2-69" name="__codelineno-2-69" href="#__codelineno-2-69"></a>            <span class="n">care</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">lognormvariate</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">CARE</span><span class="p">[</span><span class="n">urgency</span><span class="p">]),</span> <span class="mf">0.4</span><span class="p">)</span>
+<a id="__codelineno-2-70" name="__codelineno-2-70" href="#__codelineno-2-70"></a>            <span class="n">heapq</span><span class="o">.</span><span class="n">heappush</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="p">(</span><span class="n">now</span> <span class="o">+</span> <span class="n">care</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">urgency</span><span class="p">))</span>
+<a id="__codelineno-2-71" name="__codelineno-2-71" href="#__codelineno-2-71"></a>    <span class="n">report</span><span class="o">.</span><span class="n">add_day</span><span class="p">(</span><span class="n">seen</span><span class="p">,</span> <span class="n">late</span><span class="p">,</span> <span class="n">longest</span><span class="p">,</span> <span class="n">waited</span><span class="p">)</span>
+<a id="__codelineno-2-72" name="__codelineno-2-72" href="#__codelineno-2-72"></a>    <span class="k">if</span> <span class="n">day</span> <span class="o">%</span> <span class="mi">500</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-2-73" name="__codelineno-2-73" href="#__codelineno-2-73"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  day </span><span class="si">{</span><span class="n">day</span><span class="si">:</span><span class="s2">3d</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">seen</span><span class="si">}</span><span class="s2"> seen, </span><span class="si">{</span><span class="n">late</span><span class="si">}</span><span class="s2"> late, longest wait </span><span class="si">{</span><span class="n">longest</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> min"</span><span class="p">)</span>
+<a id="__codelineno-2-74" name="__codelineno-2-74" href="#__codelineno-2-74"></a>
+<a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a>
+<a id="__codelineno-2-76" name="__codelineno-2-76" href="#__codelineno-2-76"></a><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">clinic</span><span class="p">:</span> <span class="n">Clinic</span><span class="p">,</span> <span class="n">days</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Report</span><span class="p">:</span>
+<a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a>    <span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">clinic</span><span class="o">.</span><span class="n">seed</span><span class="p">)</span>
+<a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a>    <span class="n">report</span> <span class="o">=</span> <span class="n">Report</span><span class="p">()</span>
+<a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a>    <span class="k">for</span> <span class="n">day</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">days</span><span class="p">):</span>
+<a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a>        <span class="n">one_day</span><span class="p">(</span><span class="n">clinic</span><span class="p">,</span> <span class="n">report</span><span class="p">,</span> <span class="n">day</span><span class="p">)</span>
+<a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a>    <span class="k">return</span> <span class="n">report</span>
+<a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a>
+<a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a>
+<a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a>    <span class="k">for</span> <span class="n">doctors</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">):</span>
+<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a>        <span class="n">clinic</span> <span class="o">=</span> <span class="n">Clinic</span><span class="p">(</span><span class="n">doctors</span><span class="o">=</span><span class="n">doctors</span><span class="p">,</span> <span class="n">arrivals_per_hour</span><span class="o">=</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">2026</span><span class="p">)</span>
+<a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">doctors</span><span class="si">}</span><span class="s2"> doctors:"</span><span class="p">)</span>
+<a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a>        <span class="n">report</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">clinic</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="mi">2000</span><span class="p">)</span>
+<a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a>        <span class="n">share</span> <span class="o">=</span> <span class="mf">100.0</span> <span class="o">*</span> <span class="n">report</span><span class="o">.</span><span class="n">late</span> <span class="o">/</span> <span class="n">report</span><span class="o">.</span><span class="n">seen</span>
+<a id="__codelineno-2-90" name="__codelineno-2-90" href="#__codelineno-2-90"></a>        <span class="n">mean</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">total_wait</span> <span class="o">/</span> <span class="n">report</span><span class="o">.</span><span class="n">seen</span>
+<a id="__codelineno-2-91" name="__codelineno-2-91" href="#__codelineno-2-91"></a>        <span class="nb">print</span><span class="p">(</span>
+<a id="__codelineno-2-92" name="__codelineno-2-92" href="#__codelineno-2-92"></a>            <span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">report</span><span class="o">.</span><span class="n">days</span><span class="si">}</span><span class="s2"> days, </span><span class="si">{</span><span class="n">report</span><span class="o">.</span><span class="n">seen</span><span class="si">}</span><span class="s2"> patients, </span><span class="si">{</span><span class="n">share</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">% late, "</span>
+<a id="__codelineno-2-93" name="__codelineno-2-93" href="#__codelineno-2-93"></a>            <span class="sa">f</span><span class="s2">"mean wait </span><span class="si">{</span><span class="n">mean</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> min, worst </span><span class="si">{</span><span class="n">report</span><span class="o">.</span><span class="n">worst</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> min"</span>
+<a id="__codelineno-2-94" name="__codelineno-2-94" href="#__codelineno-2-94"></a>        <span class="p">)</span>
+<a id="__codelineno-2-95" name="__codelineno-2-95" href="#__codelineno-2-95"></a>
+<a id="__codelineno-2-96" name="__codelineno-2-96" href="#__codelineno-2-96"></a>
+<a id="__codelineno-2-97" name="__codelineno-2-97" href="#__codelineno-2-97"></a><span class="n">main</span><span class="p">()</span>
+</code></pre></div>
+<p>Source: <a href="https://github.com/franknoh/PPy/blob/main/examples/51_clinic"><code>examples/51_clinic</code></a>.</p>
 
 
 
@@ -4484,13 +4667,8 @@ analysis and native code you can rely on.</p>
 
 
 
-  
-  
 
 
-
-
-  
 
 
 
@@ -4516,19 +4694,33 @@ analysis and native code you can rely on.</p>
   
     
       
-        
-      
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../50_errors_and_generators/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Errors and generators">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Errors and generators
+              </div>
+            </div>
+          </a>
         
         
           
-          <a href="getting-started/" class="md-footer__link md-footer__link--next" aria-label="Next: Getting started">
+          <a href="../38_cuda/" class="md-footer__link md-footer__link--next" aria-label="Next: GPU kernels">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Getting started
+                GPU kernels
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -4569,10 +4761,10 @@ analysis and native code you can rely on.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
