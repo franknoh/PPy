@@ -31,6 +31,7 @@ __all__ = [
     "adopt",
     "as_method",
     "bind",
+    "bind_globals",
     "observation_wanted",
     "value_class_types",
 ]
@@ -91,13 +92,16 @@ def observation_wanted(specializer: object, policy: object, info: object) -> boo
     )
 
 
-def value_class_types(signature: NativeSignature, fallback: Callable[..., object]) -> tuple | None:
+def value_class_types(
+    signature: NativeSignature, fallback: Callable[..., object], *, globals_read: bool = False
+) -> tuple | None:
     """The runtime classes a generated wrapper guards value parameters on.
 
     Resolved from the defining module, so a class the wrapper cannot see means
-    no fast entry rather than a wrong one.
+    no fast entry rather than a wrong one. A function passed module globals
+    has one only where the caller reads them for it (`bind_globals`).
     """
-    if signature.reads_globals:
+    if signature.reads_globals and not globals_read:
         # The Python-level binding reads the globals; a C wrapper would not.
         return None
     namespace = getattr(fallback, "__globals__", None)
@@ -154,6 +158,10 @@ def signature_of(function: object) -> NativeSignature | None:
     known = _ADOPTED.get(id(function))
     if known is not None and known[0] is function:
         return known[1]
+    # A method bound to its instance: the entry point is its function.
+    inner = getattr(function, "__func__", None)
+    if inner is not None and inner is not function:
+        return signature_of(inner)
     return None
 
 
@@ -390,7 +398,9 @@ def _bind(
             signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
         )
     if signature.reads_globals and not globals_read:
-        return _bind_globals(signature, address, fallback, owner)
+        bound = _bind_globals(signature, address, fallback, owner)
+        assert bound is not None
+        return bound
     effects = None
     if signature.effects:
         from .effects import effects_for, register_namespace
@@ -584,9 +594,26 @@ def _namespace(function: object) -> dict | None:
     return getattr(function, "__globals__", None)
 
 
+def bind_globals(  # type: ignore[no-untyped-def]
+    signature: NativeSignature,
+    address: int,
+    fallback: Callable[..., object],
+    owner,
+    entry_for: Callable[[Callable[..., object]], Callable[..., object] | None],
+) -> NativeBinding | None:
+    """`_bind_globals` over a generated C entry point: `entry_for(spelled)` binds
+    the entry, which takes the globals after Python's arguments, with
+    `spelled` as its fallback. None where it binds none."""
+    return _bind_globals(signature, address, fallback, owner, entry_for)
+
+
 def _bind_globals(  # type: ignore[no-untyped-def]
-    signature: NativeSignature, address: int, fallback: Callable[..., object], owner
-) -> NativeBinding:
+    signature: NativeSignature,
+    address: int,
+    fallback: Callable[..., object],
+    owner,
+    entry_for: Callable[[Callable[..., object]], Callable[..., object] | None] | None = None,
+) -> NativeBinding | None:
     """A function passed the settled module globals it reads (`NativeParam.
     source`). Python's caller spells the other arguments; the wrapper reads
     each global from its module at the call and passes it after them, where
@@ -607,7 +634,16 @@ def _bind_globals(  # type: ignore[no-untyped-def]
         return fallback(*args[:count], **keywords)
 
     spelled.__ppy_globals__ = namespace  # type: ignore[attr-defined]
-    inner = _bind(signature, address, spelled, owner=owner, globals_read=True)
+    if entry_for is not None:
+        entry = entry_for(spelled)
+        if entry is None:
+            return None
+        remember(entry, signature)
+        inner = NativeBinding(
+            signature=signature, wrapper=entry, fallback=spelled, fast_entry=entry, owner=owner
+        )
+    else:
+        inner = _bind(signature, address, spelled, owner=owner, globals_read=True)
     if inner.wrapper is inner.fallback:
         # No native entry here after all: the Python function is the function.
         inner.wrapper = inner.fallback = fallback
@@ -637,16 +673,21 @@ def _bind_globals(  # type: ignore[no-untyped-def]
     return inner
 
 
-def _settled(effects, status, outer, signature, owner, target) -> bool | BaseException:  # type: ignore[no-untyped-def]
+def _settled(effects, status, outer, signature, owner, target, let_go=None) -> bool | BaseException:  # type: ignore[no-untyped-def]
     """Whether a call with effects answered: what it printed is written out once
     its result is read (`Effects.commit`); where it fell back, dropped. What it
-    raised after an effect it cannot take back comes back, for the caller to raise."""
+    raised after an effect it cannot take back comes back, for the caller to raise.
+    `let_go` sweeps what a raising call left; a crossing passes one that waits
+    until it has let go of its own handles."""
     if status >= STATUS_SANITIZER_BASE:
         effects.abandon(outer)
         kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
         return SanitizerFailure(f"sanitizer: a {kind} check failed in `{signature.qualname}`")
     return effects.leave(  # type: ignore[no-any-return]
-        status, outer, signature.qualname, lambda: _let_go_of_raised(owner, target)
+        status,
+        outer,
+        signature.qualname,
+        let_go if let_go is not None else lambda: _let_go_of_raised(owner, target),
     )
 
 
@@ -718,23 +759,28 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         if keywords or len(args) != len(expanders):
             return fallback(*args, **keywords)
         boundary = crossing.Boundary(rt, classes)
+        raised: list[bool] = []
         try:
             if effects is not None:
-                answered, answer = _cross_with_effects(boundary, args)
+                answered, answer = _cross_with_effects(boundary, args, raised)
             else:
-                answered, answer = _cross(boundary, args)
+                answered, answer = _cross(boundary, args, raised)
         finally:
             # Every handle the crossing made is let go of before any Python
             # runs: a fallback that calls native code again must not find
             # them on the thread's list, which a failed call's sweep frees.
             boundary.close()
+            if raised:
+                # And only then is what the raising call left swept: the sweep
+                # frees every handle on the list, the crossing's own included.
+                _let_go_of_raised(owner, native)
         if answered:
             binding.calls += 1
             return answer
         binding.fallbacks += 1
         return fallback(*args)
 
-    def _cross(boundary, args: tuple) -> tuple[bool, object]:  # type: ignore[no-untyped-def]
+    def _cross(boundary, args: tuple, raised: list) -> tuple[bool, object]:  # type: ignore[no-untyped-def,type-arg]
         """The native call and its conversions: whether it answered, and what."""
         atoms: list[object] = []
         borrowed: list[object] = []
@@ -751,7 +797,7 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
             if status == STATUS_RAISED:
-                _let_go_of_raised(owner, native)
+                raised.append(True)
             if status >= STATUS_SANITIZER_BASE:
                 kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
                 raise SanitizerFailure(
@@ -760,7 +806,7 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             return False, None
         return True, _read(boundary, args, slots)
 
-    def _cross_with_effects(boundary, args: tuple) -> tuple[bool, object]:  # type: ignore[no-untyped-def]
+    def _cross_with_effects(boundary, args: tuple, raised: list) -> tuple[bool, object]:  # type: ignore[no-untyped-def,type-arg]
         """As `_cross`, for a function with effects (`ppy_runtime/effects.py`)."""
         atoms: list[object] = []
         borrowed: list[object] = []
@@ -776,7 +822,9 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         slots = [result_type() for result_type in result_types]
         outer = effects.enter()
         status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
-        settled = _settled(effects, status, outer, signature, owner, native)
+        settled = _settled(
+            effects, status, outer, signature, owner, native, lambda: raised.append(True)
+        )
         if isinstance(settled, BaseException):
             raise settled
         if not settled:

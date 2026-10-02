@@ -23,7 +23,7 @@ from ppy_runtime.generated import BINDER_NAME, _insert_definition_bindings, _res
 from ...target import TargetInfo, host_target
 from .link import ToolchainError, _compiler
 from .lowering import NativeSignature
-from .wrapper import _HEADER, C_TYPES, _function
+from .wrapper import _HEADER, _function
 
 __all__ = ["build_python_extension", "extension_source"]
 

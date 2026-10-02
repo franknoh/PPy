@@ -28,6 +28,8 @@ pytestmark = [
 LINKED = """
 from dataclasses import dataclass
 
+import ppy
+
 
 class Node:
     def __init__(self, value: int, label: str) -> None:
@@ -42,6 +44,7 @@ class Point:
     y: int
 
 
+@ppy.native
 def total(head: Node | None) -> int:
     s = 0
     node = head
@@ -51,6 +54,7 @@ def total(head: Node | None) -> int:
     return s
 
 
+@ppy.native
 def bump(head: Node) -> None:
     node: Node | None = head
     while node is not None:
@@ -59,6 +63,7 @@ def bump(head: Node) -> None:
         node = node.next
 
 
+@ppy.native
 def build(n: int) -> Node:
     head = Node(0, "a")
     for i in range(1, n):
@@ -68,6 +73,7 @@ def build(n: int) -> Node:
     return head
 
 
+@ppy.native
 def shift(points: list[Point], dx: int) -> list[Point]:
     out: list[Point] = []
     for p in points:
@@ -85,7 +91,7 @@ def main() -> None:
     h = build(5)
     print(total(h), h.value, h.label, type(h).__name__)
     print(shift([Point(1, 2), Point(3, 4)], 10))
-    print(hasattr(total, "__ppy_native__"), hasattr(bump, "__ppy_native__"), hasattr(build, "__ppy_native__"), hasattr(shift, "__ppy_native__"))
+    print(ppy.native.compiled(total), ppy.native.compiled(bump), ppy.native.compiled(build), ppy.native.compiled(shift))
 
 
 main()
@@ -93,6 +99,8 @@ main()
 
 EDGES = """
 from dataclasses import dataclass
+
+import ppy
 
 
 class Node:
@@ -121,6 +129,7 @@ class Holder:
         self.flag = True
 
 
+@ppy.native
 def walk(head: Node) -> int:
     s = 0
     node: Node | None = head
@@ -133,6 +142,7 @@ def walk(head: Node) -> int:
     return s
 
 
+@ppy.native
 def pick(nodes: list[Node], k: int) -> Node:
     best = nodes[0]
     for n in nodes:
@@ -164,7 +174,7 @@ def main() -> None:
     h = Holder(Frozen("n", 1), (1, 1.5))
     g = grow(h, 3)
     print(g.item, g.pair, g.flag, h.item, grow(h, 0) is h)
-    print([hasattr(f, "__ppy_native__") for f in (walk, pick, grow)])
+    print([ppy.native.compiled(f) for f in (walk, pick, grow)])
 
 
 main()
@@ -187,7 +197,9 @@ def _run(tmp_path: Path, *args: str) -> list[str]:
 )
 def test_objects_cross_the_boundary(tmp_path: Path, source: str, native: str):
     """The answers are CPython's, and the functions that take or return objects
-    answer natively (the last line: CPython says False of each)."""
+    answer natively (the last line: CPython says False of each). They ask for
+    the boundary: copying a chain of objects in costs more than a short walk
+    over it saves, which is the cost model's to decide."""
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
     (tmp_path / "prog.ppy").write_text(textwrap.dedent(source).lstrip("\n"), encoding="utf-8")
     python = _run(tmp_path, "prog.ppy")

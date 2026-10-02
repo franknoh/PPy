@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from .abi import NativeSignature
-from .binding import as_method, bind, remember, value_class_types
+from .binding import as_method, bind, bind_globals, remember, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
@@ -96,12 +96,13 @@ class PrebuiltBinder(LibraryBinder):
         self._extensions[library] = extension
         return extension
 
-    def _fast_entry(self, signature, address: int, fallback):  # type: ignore[no-untyped-def]
-        """Bind the shipped C wrapper, which holds the fallback itself."""
+    def _fast_entry(self, signature, address: int, fallback, spelled=None):  # type: ignore[no-untyped-def]
+        """Bind the shipped C wrapper, which holds the fallback itself: `spelled`
+        where the function is passed module globals (`bind_globals`)."""
         index = self._wrapper_entries.get(signature.qualname)
         if self._wrappers is None or index is None:
             return None
-        types = value_class_types(signature, fallback)
+        types = value_class_types(signature, fallback, globals_read=spelled is not None)
         if types is None:
             return None
         if signature.crosses_collections:
@@ -119,7 +120,8 @@ class PrebuiltBinder(LibraryBinder):
         from .collection_boundary import resolver  # pylint: disable=import-outside-toplevel
 
         resolve = resolver(signature, fallback)
-        given = (address, types, fallback) if resolve is None else (address, types, fallback, resolve)
+        held = spelled if spelled is not None else fallback
+        given = (address, types, held) if resolve is None else (address, types, held, resolve)
         try:
             named = getattr(self._wrappers, f"bind_{index}")(*given)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
@@ -145,9 +147,20 @@ class PrebuiltBinder(LibraryBinder):
         # A coroutine's future needs the Python-side wrapping; the C wrapper
         # would hand back the bare handle. A function that draws needs
         # `random`'s state saved around it, which the Python side does.
+        if signature.reads_globals and not (signature.future or signature.draws):
+            # Python reads the globals and passes them after its arguments.
+            read = bind_globals(
+                signature,
+                address,
+                fallback,
+                self._library,
+                lambda spelled: self._fast_entry(signature, address, fallback, spelled),
+            )
+            if read is not None:
+                return read.wrapper
         entry = (
             None
-            if signature.future or signature.draws
+            if signature.future or signature.draws or signature.reads_globals
             else self._fast_entry(signature, address, fallback)
         )
         if entry is not None:

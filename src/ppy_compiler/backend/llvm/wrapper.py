@@ -263,6 +263,7 @@ def _support(signatures, *, managed: bool = True) -> list[str]:  # type: ignore[
         parts.append(_EFFECTS.read_text(encoding="utf-8"))
     return parts
 
+
 _FOOTER = """
 static PyMethodDef ppy_methods[] = {{
 {methods}
@@ -410,10 +411,9 @@ def crosses_in_c(signature: NativeSignature) -> bool:
 
 
 def wrapped_in_c(signature: NativeSignature) -> bool:
-    """Whether a generated wrapper serves this function: one that takes no
-    module global, and whose containers, if any, `crossing.c` copies."""
-    if signature.reads_globals:
-        return False
+    """Whether a generated wrapper serves this function: one whose containers,
+    if any, `crossing.c` copies. A module global the function reads is an
+    argument after Python's, which the binder reads for it (`bind_globals`)."""
     return not signature.crosses_collections or _crossing(signature) is not None
 
 
@@ -442,9 +442,7 @@ def _crossing_structs(index: int, crossing: _Crossing) -> str:
     entries = []
     for number, c in enumerate(crossing.classes):
         if c.kind == "record":
-            fields = [
-                f'{{"{name}", {offset}, NULL}}' for name, offset, _kind in c.fields
-            ]
+            fields = [f'{{"{name}", {offset}, NULL}}' for name, offset, _kind in c.fields]
         else:
             fields = [
                 f'{{"{name}", {offset}, &{emit(spec, f"ppy_xs_{index}_c{number}_{field}")}}}'
@@ -528,7 +526,9 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     end = "    px_end(&ppy_x);\n" if crossing else ""
     sync = ""
     if crossing and any(p.is_handle and p.written for p in signature.parameters):
-        sync = "    if (px_sync(&ppy_x) < 0) {\n        px_end(&ppy_x);\n        return NULL;\n    }\n"
+        sync = (
+            "    if (px_sync(&ppy_x) < 0) {\n        px_end(&ppy_x);\n        return NULL;\n    }\n"
+        )
     if crossing:
         # Every variable is declared before the first jump to the cleanup.
         declarations = "    ppy_cross ppy_x;\n" + declarations
@@ -556,7 +556,7 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     held = managed and signature.effects
     qualname = signature.qualname
     enter = leave = ""
-    sanitized = f"{end}        return ppy_sanitizer_failed(status, \"{qualname}\");\n"
+    sanitized = f'{end}        return ppy_sanitizer_failed(status, "{qualname}");\n'
     failed = (
         f"{end}        if (status == -1) {{\n            ppy_raised((void *)chosen);\n        }}\n"
         f"        return ppy_handoff(ppy_fallback_{index}, args, nargs);\n"
@@ -571,11 +571,11 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         leave = "    int64_t ppy_crossed = ppy_io.leave(ppy_outer);\n"
         sanitized = (
             f"{end}        ppy_io.discard();\n        ppy_io_settle();\n"
-            f"        return ppy_sanitizer_failed(status, \"{qualname}\");\n"
+            f'        return ppy_sanitizer_failed(status, "{qualname}");\n'
         )
         failed = (
             f"{end}        if (ppy_crossed) {{\n"
-            f"            return ppy_io_crossed(status, \"{qualname}\");\n        }}\n"
+            f'            return ppy_io_crossed(status, "{qualname}");\n        }}\n'
             "        ppy_io.discard();\n"
             "        if (status == -1) {\n            ppy_raised((void *)chosen);\n        }\n"
             "        ppy_io_settle();\n"

@@ -312,12 +312,16 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
         exposed, why = should_lower_native(info, _analysis, layouts, signature.classes)
+        withheld = reused.withheld.get(qualname, "")
+        if withheld:
+            exposed, why = False, withheld
         functions[qualname] = LoweredFunction(
             info,
             signature,
             exposed=exposed,
             exposure_reason=why,
             boundary=reused.boundaries.get(qualname),
+            withheld=withheld,
         )
         sources[qualname] = (info, node)
     return NativeModule(
@@ -1239,6 +1243,10 @@ class _Binder(LibraryBinder):
             and (not signature.effects or wrappers.attach_effects())
             and (not signature.crosses_collections or wrappers.attach_runtime())
         ):
+            if signature.reads_globals:
+                read = self._reading_globals(entry, fallback)
+                if read is not None:
+                    return read
             types = value_class_types(signature, fallback)
             if types is not None and signature.effects:
                 from ppy_runtime.effects import register_function
@@ -1275,6 +1283,35 @@ class _Binder(LibraryBinder):
             owner=(engine, wrappers),
             register=register,
         )
+        self.bindings.append(binding)
+        return self._recorded(qualname, binding.wrapper)
+
+    def _reading_globals(self, entry, fallback):  # type: ignore[no-untyped-def]
+        """A function passed the module globals it reads, served by its C entry
+        point: Python reads the globals and passes them after its arguments."""
+        from ppy_runtime.binding import bind_globals, observation_wanted, value_class_types
+        from ppy_runtime.collection_boundary import resolver
+
+        signature, address, specializer, info, wrappers, qualname, engine = entry
+        policy = SpecializationPolicy.of(info) if info is not None else None
+        types = value_class_types(signature, fallback, globals_read=True)
+        if types is None or signature.draws or observation_wanted(specializer, policy, info):
+            return None
+        if signature.effects:
+            from ppy_runtime.effects import register_function
+
+            register_function(signature.qualname, fallback)
+        binding = bind_globals(
+            signature,
+            address,
+            fallback,
+            (engine, wrappers),
+            lambda spelled: wrappers.bind(
+                qualname, address, types, spelled, resolver(signature, fallback)
+            ),
+        )
+        if binding is None:
+            return None
         self.bindings.append(binding)
         return self._recorded(qualname, binding.wrapper)
 

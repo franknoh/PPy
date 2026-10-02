@@ -29,6 +29,7 @@ its Python body when Python calls it.
 from __future__ import annotations
 
 import array
+import contextlib
 import ctypes
 import re
 import struct
@@ -423,14 +424,14 @@ def attach(wrappers: Any, library: Any = None) -> bool:
     taken = False
     if rt is not None:
         try:
-            addresses = [ctypes.cast(getattr(rt, n), ctypes.c_void_p).value for n in _WRAPPER_FUNCTIONS]
+            addresses = [
+                ctypes.cast(getattr(rt, n), ctypes.c_void_p).value for n in _WRAPPER_FUNCTIONS
+            ]
             taken = bool(hand(*addresses))
         except (AttributeError, TypeError, ValueError, OverflowError):
             taken = False
-    try:
+    with contextlib.suppress(AttributeError, TypeError):
         wrappers.__ppy_attached__ = taken
-    except (AttributeError, TypeError):
-        pass
     return taken
 
 

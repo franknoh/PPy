@@ -265,12 +265,16 @@ After the call:
   ran it.
 
 ```python
+import ppy
+
+
 class Node:
     def __init__(self, value: int) -> None:
         self.value = value
         self.next: Node | None = None
 
 
+@ppy.native
 def bump(head: Node | None) -> None:
     while head is not None:
         head.value += 1
@@ -280,12 +284,19 @@ def bump(head: Node | None) -> None:
 Called from Python, `bump(a)` runs natively and leaves each node's `value`
 one higher. `bump(None)` is native too, since the parameter allows `None`.
 
-The copy costs time in proportion to what crosses. So Python calls the
-native body only when the function does work in proportion to it: a loop
-that follows a field (`head = head.next`), a loop over a container of
-objects, or a call to itself on a field (`height(node.left)`). Native
-callers pass objects by handle and copy nothing. `ppy explain` gives the
-reason for each function.
+The copy costs time in proportion to what crosses, about 100 ns an object
+in and as much back after a write, where CPython reads a field in a few
+nanoseconds. So Python calls the native body only when the function does
+work in proportion to it, and more than a few operations of it per object:
+a loop that follows a field (`head = head.next`), a loop over a container
+of objects, or a call to itself on a field (`height(node.left)`), each
+doing six operations or more on what it reaches. Without `@ppy.native`,
+`bump` above, which adds one to each node, would run its Python body when
+Python calls it; the directive asks for the crossing whatever it costs.
+Native callers pass objects by handle and copy nothing. `ppy explain` gives the reason for each function.
+
+A method of a class that crosses this way is bound like a method: `node.f(x)`
+passes `node` to the native code, and a `@staticmethod` stays static.
 
 Python runs the function's own body instead when an argument's class is not
 one the signature describes. That covers a class made at run time, a

@@ -26,6 +26,7 @@ may not mutate it (spec 13.2, 13.3, 13.5).
 from __future__ import annotations
 
 import ast
+import builtins
 import dataclasses
 from dataclasses import dataclass, field
 
@@ -132,6 +133,9 @@ class LoweredFunction:
     #: The entry Python calls, when it is a thunk around `signature`'s symbol
     #: (strings cross as UTF-8 bytes there, as handles here).
     boundary: NativeSignature | None = None
+    #: Why Python's calls run the Python body whatever the cost says: it copies
+    #: an argument Python could change at a barrier (`_check_effects`).
+    withheld: str = ""
 
     @property
     def python(self) -> NativeSignature:
@@ -569,9 +573,7 @@ def _crossing_costs_more(
     return None
 
 
-def _copy_cost(
-    parameter: NativeParam, classes: tuple[CrossingClass, ...], written: bool
-) -> int:
+def _copy_cost(parameter: NativeParam, classes: tuple[CrossingClass, ...], written: bool) -> int:
     """What copying one element of a crossing parameter costs, in operations of
     a CPython loop's body (each about what `s += x` costs), in and back.
     Measured on the generated wrapper (`crossing.c`): a number in a list costs
@@ -584,10 +586,10 @@ def _copy_cost(
     if spec.kind == "object" or (spec.value is not None and spec.value.kind == "object"):
         return 8 if written else 6
     if spec.key is not None:
-        return 5 if written else 2
+        return 6 if written else 3
     if spec.value is not None and (spec.value.collection or spec.value.kind == "str"):
         return 3 if written else 2
-    return 0
+    return 1 if written else 0
 
 
 #: Work in a loop's body, as `_loop_work` counts it.
@@ -596,32 +598,34 @@ _LOOP_WORK = (*_WORK_NODES, ast.AugAssign)
 
 def _loop_work(function: ast.AST, name: str, own: str) -> int:
     """The work a loop does per pass over `name`: the operations in the body of
-    the heaviest loop that walks it (its header names it, or it follows a
-    field), less a lookup into `name` itself, which costs native code what it
-    costs Python. A function that walks by calling itself counts its body."""
+    the heaviest loop that touches it (names it, or follows a field), less a
+    lookup into `name` itself, which costs native code what it costs Python.
+    A function that walks by calling itself counts its body."""
     best = 0
     walked = False
     for loop in ast.walk(function):
-        if isinstance(loop, (ast.For, ast.AsyncFor)):
-            header: ast.AST = loop.iter
-        elif isinstance(loop, ast.While):
-            header = loop.test
+        if isinstance(loop, (ast.For, ast.AsyncFor, ast.While)):
+            body: list = loop.body
         elif isinstance(loop, ast.comprehension):
-            header = loop.iter
+            body = loop.ifs
         else:
             continue
-        names = {n.id for n in ast.walk(header) if isinstance(n, ast.Name)}
+        names = {n.id for n in ast.walk(loop) if isinstance(n, ast.Name)}
         follows = isinstance(loop, ast.While) and _follows_a_field(loop)
         if name not in names and not follows:
             continue
         walked = True
-        body = loop.body if isinstance(loop, (ast.For, ast.AsyncFor, ast.While)) else loop.ifs
         best = max(best, sum(_work_of(statement, name) for statement in body))
     if not walked and own:
         # Recursion over linked objects, or a builtin over the whole: the
         # function's own work is what each element costs it.
         return sum(_work_of(statement, name) for statement in getattr(function, "body", []))
     return best
+
+
+#: A call of one of the program's functions counts as this many operations:
+#: it is a body of its own, which may loop.
+_CALL_WORK = 4
 
 
 def _work_of(node: ast.AST, name: str) -> int:
@@ -635,8 +639,18 @@ def _work_of(node: ast.AST, name: str) -> int:
             and child.value.id == name
         ):
             continue
+        if (
+            isinstance(child, ast.Call)
+            and isinstance(child.func, ast.Name)
+            and child.func.id not in _BUILTIN_NAMES
+        ):
+            count += _CALL_WORK
+            continue
         count += 1
     return count
+
+
+_BUILTIN_NAMES = frozenset(dir(builtins))
 
 
 #: Builtins that go over a whole container given to them.
@@ -825,20 +839,20 @@ def should_lower_native(
     return False, "the boundary crossing costs more than the body saves"
 
 
-
-
 #: The crossing's cost in operations of a CPython body, measured with
 #: `examples/bench_boundary.py`: the generated wrapper's call costs what a
 #: Python call does, so a body of two operations already gains. A string is
 #: made natively on the way in and decoded on the way out, about four
-#: operations each; a value class's field is an attribute read. A function
-#: whose boundary is the Python-level binding (one that draws random numbers,
-#: or reads module globals) pays a Python frame and `ctypes`. Output a native
+#: operations each; a value class's field is an attribute read. Module
+#: globals the function reads are read by a Python frame in front of the
+#: wrapper. A function that draws random numbers is bound by the Python-level
+#: binding, which saves `random`'s state through `ctypes`. Output a native
 #: call holds is written out through Python when the call ends, which costs
 #: more than CPython's `print` for one line and much less for many: only a
 #: loop that prints pays for it.
 _CROSSING_BASE = 2
 _CROSSING_TEXT = 4
+_CROSSING_GLOBALS = 6
 _CROSSING_SLOW = 16
 _CROSSING_HELD = 40
 
@@ -850,11 +864,11 @@ def _crossing_cost(
     written: frozenset[str],
 ) -> int:
     """How much straight-line work pays for a call through the boundary."""
-    if analysis.implicit_globals or Effect.RANDOM in analysis.effects:
+    if Effect.RANDOM in analysis.effects:
         return _CROSSING_SLOW
     if any(effect in analysis.effects for effect in _NEEDS_GIL):
         return _CROSSING_HELD
-    cost = _CROSSING_BASE
+    cost = _CROSSING_BASE + (_CROSSING_GLOBALS if analysis.implicit_globals else 0)
     for param in info.params:
         native = _native_param(param.name, param.type, layouts, param.name in written)
         if native is None:
@@ -924,7 +938,9 @@ def _signature(
         symbol="ppy_" + info.qualname.replace(".", "_"),
         parameters=parameters,
         returns=returns,
-        releases_gil=_releases_gil(analysis) and _runs_long(info) if analysis is not None else False,
+        releases_gil=_releases_gil(analysis) and _runs_long(info)
+        if analysis is not None
+        else False,
         cpu_features=_cpu_features(info),
         future=future,
         returned=_returned(info, returned),

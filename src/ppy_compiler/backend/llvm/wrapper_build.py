@@ -49,7 +49,11 @@ class BuiltWrappers:
         if self.module is None or index is None:
             return None
         try:
-            given = (address, types, fallback) if resolve is None else (address, types, fallback, resolve)
+            given = (
+                (address, types, fallback)
+                if resolve is None
+                else (address, types, fallback, resolve)
+            )
             named = getattr(self.module, f"bind_{index}")(*given)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
@@ -63,7 +67,9 @@ class BuiltWrappers:
         """Point the wrappers that copy containers at the collections runtime."""
         if self.module is None:
             return False
-        from ppy_runtime.collection_boundary import attach  # pylint: disable=import-outside-toplevel
+        from ppy_runtime.collection_boundary import (
+            attach,  # pylint: disable=import-outside-toplevel
+        )
 
         return attach(self.module, library)
 

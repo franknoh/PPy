@@ -13,9 +13,30 @@ The compiler asks two different questions:
 
 A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit `@ppy.native`/`@ppy.jit`/`@ppy.specialize`/`@ppy.parallel` gets the
-boundary. A two-instruction helper stays on the Python side (remarked as
-`R3004`). Native callers still call its native symbol directly, boundary or
-not.
+boundary. Native callers call its native symbol directly, boundary or not.
+
+The generated wrapper's call costs about what a Python call does: 31 ns for
+`def add(x: int, y: int) -> int: return x + y` called from Python, against
+33 ns for CPython's own call of it, measured with `examples/bench_boundary.py`.
+So straight-line work pays from two operations (`0.5 * base * height`), and
+a one-operation helper stays on the Python side (remarked as `R3004`). The
+rest costs more:
+
+| what crosses | straight-line work it takes |
+|---|---|
+| numbers, tuples of numbers | 2 operations |
+| a `str` parameter or result | 4 more each: a native string is made for it |
+| a value class | 1 more per field |
+| output held while the call runs (a `print`) | a loop: one line written through Python costs more than CPython's `print`, many cost much less |
+| a module global the function reads | 6 more: a Python frame reads it for the wrapper |
+| a call that draws from `random` | 16: the Python-level binding saves its state |
+
+A function that returns nothing gets the boundary where it loops, or fills
+a container the caller passed. A function that only checks its arguments
+and raises stays a native caller's.
+
+A container or an object is copied whole on each call, so the body has to
+do work in proportion to it ([Lists, dicts, and sets](containers.md#between-functions)).
 
 `ppy explain FILE.ppy:name` reports the decision and, when the answer is no,
 the first blocking construct.
@@ -184,11 +205,13 @@ dashboard. See [the command](../cli.md#ppy-explain).
 
 ## Threads
 
-The generated wrapper releases the GIL around the native call, so
-`@ppy.native` functions scale across threads. A function that prints, reads,
-or calls into Python is bound through the Python boundary instead, which
-writes out its held output, and takes the GIL where it reaches Python
-([Effects in native code](native-effects.md)).
+The generated wrapper releases the GIL around a native call that loops or
+calls another function, so `@ppy.native` functions scale across threads. A
+short straight-line body keeps it: dropping the GIL and taking it back costs
+about 20 ns, what two operations cost. A function that prints, reads, or
+calls into Python keeps the GIL too: its wrapper holds its output until the
+call ends and writes it out then, and the call takes the GIL where it
+reaches Python ([Effects in native code](native-effects.md)).
 
 Reading input is its own guide: [Reading input](input.md).
 

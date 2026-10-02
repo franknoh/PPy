@@ -50,6 +50,58 @@ def vowels(text: str) -> int:
         if c in "aeiou":
             n += 1
     return n
+
+
+def triangle(base: float, height: float) -> float:
+    return 0.5 * base * height
+
+
+def greet(name: str) -> int:
+    return len(name) + 1
+
+
+def shout(n: int) -> int:
+    print(n)
+    return n + 1
+
+
+def check(n: int) -> None:
+    if n < 0:
+        raise ValueError("negative")
+
+
+def squares(xs: list[int], n: int) -> None:
+    for i in range(n):
+        xs.append(i * i)
+
+
+def lookups(d: dict[int, int]) -> int:
+    s = 0
+    for k in d:
+        s += d[k]
+    return s
+
+
+def weighed(d: dict[int, int]) -> int:
+    s = 0
+    for k, v in d.items():
+        s += k * v + (v >> 1)
+    return s
+
+
+class Link:
+    def __init__(self, value: int) -> None:
+        self.value = value
+        self.next: Link | None = None
+
+
+def chain(head: Link) -> int:
+    s = 0
+    node: Link | None = head
+    while node is not None:
+        s += node.value
+        node = node.next
+    return s
 """
 
 
@@ -85,6 +137,47 @@ def test_a_collection_the_body_barely_touches_is_not_copied_across(exposure):  #
 def test_work_that_grows_with_the_argument_crosses(exposure, name: str):  # type: ignore[no-untyped-def]
     exposed, reason = exposure(name)
     assert exposed, reason
+
+
+@pytest.mark.parametrize(
+    ("name", "exposed", "why"),
+    [
+        # The generated wrapper costs what a Python call does: two operations gain.
+        ("triangle", True, "straight-line work"),
+        # A string is made natively on the way in, which a short body does not repay.
+        ("greet", False, "crossing costs more"),
+        # One line printed through Python costs more than CPython's `print`.
+        ("shout", False, "crossing costs more"),
+        ("check", False, "returns nothing"),
+        # A loop that fills the caller's list returns nothing, and pays.
+        ("squares", True, ""),
+        # A dict's entry costs a hash and a put to copy: a lookup per entry
+        # does not repay it, arithmetic on each does.
+        ("lookups", False, "copying the collections"),
+        ("weighed", True, ""),
+        # Copying a chain of objects costs more than a short walk over it.
+        ("chain", False, "copying the collections"),
+    ],
+)
+def test_the_crossing_is_taken_where_it_is_cheaper(exposure, name: str, exposed: bool, why: str):  # type: ignore[no-untyped-def]
+    found, reason = exposure(name)
+    assert found == exposed, reason
+    assert why in reason
+
+
+def test_the_gil_is_dropped_only_around_a_call_that_may_run_long(write, analyze):  # type: ignore[no-untyped-def]
+    """Dropping the GIL and taking it back costs what a two-operation body does."""
+    from ppy_compiler.backend.llvm.lowering import _signature
+
+    path = write("prog.ppy", PROGRAM)
+    bundle = analyze(path, backend="llvm")
+
+    def releases(name: str) -> bool:
+        info = bundle.symbols.functions[f"prog.{name}"]
+        return _signature(info, None, bundle.analysis.function(f"prog.{name}")).releases_gil
+
+    assert not releases("add") and not releases("triangle")
+    assert releases("vowels")
 
 
 def test_the_warm_path_finds_projects_as_the_configuration_does():

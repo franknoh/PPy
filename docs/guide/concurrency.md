@@ -63,8 +63,8 @@ without them is refused with the reason.
 
 ## Native functions on Python threads
 
-Generated wrappers release the GIL around native calls, so `@ppy.native`
-functions scale on ordinary Python threads too. Measured: 1.95× on two
+Generated wrappers release the GIL around native calls that loop, so
+`@ppy.native` functions scale on ordinary Python threads too. Measured: 1.95× on two
 threads, against 0.98× for the same code on plain CPython
 ([Threads](../howto/28_threads.md)).
 

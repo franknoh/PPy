@@ -39,6 +39,7 @@ class CachedLowering:
         "rejected",
         "remarks",
         "signatures",
+        "withheld",
     )
 
     def __init__(
@@ -56,8 +57,11 @@ class CachedLowering:
         remarks: tuple[str, ...] = (),
         boundaries: dict[str, NativeSignature] | None = None,
         effects: dict[str, str] | None = None,
+        withheld: dict[str, str] | None = None,
     ) -> None:
         self.ir = ir
+        #: Per function Python's calls run the Python body of, why.
+        self.withheld = dict(withheld or {})
         #: Per function with effects, the rule they run under.
         self.effects = dict(effects or {})
         #: Per function, the thunk Python calls where there is one.
@@ -192,6 +196,9 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
             "proved": {q: list(names) for q, names in module.proved.items()},
             "remarks": list(module.remarks),
             "effects": dict(getattr(module, "effects", {})),
+            "withheld": {
+                q: f.withheld for q, f in module.functions.items() if getattr(f, "withheld", "")
+            },
         },
         separators=(",", ":"),
     )
@@ -220,6 +227,7 @@ def decode(text: str) -> CachedLowering | None:
             remarks=tuple(raw.get("remarks", ())),
             boundaries={q: _read_signature(s) for q, s in raw.get("boundaries", {}).items()},
             effects=dict(raw.get("effects", {})),
+            withheld=dict(raw.get("withheld", {})),
         )
     except (KeyError, TypeError, ValueError):
         return None

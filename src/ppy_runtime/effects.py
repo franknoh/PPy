@@ -20,6 +20,7 @@ never a second run of what the call already did.
 from __future__ import annotations
 
 import builtins
+import contextlib
 import ctypes
 import hashlib
 import sys
@@ -405,10 +406,8 @@ def attach(wrappers: Any, library: ctypes.CDLL | None = None) -> bool:
             taken = bool(hand(*addresses, effects.crossed, effects.failed, effects.tidy))
         except (AttributeError, TypeError, ValueError, OverflowError):
             taken = False
-    try:
+    with contextlib.suppress(AttributeError, TypeError):
         wrappers.__ppy_effects__ = taken
-    except (AttributeError, TypeError):
-        pass
     return taken
 
 
