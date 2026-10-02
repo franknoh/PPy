@@ -117,9 +117,8 @@ none differing.
 - Native calls bind keyword arguments and constant defaults, and a Python
   caller's keywords and defaults reach the native entry instead of the
   Python body. The generated wrapper binds them in C: a call with a keyword
-  or a default left out costs about 40 ns, as in CPython, where a first
-  version took 1.5 µs. A call that does not bind raises CPython's
-  `TypeError`.
+  or a default left out costs about 40 ns, as in CPython. A call that does
+  not bind raises CPython's `TypeError`.
 - Native code takes back results from Python functions that change nothing,
   falling back on a mismatch, and results from other callees only where
   their type is certain. Before, a `float`, `bool`, or `str` result was
