@@ -207,16 +207,22 @@ def _display_fits(node: ast.expr, actual: T.Type, declared: T.Type) -> bool:
 
 def _generator_fits(actual: T.Type, declared: T.Type) -> bool:
     """A generator expression is a `Generator[T, None, None]`: it is typed
-    `Iterator[T]`, and fits a `Generator` that sends and returns nothing."""
+    `Iterator[T]`, and fits a `Generator` that sends and returns nothing --
+    a bare `Generator` among them, which says nothing of what it yields."""
     actual = T.strip_literal(actual)
     declared = T.strip_literal(declared)
-    return (
+    if not (
         isinstance(actual, T.Instance)
         and actual.name == "Iterator"
         and len(actual.args) == 1
         and isinstance(declared, T.Instance)
         and declared.name == "Generator"
-        and 1 <= len(declared.args) <= 3
+    ):
+        return False
+    if not declared.args:
+        return True
+    return (
+        len(declared.args) <= 3
         and T.is_assignable(actual.args[0], declared.args[0])
         and all(isinstance(a, T.AnyType) or a == T.NONE for a in declared.args[1:])
     )
@@ -3632,12 +3638,26 @@ class _Checker:
                 modeled = table.get((concrete, method))
                 if modeled is not None:
                     table[(owner, method)] = modeled
+        # A `MutableSequence` offers what `MutableSequence` defines, which is
+        # the list's methods less `sort` and `copy`.
+        for method in ("append", "extend", "pop", "insert", "clear", "remove", "reverse"):
+            modeled = table.get(("list", method))
+            if modeled is not None:
+                table[("MutableSequence", method)] = T.Callable_(
+                    modeled.params, modeled.ret, f"MutableSequence.{method}"
+                )
         table[("Sequence", "count")] = T.Callable_(
             (T.Param("value", element),), T.INT, "Sequence.count"
         )
         table[("Sequence", "index")] = T.Callable_(
             (T.Param("value", element),), T.INT, "Sequence.index"
         )
+        for method in ("count", "index"):
+            table[("MutableSequence", method)] = T.Callable_(
+                table[("Sequence", method)].params,
+                T.INT,
+                f"MutableSequence.{method}",
+            )
         table[("dict", "copy")] = T.Callable_((), base, "dict.copy")
         found = table.get((name, attr))
         if found is not None:
@@ -3801,7 +3821,7 @@ class _Checker:
                 wanted = "`peek` and `pop`" if "Heap" in base.name else "its methods"
                 self._error("E1301", f"a `{base.name}` is read by {wanted}", node)
                 return Binding(C.value_of(base))
-            if base.name in {"list", "Sequence", "Buffer", "memoryview", "array"}:
+            if base.name in {"list", "Sequence", "MutableSequence", "Buffer", "memoryview", "array"}:
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(base if is_slice else B.element_type(base))
             if base.name == "dict":
@@ -6314,13 +6334,17 @@ class _Checker:
                     node,
                 )
             return
-        self._error(
-            code,
-            message,
-            node,
-            help=help
-            or "wrap the region in `with ppy.dynamic:` or mark the function `@ppy.dynamic`",
-        )
+        help = help or "wrap the region in `with ppy.dynamic:` or mark the function `@ppy.dynamic`"
+        if not self.strict and self.dynamic_policy != "deny":
+            # CPython runs it, so `--no-strict` does too: the code around it
+            # is treated as if it sat in a dynamic boundary and stays on the
+            # Python path, and the finding is reported as `W2010`.
+            self._dynamic_seen = True
+            self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
+            self._native_blockers.append(message)
+            self._strictly(code, message, node, help=help)
+            return
+        self._error(code, message, node, help=help)
 
     def _rebinding_class(self, info: ClassInfo, attr: str) -> ClassInfo | None:
         """The class in `info`'s MRO whose body set `attr` and which the

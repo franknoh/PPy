@@ -70,6 +70,7 @@ def _element_storage(t: T.Type) -> T.Type:
                 "set",
                 "frozenset",
                 "Sequence",
+                "MutableSequence",
                 "Iterable",
                 "Iterator",
                 "Generator",
