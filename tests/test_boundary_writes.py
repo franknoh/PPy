@@ -288,6 +288,7 @@ def flushed(n: int) -> int:
     return total
 
 
+@ppy.native
 def look(d: dict[int, list[int]], k: int) -> int:
     s = 0
     for key in d:

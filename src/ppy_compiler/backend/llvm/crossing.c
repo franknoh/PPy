@@ -825,16 +825,17 @@ static PyObject *px_scalar_value(int64_t word, char kind) {
     return PyLong_FromLongLong((long long)word);
 }
 
-/* An instance made without running `__init__` (native code ran it). */
+/* An instance made without running `__init__` (native code ran it), as
+   `object.__new__(cls)` makes it, with the checks that call makes. */
 static PyObject *px_blank(PyTypeObject *type) {
-    static PyObject *nothing = NULL;
-    if (nothing == NULL) {
-        nothing = PyTuple_New(0);
-        if (nothing == NULL) {
+    static PyObject *make = NULL;
+    if (make == NULL) {
+        make = PyObject_GetAttrString((PyObject *)&PyBaseObject_Type, "__new__");
+        if (make == NULL) {
             return NULL;
         }
     }
-    return PyBaseObject_Type.tp_new(type, nothing, NULL);
+    return PyObject_CallOneArg(make, (PyObject *)type);
 }
 
 /* Whether `old` already is the value of these words: then it stays, and so

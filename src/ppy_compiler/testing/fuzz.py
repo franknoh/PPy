@@ -187,6 +187,21 @@ def values(head: Link | None) -> list[int]:
 
 """
 
+#: What a program with boundary writes adds: an object class whose instances
+#: cross by copy, and the directive that asks for the crossing.
+_BOUNDARY_PRELUDE = """\
+import ppy
+
+
+class Box:
+    def __init__(self, value: int) -> None:
+        self.value: int = value
+        self.items: list[int] = []
+        self.peer: Box | None = None
+
+
+"""
+
 _BIG = (2**62, -(2**62), 2**63 - 1, -(2**63), 3037000499, 4611686018427387903)
 _FLOATS = ("0.5", "-0.0", "1e308", "-2.5", "3.0", "1e-300", "7.25")
 _SPECIAL_FLOATS = ('float("inf")', 'float("-inf")', 'float("nan")')
@@ -219,8 +234,13 @@ class _Scope:
 
 
 class _Generator:
-    def __init__(
-        self, seed: int, prints: bool = False, state: bool = False, stdlib: bool = False
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        seed: int,
+        prints: bool = False,
+        state: bool = False,
+        stdlib: bool = False,
+        boundary: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
         self.fresh = 0
@@ -233,6 +253,10 @@ class _Generator:
         #: `ppy run`'s boundary, drawn from a sequence of their own.
         self.with_state = state
         self.state = random.Random(seed ^ 0x5EED)
+        #: Whether the program also writes through containers and objects
+        #: Python passes, shared and nested, drawn from a sequence of their own.
+        self.with_boundary = boundary
+        self.crossing = random.Random(seed ^ 0xB0DE)
 
     def name(self, prefix: str) -> str:
         self.fresh += 1
@@ -1199,6 +1223,8 @@ class _Generator:
         if self.with_state:
             w.lines.extend(_STATE_PRELUDE.splitlines())
             self.state_globals(w)
+        if self.with_boundary:
+            w.lines.extend(_BOUNDARY_PRELUDE.splitlines())
         calls: list[str] = []
         for _ in range(self.rng.randint(3, 6)):
             name = self.name("fn")
@@ -1208,6 +1234,8 @@ class _Generator:
                 for _ in range(self.rng.randint(1, 3))
             )
         after = self.state_part(w) if self.with_state else []
+        if self.with_boundary:
+            after.extend(self.boundary_part(w))
         w.put("def main() -> None:")
         if self.stdlib:
             w.put(f"    random.seed({self.seed})")
@@ -1240,17 +1268,112 @@ class _Generator:
         )
         return after
 
+    # -- writes across the boundary ----------------------------------------------
 
-def generate_program(
-    seed: int, prints: bool = False, state: bool = False, stdlib: bool = False
+    def boundary_function(self, w: _Writer, name: str) -> None:
+        """A function Python calls natively with containers and objects it
+        writes through: a list of lists, a dict of lists, a set, and objects in
+        a list, each of which the generated wrapper copies in and back."""
+        rng = self.crossing
+        w.put("@ppy.native")
+        w.put(
+            f"def {name}(g: list[list[int]], d: dict[int, list[int]], s: set[int], "
+            "boxes: list[Box], k: int) -> int:"
+        )
+        w.depth += 1
+        w.put("total = 0")
+        modulus = rng.randint(7, 97)
+        menu = [
+            f"row[j] = (row[j] * {rng.randint(1, 5)} + k + i) % {modulus}",
+            "total += row[j] * (i + 1)",
+            (
+                f"if len(row) < 8 and (row[j] + k) % {rng.randint(2, 4)} == 0:\n"
+                f"    row.append((k + j) % {modulus})"
+            ),
+            f"if len(row) > 1 and row[j] > {rng.randint(10, 60)}:\n    row.pop()\n    break",
+            "s.add((row[j] + k) % 13)",
+            f"if row[j] % {rng.randint(2, 5)} == 1:\n    s.discard(row[j] % 13)",
+            (
+                "d.setdefault((row[j] + i) % 5, []).append(k)\nif len(d[(row[j] + i) % 5]) > 6:\n"
+                "    d[(row[j] + i) % 5].pop(0)"
+            ),
+        ]
+        w.put("for i in range(len(g)):")
+        w.depth += 1
+        w.put("row = g[i]")
+        w.put("for j in range(len(row)):")
+        w.depth += 1
+        for statement in rng.sample(menu, rng.randint(2, 5)):
+            for line in statement.split("\n"):
+                w.put(line)
+        w.depth -= 2
+        tails = [
+            "g.reverse()",
+            "if len(g) > 0:\n    g[0].sort()",
+            "if len(g) < 5 and len(g) > 0:\n    g.append(g[len(g) - 1])",
+            "if len(g) < 5:\n    g.append([k % 7, k % 3])",
+            "if len(g) > 2:\n    g.pop(0)",
+            "for key in d:\n    if len(d[key]) < 6:\n        d[key].append(len(d[key]) + k)",
+            "if k in d:\n    d[k].reverse()",
+            (
+                f"for b in boxes:\n    b.value = (b.value * {rng.randint(2, 5)} + k) % {modulus}\n"
+                "    if len(b.items) < 6:\n        b.items.append(b.value)"
+            ),
+            "if len(boxes) > 0 and boxes[0].peer is not None:\n    boxes[0].peer.value += k",
+            "if len(boxes) < 4:\n    boxes.append(Box(k))",
+            "if len(boxes) > 1:\n    boxes[1].peer = boxes[0]",
+        ]
+        for statement in rng.sample(tails, rng.randint(2, 5)):
+            for line in statement.split("\n"):
+                w.put(line)
+        w.put("return total + len(s) + len(d) + len(boxes)")
+        w.depth -= 1
+        w.put("")
+        w.put("")
+
+    def boundary_part(self, w: _Writer) -> list[str]:
+        """The functions with boundary writes, and what `main` does with them:
+        arguments that share rows, a row both in the list and in the dict, the
+        same object twice, and objects that point at each other."""
+        rng = self.crossing
+        name = self.name("bw")
+        self.boundary_function(w, name)
+        after = [
+            f"row = [{', '.join(str(rng.randint(0, 9)) for _ in range(rng.randint(1, 4)))}]",
+            rng.choice(("g = [row, [4, 5], row]", "g = [row] * 3", "g = [[1, 2], row, []]")),
+            rng.choice(("d = {1: row, 2: [7]}", "d = {0: g[0], 3: []}", "d = {}")),
+            f"s = {{{', '.join(str(rng.randint(0, 12)) for _ in range(rng.randint(1, 4)))}}}",
+            "b1 = Box(1)",
+            "b2 = Box(2)",
+            "b1.peer = b2",
+            rng.choice(("b2.peer = b1", "b2.peer = b2", "b2.peer = None")),
+            rng.choice(("boxes = [b1, b2, b1]", "boxes = [b2]", "boxes = []")),
+        ]
+        for _ in range(rng.randint(1, 3)):
+            after.append(f"print({name}(g, d, s, boxes, {rng.randint(-3, 9)}))")
+            after.append(
+                "print(g, sorted(d.items()), sorted(s), [b.value for b in boxes], "
+                "b1.items, b2.items, row in g, len(g) > 1 and g[0] is g[len(g) - 1])"
+            )
+        return after
+
+
+def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    seed: int,
+    prints: bool = False,
+    state: bool = False,
+    stdlib: bool = False,
+    boundary: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
     it also reads and writes module globals and walks objects Python made,
     which only the paths with a Python boundary run (`STATE_PATHS`). With
     `stdlib`, functions also draw seeded random numbers and call `math`,
-    `heapq`, `bisect`, and `itertools`."""
-    return _Generator(seed, prints, state, stdlib).program()
+    `heapq`, `bisect`, and `itertools`. With `boundary`, a function Python
+    calls natively writes through lists of lists, a dict of lists, a set, and
+    objects that share rows and point at each other (`STATE_PATHS` too)."""
+    return _Generator(seed, prints, state, stdlib, boundary).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:

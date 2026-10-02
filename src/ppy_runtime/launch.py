@@ -117,9 +117,11 @@ class PrebuiltBinder(LibraryBinder):
             if not attach_effects(self._wrappers, self._library):
                 return None
             register_function(signature.qualname, fallback)
-        from .collection_boundary import resolver  # pylint: disable=import-outside-toplevel
+        resolve = None
+        if signature.classes:
+            from .collection_boundary import resolver  # pylint: disable=import-outside-toplevel
 
-        resolve = resolver(signature, fallback)
+            resolve = resolver(signature, fallback)
         held = spelled if spelled is not None else fallback
         given = (address, types, held) if resolve is None else (address, types, held, resolve)
         try:
