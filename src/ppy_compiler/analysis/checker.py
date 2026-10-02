@@ -544,6 +544,9 @@ def _is_inspecting_builtin(node: ast.Call, env: Env) -> bool:
 #: Types whose `+=`/`-=`/... mutate the object rather than rebinding.
 _IN_PLACE_MUTABLE = frozenset({"list", "set", "dict", "bytearray", "collections.deque"})
 
+#: What `functools.cmp_to_key` makes of each element.
+_KEY_WRAPPER = "functools.KeyWrapper"
+
 #: The `collections` types whose methods native code has (`lowering/stdlib.py`).
 _NATIVE_LIBRARY = frozenset({"collections.deque", *stdlib.LIBRARY_MAPPINGS})
 
@@ -2284,6 +2287,10 @@ class _Checker:
             env.set(pattern.name, Binding(T.list_of(B.element_type(subject.type))))
 
     def _expr(self, node: ast.expr, env: Env) -> Binding:
+        if isinstance(node, ast.Call) and self._cmp_to_key(node) is not None:
+            binding = self._key_of_comparison(node, env)
+            self._record(node, binding)
+            return binding
         lambda_ = self._library_lambda(node)
         if lambda_ is not None:
             # `operator.add`, `itemgetter(1)`: the lambda each is, typed as a
@@ -2317,11 +2324,73 @@ class _Checker:
                 return f"builtins.{expr.id}"
             return found
 
-        return native_stdlib.library_lambda(node, canonical)
+        def arity(qualname: str) -> int | None:
+            info = self.project.functions.get(qualname)
+            if info is None or info.owner or info.enclosing:
+                return None
+            if any(p.kind != "positional_or_keyword" or p.has_default for p in info.params):
+                return None
+            return len(info.params)
+
+        def stable(name: str) -> bool:
+            # A parameter the function never rebinds, or a settled global.
+            current = self._current
+            if current is None:
+                return False
+            if name in {p.name for p in current.params}:
+                return not any(
+                    isinstance(child, ast.Name)
+                    and child.id == name
+                    and isinstance(child.ctx, (ast.Store, ast.Del))
+                    for child in current.nodes
+                )
+            return name not in self._function_locals and name in self.symbols.settled_globals
+
+        return native_stdlib.library_lambda(node, canonical, arity, stable)
 
     def _lambda_like(self, node: ast.expr) -> bool:
-        """A lambda, or a library function that stands for one."""
-        return isinstance(node, ast.Lambda) or self._library_lambda(node) is not None
+        """A lambda, a library function that stands for one, or a sort key
+        made of a comparison (`cmp_to_key(f)`)."""
+        return (
+            isinstance(node, ast.Lambda)
+            or self._library_lambda(node) is not None
+            or self._cmp_to_key(node) is not None
+        )
+
+    def _cmp_to_key(self, node: ast.expr) -> ast.expr | None:
+        """`cmp_to_key(f)`: its `f`."""
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, (ast.Name, ast.Attribute))
+            and len(node.args) == 1
+            and not node.keywords
+            and self.project.resolver(self.symbols).canonical(node.func) == "functools.cmp_to_key"
+        ):
+            return node.args[0]
+        return None
+
+    def _key_of_comparison(self, node: ast.Call, env: Env) -> Binding:
+        """`cmp_to_key(f)` where a sort key goes: `f` compares two elements, and
+        the key it makes takes one."""
+        known = self._lambda_parameters
+        self._lambda_parameters = None
+        element = known[0] if known is not None and len(known) == 1 else T.UNKNOWN
+        compare = node.args[0]
+        self._expr(node.func, env)
+        if self._lambda_like(compare):
+            self._lambda_parameters = (element, element)
+        called = self._expr(compare, env)
+        self._lambda_parameters = None
+        typed = T.strip_literal(called.type)
+        if isinstance(typed, T.Callable_):
+            own = self.project.functions.get(typed.qualname)
+            if own is not None:
+                self._effects = self._effects | own.effects
+                self._calls.add(own.qualname)
+        else:
+            self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
+        made = T.Instance(_KEY_WRAPPER, (), (_KEY_WRAPPER, "object"))
+        return Binding(T.Callable_((T.Param("obj", element),), made, "functools.cmp_to_key"))
 
     def _record_empty_display(self, node: ast.expr, actual: T.Type, declared: T.Type) -> None:
         """`return []` from a `-> list[int]`: the empty display is a `list[int]`,

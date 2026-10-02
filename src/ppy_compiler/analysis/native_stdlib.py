@@ -453,19 +453,28 @@ _LAMBDA = "_ppy_lambda"
 
 
 def library_lambda(
-    node: ast.expr, canonical: Callable[[ast.expr], str | None]
+    node: ast.expr,
+    canonical: Callable[[ast.expr], str | None],
+    arity: Callable[[str], int | None] | None = None,
+    stable: Callable[[str], bool] | None = None,
 ) -> ast.Lambda | None:
     """The lambda a library function written as a value is: `operator.add` is
     `lambda a, b: a + b`, `itemgetter(1)` is `lambda x: x[1]`, `attrgetter("w")`
-    is `lambda x: x.w`. The checker types it where it is used, as it types a
+    is `lambda x: x.w`, and `partial(f, 2)` of a two-argument `f` is
+    `lambda y: f(2, y)`. The checker types it where it is used, as it types a
     lambda written there, and native code makes it a function value or runs
     its body in place. The same node always gives the same lambda; None for
-    anything else. `canonical` names what an expression refers to."""
+    anything else. `canonical` names what an expression refers to, `arity`
+    how many parameters a function of the program has, and `stable` whether
+    a name holds one value for the whole function (a `partial` binds its
+    arguments when it is made, which a lambda's names do not)."""
     made = getattr(node, _LAMBDA, None)
     if made is not None:
         return made if isinstance(made, ast.Lambda) else None
     _MADE[0] += 1
     found = _library_lambda(node, canonical)
+    if found is None and arity is not None and stable is not None:
+        found = _partial_lambda(node, canonical, arity, stable)
     if isinstance(node, (ast.Attribute, ast.Name, ast.Call)):
         setattr(node, _LAMBDA, found if found is not None else False)
     return found
@@ -510,6 +519,56 @@ def _library_lambda(
         return None
     body = parts[0] if len(parts) == 1 else ast.Tuple(parts, ast.Load())
     return _lambda(node, 1, body)
+
+
+def _partial_lambda(
+    node: ast.expr,
+    canonical: Callable[[ast.expr], str | None],
+    arity: Callable[[str], int | None],
+    stable: Callable[[str], bool],
+) -> ast.Lambda | None:
+    """`partial(f, a, b)` of a function of the program, its arguments
+    constants or names that keep one value: `lambda x: f(a, b, x)`."""
+    if not isinstance(node, ast.Call) or node.keywords or len(node.args) < 2:
+        return None
+    if canonical(node.func) != "functools.partial":
+        return None
+    function = node.args[0]
+    bound = node.args[1:]
+    if not isinstance(function, ast.Name):
+        return None
+    target = canonical(function)
+    count = arity(target) if target is not None else None
+    if count is None or len(bound) > count:
+        return None
+    for argument in bound:
+        if _constant(argument) or (isinstance(argument, ast.Name) and stable(argument.id)):
+            continue
+        return None
+    rest = [_arg_name(i) for i in range(count - len(bound))]
+    called = ast.Call(
+        ast.Name(function.id, ast.Load()),
+        [_copied(a) for a in bound] + rest,  # type: ignore[operator]
+        [],
+    )
+    return _lambda(node, len(rest), called)
+
+
+def _constant(node: ast.expr) -> bool:
+    """A number, a string, a bool, or `None` written out, or a negative number."""
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        node = node.operand
+        return isinstance(node, ast.Constant) and type(node.value) in (int, float)
+    return isinstance(node, ast.Constant) and type(node.value) in (int, float, str, bool, type(None))
+
+
+def _copied(node: ast.expr) -> ast.expr:
+    if isinstance(node, ast.Constant):
+        return ast.Constant(node.value)
+    if isinstance(node, ast.UnaryOp):
+        return ast.UnaryOp(ast.USub(), _copied(node.operand))
+    assert isinstance(node, ast.Name)
+    return ast.Name(node.id, ast.Load())
 
 
 def _operator_lambda(name: str, node: ast.expr) -> ast.Lambda | None:

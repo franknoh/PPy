@@ -711,6 +711,114 @@ class LibraryLowering:
             )
         return core.load(b, running)
 
+    # -- cmp_to_key ------------------------------------------------------------------------
+
+    def _comparison(self, node: ast.expr) -> ast.expr | None:
+        """`cmp_to_key(f)` as a sort key: its `f`."""
+        if not (isinstance(node, ast.Call) and len(node.args) == 1 and not node.keywords):
+            return None
+        lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
+        if not isinstance(lexical, LexicalBindings):
+            return None
+        if lexical.targets_at(node.func) != {"functools.cmp_to_key"}:
+            return None
+        return node.args[0]
+
+    def _sort(self, kind: Kind, handle: Value, node: ast.Call) -> Value:
+        keyed = {k.arg: k.value for k in node.keywords}
+        compare = self._comparison(keyed["key"]) if "key" in keyed else None
+        if compare is None:
+            return super()._sort(kind, handle, node)  # type: ignore[misc,no-any-return]
+        b = self.b  # type: ignore[attr-defined]
+        rt = self._rt  # type: ignore[attr-defined]
+        shape = kind.value
+        assert shape is not None
+        if node.args or set(keyed) - {"key", "reverse"}:
+            raise Unsupported("`sort` takes `key=` and `reverse=`")
+        if shape.words != 1 or shape.kind in {"tuple", "record"}:
+            raise Unsupported("`cmp_to_key` sorts numbers, strings, and objects natively")
+        descending = self._word(0)  # type: ignore[attr-defined]
+        if "reverse" in keyed:
+            descending = core.cast(b, self._test(keyed["reverse"]), I64)  # type: ignore[attr-defined]
+        element = T.strip_literal(self._type_of(keyed["key"]))  # type: ignore[attr-defined]
+        assert isinstance(element, T.Callable_)
+        less = self._comparison_callback(compare, element.params[0].type)
+        # The list's own order (a class's `__lt__`) is put back after.
+        before = rt("ppy_coll_field", (handle, self._word(21)))  # type: ignore[attr-defined]
+        rt("ppy_coll_order_by", (handle, less), None)
+        rt("ppy_seq_sort_by", (handle, self._word(1), descending), None)  # type: ignore[attr-defined]
+        rt("ppy_coll_order_by", (handle, before), None)
+        ok = rt("ppy_coll_callback_ok", ())
+        core.guard(
+            b,
+            core.cmp(b, "ne", ok, self._word(0)),  # type: ignore[attr-defined]
+            "contract",
+            "a comparison the sort called failed a guard",
+        )
+        return self._word(0)  # type: ignore[attr-defined,no-any-return]
+
+    def _comparison_callback(self, compare: ast.expr, element: T.Type) -> Value:
+        """`lambda a, b: compare(a, b) < 0` as a native function the runtime's
+        sort calls back: the address of its C face."""
+        from ..analysis.symbols import FunctionInfo, ParamInfo  # pylint: disable=import-outside-toplevel
+        from .ast_to_ir import _FunctionLowering  # pylint: disable=import-outside-toplevel
+
+        frontend = self.frontend  # type: ignore[attr-defined]
+        made: dict[int, str] = frontend.__dict__.setdefault("_comparisons", {})
+        found = made.get(id(compare))
+        if found is None:
+            lambda_ = compare if isinstance(compare, ast.Lambda) else self._as_lambda(compare)
+            types = frontend.analysis.node_types
+            if lambda_ is not None:
+                if len(lambda_.args.args) != 2:
+                    raise Unsupported("`cmp_to_key` takes a function of two arguments")
+                names = [a.arg for a in lambda_.args.args]
+                called: ast.expr = lambda_.body
+            else:
+                if not isinstance(compare, ast.Name):
+                    raise Unsupported("`cmp_to_key` takes a lambda or a function natively")
+                names = [".a", ".b"]
+                loads = [ast.Name(name, ast.Load()) for name in names]
+                called = ast.Call(ast.Name(compare.id, ast.Load()), loads, [])
+                typed = T.strip_literal(self._type_of(compare))  # type: ignore[attr-defined]
+                if not isinstance(typed, T.Callable_):
+                    raise Unsupported(f"`{compare.id}` is not a function native code calls")
+                types[id(called)] = typed.ret
+                for load in loads:
+                    types[id(load)] = element
+            zero = ast.Constant(0)
+            test = ast.Compare(called, [ast.Lt()], [zero])
+            types[id(zero)] = T.INT
+            types[id(test)] = T.BOOL
+            spelled = f"{self.info.qualname}.<cmp{len(made)}>"  # type: ignore[attr-defined]
+            definition = ast.FunctionDef(
+                name=f"cmp{len(made)}",
+                args=ast.arguments([], [ast.arg(n) for n in names], None, [], [], None, []),
+                body=[ast.Return(test)],
+                decorator_list=[],
+                returns=None,
+                type_params=[],
+            )
+            ast.copy_location(definition, compare)
+            ast.fix_missing_locations(definition)
+            frontend.synthetic.append(definition)
+            info = FunctionInfo(
+                name=definition.name,
+                qualname=spelled.replace("<", "").replace(">", ""),
+                module=self.info.module,  # type: ignore[attr-defined]
+                node=definition,
+                path=self.info.path,  # type: ignore[attr-defined]
+                params=[ParamInfo(name, element, annotated=True) for name in names],
+                ret=T.BOOL,
+                ret_annotated=True,
+            )
+            signature = frontend.signature(info)
+            function = frontend.declare(info, signature)
+            frontend.declared.pop(info.qualname, None)
+            _FunctionLowering(frontend, function, signature, info, {}).run(definition)
+            found = made[id(compare)] = function.name
+        return core.callback(self.b, found)  # type: ignore[attr-defined]
+
     # -- equality -------------------------------------------------------------------------
 
     def _collection_equality(self, node: ast.Compare) -> Value | None:
