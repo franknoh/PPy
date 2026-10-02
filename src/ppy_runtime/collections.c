@@ -535,7 +535,10 @@ int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t float
     int64_t *header = (int64_t *)calloc(26, sizeof(int64_t));
     int64_t room = capacity > 0 ? capacity : 1;
     int64_t *records = (int64_t *)calloc((size_t)(room * (stride > 0 ? stride : 1)), 8);
-    int64_t spare = 2 * (words > keys ? (words > 0 ? words : 1) : keys);
+    /* `keys` carries which key words are strings above bit 32 (a copy
+       passes header word 13 whole): the count is the low half. */
+    int64_t key_words = keys & 0xFFFFFFFF;
+    int64_t spare = 2 * (words > key_words ? (words > 0 ? words : 1) : key_words);
     int64_t *scratch = (int64_t *)calloc((size_t)spare, 8);
     if (header == NULL || records == NULL || scratch == NULL) {
         ppy_coll_fail();

@@ -994,7 +994,8 @@ def test_emitted_source_frees_everything_once(tmp_path: Path, name: str, languag
         capture_output=True,
         text=True,
         check=False,
-        env={"ASAN_OPTIONS": "detect_leaks=1"},
+        # A 64 GiB request is refused as a smaller machine would refuse it.
+        env={"ASAN_OPTIONS": "detect_leaks=1:max_allocation_size_mb=1024"},
     )
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout.strip() == expected
