@@ -482,6 +482,15 @@ def _ffi_library_of(resolver: NameResolver, node: ast.expr) -> str | None:
     return None
 
 
+def _number_table(literal: object) -> bool:
+    """A tuple of a few numbers or bools of one type: a constant table native
+    code holds as a value (`(0.1, 0.3, 0.6)`)."""
+    if not isinstance(literal, tuple) or not 0 < len(literal) <= 16:
+        return False
+    kinds = {type(item) for item in literal}
+    return len(kinds) == 1 and kinds <= {int, float, bool}
+
+
 class NameResolver:
     """Resolves annotation names for one module against the whole project."""
 
@@ -752,13 +761,22 @@ class ProjectSymbols:
                 literal = self._constant_value(value)
                 if literal is _NOT_CONSTANT:
                     continue
-                if not isinstance(literal, (int, float, complex, str, bytes, bool, type(None))):
+                if not isinstance(
+                    literal, (int, float, complex, str, bytes, bool, type(None))
+                ) and not _number_table(literal):
                     continue
                 literals[target] = literal
             for name, literal in literals.items():
                 if counts.get(name, 0) != 1 or (symbols.name, name) in rebound:
                     continue
                 symbols.constant_globals[name] = literal
+                if isinstance(literal, tuple):
+                    # A table of numbers: read in place, never a global read.
+                    symbols.globals.setdefault(
+                        name,
+                        T.Tuple_(tuple(T.strip_literal(T.type_of_constant(v)) for v in literal)),
+                    )
+                    continue
                 existing = symbols.global_facts.get(name, Facts())
                 facts = existing.with_(constant=literal, has_constant=True)
                 if isinstance(literal, int) and not isinstance(literal, bool):

@@ -45,6 +45,12 @@ rest, so you install only what you use.
 A missing library only disables its plugin. `uv run ppy doctor` reports
 what was found and what was not.
 
+Without the `llvm` extra, `ppy run prog.py` prints one warning (`W2012`)
+saying how to install `ppy-lang[llvm]`, then runs the program on CPython
+with the same output and exit code. `ppy build`, `ppy run --profile`, and
+the other commands that only make native code stop with `E1801` and the
+same advice.
+
 ## Toolchain
 
 Everything native is compiled on the machine where it runs, by the C

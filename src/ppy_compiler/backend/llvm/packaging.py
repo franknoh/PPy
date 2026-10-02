@@ -46,10 +46,12 @@ def build_extension(
     if generated is None:
         raise PackagingError("E1002", f"`{module}` produced no Python to carry")
     prefix = f"{module}."
+    # A nested function's entry is bound each time its `def` runs, which the
+    # extension's binder, there only while the module loads, cannot serve.
     signatures = {
         qualname: signature
         for qualname, signature in artifacts.signatures.items()
-        if qualname.startswith(prefix)
+        if qualname.startswith(prefix) and "<locals>" not in qualname
     }
     keys = {qualname: qualname[len(prefix) :] for qualname in signatures}
     name = module.rpartition(".")[2]

@@ -27,6 +27,7 @@ from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
+from ..analysis.closures import own_names
 from ..analysis.lexical import LexicalBindings
 from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo, ParamInfo, derivative_spec, fold_flags
@@ -92,11 +93,12 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
+from .calls import CallBinding, nested_entry_refusal
 from .closures import ClosureLowering
 from .collections import HANDLE, Held, crossing_classes, records_of
 from .containers import ContainerLowering
 from .effects import EffectLowering, check_effects, rule_of, wants_exceptions
-from .exceptions import ExceptionLowering, uses_exceptions
+from .exceptions import ExceptionLowering, OwnedTemporaries, uses_exceptions
 from .expressions import ExpressionLowering
 from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
@@ -474,13 +476,16 @@ class Frontend:
         if self.native_exceptions:
             # The backends ask each call's status for the raised one.
             self.module.attributes["ppy.exceptions"] = True
+        enclosing = {q: entry[0] for q, entry in functions.items()}
         for qualname, (info, analysis, node) in functions.items():
             if info.enclosing is not None:
-                # Lowered as a closure where it is defined, never on its own.
-                lowered.rejected[qualname] = (
-                    "a function defined inside another is lowered as a closure where it is defined"
-                )
-                continue
+                # Lowered as a closure where it is defined; and, where it
+                # shares nothing with the functions around it, on its own too,
+                # for Python to call when the function around it is Python's.
+                refused = nested_entry_refusal(info, enclosing)
+                if refused is not None:
+                    lowered.rejected[qualname] = refused
+                    continue
             if qualname in self.python:
                 lowered.rejected[qualname] = self.python[qualname]
                 continue
@@ -667,7 +672,7 @@ class Frontend:
             raise Unsupported("canonical signature has no CPU native ABI")
         return IRSignature(
             info.qualname,
-            "ppy_" + info.qualname.replace(".", "_"),
+            "ppy_" + info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
             tuple(parameters),
             results,
             native,
@@ -845,7 +850,7 @@ class Frontend:
             else _result_types(info, self.layouts)
         )
         function = self.module.add_function(
-            info.qualname.replace(".", "_"),
+            info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
             params,
             results,
             attributes={
@@ -916,7 +921,7 @@ class Frontend:
         for type_ in results:
             self.require_type(type_)
         function = self.module.add_function(
-            info.qualname.replace(".", "_"),
+            info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
             params,
             results,
             visibility="extern",
@@ -1471,6 +1476,8 @@ class _GuardSite:
 
 
 class _FunctionLowering(  # pylint: disable=too-many-ancestors
+    OwnedTemporaries,
+    CallBinding,
     StdlibLowering,
     ExpressionLowering,
     FrameLowering,
@@ -1605,6 +1612,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         self._stable = {
             name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
         } - stored
+        self._bind_constant_tables(node)
         self._body(node.body)
         self._check_cells()
         if self._open():
@@ -2715,13 +2723,69 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         packed = core.load(self.b, self.tuples[name])
         assert isinstance(packed.type, TupleType)
         if not isinstance(index, ast.Constant) or not isinstance(index.value, int):
-            raise Unsupported("a fixed tuple must be indexed by a constant")
+            return self._tuple_item_at(packed, index)
         position = index.value
         if position < 0:
             position += len(packed.type.items)
         if not 0 <= position < len(packed.type.items):
             raise Unsupported(f"index {index.value} is out of range for `{name}`")
         return core.tuple_extract(self.b, packed, position)
+
+    def _tuple_item_at(self, packed: Value, index: ast.expr) -> Value:
+        """`table[i]` of a tuple whose items are all of one type: the index
+        counted from either end and checked as CPython checks it, then the
+        item picked out by comparing it with each position."""
+        assert isinstance(packed.type, TupleType)
+        items = packed.type.items
+        if not items or len(items) > _MAX_TUPLE_WIDTH or any(t != items[0] for t in items):
+            raise Unsupported("a fixed tuple must be indexed by a constant")
+        b = self.b
+        position = self._coerce(self._expr(index), "int")
+        count = core.const(b, len(items), I64)
+        zero = core.const(b, 0, I64)
+        negative = core.cmp(b, "lt", position, zero)
+        position = core.select(b, negative, core.add(b, position, count, overflow="wrap"), position)
+        inside = core.bitwise(
+            b, "and", core.cmp(b, "ge", position, zero), core.cmp(b, "lt", position, count)
+        )
+        self._require(inside, "tuple index out of range", "IndexError: tuple index out of range")
+        found = core.tuple_extract(b, packed, 0)
+        for at in range(1, len(items)):
+            here = core.cmp(b, "eq", position, core.const(b, at, I64))
+            found = core.select(b, here, core.tuple_extract(b, packed, at), found)
+        return found
+
+    def _bind_constant_tables(self, node: ast.FunctionDef) -> None:
+        """Each module-level table of numbers the body reads (`RATES = (0.1,
+        0.3)`), made once in the entry block as the tuple value it is."""
+        symbols = getattr(self.frontend.analysis, "symbols", None)
+        if symbols is None:
+            return
+        own = own_names(node)
+        read = {
+            inner.id
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Load)
+        }
+        for name in sorted(read - own - set(self.tuples)):
+            table = symbols.constant_globals.get(name)
+            if not isinstance(table, tuple):
+                continue
+            entry = self._entry_builder()
+            items: list[Value] = []
+            for item in table:
+                if isinstance(item, bool):
+                    items.append(core.const(entry, item, BOOL))
+                elif isinstance(item, int):
+                    if not -(1 << 63) <= item < (1 << 63):
+                        raise Unsupported(f"`{name}` holds an integer past 64 bits")
+                    items.append(core.const(entry, item, I64))
+                else:
+                    items.append(core.const(entry, float(item), F64))
+            packed = core.tuple_make(entry, *items)
+            slot = self._alloca(packed.type, name)
+            core.store(self._entry_builder(), packed, slot)
+            self.tuples[name] = slot
 
     def _module_constant(self, name: str) -> Value | None:
         symbols = getattr(self.frontend.analysis, "symbols", None)
@@ -3110,7 +3174,10 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             reduced = self._reduction(target, node)
             if reduced is not None:
                 return reduced
-        if node.keywords:
+        if node.keywords and not self._binds_keywords(node):
+            through = self._effect_python_call(node, discard_result)
+            if through is not None:
+                return through
             raise Unsupported("keyword arguments have no native ABI")
         if self.frontend.standalone:
             read = self._standalone_read(node)
@@ -3190,11 +3257,19 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             powered = self._pow_call(node)
             if powered is not None:
                 return powered
+        scoped = self._scoped_callee(node)
         for qualname, (function, signature) in self.frontend.declared.items():
-            if qualname.rpartition(".")[2] == target and "ppy.generic" not in function.attributes:
+            if scoped is not None:
+                # A name a function around this one defines: that one, or none.
+                reached = qualname == scoped
+            else:
+                reached = qualname.rpartition(".")[2] == target and "<locals>" not in qualname
+            if reached and "ppy.generic" not in function.attributes:
                 return self._native_call(
                     function, signature, qualname, node, discard_result=discard_result
                 )
+        if scoped is not None:
+            raise Unsupported(f"`{target}` is a function the one around this keeps in Python")
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
                 return self._generic_call(qualname, info, node, discard_result=discard_result)
@@ -3231,12 +3306,13 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         A collection argument is typed by what the checker said of it, since
         its handle says nothing of what it holds, and it is passed by handle.
         """
-        if len(node.args) != len(info.params):
+        spelled = self._spelled(qualname, node)
+        if len(spelled) != len(info.params):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         values: list[Value] = []
         temporaries: list[Value] = []
         bindings: dict[T.TypeVar_, T.Type] = {}
-        for argument, param in zip(node.args, info.params, strict=True):
+        for argument, param in zip(spelled, info.params, strict=True):
             if self._is_collection(argument) or self._string_of(argument) is not None:
                 handle, owned = self._handle(argument)
                 if owned:
@@ -4547,11 +4623,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if aio_dialect.is_async(function):
             if not aio_dialect.is_async(self.function):
                 raise Unsupported(f"`{qualname}` is a coroutine; only a coroutine awaits it")
-            started = self._call_arguments(signature, node.args, qualname)
+            started = self._call_arguments(signature, self._spelled(qualname, node), qualname)
             inner = function.results[0] if function.results else VOID
             return aio_dialect.create(self.b, function.name, tuple(started), inner)
         waiting = len(self._temporaries)
-        arguments = self._call_arguments(signature, node.args, qualname)
+        arguments = self._call_arguments(signature, self._spelled(qualname, node), qualname)
         temporaries = self._temporaries[waiting:]
         del self._temporaries[waiting:]
         if signature.returns_tuple:

@@ -4,6 +4,7 @@
     uv run python scripts/fuzz.py --seed 400 --count 10 --paths run,standalone
     uv run python scripts/fuzz.py --state --count 25 # module globals and objects
     uv run python scripts/fuzz.py --seed 0 --count 25 --stdlib   # the standard library
+    uv run python scripts/fuzz.py --seed 0 --count 25 --calls    # keywords and defaults
     uv run python scripts/fuzz.py --replay           # every saved regression
     uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
 
@@ -78,11 +79,12 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     prints: bool = False,
     state: bool = False,
     stdlib: bool = False,
+    calls: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
     for current in range(seed, seed + count):
-        source = generate_program(current, prints, state, stdlib)
+        source = generate_program(current, prints, state, stdlib, calls)
         results = run_program(source, paths, timeout=60.0)
         mismatches = printed_twice(results) + compare(results)
         if not mismatches:
@@ -132,6 +134,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prints", action="store_true", help="functions print between checks")
     parser.add_argument("--show", type=int, help="print the program for this seed and exit")
     parser.add_argument(
+        "--calls",
+        action="store_true",
+        help="functions take defaults and keyword-only parameters; calls name and omit them",
+    )
+    parser.add_argument(
         "--stdlib",
         action="store_true",
         help=(
@@ -141,7 +148,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     options = parser.parse_args(argv)
     if options.show is not None:
-        print(generate_program(options.show, options.prints, options.state, options.stdlib), end="")
+        shown = generate_program(
+            options.show, options.prints, options.state, options.stdlib, options.calls
+        )
+        print(shown, end="")
         return 0
     if options.replay:
         return replay()
@@ -154,6 +164,7 @@ def main(argv: list[str] | None = None) -> int:
         options.prints,
         options.state,
         options.stdlib,
+        options.calls,
     )
 
 

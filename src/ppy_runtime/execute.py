@@ -47,6 +47,27 @@ class NativeBinder(Protocol):
     def region(self, module: str, function: str, fallback: object) -> object: ...
 
 
+def _binder(natives: NativeBinder, module_name: str):  # type: ignore[no-untyped-def]
+    """What a generated module calls to bind each entry point as its `def` runs.
+
+    A nested function's `def` runs each time the function around it does.
+    It shares nothing with that function (the compiler gives it an entry
+    only then), so every function object it makes behaves alike, and the
+    first one bound serves them all, rather than one binding made per call.
+    """
+    nested: dict[str, object] = {}
+
+    def bind(function: str, value: object) -> object:
+        if "<locals>" not in function:
+            return natives.bind(module_name, function, value)
+        found = nested.get(function)
+        if found is None:
+            found = nested[function] = natives.bind(module_name, function, value)
+        return found
+
+    return bind
+
+
 def _prepare_natives(
     namespace: dict,
     module_name: str,
@@ -76,7 +97,7 @@ def _prepare_natives(
             )
     names = natives.names(module_name)
     if names:
-        namespace[BINDER_NAME] = lambda function, value: natives.bind(module_name, function, value)
+        namespace[BINDER_NAME] = _binder(natives, module_name)
     return (names, exported, regions)
 
 

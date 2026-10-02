@@ -823,7 +823,7 @@ def _signature(
         returns = ("i64",)
     return NativeSignature(
         qualname=info.qualname,
-        symbol="ppy_" + info.qualname.replace(".", "_"),
+        symbol="ppy_" + info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
         parameters=parameters,
         returns=returns,
         releases_gil=_releases_gil(analysis)
