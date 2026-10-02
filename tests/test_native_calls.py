@@ -445,7 +445,8 @@ print("KEYED", len(keyed))
 def test_a_value_class_argument_crosses_with_an_object_result(tmp_path: Path):
     """A function taking a value class and returning an object runs its native
     body when Python calls it, by position or with a default left out, which
-    Python binds before it makes the call through the native entry."""
+    the generated wrapper binds before it makes the call through the native
+    entry, without Python's binding (`binding.keyed`)."""
     expected = _expected(tmp_path, VALUE_CLASS_ARGUMENT)
     built = _run(tmp_path, "-m", "ppy_compiler", "build", "prog.ppy", "-o", "dist")
     assert built.returncode == 0, built.stderr
@@ -455,7 +456,84 @@ def test_a_value_class_argument_crosses_with_an_object_result(tmp_path: Path):
     lines = ran.stdout.splitlines()
     assert lines[0] == expected
     assert "NATIVE prog.run True" in lines, lines
-    assert "KEYED 1" in lines, lines
+    assert "KEYED 0" in lines, lines
+
+
+KEYWORD_CALLS = """
+import sys
+
+import ppy
+
+
+@ppy.native
+def scale(x: int, factor: int = 3, *, offset: int = 0, label: str = "n") -> str:
+    return label + str(x * factor + offset)
+
+
+@ppy.native
+def mix(a: int, b: float, /, c: int = 2) -> float:
+    return a * b + c
+
+
+def main() -> None:
+    here = sys.modules[__name__]
+    f = getattr(here, "scale")
+    g = getattr(here, "mix")
+    print(f(2), f(2, 5), f(2, offset=1), f(x=2, factor=4), f(offset=7, x=1, label="z"))
+    name = "".join(["fac", "tor"])
+    print(f(2, **{name: 6}), f(2**70, factor=1), f(True, offset=False))
+    print(g(2, 1.5), g(2, 1.5, c=1), g(2, 1.5, 4), g(3, 0.5, c=2**70))
+    bad = [
+        lambda: f(),
+        lambda: f(2, nope=1),
+        lambda: f(2, 3, 4),
+        lambda: f(2, x=3),
+        lambda: f(2, factor=1, **{"factor": 2}),
+        lambda: f(2, "3"),
+        lambda: f(2, offset="1"),
+        lambda: g(2, b=1.5),
+        lambda: g(a=2, b=1.5),
+        lambda: g(2),
+    ]
+    for call in bad:
+        try:
+            print(call())
+        except TypeError as e:
+            print("TypeError:", e)
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+@pytest.mark.parametrize("built", [False, True])
+def test_the_generated_wrapper_binds_keywords_and_defaults_itself(tmp_path: Path, built: bool):
+    """A call from Python with keywords or with defaults left out is bound in
+    the generated C wrapper, by the Python function's parameter names and its
+    defaults, and made through the native entry; a guard that refuses the
+    bound arguments hands Python the call as it was spelled. A call that does
+    not bind is the Python function's, which raises CPython's `TypeError`."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "prog.ppy").write_text(KEYWORD_CALLS.lstrip("\n"), encoding="utf-8")
+    expected = _run(tmp_path, "prog.ppy")
+    assert expected.returncode == 0, expected.stderr
+    if not built:
+        done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+        assert done.returncode == 0, done.stderr
+        assert _output(done).strip() == expected.stdout.strip()
+        return
+    made = _run(tmp_path, "-m", "ppy_compiler", "build", "prog.ppy", "-o", "dist")
+    assert made.returncode == 0, made.stderr
+    (tmp_path / "stats.py").write_text(_STATS, encoding="utf-8")
+    ran = _run(tmp_path, "stats.py", str(tmp_path / "dist" / "ppy-bindings.json"))
+    assert ran.returncode == 0, ran.stderr
+    lines = ran.stdout.splitlines()
+    assert "\n".join(lines[: -3]) == expected.stdout.strip()
+    assert "NATIVE prog.scale True" in lines and "NATIVE prog.mix True" in lines, lines
+    # No call went through Python's binding (`binding.keyed`).
+    assert lines[-1] == "KEYED 0", lines
 
 
 RAISES_WITH_A_LIST = """

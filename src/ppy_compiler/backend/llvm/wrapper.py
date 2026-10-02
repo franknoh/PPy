@@ -100,6 +100,138 @@ static PyObject *ppy_handoff(PyObject *fallback, PyObject *const *args, Py_ssize
     return PyObject_Vectorcall(fallback, args, nargs, NULL);
 }
 
+/* The fallback, called as the caller spelled the call. */
+static PyObject *ppy_handoff_as(
+    PyObject *fallback, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames
+) {
+    if (fallback == NULL) {
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+    return PyObject_Vectorcall(fallback, args, nargs, kwnames);
+}
+
+/* A call spelled with keywords, or with defaults left out, bound here as
+ * Python binds it: by the Python function's parameter names, and with its
+ * defaults, read at each call as `__defaults__` and `__kwdefaults__` hold
+ * them. Anything this does not bind plainly (a name it does not know, one
+ * given twice, a positional-only one by name, too many arguments, a missing
+ * one with no default) is the Python function's to bind, which raises
+ * CPython's own TypeError for it. */
+typedef struct {
+    PyObject *function; /* the Python function, or NULL: nothing binds here */
+    PyObject *names;    /* its parameters' names, in the native entry's order */
+    Py_ssize_t posonly;    /* the leading ones only passed by position */
+    Py_ssize_t positional; /* the ones that can be passed by position */
+} ppy_binder;
+
+static Py_ssize_t ppy_code_count(PyObject *code, const char *name) {
+    PyObject *value = PyObject_GetAttrString(code, name);
+    Py_ssize_t found = value != NULL && PyLong_Check(value) ? PyLong_AsSsize_t(value) : -1;
+    Py_XDECREF(value);
+    return found;
+}
+
+/* Bind by `function`, whose parameters must be the entry's `count` in order:
+ * no `*args` and no `**kwargs`. Any other function binds nothing here. */
+static void ppy_binder_set(ppy_binder *binder, PyObject *function, Py_ssize_t count) {
+    PyObject *code;
+    PyObject *varnames = NULL;
+    Py_ssize_t flags, positional, posonly, kwonly;
+    Py_CLEAR(binder->function);
+    Py_CLEAR(binder->names);
+    if (function == NULL || !PyFunction_Check(function)) {
+        return;
+    }
+    code = PyFunction_GetCode(function);
+    flags = ppy_code_count(code, "co_flags");
+    positional = ppy_code_count(code, "co_argcount");
+    posonly = ppy_code_count(code, "co_posonlyargcount");
+    kwonly = ppy_code_count(code, "co_kwonlyargcount");
+    varnames = PyObject_GetAttrString(code, "co_varnames");
+    /* 0x04 is CO_VARARGS and 0x08 CO_VARKEYWORDS. */
+    if (flags < 0 || positional < 0 || posonly < 0 || kwonly < 0 || (flags & 0x0C) != 0
+        || positional + kwonly != count || varnames == NULL || !PyTuple_Check(varnames)
+        || PyTuple_GET_SIZE(varnames) < count) {
+        Py_XDECREF(varnames);
+        PyErr_Clear();
+        return;
+    }
+    binder->names = PyTuple_GetSlice(varnames, 0, count);
+    Py_DECREF(varnames);
+    if (binder->names == NULL) {
+        PyErr_Clear();
+        return;
+    }
+    Py_INCREF(function);
+    binder->function = function;
+    binder->posonly = posonly;
+    binder->positional = positional;
+}
+
+/* 1 where the call bound into `bound`, a borrowed reference per parameter;
+ * 0 where Python must bind it. */
+static int ppy_bind_call(
+    const ppy_binder *binder, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames,
+    PyObject **bound, Py_ssize_t count
+) {
+    Py_ssize_t keywords = kwnames != NULL ? PyTuple_GET_SIZE(kwnames) : 0;
+    PyObject *defaults;
+    Py_ssize_t first;
+    if (binder->function == NULL || nargs > binder->positional) {
+        return 0;
+    }
+    for (Py_ssize_t i = 0; i < count; i++) {
+        bound[i] = i < nargs ? args[i] : NULL;
+    }
+    for (Py_ssize_t k = 0; k < keywords; k++) {
+        PyObject *key = PyTuple_GET_ITEM(kwnames, k);
+        Py_ssize_t at = -1;
+        for (Py_ssize_t i = binder->posonly; i < count && at < 0; i++) {
+            if (PyTuple_GET_ITEM(binder->names, i) == key) {
+                at = i;
+            }
+        }
+        for (Py_ssize_t i = binder->posonly; i < count && at < 0; i++) {
+            /* A name the caller made rather than spelled is equal, not the same. */
+            if (PyUnicode_Compare(PyTuple_GET_ITEM(binder->names, i), key) == 0) {
+                at = i;
+            }
+        }
+        if (PyErr_Occurred()) {
+            PyErr_Clear();
+            return 0;
+        }
+        if (at < 0 || bound[at] != NULL) {
+            return 0;
+        }
+        bound[at] = args[nargs + k];
+    }
+    defaults = PyFunction_GetDefaults(binder->function);
+    first = binder->positional - (defaults != NULL ? PyTuple_GET_SIZE(defaults) : 0);
+    for (Py_ssize_t i = nargs; i < count; i++) {
+        if (bound[i] != NULL) {
+            continue;
+        }
+        if (i < binder->positional) {
+            if (defaults == NULL || i < first) {
+                return 0;
+            }
+            bound[i] = PyTuple_GET_ITEM(defaults, i - first);
+        } else {
+            PyObject *named = PyFunction_GetKwDefaults(binder->function);
+            PyObject *value = named != NULL && PyDict_Check(named)
+                ? PyDict_GetItemWithError(named, PyTuple_GET_ITEM(binder->names, i))
+                : NULL;
+            if (value == NULL) {
+                PyErr_Clear();
+                return 0;
+            }
+            bound[i] = value;
+        }
+    }
+    return 1;
+}
+
 /* The entry that stands in for a Python function answers to its name, its
  * module, and its docstring, so `help`, `doctest`, and `__name__` see the
  * function the program wrote rather than the wrapper module's table entry. */
@@ -483,6 +615,7 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         for atom in signature.returns
     ]
     pointer = f"ppy_fn_{index}"
+    count = len(signature.parameters)
     copied = _crossing(signature) if signature.crosses_collections else None
     crossing = copied is not None
     specs = copied.specs if copied is not None else None
@@ -560,7 +693,7 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     sanitized = f'{end}        return ppy_sanitizer_failed(status, "{qualname}");\n'
     failed = (
         f"{end}        if (status == -1) {{\n            ppy_raised((void *)chosen);\n        }}\n"
-        f"        return ppy_handoff(ppy_fallback_{index}, args, nargs);\n"
+        f"        return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);\n"
     )
     answered = f"{sync}    PyObject *ppy_result = {boxed};\n{end}    return ppy_result;\n"
     if held:
@@ -580,7 +713,7 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
             "        ppy_io.discard();\n"
             "        if (status == -1) {\n            ppy_raised((void *)chosen);\n        }\n"
             "        ppy_io_settle();\n"
-            f"        return ppy_handoff(ppy_fallback_{index}, args, nargs);\n"
+            f"        return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);\n"
         )
         synced = sync.replace("return NULL;", "return ppy_io_commit_result(NULL);")
         answered = (
@@ -597,6 +730,7 @@ static int ppy_spec_count_{index} = 0;
 static PyObject *ppy_types_{index} = NULL;
 static PyObject *ppy_fallback_{index} = NULL;
 static PyObject *ppy_keyed_{index} = NULL;
+static ppy_binder ppy_binder_{index} = {{NULL, NULL, 0, 0}};
 {type_slots}
 {name_slots}
 {builder}
@@ -622,6 +756,7 @@ static PyObject *ppy_bind_{index}(PyObject *self, PyObject *args) {{
     Py_XDECREF(ppy_fallback_{index});
     ppy_fallback_{index} = fallback;
     ppy_target_{index} = ({pointer})(uintptr_t)address;
+    ppy_binder_set(&ppy_binder_{index}, fallback, {count});
 {_type_assignments(index, object_params)}    ppy_spec_count_{index} = 0;
     if (fallback != NULL) {{
         return ppy_named((PyCFunction)(void *)ppy_call_{index}, fallback);
@@ -652,10 +787,24 @@ static PyObject *ppy_specialize_{index}(PyObject *self, PyObject *args) {{
 }}
 
 static PyObject *ppy_call_{index}(
-    PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames
+    PyObject *self, PyObject *const *ppy_given, Py_ssize_t ppy_count, PyObject *kwnames
 ) {{
+    /* The arguments in the entry's order: as given, or bound from keywords
+       and defaults. A refusal hands Python the call as it was spelled. */
+    PyObject *const *args = ppy_given;
+    Py_ssize_t nargs = ppy_count;
+    PyObject *ppy_bound[{max(count, 1)}];
     if ((kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0)
-        || (ppy_target_{index} != NULL && nargs != {len(signature.parameters)})) {{
+        || (ppy_target_{index} != NULL && nargs != {count})) {{
+        if (ppy_target_{index} != NULL && ppy_binder_{index}.function != NULL) {{
+            if (ppy_bind_call(&ppy_binder_{index}, ppy_given, ppy_count, kwnames, ppy_bound, {count})) {{
+                args = ppy_bound;
+                nargs = {count};
+                goto ppy_bound_call;
+            }}
+            /* What does not bind here does not bind: Python raises its TypeError. */
+            return PyObject_Vectorcall(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);
+        }}
         /* Python binds keywords and defaults (`binding.keyed`), then calls
            this entry in order; without a binder the Python function runs. */
         if (ppy_keyed_{index} != NULL) {{
@@ -669,6 +818,7 @@ static PyObject *ppy_call_{index}(
     if (ppy_target_{index} == NULL) {{
         return ppy_handoff(ppy_fallback_{index}, args, nargs);
     }}
+ppy_bound_call:;
     {pointer} chosen = ppy_target_{index};
     for (int slot = 0; slot < ppy_spec_count_{index}; slot++) {{
         if (ppy_spec_matches(&ppy_specs_{index}[slot], args, nargs)) {{
@@ -691,7 +841,7 @@ static PyObject *ppy_call_{index}(
 {answered}
 ppy_fallback:
 {cleanup}
-{end}    return ppy_handoff(ppy_fallback_{index}, args, nargs);
+{end}    return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);
 }}
 """
 
