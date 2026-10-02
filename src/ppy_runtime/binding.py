@@ -26,7 +26,14 @@ from .abi import (
     NativeSignature,
 )
 
-__all__ = ["NativeBinding", "adopt", "bind", "observation_wanted", "value_class_types"]
+__all__ = [
+    "NativeBinding",
+    "adopt",
+    "as_method",
+    "bind",
+    "observation_wanted",
+    "value_class_types",
+]
 
 _I64_LOW = -(1 << 63)
 _I64_HIGH = (1 << 63) - 1
@@ -116,6 +123,26 @@ _ADOPTED: dict[int, tuple[object, NativeSignature]] = {}
 def remember(entry: Callable[..., object], signature: NativeSignature) -> None:
     """Record that `entry`, a generated C entry point, runs `signature` natively."""
     _ADOPTED[id(entry)] = (entry, signature)
+
+
+def as_method(entry: Callable[..., object], fallback: object, key: str) -> Callable[..., object]:
+    """A generated C entry point that stands in a class body for a plain method,
+    made an instance method: a builtin function does not bind, so `obj.f(x)`
+    would not pass `obj`. A static method's entry is left as it is."""
+    import types  # pylint: disable=import-outside-toplevel
+
+    if "." not in key or not isinstance(fallback, types.FunctionType):
+        return entry
+    made = _INSTANCE_METHOD(entry)
+    known = _ADOPTED.get(id(entry))
+    if known is not None and known[0] is entry:
+        remember(made, known[1])
+    return made  # type: ignore[no-any-return]
+
+
+_INSTANCE_METHOD = ctypes.pythonapi.PyInstanceMethod_New
+_INSTANCE_METHOD.restype = ctypes.py_object
+_INSTANCE_METHOD.argtypes = (ctypes.py_object,)
 
 
 def signature_of(function: object) -> NativeSignature | None:
@@ -524,7 +551,11 @@ def _bind(
         binding.specialized_calls += int(entry is not None)
         return _answer(slots)
 
+    nothing = signature.returns_none
+
     def _answer(slots: list) -> object:  # type: ignore[type-arg]
+        if nothing:
+            return None
         if text_result:
             return _text_result(slots[0].value, slots[1].value)
         if returns_tuple:

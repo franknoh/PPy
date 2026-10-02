@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from .abi import NativeSignature
-from .binding import bind, remember, value_class_types
+from .binding import as_method, bind, remember, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
@@ -109,8 +109,19 @@ class PrebuiltBinder(LibraryBinder):
 
             if not attach(self._wrappers, self._library):
                 return None
+        if signature.effects:
+            from .effects import attach as attach_effects  # pylint: disable=import-outside-toplevel
+            from .effects import register_function  # pylint: disable=import-outside-toplevel
+
+            if not attach_effects(self._wrappers, self._library):
+                return None
+            register_function(signature.qualname, fallback)
+        from .collection_boundary import resolver  # pylint: disable=import-outside-toplevel
+
+        resolve = resolver(signature, fallback)
+        given = (address, types, fallback) if resolve is None else (address, types, fallback, resolve)
         try:
-            named = getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
+            named = getattr(self._wrappers, f"bind_{index}")(*given)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
         if named is not None:
@@ -132,17 +143,16 @@ class PrebuiltBinder(LibraryBinder):
         if not address:
             return fallback
         # A coroutine's future needs the Python-side wrapping; the C wrapper
-        # would hand back the bare handle, and knows nothing of held output. A
-        # function that draws needs `random`'s state saved around it, which
-        # the Python side does.
+        # would hand back the bare handle. A function that draws needs
+        # `random`'s state saved around it, which the Python side does.
         entry = (
             None
-            if signature.future or signature.effects or signature.draws
+            if signature.future or signature.draws
             else self._fast_entry(signature, address, fallback)
         )
         if entry is not None:
             remember(entry, signature)
-            return entry
+            return as_method(entry, fallback, function)
         binding = bind(signature, address, fallback, owner=self._library)
         return binding.wrapper
 

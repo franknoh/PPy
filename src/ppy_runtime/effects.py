@@ -28,7 +28,14 @@ from typing import Any
 
 from .abi import STATUS_OK, STATUS_RAISED
 
-__all__ = ["EffectError", "Effects", "effects_for", "register_namespace"]
+__all__ = [
+    "EffectError",
+    "Effects",
+    "attach",
+    "effects_for",
+    "register_function",
+    "register_namespace",
+]
 
 _HOOK = ctypes.CFUNCTYPE(
     ctypes.c_int64, ctypes.c_int64, ctypes.c_int64, ctypes.c_int64, ctypes.c_int64
@@ -47,6 +54,8 @@ _SIGNATURES: dict[str, tuple[Any, tuple[Any, ...]]] = {
     "ppy_io_commit": (ctypes.c_int64, ()),
     "ppy_io_discard": (None, ()),
     "ppy_io_state": (ctypes.POINTER(ctypes.c_int64), ()),
+    "ppy_io_calls": (ctypes.POINTER(ctypes.c_int64), ()),
+    "ppy_coll_sweep": (None, ()),
     "ppy_io_answer": (None, (ctypes.c_int64, ctypes.c_int64)),
     "ppy_io_answer_text": (None, (ctypes.c_char_p, ctypes.c_int64)),
     "ppy_io_pending": (
@@ -113,8 +122,6 @@ class Effects:
     # -- the boundary ------------------------------------------------------------
 
     def enter(self) -> int:
-        local = self.local
-        local.depth = getattr(local, "depth", 0) + 1
         return int(self.lib.ppy_io_enter())
 
     def leave(self, status: int, outer: int, qualname: str, let_go: Any) -> bool | BaseException:
@@ -164,11 +171,46 @@ class Effects:
             raise self._raised().pop()
 
     def _done(self) -> None:
-        local = self.local
-        local.depth -= 1
-        if local.depth == 0:
+        """Once the outermost call is done, the objects and exceptions the
+        calls left are forgotten. The runtime counts the calls in progress
+        (`ppy_io_calls`), so a generated wrapper's calls count too."""
+        calls = self.lib.ppy_io_calls()
+        if calls[0] == 0:
+            calls[1] = 0
+            local = self.local
             local.__dict__.pop("objects", None)
             local.__dict__.pop("raised", None)
+
+    # -- a generated wrapper's slow paths (`crossing.c`'s `ppy_effects`) -------------
+
+    def crossed(self, status: int, qualname: str) -> BaseException:
+        """A call that ended other than answering after a barrier: what to raise.
+        The wrapper has left the call and let go of what it held."""
+        try:
+            if status != STATUS_RAISED:
+                self.lib.ppy_io_discard()
+                return EffectError(
+                    f"PPy: native `{qualname}` fell back after an effect; "
+                    "please report this as a bug"
+                )
+            error = self._native_exception()
+            self.lib.ppy_coll_sweep()
+            if self.lib.ppy_io_commit() != 0:
+                return self._raised().pop()
+            return error
+        finally:
+            self._done()
+
+    def failed(self) -> BaseException:
+        """What a write raised when an answered call's output was written out."""
+        try:
+            return self._raised().pop()
+        finally:
+            self._done()
+
+    def tidy(self) -> None:
+        """After a generated wrapper's call: the outermost's leftovers forgotten."""
+        self._done()
 
     def _native_exception(self) -> BaseException:
         """The exception pending in native code, as Python's."""
@@ -341,6 +383,48 @@ def _resolve(spelled: str) -> Any:
     for part in rest:
         found = getattr(found, part)
     return found
+
+
+def attach(wrappers: Any, library: ctypes.CDLL | None = None) -> bool:
+    """Hand a generated wrapper module the runtime's held output and this
+    side's slow paths (`wrapper_effects.c`); whether it took them. Asked once
+    per module."""
+    hand = getattr(wrappers, "ppy_effects", None)
+    if hand is None:
+        return False
+    attached = getattr(wrappers, "__ppy_effects__", None)
+    if attached is not None:
+        return bool(attached)
+    effects = effects_for(library)
+    taken = False
+    if effects is not None:
+        lib = effects.lib
+        names = ("ppy_io_enter", "ppy_io_leave", "ppy_io_commit", "ppy_io_discard", "ppy_io_calls")
+        try:
+            addresses = [ctypes.cast(getattr(lib, name), ctypes.c_void_p).value for name in names]
+            taken = bool(hand(*addresses, effects.crossed, effects.failed, effects.tidy))
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            taken = False
+    try:
+        wrappers.__ppy_effects__ = taken
+    except (AttributeError, TypeError):
+        pass
+    return taken
+
+
+def register_function(qualname: str, function: Any) -> None:
+    """`register_namespace` with the globals `function` reads: its own, or those
+    of the function a binding wrapper stands for."""
+    while function is not None:
+        found = getattr(function, "__ppy_globals__", None)
+        if found is not None:
+            register_namespace(qualname, found)
+            return
+        wrapped = getattr(function, "__wrapped__", None)
+        if wrapped is None:
+            register_namespace(qualname, getattr(function, "__globals__", None))
+            return
+        function = wrapped
 
 
 _LOCK = threading.Lock()

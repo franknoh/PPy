@@ -81,7 +81,7 @@ static struct PyModuleDef ppy_module = {{
 }};
 
 PyMODINIT_FUNC PyInit_{name}(void) {{
-    PyObject *module = PyModule_Create(&ppy_module);
+{link}    PyObject *module = PyModule_Create(&ppy_module);
     if (module == NULL) {{
         return NULL;
     }}
@@ -106,6 +106,34 @@ PyMODINIT_FUNC PyInit_{name}(void) {{
     PyDict_DelItemString(dict, "__ppy_bind_native__");
     return module;
 }}
+"""
+
+#: The crossing's runtime, linked into the extension rather than handed over.
+_RUNTIME_LINK = """
+int8_t *ppy_seq_new(int64_t, int64_t, int64_t, int64_t);
+int8_t *ppy_map_new(int64_t, int64_t, int64_t, int64_t);
+void ppy_seq_push_many(int8_t *, const int8_t *, int64_t);
+void ppy_coll_put_many(int8_t *, const int8_t *, const int8_t *, int64_t);
+void ppy_coll_copy_out(int8_t *, int8_t *, int8_t *);
+int64_t ppy_coll_len(int8_t *);
+void ppy_coll_retain(int8_t *);
+void ppy_coll_release(int8_t *);
+void ppy_coll_text_keys(int8_t *, int64_t);
+void ppy_str_new_many(const int8_t *, const int64_t *, int64_t, int64_t *);
+
+static void ppy_rt_link(void) {
+    ppy_rt.seq_new = ppy_seq_new;
+    ppy_rt.map_new = ppy_map_new;
+    ppy_rt.push_many = ppy_seq_push_many;
+    ppy_rt.put_many = ppy_coll_put_many;
+    ppy_rt.copy_out = ppy_coll_copy_out;
+    ppy_rt.len = ppy_coll_len;
+    ppy_rt.retain = ppy_coll_retain;
+    ppy_rt.release = ppy_coll_release;
+    ppy_rt.text_keys = ppy_coll_text_keys;
+    ppy_rt.str_new_many = ppy_str_new_many;
+    ppy_rt_ready = 1;
+}
 """
 
 _ADOPTER = """
@@ -174,20 +202,25 @@ def extension_source(
     under (`f`, or `Class.method`); `python_source` is the module's
     optimized Python with the binding calls already in place.
     """
-    from .wrapper import _type_assignments
+    from .wrapper import _c_atom, _support, _type_assignments
 
     ordered = sorted(signatures.items())
-    parts = [_HEADER, "#include <string.h>"]
+    parts = [_HEADER, "#include <string.h>", *_support(signatures.values(), managed=False)]
+    link = ""
+    if any(s.crosses_collections for s in signatures.values()):
+        # The collections runtime is linked in: the crossing calls it directly.
+        parts.append(_RUNTIME_LINK)
+        link = "    ppy_rt_link();\n"
     entries: list[str] = []
     calls: list[str] = []
     adopters: list[str] = []
     for index, (qualname, signature) in enumerate(ordered):
-        parts.append(_function(index, signature))
-        atoms = [
-            C_TYPES[atom.removesuffix("*")] + ("*" if atom.endswith("*") else "")
-            for atom in signature.params
+        parts.append(_function(index, signature, managed=False))
+        atoms = [_c_atom(atom) for atom in signature.params]
+        outs = [
+            "char **, long long *" if atom == "text" else f"{_c_atom(atom)} *"
+            for atom in signature.returns
         ]
-        outs = [f"{C_TYPES[atom]} *" for atom in signature.returns]
         parts.append(f"int32_t {signature.symbol}({', '.join([*atoms, *outs])});")
         entries.append(f'    {{"{keys[qualname]}", {index}}},')
         method_name = keys[qualname].rpartition(".")[2]
@@ -217,6 +250,7 @@ def extension_source(
             adopters="\n".join(adopters) + "\n" + table,
             source=_c_bytes(python_source),
             name=name,
+            link=link,
             file=_c_string(source_path),
         )
     )

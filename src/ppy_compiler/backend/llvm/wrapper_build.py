@@ -35,18 +35,22 @@ class BuiltWrappers:
     def ok(self) -> bool:
         return self.module is not None
 
-    def bind(self, qualname: str, address: int, types: tuple, fallback=None) -> object | None:  # type: ignore[no-untyped-def]
+    def bind(  # type: ignore[no-untyped-def]
+        self, qualname: str, address: int, types: tuple, fallback=None, resolve=None
+    ) -> object | None:
         """Point one wrapper at its native code, and hand back the fast entry.
 
         With `fallback`, the wrapper holds the Python implementation itself and
         invokes it from C when a guard refuses the call; without one it returns
-        `NotImplemented` and the caller must watch for it.
+        `NotImplemented` and the caller must watch for it. `resolve` finds the
+        Python classes of the objects that cross (`collection_boundary.resolver`).
         """
         index = self.entries.get(qualname)
         if self.module is None or index is None:
             return None
         try:
-            named = getattr(self.module, f"bind_{index}")(address, types, fallback)
+            given = (address, types, fallback) if resolve is None else (address, types, fallback, resolve)
+            named = getattr(self.module, f"bind_{index}")(*given)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
         if named is not None:
@@ -60,6 +64,14 @@ class BuiltWrappers:
         if self.module is None:
             return False
         from ppy_runtime.collection_boundary import attach  # pylint: disable=import-outside-toplevel
+
+        return attach(self.module, library)
+
+    def attach_effects(self, library=None) -> bool:  # type: ignore[no-untyped-def]
+        """Point the wrappers of functions with effects at the held output."""
+        if self.module is None:
+            return False
+        from ppy_runtime.effects import attach  # pylint: disable=import-outside-toplevel
 
         return attach(self.module, library)
 

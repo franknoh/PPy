@@ -15,7 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ppy_runtime.collection_boundary import RETURNS_NOTHING, Spec
+from ppy_runtime.abi import CrossingClass
+from ppy_runtime.collection_boundary import Spec, field_spec
 from ppy_runtime.collection_boundary import parse as parse_spec
 
 from .lowering import NativeParam, NativeSignature
@@ -246,8 +247,21 @@ static int ppy_add_spec(ppy_spec *specs, int *count, PyObject *args) {
 """
 
 #: The containers' crossing (`crossing.c`), added to a module whose
-#: functions take or return a `list`, a `dict`, or a `set`.
+#: functions take or return a `list`, a `dict`, or a `set`, and the held
+#: output of functions with effects (`wrapper_effects.c`).
 _CROSSING = Path(__file__).with_name("crossing.c")
+_EFFECTS = Path(__file__).with_name("wrapper_effects.c")
+
+
+def _support(signatures, *, managed: bool = True) -> list[str]:  # type: ignore[no-untyped-def]
+    """The C the wrappers of these signatures share."""
+    found = list(signatures)
+    parts = []
+    if any(s.crosses_collections for s in found):
+        parts.append(_CROSSING.read_text(encoding="utf-8"))
+    if managed and any(s.effects for s in found):
+        parts.append(_EFFECTS.read_text(encoding="utf-8"))
+    return parts
 
 _FOOTER = """
 static PyMethodDef ppy_methods[] = {{
@@ -291,9 +305,11 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
     # drives, and so does a global the binding reads; there is no C wrapper
     # for either.
     signatures = {q: s for q, s in signatures.items() if wrapped_in_c(s)}
+    parts.extend(_support(signatures.values()))
     if any(s.crosses_collections for s in signatures.values()):
-        parts.append(_CROSSING.read_text(encoding="utf-8"))
         methods.append('    {"ppy_runtime", ppy_runtime, METH_VARARGS, NULL},')
+    if any(s.effects for s in signatures.values()):
+        methods.append('    {"ppy_effects", ppy_effects, METH_VARARGS, NULL},')
     for index, (qualname, signature) in enumerate(sorted(signatures.items())):
         entries[qualname] = index
         parts.append(_function(index, signature))
@@ -321,43 +337,76 @@ _CROSSING_KINDS = {
     "list": "PX_LIST",
     "dict": "PX_DICT",
     "set": "PX_SET",
+    "object": "PX_OBJECT",
+    "record": "PX_RECORD",
 }
 
+_PARTS = {"int": "i", "float": "f", "bool": "b"}
 
-def _copied(spec: Spec | None) -> bool:
+
+@dataclass(slots=True)
+class _Crossing:
+    """What a signature's wrapper copies: each crossed type by its parameter's
+    position (`r` the result), and the classes its objects are instances of,
+    each with its fields' types."""
+
+    specs: dict[str, Spec]
+    classes: list[CrossingClass]
+    fields: dict[str, list[tuple[str, int, Spec]]]
+
+
+def _copied(spec: Spec | None, classes: dict[str, CrossingClass]) -> bool:
     """Whether `crossing.c` copies this type: numbers, strings, tuples of
-    numbers, and Python's own containers of them."""
+    numbers, Python's own containers, objects, and value classes."""
     if spec is None or spec.kind not in _CROSSING_KINDS:
         return False
-    if spec.kind == "tuple" and len(spec.parts) > 32:
+    if spec.kind in {"tuple", "record"} and len(spec.parts) > 32:
         return False
-    return all(_copied(inner) for inner in (spec.key, spec.value) if inner is not None)
+    if spec.kind in {"object", "record"} and spec.record not in classes:
+        return False
+    return all(_copied(inner, classes) for inner in (spec.key, spec.value) if inner is not None)
 
 
-def _specs(signature: NativeSignature) -> dict[str, Spec] | None:
-    """Each container the signature crosses, by its parameter's position (`r`
-    the result), or None where one is not a type `crossing.c` copies."""
-    found: dict[str, Spec] = {}
+def _crossing(signature: NativeSignature) -> _Crossing | None:
+    """What the wrapper copies, or None where a type is not one `crossing.c`
+    copies: a `ppy` collection, a class with a field native code cannot
+    hold."""
+    described = {c.qualname: c for c in signature.classes}
+    fields: dict[str, list[tuple[str, int, Spec]]] = {}
+    for c in signature.classes:
+        if c.kind == "record":
+            if any(kind not in _PARTS for _name, _offset, kind in c.fields):
+                return None
+            continue
+        parsed = []
+        for name, offset, spelled in c.fields:
+            spec = field_spec(spelled, described)
+            if not _copied(spec, described):
+                return None
+            assert spec is not None
+            parsed.append((name, offset, spec))
+        fields[c.qualname] = parsed
+    specs: dict[str, Spec] = {}
     for position, parameter in enumerate(signature.parameters):
         if not parameter.is_handle:
             continue
-        spec = parse_spec(parameter.element) if not parameter.nullable else None
-        if not _copied(spec):
+        spec = parse_spec(parameter.element + ("?" if parameter.nullable else ""), described)
+        if not _copied(spec, described):
             return None
         assert spec is not None
-        found[str(position)] = spec
-    if signature.returned and signature.returned != RETURNS_NOTHING:
-        spec = parse_spec(signature.returned)
-        if not _copied(spec):
+        specs[str(position)] = spec
+    if signature.returned and not signature.returns_none:
+        spec = parse_spec(signature.returned, described)
+        if not _copied(spec, described):
             return None
         assert spec is not None
-        found["r"] = spec
-    return found
+        specs["r"] = spec
+    return _Crossing(specs, list(signature.classes), fields)
 
 
 def crosses_in_c(signature: NativeSignature) -> bool:
     """Whether the generated wrapper copies this function's containers itself."""
-    return signature.crosses_collections and _specs(signature) is not None
+    return signature.crosses_collections and _crossing(signature) is not None
 
 
 def wrapped_in_c(signature: NativeSignature) -> bool:
@@ -365,25 +414,60 @@ def wrapped_in_c(signature: NativeSignature) -> bool:
     module global, and whose containers, if any, `crossing.c` copies."""
     if signature.reads_globals:
         return False
-    return not signature.crosses_collections or _specs(signature) is not None
+    return not signature.crosses_collections or _crossing(signature) is not None
 
 
-def _spec_structs(index: int, specs: dict[str, Spec]) -> str:
-    """Each crossed type as static `ppy_xs` structs, inner ones first."""
+def _crossing_structs(index: int, crossing: _Crossing) -> str:
+    """Each crossed type as static `ppy_xs` structs, inner ones first, and the
+    classes as a `px_classes` table whose Python classes the first call finds."""
     lines: list[str] = []
+    position = {c.qualname: number for number, c in enumerate(crossing.classes)}
 
     def emit(spec: Spec, name: str) -> str:
         key = emit(spec.key, f"{name}k") if spec.key is not None else ""
         value = emit(spec.value, f"{name}v") if spec.value is not None else ""
-        parts = "".join({"int": "i", "float": "f", "bool": "b"}[p] for p in spec.parts)
+        parts = "".join(_PARTS[p] for p in spec.parts)
+        cls = position.get(spec.record, -1) if spec.kind in {"object", "record"} else -1
         lines.append(
             f"static const ppy_xs {name} = {{{_CROSSING_KINDS[spec.kind]}, {len(spec.parts)}, "
-            f'"{parts}", {"&" + key if key else "NULL"}, {"&" + value if value else "NULL"}}};'
+            f'"{parts}", {"&" + key if key else "NULL"}, {"&" + value if value else "NULL"}, '
+            f"{cls}, {int(spec.nullable)}}};"
         )
         return name
 
-    for tag, spec in specs.items():
+    for tag, spec in crossing.specs.items():
         emit(spec, f"ppy_xs_{index}_{tag}")
+    if not crossing.classes:
+        return "\n".join(lines)
+    entries = []
+    for number, c in enumerate(crossing.classes):
+        if c.kind == "record":
+            fields = [
+                f'{{"{name}", {offset}, NULL}}' for name, offset, _kind in c.fields
+            ]
+        else:
+            fields = [
+                f'{{"{name}", {offset}, &{emit(spec, f"ppy_xs_{index}_c{number}_{field}")}}}'
+                for field, (name, offset, spec) in enumerate(crossing.fields[c.qualname])
+            ]
+        lines.append(
+            f"static const px_field ppy_fields_{index}_{number}[] = "
+            f"{{{', '.join(fields) or '{NULL, 0, NULL}'}}};"
+        )
+        bases = [str(position[b]) for b in c.bases if b in position]
+        lines.append(
+            f"static const int ppy_bases_{index}_{number}[] = {{{', '.join(bases) or '-1'}}};"
+        )
+        entries.append(
+            f'    {{"{c.qualname}", {int(c.kind == "record")}, {c.tag}LL, {c.words}, {c.floats}LL, '
+            f"{c.handles}LL, {len(c.fields)}, ppy_fields_{index}_{number}, {len(bases)}, "
+            f"ppy_bases_{index}_{number}, NULL, NULL}},"
+        )
+    lines.append(f"static px_class ppy_classlist_{index}[] = {{\n" + "\n".join(entries) + "\n};")
+    lines.append(
+        f"static px_classes ppy_classes_{index} = "
+        f"{{{len(crossing.classes)}, ppy_classlist_{index}, NULL, 0}};"
+    )
     return "\n".join(lines)
 
 
@@ -391,15 +475,19 @@ def _c_atom(atom: str) -> str:
     return C_TYPES[atom.removesuffix("*")] + ("*" if atom.endswith("*") else "")
 
 
-def _function(index: int, signature: NativeSignature) -> str:
+def _function(index: int, signature: NativeSignature, *, managed: bool = True) -> str:
+    """One function's wrapper. `managed` is a boundary the runtime binds, which
+    holds output (`wrapper_effects.c`); an extension's links its own code."""
     atoms = [_c_atom(atom) for atom in signature.params]
     outs = [
         "char **, long long *" if atom == "text" else f"{_c_atom(atom)} *"
         for atom in signature.returns
     ]
     pointer = f"ppy_fn_{index}"
-    specs = _specs(signature) if signature.crosses_collections else None
-    crossing = specs is not None
+    copied = _crossing(signature) if signature.crosses_collections else None
+    crossing = copied is not None
+    specs = copied.specs if copied is not None else None
+    classes = f"&ppy_classes_{index}" if copied is not None and copied.classes else "NULL"
 
     object_params = [p for p in signature.parameters if p.is_object]
     type_slots = "\n".join(
@@ -444,13 +532,60 @@ def _function(index: int, signature: NativeSignature) -> str:
     if crossing:
         # Every variable is declared before the first jump to the cleanup.
         declarations = "    ppy_cross ppy_x;\n" + declarations
-        body = "    px_begin(&ppy_x);\n    if (!ppy_rt_ready) goto ppy_fallback;\n" + body
+        body = (
+            f"    px_begin(&ppy_x, {classes});\n    if (!ppy_rt_ready) goto ppy_fallback;\n"
+            + (f"    if (!px_resolve({classes})) goto ppy_fallback;\n" if classes != "NULL" else "")
+            + body
+        )
     boxed = _box(signature).replace("ppy_build_result(", f"ppy_build_result_{index}(")
-    if crossing and signature.returned == RETURNS_NOTHING:
+    if signature.returns_none:
         boxed = "Py_NewRef(Py_None)"
     elif crossing and specs is not None and "r" in specs:
         boxed = f"px_result(&ppy_x, (int8_t *)ppy_out0, &ppy_xs_{index}_r)"
-    structs = _spec_structs(index, specs) if specs else ""
+    structs = _crossing_structs(index, copied) if copied is not None else ""
+    resolver = ""
+    if classes != "NULL":
+        # The classes' Python classes are found at the first call, by this.
+        resolver = (
+            "    if (resolve != NULL && resolve != Py_None) {\n"
+            "        Py_INCREF(resolve);\n"
+            f"        Py_XDECREF(ppy_classes_{index}.resolve);\n"
+            f"        ppy_classes_{index}.resolve = resolve;\n"
+            "    }\n"
+        )
+    held = managed and signature.effects
+    qualname = signature.qualname
+    enter = leave = ""
+    sanitized = f"{end}        return ppy_sanitizer_failed(status, \"{qualname}\");\n"
+    failed = (
+        f"{end}        if (status == -1) {{\n            ppy_raised((void *)chosen);\n        }}\n"
+        f"        return ppy_handoff(ppy_fallback_{index}, args, nargs);\n"
+    )
+    answered = f"{sync}    PyObject *ppy_result = {boxed};\n{end}    return ppy_result;\n"
+    if held:
+        # Output held while the call runs: written out once it answers,
+        # dropped where it falls back, and a call that raised after a
+        # barrier raises at the boundary (`wrapper_effects.c`).
+        body = "    if (!ppy_io_ready) goto ppy_fallback;\n" + body
+        enter = "    int64_t ppy_outer = ppy_io.enter();\n"
+        leave = "    int64_t ppy_crossed = ppy_io.leave(ppy_outer);\n"
+        sanitized = (
+            f"{end}        ppy_io.discard();\n        ppy_io_settle();\n"
+            f"        return ppy_sanitizer_failed(status, \"{qualname}\");\n"
+        )
+        failed = (
+            f"{end}        if (ppy_crossed) {{\n"
+            f"            return ppy_io_crossed(status, \"{qualname}\");\n        }}\n"
+            "        ppy_io.discard();\n"
+            "        if (status == -1) {\n            ppy_raised((void *)chosen);\n        }\n"
+            "        ppy_io_settle();\n"
+            f"        return ppy_handoff(ppy_fallback_{index}, args, nargs);\n"
+        )
+        synced = sync.replace("return NULL;", "return ppy_io_commit_result(NULL);")
+        answered = (
+            f"{synced}    PyObject *ppy_result = {boxed};\n"
+            f"{end}    return ppy_io_commit_result(ppy_result);\n"
+        )
     return f"""
 /* {signature.qualname}: {signature} */
 {structs}
@@ -470,12 +605,14 @@ static PyObject *ppy_bind_{index}(PyObject *self, PyObject *args) {{
     unsigned long long address;
     PyObject *types;
     PyObject *fallback = NULL;
-    if (!PyArg_ParseTuple(args, "KO|O", &address, &types, &fallback)) {{
+    PyObject *resolve = NULL;
+    if (!PyArg_ParseTuple(args, "KO|OO", &address, &types, &fallback, &resolve)) {{
         return NULL;
     }}
     if (fallback == Py_None) {{
         fallback = NULL;
     }}
+{resolver}
     Py_XINCREF(types);
     Py_XDECREF(ppy_types_{index});
     ppy_types_{index} = types;
@@ -522,22 +659,15 @@ static PyObject *ppy_call_{index}(
 {body}
 {out_declarations}
     int status = 0;
-{release}
+{enter}{release}
     status = chosen({call_arguments});
 {acquire}
-{cleanup}
+{leave}{cleanup}
     if (status >= 2) {{
-{end}        return ppy_sanitizer_failed(status, "{signature.qualname}");
-    }}
+{sanitized}    }}
     if (status != 0) {{
-{end}        if (status == -1) {{
-            ppy_raised((void *)chosen);
-        }}
-        return ppy_handoff(ppy_fallback_{index}, args, nargs);
-    }}
-{sync}    PyObject *ppy_result = {boxed};
-{end}    return ppy_result;
-
+{failed}    }}
+{answered}
 ppy_fallback:
 {cleanup}
 {end}    return ppy_handoff(ppy_fallback_{index}, args, nargs);

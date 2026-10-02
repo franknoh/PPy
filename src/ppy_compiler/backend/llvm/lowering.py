@@ -524,11 +524,16 @@ def called_back_only(info: FunctionInfo) -> bool:
     )
 
 
+#: What counts as an operation of straight-line work.
+_WORK_NODES = (ast.BinOp, ast.UnaryOp, ast.Compare, ast.BoolOp, ast.Call, ast.Subscript, ast.IfExp)
+
+
 def _crossing_costs_more(
     info: FunctionInfo,
     layouts: ClassLayouts | None,
     written: frozenset[str],
     classes: tuple[CrossingClass, ...] = (),
+    filled: frozenset[str] = frozenset(),
 ) -> str | None:
     """Why copying the function's containers across the boundary would cost more
     than running it natively saves, or None when it pays.
@@ -536,12 +541,15 @@ def _crossing_costs_more(
     The boundary copies a container that crosses whole, in and back, on every
     call. That is work proportional to its size, so the body has to do work
     proportional to it too: a loop that walks it, or works on it element by
-    element. A container of strings costs more still, a native string made
-    for every element, about what one pass of a Python loop spends on it, so
-    it pays only when the body makes more than one pass (a loop in a loop).
+    element. How much work depends on what an element costs to copy, which
+    `_copy_cost` puts in operations of a Python loop's body: a list of
+    numbers next to nothing, a dict's entry or an inner list a few, an object
+    more. A container of strings costs more still, a native string made for
+    every element, about what one pass of a Python loop spends on it, so it
+    pays only when the body makes more than one pass (a loop in a loop).
     """
     crossing = [
-        param.name
+        (param.name, native)
         for param in info.params
         if (native := _native_param(param.name, param.type, layouts, param.name in written))
         is not None
@@ -549,11 +557,86 @@ def _crossing_costs_more(
         and native.element != "str"
         and _crosses(native, classes)
     ]
-    if crossing and not _works_through(info.node, crossing, info.name):
+    names = [name for name, _native in crossing]
+    if crossing and not _works_through(info.node, names, info.name):
         return "copying the collections in costs more than the body does with them"
+    for name, native in crossing:
+        need = _copy_cost(native, classes, name in filled)
+        if need and _loop_work(info.node, name, info.name) < need:
+            return "copying the collections in costs more than the body does with them"
     if _holds_strings(info) and not _nested_loop(info.node):
         return "copying its strings across costs what one pass over them saves"
     return None
+
+
+def _copy_cost(
+    parameter: NativeParam, classes: tuple[CrossingClass, ...], written: bool
+) -> int:
+    """What copying one element of a crossing parameter costs, in operations of
+    a CPython loop's body (each about what `s += x` costs), in and back.
+    Measured on the generated wrapper (`crossing.c`): a number in a list costs
+    a few nanoseconds; a dict's or a set's entry is hashed and put; a list in
+    a list, and an object, is a handle made, filled, and let go of."""
+    described = {c.qualname: c for c in classes}
+    spec = crossing_spec(parameter.element, described)
+    if spec is None:
+        return 0
+    if spec.kind == "object" or (spec.value is not None and spec.value.kind == "object"):
+        return 8 if written else 6
+    if spec.key is not None:
+        return 5 if written else 2
+    if spec.value is not None and (spec.value.collection or spec.value.kind == "str"):
+        return 3 if written else 2
+    return 0
+
+
+#: Work in a loop's body, as `_loop_work` counts it.
+_LOOP_WORK = (*_WORK_NODES, ast.AugAssign)
+
+
+def _loop_work(function: ast.AST, name: str, own: str) -> int:
+    """The work a loop does per pass over `name`: the operations in the body of
+    the heaviest loop that walks it (its header names it, or it follows a
+    field), less a lookup into `name` itself, which costs native code what it
+    costs Python. A function that walks by calling itself counts its body."""
+    best = 0
+    walked = False
+    for loop in ast.walk(function):
+        if isinstance(loop, (ast.For, ast.AsyncFor)):
+            header: ast.AST = loop.iter
+        elif isinstance(loop, ast.While):
+            header = loop.test
+        elif isinstance(loop, ast.comprehension):
+            header = loop.iter
+        else:
+            continue
+        names = {n.id for n in ast.walk(header) if isinstance(n, ast.Name)}
+        follows = isinstance(loop, ast.While) and _follows_a_field(loop)
+        if name not in names and not follows:
+            continue
+        walked = True
+        body = loop.body if isinstance(loop, (ast.For, ast.AsyncFor, ast.While)) else loop.ifs
+        best = max(best, sum(_work_of(statement, name) for statement in body))
+    if not walked and own:
+        # Recursion over linked objects, or a builtin over the whole: the
+        # function's own work is what each element costs it.
+        return sum(_work_of(statement, name) for statement in getattr(function, "body", []))
+    return best
+
+
+def _work_of(node: ast.AST, name: str) -> int:
+    count = 0
+    for child in ast.walk(node):
+        if not isinstance(child, _LOOP_WORK):
+            continue
+        if (
+            isinstance(child, ast.Subscript)
+            and isinstance(child.value, ast.Name)
+            and child.value.id == name
+        ):
+            continue
+        count += 1
+    return count
 
 
 #: Builtins that go over a whole container given to them.
@@ -666,10 +749,6 @@ def _returns_none(t: T.Type) -> bool:
 #: Directives that are an explicit request for the native boundary.
 _EXPOSURE_DIRECTIVES = ("native", "jit", "specialize", "parallel")
 
-#: Below this much straight-line work, the ~0.2 us Python/native crossing
-#: costs more than the native body saves over CPython.
-_EXPOSURE_WORK = 16
-
 
 def can_lower_native(
     info: FunctionInfo, analysis: FunctionAnalysis, layouts: ClassLayouts | None = None
@@ -708,10 +787,11 @@ def should_lower_native(
             _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
         )
     )
-    if _returns_none(info.ret) and not fills:
-        # The boundary hands back a value; a function with none to hand
-        # back is native code's to call -- a thread's body, a helper --
-        # unless what it does is fill a collection the caller passed.
+    if _returns_none(info.ret) and not fills and not _loops(info.node):
+        # A function with no value to hand back is native code's to call -- a
+        # thread's body, a helper, a check that raises -- unless what it does
+        # is fill a collection the caller passed, or loop: a `main` that
+        # prints as it goes is worth one crossing.
         return False, "returns nothing, which has no Python boundary"
     returned = _collection_param("", info.ret, layouts)
     if returned is not None and returned.element != "str" and not _crosses(returned, classes):
@@ -728,7 +808,7 @@ def should_lower_native(
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
-    refused = _crossing_costs_more(info, layouts, written, classes)
+    refused = _crossing_costs_more(info, layouts, written, classes, frozenset(filled))
     if refused is not None:
         return False, refused
     for param in info.params:
@@ -739,13 +819,54 @@ def should_lower_native(
     for child in ast.walk(info.node):
         if isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension)):
             return True, "contains a loop"
-    work = sum(
-        isinstance(child, (ast.BinOp, ast.Compare, ast.BoolOp, ast.Call, ast.Subscript))
-        for child in ast.walk(info.node)
-    )
-    if work >= _EXPOSURE_WORK:
+    work = sum(isinstance(child, _WORK_NODES) for child in ast.walk(info.node))
+    if work >= _crossing_cost(info, analysis, layouts, written):
         return True, f"straight-line work ({work} operations)"
     return False, "the boundary crossing costs more than the body saves"
+
+
+
+
+#: The crossing's cost in operations of a CPython body, measured with
+#: `examples/bench_boundary.py`: the generated wrapper's call costs what a
+#: Python call does, so a body of two operations already gains. A string is
+#: made natively on the way in and decoded on the way out, about four
+#: operations each; a value class's field is an attribute read. A function
+#: whose boundary is the Python-level binding (one that draws random numbers,
+#: or reads module globals) pays a Python frame and `ctypes`. Output a native
+#: call holds is written out through Python when the call ends, which costs
+#: more than CPython's `print` for one line and much less for many: only a
+#: loop that prints pays for it.
+_CROSSING_BASE = 2
+_CROSSING_TEXT = 4
+_CROSSING_SLOW = 16
+_CROSSING_HELD = 40
+
+
+def _crossing_cost(
+    info: FunctionInfo,
+    analysis: FunctionAnalysis,
+    layouts: ClassLayouts | None,
+    written: frozenset[str],
+) -> int:
+    """How much straight-line work pays for a call through the boundary."""
+    if analysis.implicit_globals or Effect.RANDOM in analysis.effects:
+        return _CROSSING_SLOW
+    if any(effect in analysis.effects for effect in _NEEDS_GIL):
+        return _CROSSING_HELD
+    cost = _CROSSING_BASE
+    for param in info.params:
+        native = _native_param(param.name, param.type, layouts, param.name in written)
+        if native is None:
+            continue
+        if native.is_handle and native.element == "str":
+            cost += _CROSSING_TEXT
+        elif native.is_object:
+            cost += len(native.fields)
+    returned = _collection_param("", info.ret, layouts)
+    if returned is not None and returned.element == "str":
+        cost += _CROSSING_TEXT
+    return cost
 
 
 #: What a standalone build can allocate for itself, and the element it holds.
@@ -803,22 +924,20 @@ def _signature(
         symbol="ppy_" + info.qualname.replace(".", "_"),
         parameters=parameters,
         returns=returns,
-        releases_gil=_releases_gil(analysis) if analysis is not None else False,
+        releases_gil=_releases_gil(analysis) and _runs_long(info) if analysis is not None else False,
         cpu_features=_cpu_features(info),
         future=future,
-        returned=_returned(info, returned, parameters),
+        returned=_returned(info, returned),
         draws=analysis is not None and Effect.RANDOM in analysis.effects,
     )
 
 
-def _returned(
-    info: FunctionInfo, returned: NativeParam | None, parameters: tuple[NativeParam, ...]
-) -> str:
+def _returned(info: FunctionInfo, returned: NativeParam | None) -> str:
     """What the boundary builds from the result: a collection's type, or `None`
-    for a function that returns nothing and takes a collection."""
+    for a function that returns nothing."""
     if returned is not None:
         return returned.element
-    if _returns_none(info.ret) and any(p.is_handle for p in parameters):
+    if _returns_none(info.ret) and not info.is_async:
         return RETURNS_NOTHING
     return ""
 
@@ -868,6 +987,41 @@ def _releases_gil(analysis: FunctionAnalysis) -> bool:
     the same guarantee NumPy relies on.
     """
     return not any(effect in analysis.effects for effect in _NEEDS_GIL)
+
+
+def _loops(node: ast.AST) -> bool:
+    return any(
+        isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension))
+        for child in ast.walk(node)
+    )
+
+
+def _runs_long(info: FunctionInfo) -> bool:
+    """Whether a call may run long enough to be worth dropping the GIL for: a
+    loop, or a call that may be one (recursion, a callee's loop). Dropping it
+    and taking it back costs about what a two-operation body does, so a
+    short straight-line body keeps it, as CPython's own builtins do."""
+    for child in ast.walk(info.node):
+        if isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension)):
+            return True
+        if isinstance(child, ast.Call) and not _brief_call(child):
+            return True
+    return False
+
+
+#: Builtins whose call is a step or two natively; `min` and `max` of two or
+#: more values, not of a collection.
+_BRIEF_BUILTINS = frozenset(
+    {"abs", "len", "int", "float", "bool", "round", "divmod", "pow", "ord", "chr"}
+)
+
+
+def _brief_call(call: ast.Call) -> bool:
+    if not isinstance(call.func, ast.Name):
+        return False
+    if call.func.id in {"min", "max"}:
+        return len(call.args) >= 2
+    return call.func.id in _BRIEF_BUILTINS
 
 
 def _abi_name(scalar: str) -> str:

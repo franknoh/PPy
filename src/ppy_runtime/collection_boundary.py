@@ -32,13 +32,23 @@ import array
 import ctypes
 import re
 import struct
+import sys
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
 from .abi import CrossingClass
 
-__all__ = ["RETURNS_NOTHING", "Boundary", "Spec", "attach", "parse", "runtime"]
+__all__ = [
+    "RETURNS_NOTHING",
+    "Boundary",
+    "Spec",
+    "attach",
+    "field_spec",
+    "parse",
+    "resolver",
+    "runtime",
+]
 
 #: A signature's `returned` for a function that returns `None`: its native
 #: entry fills a placeholder word, which the boundary does not hand out.
@@ -273,6 +283,52 @@ class Classes:
                     types[found] = described
             self._types = types
         return self._types.get(type(value))
+
+
+def field_spec(spelled: str, classes: dict[str, CrossingClass]) -> Spec | None:
+    """A field's type as the boundary sees it (see `_field_spec`)."""
+    return _field_spec(spelled, classes)
+
+
+def resolver(signature: Any, function: Any) -> Any:
+    """For a generated wrapper whose objects cross: a callable giving the Python
+    class of each class the signature describes, in its order, or None
+    while one is not defined yet. Found where `function` would find it."""
+    if not signature.classes:
+        return None
+    classes = Classes(signature.classes, _finder(function))
+    order = [c.qualname for c in signature.classes]
+
+    def resolve() -> tuple[type, ...] | None:
+        found = tuple(classes.python(qualname) for qualname in order)
+        return found if all(isinstance(t, type) for t in found) else None
+
+    return resolve
+
+
+def _finder(function: Any) -> Any:
+    """How a described class is found: in the namespace `function` reads, where
+    the program defines it, else in its module (`binding._class_finder`)."""
+    namespace = None
+    while function is not None:
+        namespace = getattr(function, "__ppy_globals__", None)
+        if namespace is not None:
+            break
+        wrapped = getattr(function, "__wrapped__", None)
+        if wrapped is None:
+            namespace = getattr(function, "__globals__", None)
+            break
+        function = wrapped
+
+    def find(described: CrossingClass) -> Any:
+        if namespace is not None:
+            found = namespace.get(described.name)
+            if isinstance(found, type) and found.__qualname__ == described.name:
+                return found
+        module = sys.modules.get(described.module)
+        return getattr(module, described.name, None) if module is not None else None
+
+    return find
 
 
 def _field_spec(spelled: str, classes: dict[str, CrossingClass]) -> Spec | None:

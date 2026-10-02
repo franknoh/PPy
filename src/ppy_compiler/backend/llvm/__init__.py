@@ -1222,7 +1222,7 @@ class _Binder(LibraryBinder):
         return binding.wrapper
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
-        from ppy_runtime.binding import adopt, observation_wanted, value_class_types
+        from ppy_runtime.binding import adopt, as_method, observation_wanted, value_class_types
 
         from .runtime import bind as make_binding
 
@@ -1236,10 +1236,15 @@ class _Binder(LibraryBinder):
         if (
             wrappers is not None
             and wrappers.ok
-            and not signature.effects
+            and (not signature.effects or wrappers.attach_effects())
             and (not signature.crosses_collections or wrappers.attach_runtime())
         ):
             types = value_class_types(signature, fallback)
+            if types is not None and signature.effects:
+                from ppy_runtime.effects import register_function
+
+                # Where its calls into Python find what they name.
+                register_function(signature.qualname, fallback)
             if types is not None:
                 register = wrappers.registrar(qualname)
                 # A function that draws needs `random`'s state saved around it,
@@ -1249,11 +1254,15 @@ class _Binder(LibraryBinder):
                 ):
                     # Nothing to watch for: the wrapper holds the fallback in C
                     # and no Python frame stands on the call path at all.
-                    direct = wrappers.bind(qualname, address, types, fallback)
+                    from ppy_runtime.collection_boundary import resolver
+
+                    direct = wrappers.bind(
+                        qualname, address, types, fallback, resolver(signature, fallback)
+                    )
                     if direct is not None:
                         binding = adopt(signature, direct, fallback, owner=(engine, wrappers))
                         self.bindings.append(binding)
-                        return self._recorded(qualname, direct)
+                        return self._recorded(qualname, as_method(direct, fallback, function))
                 fast_entry = wrappers.bind(qualname, address, types)
         binding = make_binding(
             signature,
