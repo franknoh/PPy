@@ -827,7 +827,9 @@ def _signature(
         parameters=parameters,
         returns=returns,
         # A cached function writes its table, which Python's callers share.
-        releases_gil=_releases_gil(analysis) if analysis is not None and not _cached(info) else False,
+        releases_gil=_releases_gil(analysis)
+        if analysis is not None and not _cached(info)
+        else False,
         cpu_features=_cpu_features(info),
         future=future,
         returned=_returned(info, returned, parameters),

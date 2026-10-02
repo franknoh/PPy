@@ -385,7 +385,9 @@ class _Generator:
         items = self.int_list(scope, depth)
         if roll < 0.12:
             start = self.int_expr(scope, depth + 1)
-            return f"functools.reduce(operator.{rng.choice(('add', 'sub', 'xor'))}, {items}, {start})"
+            return (
+                f"functools.reduce(operator.{rng.choice(('add', 'sub', 'xor'))}, {items}, {start})"
+            )
         if roll < 0.2:
             return f"functools.reduce({rng.choice(('max', 'min'))}, {items})"
         if roll < 0.3:
@@ -396,9 +398,13 @@ class _Generator:
             return f"collections.Counter({items}).total()"
         if roll < 0.56:
             low = self.int_expr(scope, depth + 1)
-            return f"random.Random({self.seed}).randint({low}, {low} + {self.small(scope, depth, 30)})"
+            return (
+                f"random.Random({self.seed}).randint({low}, {low} + {self.small(scope, depth, 30)})"
+            )
         if roll < 0.64:
-            return f"random.Random({self.int_expr(scope, depth + 1)}).randrange({rng.randint(1, 90)})"
+            return (
+                f"random.Random({self.int_expr(scope, depth + 1)}).randrange({rng.randint(1, 90)})"
+            )
         if roll < 0.74:
             return f"_cached({self.small(scope, depth, 60)})"
         if roll < 0.84:

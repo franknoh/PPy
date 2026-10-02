@@ -19,9 +19,9 @@ __all__ = [
     "ARRAY_TYPECODES",
     "EXTERNAL_TYPES",
     "INSTANCE_ATTRS",
-    "MODULE_ATTRIBUTES",
     "LIBRARY_MAPPINGS",
     "MAPPING_OWN",
+    "MODULE_ATTRIBUTES",
     "cache_attribute",
     "call",
     "instance_attribute",
@@ -767,6 +767,7 @@ def cache_attribute(function: T.Callable_, attribute: str) -> T.Type | None:
         return function
     found = _FUNCTIONS.get(f"{_CACHE_WRAPPER}.{attribute}")
     return found[0] if found is not None else None
+
 
 #: Module attributes with a known type.
 MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {

@@ -101,8 +101,8 @@ from .expressions import ExpressionLowering
 from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
 from .intness import ModuleIntness, gives_int
-from .stdlib import StdlibLowering
 from .memo import cached_decorator, define_cached
+from .stdlib import StdlibLowering
 from .strings import StringLowering
 from .walks import WalkLowering
 

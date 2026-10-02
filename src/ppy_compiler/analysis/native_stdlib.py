@@ -451,7 +451,13 @@ _BINARY = {
     "concat": ast.Add,
 }  # fmt: skip
 _COMPARE = {"lt": ast.Lt, "le": ast.LtE, "eq": ast.Eq, "ne": ast.NotEq, "ge": ast.GtE, "gt": ast.Gt}
-_UNARY = {"neg": ast.USub, "pos": ast.UAdd, "invert": ast.Invert, "inv": ast.Invert, "not_": ast.Not}
+_UNARY = {
+    "neg": ast.USub,
+    "pos": ast.UAdd,
+    "invert": ast.Invert,
+    "inv": ast.Invert,
+    "not_": ast.Not,
+}
 
 #: Every `operator` function a lambda stands for, as `operator.<name>`.
 OPERATOR_FUNCTIONS = frozenset(
@@ -569,7 +575,13 @@ def _constant(node: ast.expr) -> bool:
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
         node = node.operand
         return isinstance(node, ast.Constant) and type(node.value) in (int, float)
-    return isinstance(node, ast.Constant) and type(node.value) in (int, float, str, bool, type(None))
+    return isinstance(node, ast.Constant) and type(node.value) in (
+        int,
+        float,
+        str,
+        bool,
+        type(None),
+    )
 
 
 def _copied(node: ast.expr) -> ast.expr:

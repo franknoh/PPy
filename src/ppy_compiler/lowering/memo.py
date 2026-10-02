@@ -111,7 +111,7 @@ def _mask(words: list[str], kind: str) -> int:
     return sum(1 << index for index, word in enumerate(words) if word == kind)
 
 
-class MemoLowering:
+class MemoLowering:  # pylint: disable=attribute-defined-outside-init
     """The entry of a cached function; mixed into `_FunctionLowering`."""
 
     def memo_run(self, node: ast.FunctionDef, body: str, results: tuple, bound: int) -> None:
@@ -205,18 +205,21 @@ class MemoLowering:
     def _words_buffer(self, label: str, words: list[tuple[str, Value]]) -> Value:
         """The words in a stack buffer, each eight bytes, and its address."""
         b = self.b  # type: ignore[attr-defined]
-        types = tuple(F64 if kind == "float" else HANDLE if kind == "str" else I64 for kind, _ in words)
+        types = tuple(
+            F64 if kind == "float" else HANDLE if kind == "str" else I64 for kind, _ in words
+        )
         buffer = self._alloca(TupleType(types or (I64,)), label)  # type: ignore[attr-defined]
         address = core.cast(b, buffer, _pointer(buffer, HANDLE.pointee))
-        for index, (kind, value) in enumerate(words):
+        for index, (kind, given) in enumerate(words):
             stored = F64 if kind == "float" else HANDLE if kind == "str" else I64
             pointer = core.cast(b, address, _pointer(address, stored))
             if index:
                 pointer = core.ptr_offset(b, pointer, self._word(index))  # type: ignore[attr-defined]
-            if stored == I64 and value.type == BOOL:
-                value = core.cast(b, value, I64)
-            elif stored == F64 and value.type == I64:
-                value = self._coerce(value, "float")  # type: ignore[attr-defined]
+            value = given
+            if stored == I64 and given.type == BOOL:
+                value = core.cast(b, given, I64)
+            elif stored == F64 and given.type == I64:
+                value = self._coerce(given, "float")  # type: ignore[attr-defined]
             core.store(b, value, pointer)
         return address
 

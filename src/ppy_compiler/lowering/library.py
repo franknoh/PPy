@@ -17,15 +17,14 @@ with a flavor saying which (`Kind.flavor`), so a subscript, a loop, `len`,
   `popitem(last=...)` move and take entries at either end.
 
 `repr` is CPython's: `defaultdict(<class 'int'>, {...})`, `Counter({...})`
-in `most_common` order, `OrderedDict({...})` (before 3.12, `OrderedDict([(k,
-v), ...])`), `deque([...])`. A `defaultdict` whose factory is a function is
-shown by Python, which names the function by its address.
+in `most_common` order, `OrderedDict({...})`, `deque([...])`. A
+`defaultdict` whose factory is a function is shown by Python, which names
+the function by its address.
 """
 
 from __future__ import annotations
 
 import ast
-import sys
 from dataclasses import dataclass
 
 from ..analysis import types as T
@@ -465,7 +464,9 @@ class LibraryLowering:
             self._walk(  # type: ignore[attr-defined]
                 source,
                 lambda items: self._add_value(  # type: ignore[attr-defined]
-                    listed, made, core.tuple_make(self.b, *self._flat(items))  # type: ignore[attr-defined]
+                    listed,
+                    made,
+                    core.tuple_make(self.b, *self._flat(items)),  # type: ignore[attr-defined]
                 ),
             )
             return made  # type: ignore[no-any-return]
@@ -704,8 +705,12 @@ class LibraryLowering:
             first, second = f".racc{tag}", f".relem{tag}"
             callee: ast.expr = function
             held = self._reference_of(function)  # type: ignore[attr-defined]
-            if isinstance(held, Shape) and held.kind == "function" and not (
-                isinstance(function, ast.Name) and function.id in self.collections  # type: ignore[attr-defined]
+            if (
+                isinstance(held, Shape)
+                and held.kind == "function"
+                and not (
+                    isinstance(function, ast.Name) and function.id in self.collections  # type: ignore[attr-defined]
+                )
             ):
                 # A function value made by an expression is made once, first.
                 callee = ast.Name(f".rfn{tag}", ast.Load())
@@ -747,7 +752,9 @@ class LibraryLowering:
             b.at_end(begin)
             if shape.reference:
                 self._retain(element)  # type: ignore[attr-defined]
-            core.store(b, self._coerce(element, shape.kind) if not shape.reference else element, running)  # type: ignore[attr-defined]
+            core.store(
+                b, self._coerce(element, shape.kind) if not shape.reference else element, running
+            )  # type: ignore[attr-defined]
             core.store(b, core.const(b, True, BOOL), started)
             core.br(b, Successor(done))
             b.at_end(apply)
@@ -821,7 +828,10 @@ class LibraryLowering:
     def _comparison_callback(self, compare: ast.expr, element: T.Type) -> Value:
         """`lambda a, b: compare(a, b) < 0` as a native function the runtime's
         sort calls back: the address of its C face."""
-        from ..analysis.symbols import FunctionInfo, ParamInfo  # pylint: disable=import-outside-toplevel
+        from ..analysis.symbols import (  # pylint: disable=import-outside-toplevel
+            FunctionInfo,
+            ParamInfo,
+        )
         from .ast_to_ir import _FunctionLowering  # pylint: disable=import-outside-toplevel
 
         frontend = self.frontend  # type: ignore[attr-defined]
@@ -994,15 +1004,10 @@ class LibraryLowering:
             length = self._rt("ppy_coll_len", (order,))  # type: ignore[attr-defined]
             self._add_pairs(builder, _Ranked(kind, slot, "items", order=held, limit=length), ": ")
             add(builder, "})")
-        elif sys.version_info >= (3, 12):
+        else:
             add(builder, "OrderedDict(")
             self._add_elements_repr(builder, plain, handle)  # type: ignore[attr-defined]
             add(builder, ")")
-        else:
-            add(builder, "OrderedDict([")
-            slot = self._hold(kind, handle, owned=False)  # type: ignore[attr-defined]
-            self._add_pairs(builder, _Source(kind, slot, "items"), ", ", "(", ")")
-            add(builder, "])")
         core.br(b, Successor(shown))
         b.at_end(shown)
 
@@ -1041,7 +1046,6 @@ class LibraryLowering:
 
 def _raising() -> dict[str, object]:
     import collections  # pylint: disable=import-outside-toplevel
-
     import functools  # pylint: disable=import-outside-toplevel
 
     return {
@@ -1053,4 +1057,3 @@ def _raising() -> dict[str, object]:
 def _text(key: str) -> str:
     action = _raising()[key]
     return said(action)  # type: ignore[arg-type]
-

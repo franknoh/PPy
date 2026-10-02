@@ -755,7 +755,11 @@ def _factory_value(factory: T.Type) -> T.Type | None:
     """What a `defaultdict`'s factory makes: a class (`int`, `list`) or a
     function of no arguments (`lambda: -1`)."""
     if isinstance(factory, T.ClassObject):
-        short = factory.name.rpartition(".")[2] if factory.name.startswith("builtins.") else factory.name
+        short = (
+            factory.name.rpartition(".")[2]
+            if factory.name.startswith("builtins.")
+            else factory.name
+        )
         return _FACTORIES.get(short)
     if isinstance(factory, T.Callable_):
         if any(not p.has_default for p in factory.params):

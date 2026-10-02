@@ -13,7 +13,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from ...analysis.native_stdlib import MATH_NATIVE, STRING_CONSTANTS
+from ...analysis.native_stdlib import MATH_NATIVE, OPERATOR_FUNCTIONS, STRING_CONSTANTS
 from ...analysis.native_stdlib import MODELS as NATIVE_MODELS
 from ...diagnostics import Diagnostic, Severity
 from ...driver.ir_pipeline import value_class_layouts
@@ -33,13 +33,9 @@ _NATIVE_MODULES = frozenset(
 #: What `from functools import ...` and `from operator import ...` may name.
 _LIBRARY_NAMES = {
     "functools": frozenset({"cache", "lru_cache", "reduce", "partial", "cmp_to_key"}),
-    "operator": frozenset(
-        {
-            "add", "sub", "mul", "truediv", "floordiv", "mod", "pow", "neg", "pos", "abs",
-            "and_", "or_", "xor", "lshift", "rshift", "not_", "truth", "eq", "ne", "lt",
-            "le", "gt", "ge", "itemgetter", "attrgetter", "index", "contains", "concat",
-        }
-    ),  # fmt: skip
+    "operator": OPERATOR_FUNCTIONS | {"itemgetter", "attrgetter"},
+}
+    ),
 }
 
 #: What `from collections import ...` may name in a standalone module.
