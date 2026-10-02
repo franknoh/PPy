@@ -2,6 +2,124 @@
 
 ## 0.6.0 — unreleased
 
+More ordinary Python runs natively under `ppy run`: functions that print,
+read input, or call back into Python; functions that read module globals or
+take the project's objects; `isinstance`, chained comparisons, `in`, integer
+powers, and generators passed around as values; and `random`, `math`,
+`heapq`, `bisect`, and `itertools`. The checker accepts more of the typing
+module, and a native function given an `int` for a `float` parameter now
+returns what CPython returns. CORPUS_SUMMARY
+
+### Effects in native code
+
+- Functions that print, read input, read and write text files, or call
+  Python functions compile under `ppy run`.
+  - A native call holds what it prints until it returns, and drops it if it
+    falls back to Python, so nothing is printed twice.
+  - `input()`, `print(flush=True)`, files, and calls into Python are
+    barriers. The compiler proves nothing falls back after one, or the
+    function stays in Python.
+  - `ppy explain` says which rule each function runs under.
+- `scripts/fuzz.py --prints` fuzzes prints between checks that may fall
+  back.
+- New guide page: Effects in native code.
+
+### Globals and objects across the boundary
+
+- Under `ppy run`, a function that reads a module global bound once and
+  never rebound runs natively. The boundary reads the global at each call,
+  and a written global container is copied back to the module's object. Such
+  a function stays in Python if it also has a barrier.
+- Objects of the project's classes, and dataclass values in containers,
+  cross between Python and native code. Shared objects and cycles stay
+  shared, written fields come back to the caller's objects, and a returned
+  object is the caller's own where it came from one.
+- Fixed: a store to a `global` name inside a function was dropped by the
+  Python backend's optimizer, and reads of that global elsewhere were folded
+  to the module's first value.
+- Fixed: a function taking a read-only list beside a written container
+  crashed when Python called it, and failed to compile when called from
+  another module.
+
+### More expressions and loops
+
+- `isinstance` with builtin classes compiles where the types decide the
+  answer.
+- Chained comparisons compile, with each operand evaluated once.
+- `in` and `not in` compile over tuple and set displays, tuple values, and
+  `range`, with no range built.
+- `flag is True` compiles between two bools.
+- Integer `**` and `pow(a, b[, m])` compile. A result past 64 bits, or a
+  negative exponent, falls back.
+- `a = b = value` compiles, and so does a conditional tuple assignment.
+- `for` compiles over:
+  - `range` with a step known only at run time, and `reversed(range(...))`;
+  - strings, tuples, and list parameters, under `enumerate`, `zip`, and
+    `reversed`;
+  - with `else`.
+- `for x in obj` and `iter(obj)` are typed from the class's `__iter__`.
+- Generators that are returned, passed to another function, stepped inside
+  a loop or a branch, made by an `__iter__` method, or that yield from
+  themselves compile. Each gets a heap frame with a reference count, which
+  the collector sees.
+- `e.args` of an exception raised with one string or none compiles.
+- A native function no longer turns an `int` into a `float` where the
+  difference would show. `f(0)` of `def f(x: float) -> float: return x` is
+  `0`, as in CPython. Elsewhere, ints up to 2**53 are still taken and
+  converted.
+- Fixed: returning from inside a loop over a generator leaked the
+  generator's locals in native code.
+
+### The standard library natively
+
+- `random` runs natively: CPython's Mersenne Twister and `random.py`'s
+  algorithms, draw for draw. Under `ppy run` native code draws from Python's
+  own generator, so a seeded program prints the same numbers on every path,
+  and a native call that falls back restores the generator first.
+- `math` runs natively: `gcd`, `comb`, `isqrt`, `factorial`, `fsum`,
+  `hypot`, `dist`, `isclose`, `log` with a base, the trigonometric and
+  hyperbolic functions, and the constants.
+- `heapq` and `bisect` over plain lists, finite `itertools` iterators where
+  a loop or call consumes them, an annotated `collections.deque`, and the
+  `string` constants run natively.
+- Fixed: `math.sqrt`, `log`, `exp`, `pow`, and `sin` of arguments outside
+  their domain gave a NaN or an infinity in native code instead of raising.
+- `scripts/fuzz.py --stdlib` fuzzes seeded random numbers and these modules.
+- New guide page: The standard library.
+
+### The checker
+
+- It accepts `typing.Self`, old-style `TypeVar` and `Generic[T]`, and named
+  tuples in all three forms (`namedtuple`, the functional `NamedTuple`, and
+  `class P(NamedTuple)`).
+- It accepts `setattr` and assignment of class attributes, methods called
+  through their class, `__import__` with a constant name, and generator
+  expressions where a `Generator` is declared.
+- It types `Queue`, `deque`, `Counter`, `OrderedDict`, `defaultdict`,
+  `datetime`, `Decimal`, and `Fraction`, and their operators.
+- `list[int]` is accepted where a function only reads a `list[int | float]`
+  or `Sequence[float]`.
+- `--no-strict` reports a value that may be `None` as `W2011` and runs the
+  program. Native code raises CPython's `AttributeError` where the `None`
+  arrives.
+- `--no-strict` infers a private helper's unannotated parameters from its
+  call sites.
+- `return []` beside a declared return type no longer keeps a function in
+  Python.
+- Fixed: `(-2) ** c` printed `-(2 ** c)` under the Python backend after
+  constant folding.
+
+### Known limitations
+
+- `defaultdict`, `Counter`, `OrderedDict`, `functools`, `operator`, and
+  `random.Random` instances stay in Python. So does a `deque` the checker
+  sees without its element type, and `list(q)` and `q[i] = x` of a deque.
+- A temporary list that is live when a check raises inside a `try` that
+  native code catches is leaked (`[1, 2][5]` inside `try`/`except
+  IndexError`).
+- On Python 3.14 a standalone binary prints the generic `math domain error`
+  where 3.14's message includes the value.
+
 ## 0.5.0 — 2026-09-30
 
 Ordinary Python goes native without a rewrite. Plain lists, dicts, and sets
