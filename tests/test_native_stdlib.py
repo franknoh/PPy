@@ -1265,7 +1265,9 @@ def walk(rng: random.Random, n: int) -> int:
 
 
 def overflow_after_draw(rng: random.Random, k: int) -> int:
-    a = rng.randint(1, 100)
+    a = 0
+    for _ in range(3):
+        a += rng.randint(1, 100)
     return a * k + rng.randint(1, 10)
 
 
