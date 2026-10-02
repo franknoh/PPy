@@ -19,7 +19,7 @@ from pathlib import Path
 
 from ...cache import digest
 from .lowering import NativeSignature
-from .wrapper import WrapperModule, generate
+from .wrapper import WrapperModule, generate, wrapped_in_c
 
 __all__ = ["BuiltWrappers", "build_wrappers", "wrapper_toolchain"]
 
@@ -54,6 +54,14 @@ class BuiltWrappers:
         # A wrapper module built before the entry points carried their names
         # still answers to the index.
         return getattr(self.module, qualname, None) or getattr(self.module, f"call_{index}", None)
+
+    def attach_runtime(self, library=None) -> bool:  # type: ignore[no-untyped-def]
+        """Point the wrappers that copy containers at the collections runtime."""
+        if self.module is None:
+            return False
+        from ppy_runtime.collection_boundary import attach  # pylint: disable=import-outside-toplevel
+
+        return attach(self.module, library)
 
     def registrar(self, qualname: str):  # type: ignore[no-untyped-def]
         """A callable that hands one specialization to the generated wrapper."""
@@ -138,8 +146,9 @@ def build_wrappers(
     project finds it, rather than to `cache_directory`."""
     # A coroutine hands back a future the Python side wraps; no C wrapper for it.
     signatures = {name: s for name, s in signatures.items() if not s.future}
-    # A collection crosses through the Python-level binding, which copies it.
-    crossing = {name for name, s in signatures.items() if s.crosses_collections or s.reads_globals}
+    # A collection the generated wrapper cannot copy crosses through the
+    # Python-level binding, and so does a global the binding reads.
+    crossing = {name for name, s in signatures.items() if not wrapped_in_c(s)}
     signatures = {name: s for name, s in signatures.items() if name not in crossing}
     if not signatures:
         # Every function here crosses through the Python-level binding: there

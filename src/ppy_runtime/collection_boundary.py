@@ -38,7 +38,7 @@ from typing import Any
 
 from .abi import CrossingClass
 
-__all__ = ["RETURNS_NOTHING", "Boundary", "Spec", "parse", "runtime"]
+__all__ = ["RETURNS_NOTHING", "Boundary", "Spec", "attach", "parse", "runtime"]
 
 #: A signature's `returned` for a function that returns `None`: its native
 #: entry fills a placeholder word, which the boundary does not hand out.
@@ -336,6 +336,46 @@ def runtime(library: Any = None) -> Any:
         function.restype = result
         function.argtypes = arguments
     return found
+
+
+#: The runtime functions a generated wrapper copies containers with, in the
+#: order its `ppy_runtime` takes their addresses (`crossing.c`).
+_WRAPPER_FUNCTIONS = (
+    "ppy_seq_new",
+    "ppy_map_new",
+    "ppy_seq_push_many",
+    "ppy_coll_put_many",
+    "ppy_coll_copy_out",
+    "ppy_coll_len",
+    "ppy_coll_retain",
+    "ppy_coll_release",
+    "ppy_coll_text_keys",
+    "ppy_str_new_many",
+)
+
+
+def attach(wrappers: Any, library: Any = None) -> bool:
+    """Hand a generated wrapper module the runtime its native code makes handles
+    in (`runtime`); whether it took it. Asked once per module."""
+    hand = getattr(wrappers, "ppy_runtime", None)
+    if hand is None:
+        return False
+    attached = getattr(wrappers, "__ppy_attached__", None)
+    if attached is not None:
+        return bool(attached)
+    rt = runtime(library)
+    taken = False
+    if rt is not None:
+        try:
+            addresses = [ctypes.cast(getattr(rt, n), ctypes.c_void_p).value for n in _WRAPPER_FUNCTIONS]
+            taken = bool(hand(*addresses))
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            taken = False
+    try:
+        wrappers.__ppy_attached__ = taken
+    except (AttributeError, TypeError):
+        pass
+    return taken
 
 
 def _format(spec: Spec) -> str:

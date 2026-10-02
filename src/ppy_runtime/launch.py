@@ -104,6 +104,11 @@ class PrebuiltBinder(LibraryBinder):
         types = value_class_types(signature, fallback)
         if types is None:
             return None
+        if signature.crosses_collections:
+            from .collection_boundary import attach  # pylint: disable=import-outside-toplevel
+
+            if not attach(self._wrappers, self._library):
+                return None
         try:
             named = getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path

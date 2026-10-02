@@ -1233,7 +1233,12 @@ class _Binder(LibraryBinder):
         policy = SpecializationPolicy.of(info) if info is not None else None
         fast_entry = None
         register = None
-        if wrappers is not None and wrappers.ok and not signature.effects:
+        if (
+            wrappers is not None
+            and wrappers.ok
+            and not signature.effects
+            and (not signature.crosses_collections or wrappers.attach_runtime())
+        ):
             types = value_class_types(signature, fallback)
             if types is not None:
                 register = wrappers.registrar(qualname)
