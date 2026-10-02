@@ -461,7 +461,9 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
                     "E1801",
                     Severity.ERROR,
                     "`ppy build` makes native code, and llvmlite is not installed",
-                    help=f"install the LLVM extra: {INSTALL_LLVM}, or build with `--backend python`",
+                    help=(
+                        f"install the LLVM extra: {INSTALL_LLVM}, or build with `--backend python`"
+                    ),
                 )
             )
             return 2
