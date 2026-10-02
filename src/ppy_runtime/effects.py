@@ -40,6 +40,11 @@ _NONE, _INT, _FLOAT, _BOOL, _STR, _OBJECT, _KEYWORD = range(7)
 #: A tuple result's kind has this bit; its count and items' kinds above it.
 _TUPLE = 8
 
+#: A pure call's kind has this bit where the callee promises the result.
+_PROMISED_BIT = 2 << 40
+
+_KIND_NAMES = {_INT: "int", _FLOAT: "float", _BOOL: "bool", _STR: "str"}
+
 _I64_LOW = -(1 << 63)
 _I64_HIGH = (1 << 63) - 1
 
@@ -239,8 +244,14 @@ class Effects:
                     result = _resolve(name)(*arguments, **keywords)
                 if op in {6, 7}:
                     # A callee a second run cannot tell from the first: a result
-                    # of another kind is the native call's to fall back on.
-                    return 0 if self._answer_exactly(result, c) else 1
+                    # of another kind is the native call's to fall back on, or
+                    # a broken promise where the result was promised.
+                    promised = bool(c & _PROMISED_BIT)
+                    if self._answer_exactly(result, c & ~_PROMISED_BIT):
+                        return 0
+                    if promised:
+                        raise _mismatch(name, _KIND_NAMES.get(c & ~_PROMISED_BIT, "?"), result)
+                    return 1
                 self._answer(result, c, name)
             elif op == 5:
                 self._objects().pop(a, None)

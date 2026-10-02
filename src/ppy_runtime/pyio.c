@@ -13,7 +13,8 @@
      op 5  let go of the Python object numbered `a`
      op 6  as 3, for a callee no second run could tell from the first: the
            result must be exactly of the kind wanted, and the hook answers
-           1 where it is not, for the native call to fall back
+           1 where it is not, for the native call to fall back, or, where
+           the call's flags have bit 1 (a promised result), raises TypeError
      op 7  as 6, a method
 
    A kind is 0 none, 1 int, 2 float, 3 bool, 4 str (a handle), 5 a Python
@@ -328,7 +329,8 @@ int64_t ppy_io_call(const int8_t *name, int64_t bytes, int64_t kind, int64_t met
    exactly of the kind wanted, and the native call falls back. */
 int64_t ppy_io_call_pure(const int8_t *name, int64_t bytes, int64_t kind, int64_t method) {
     int64_t *state = ppy_io_state();
-    int64_t done = ppy_io_hook(method ? 7 : 6, (int64_t)(intptr_t)name, bytes, kind);
+    int64_t done =
+        ppy_io_hook((method & 1) ? 7 : 6, (int64_t)(intptr_t)name, bytes, kind | (method & 2) << 40);
     state[8] = 0;
     if (done == 1) {
         return 1;

@@ -59,6 +59,10 @@ _NONE, _INT, _FLOAT, _BOOL, _STR, _OBJECT, _KEYWORD = 0, 1, 2, 3, 4, 5, 6
 #: A tuple result's kind: this bit, the count, and each item's kind (`pyio.c`).
 _TUPLE = 8
 
+#: A pure call's flag for a result the callee promises: one of another kind
+#: raises `TypeError` rather than falling back (`pyio.c`).
+_PROMISED = 2
+
 #: Effects a callee may have and still be run twice unseen: it reads, allocates,
 #: and may raise, and changes nothing.
 _RERUNNABLE = frozenset(
@@ -573,9 +577,11 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         returned = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
         pure = self._rerunnable(node)
         kind = _NONE
+        certain = True
         if not discard and returned != T.NONE:
             kind = _result_kind(returned)
-            if kind < 0 or (not pure and not self._certain(node, returned)):
+            certain = kind >= 0 and self._certain(node, returned)
+            if kind < 0 or (not pure and not certain):
                 why = (
                     "which native code has no value for"
                     if kind < 0
@@ -592,7 +598,9 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
             arguments.append((_KEYWORD, name, False))
             arguments.append(self._crossing(keyword.value))
         module = self.info.module  # type: ignore[attr-defined]
-        made = self._python_call(f"{module}:{ast.unparse(func)}", arguments, kind, pure=pure)
+        made = self._python_call(
+            f"{module}:{ast.unparse(func)}", arguments, kind, pure=pure, checked=not certain
+        )
         return made if made is not None else self._word(0)  # type: ignore[attr-defined,no-any-return]
 
     def _crossing(self, argument: ast.expr) -> tuple[int, Value, bool]:
@@ -638,10 +646,18 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         function's own result (CPython keeps those promises), or a function of
         this module every `return` of which gives exactly that type. An `int`
         never is, whatever its callee: Python's may not fit 64 bits."""
-        if returned not in (T.STR, T.BOOL, T.FLOAT):
-            return False
         func = node.func
         symbols = self.frontend.analysis.symbols  # type: ignore[attr-defined]
+        if returned == T.INT:
+            # A length, a code point, and a hash are words by CPython's own making.
+            return (
+                isinstance(func, ast.Name)
+                and func.id in {"len", "ord", "hash"}
+                and func.id not in symbols.functions
+                and func.id not in symbols.imports
+            )
+        if returned not in (T.STR, T.BOOL, T.FLOAT):
+            return False
         if isinstance(func, ast.Name):
             info = symbols.functions.get(func.id)
             if info is not None:
@@ -713,10 +729,12 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         *,
         method: bool = False,
         pure: bool = False,
+        checked: bool = True,
     ) -> Value | None:
         """Call the Python callable `module:name` with the arguments boxed, and
         unbox its result as `kind`; what it raises is raised natively. A `pure`
-        call is no barrier, and falls back where its result is not `kind`."""
+        call is no barrier; where its result is not `kind` it falls back, or,
+        not `checked` (the result is promised), raises `TypeError`."""
         rt = self._rt  # type: ignore[attr-defined]
         for argument_kind, value, _owned in arguments:
             if argument_kind == _KEYWORD:
@@ -732,12 +750,13 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
                 rt("ppy_io_push", (self._word(argument_kind), word), None)  # type: ignore[attr-defined]
         data, length = self._text_data(spelled)  # type: ignore[attr-defined]
         call = "ppy_io_call_pure" if pure else "ppy_io_call"
-        status = rt(call, (data, length, self._word(kind), self._word(int(method))))  # type: ignore[attr-defined]
+        flags = int(method) | (_PROMISED if pure and not checked else 0)
+        status = rt(call, (data, length, self._word(kind), self._word(flags)))  # type: ignore[attr-defined]
         for argument_kind, value, owned in arguments:
             if argument_kind == _STR and owned:
                 self._release(value)  # type: ignore[attr-defined]
         if pure:
-            self._after_pure_call(status)
+            self._after_pure_call(status, checked)
         else:
             self._after_barrier(status)
         if kind & _TUPLE:
@@ -763,11 +782,14 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
             return rt("ppy_io_result", ())  # type: ignore[no-any-return]
         return None
 
-    def _after_pure_call(self, status: Value) -> None:
+    def _after_pure_call(self, status: Value, checked: bool) -> None:
         """A pure call's status: 0; 1 where its result was of another kind, and
-        the native call falls back; or -1 with Python's exception pending."""
-        mismatched = core.cmp(self.b, "ne", status, self._word(1))  # type: ignore[attr-defined]
-        core.guard(self.b, mismatched, "contract", "a call into Python gave another type")  # type: ignore[attr-defined]
+        the native call falls back; or -1 with Python's exception pending. A
+        promised result is never 1: a broken promise is a `TypeError`, so no
+        check follows a barrier for it."""
+        if checked:
+            mismatched = core.cmp(self.b, "ne", status, self._word(1))  # type: ignore[attr-defined]
+            core.guard(self.b, mismatched, "contract", "a call into Python gave another type")  # type: ignore[attr-defined]
         answered = core.cmp(self.b, "eq", status, self._word(0))  # type: ignore[attr-defined]
         if not self._exceptions_on():  # type: ignore[attr-defined]
             # Nothing was crossed: Python runs the call again and raises it.
