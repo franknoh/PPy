@@ -826,7 +826,6 @@ def _signature(
         symbol="ppy_" + info.qualname.replace(".", "_"),
         parameters=parameters,
         returns=returns,
-        # A cached function writes its table, which Python's callers share.
         releases_gil=_releases_gil(analysis)
         if analysis is not None and not _cached(info)
         else False,
@@ -885,7 +884,15 @@ _NEEDS_GIL = (Effect.PYTHON_CALLBACK, Effect.EXTERNAL_UNKNOWN, Effect.IO, Effect
 
 
 def _cached(info: FunctionInfo) -> bool:
-    return any(name in {"functools.cache", "functools.lru_cache"} for name in info.decorators)
+    """A cached function writes its table, which Python's callers share, and
+    one taking a `random.Random` draws from a Python object's memory: the GIL
+    is held for both."""
+    if any(name in {"functools.cache", "functools.lru_cache"} for name in info.decorators):
+        return True
+    return any(
+        isinstance(base := T.strip_literal(p.type), T.Instance) and base.name == "random.Random"
+        for p in info.params
+    )
 
 
 def _releases_gil(analysis: FunctionAnalysis) -> bool:

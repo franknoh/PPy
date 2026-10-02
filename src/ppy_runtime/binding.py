@@ -675,7 +675,11 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         if signature.returned and not nothing
         else None
     )
-    if signature.returned and not nothing and returned is None:
+    if (
+        signature.returned
+        and not nothing
+        and (returned is None or returned.kind == "random.Random")
+    ):
         return unbound
     expanders = [None if p.is_handle else _expander_for(p, None) for p in signature.parameters]
     written = [p.is_handle and p.written for p in signature.parameters]
@@ -700,6 +704,8 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         if answered:
             binding.calls += 1
             return answer
+        # A generator an argument lent is put back as it was before Python reruns.
+        boundary.restore()
         binding.fallbacks += 1
         return fallback(*args)
 

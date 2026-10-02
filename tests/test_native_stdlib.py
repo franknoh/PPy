@@ -1251,3 +1251,60 @@ def test_recursion_goes_through_the_native_table(tmp_path: Path):
     assert _output(done).strip() == expected
     explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.ways")
     assert "llvm backend: native" in explained.stdout, explained.stdout
+
+
+LENT = """
+import random
+
+
+def walk(rng: random.Random, n: int) -> int:
+    position = 0
+    for _ in range(n):
+        position += rng.choice([-1, 1]) * rng.randint(1, 3)
+    return position
+
+
+def overflow_after_draw(rng: random.Random, k: int) -> int:
+    a = rng.randint(1, 100)
+    return a * k + rng.randint(1, 10)
+
+
+def with_gauss(rng: random.Random, n: int) -> float:
+    total = 0.0
+    for _ in range(n):
+        total += rng.random() + rng.gauss(0.0, 1.0)
+    return total
+
+
+def main() -> None:
+    rng = random.Random(42)
+    print(walk(rng, 1000))
+    print(rng.random())
+    print(walk(rng, 10), rng.gauss(0.0, 1.0))
+    print(overflow_after_draw(rng, 3))
+    print(overflow_after_draw(rng, 2**62))
+    print(rng.randint(1, 1000))
+    print(with_gauss(rng, 5), rng.gauss(0.0, 1.0))
+    print(walk(rng, 5))
+    other = random.Random(7)
+    print(walk(other, 20), walk(rng, 20))
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_generator_python_lends_is_drawn_from_in_place(tmp_path: Path):
+    """A `random.Random` Python passes in: native code draws from its state in
+    place, interleaved with Python's draws; a call that falls back after it
+    drew (a word overflowed) puts the state back first, and `gauss`, whose
+    held value is Python's, falls back too."""
+    expected = _expected(tmp_path, LENT)
+    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    assert _output(done).strip() == expected
+    for function in ("walk", "overflow_after_draw", "with_gauss"):
+        explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
+        assert "llvm backend: native" in explained.stdout, (function, explained.stdout)

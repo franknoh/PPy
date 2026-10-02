@@ -298,6 +298,17 @@ class StdlibLowering(LibraryLowering, MemoLowering):
         self.frontend.module.require("math", 1)  # type: ignore[attr-defined]
         return math_dialect.call(self.b, name, value)  # type: ignore[attr-defined,no-any-return]
 
+    def _own_generator(self, instance: Value, name: str) -> None:
+        """`r.seed` and `r.gauss` of a generator Python lent touch its
+        `gauss_next`, which only Python has: such a call falls back."""
+        lent = self._rt("ppy_random_instance_lent", (instance,))  # type: ignore[attr-defined]
+        core.guard(
+            self.b,  # type: ignore[attr-defined]
+            core.cmp(self.b, "eq", lent, self._word(0)),  # type: ignore[attr-defined]
+            "contract",
+            f"`Random.{name}` of a generator Python lent",
+        )
+
     def _state(self) -> Value:
         """The generator a draw moves: a `random.Random`'s own, where a method of
         one is lowering, or the module's."""
@@ -321,6 +332,7 @@ class StdlibLowering(LibraryLowering, MemoLowering):
             value = self._int_argument(args[0]) if args else word(0)
             instance = self.__dict__.get("_random_instance")
             if instance is not None:
+                self._own_generator(instance, "seed")
                 rt("ppy_random_seed_instance", (instance, given, value), None)
                 return word(0)
             rt("ppy_random_reseed", (self._state(), given, value), None)
@@ -550,6 +562,7 @@ class StdlibLowering(LibraryLowering, MemoLowering):
                 instance = self.__dict__.get("_random_instance")
                 if instance is not None:
                     # A generator of its own holds its value back itself.
+                    self._own_generator(instance, "gauss")
                     held = rt("ppy_random_instance_held", (instance,), HANDLE)
                     return rt("ppy_random_gauss_held", (self._state(), mu, sigma, held), F64)  # type: ignore[no-any-return]
                 if not self.frontend.standalone:  # type: ignore[attr-defined]
