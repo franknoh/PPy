@@ -151,13 +151,47 @@ def _makes_bool(node: ast.expr) -> bool:
 
 def _cannot_raise(node: ast.expr) -> bool:
     """Pure, and no operator in it can raise: what may be deleted outright, or
-    moved to where it runs when the program would not have run it."""
+    moved to where it runs when the program would not have run it.
+
+    An operator raises when its operands are of types it does not take, so
+    each operand must be a number, a string, or None by the analysis: `x + 12`
+    with `x` of no known type raises `TypeError` for a string."""
     if not _is_pure_expr(node):
         return False
-    return not any(
-        isinstance(child, ast.BinOp) and isinstance(child.op, _RAISING_OPERATORS)
-        for child in ast.walk(node)
-    )
+    for child in ast.walk(node):
+        if isinstance(child, ast.BinOp):
+            if isinstance(child.op, _RAISING_OPERATORS):
+                return False
+            if not (_plain(child.left) and _plain(child.right)):
+                return False
+        elif isinstance(child, ast.UnaryOp):
+            if not _plain(child.operand):
+                return False
+        elif isinstance(child, ast.Compare):
+            operands = [child.left, *child.comparators]
+            if not all(isinstance(op, (ast.Is, ast.IsNot)) for op in child.ops) and not all(
+                _plain(operand) for operand in operands
+            ):
+                return False
+        elif isinstance(child, ast.BoolOp):
+            if not all(_plain(value) for value in child.values):
+                return False
+        elif isinstance(child, ast.FormattedValue):
+            # `f"{x:>6}"` raises for bytes, and a format spec may not suit the value.
+            if not _plain(child.value) or child.format_spec is not None:
+                return False
+    return True
+
+
+#: Values whose operators raise only on a mix of them, which the checker
+#: reports: numbers, strings, and None.
+_PLAIN = frozenset({T.INT, T.FLOAT, T.BOOL, T.STR, T.NONE})
+
+
+def _plain(node: ast.expr) -> bool:
+    if isinstance(node, ast.Constant):
+        return True
+    return T.strip_literal(type_of(node)) in _PLAIN
 
 
 def _assigned_names(nodes: list[ast.stmt]) -> set[str]:

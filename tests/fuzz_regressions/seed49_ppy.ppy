@@ -1,0 +1,125 @@
+# fuzz: path=ppy seed=49 (stdout differs)
+# fuzz: unannotated
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+class Failed(ValueError):
+    def __init__(self, code: int, where: str) -> None:
+        super().__init__(f"{where}: {code}")
+        self.code: int = code
+        self.where: str = where
+
+
+@dataclass(order=True)
+class Tag:
+    rank: int
+    label: str
+
+
+def countdown(n: int) -> Iterator[int]:
+    pass
+
+
+def pairs(n: int) -> Iterator[int]:
+    yield from countdown(n)
+
+
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+
+
+def fn1(a2, a3):
+    sa12: set[int] = {(a3 * a3)}
+    sb13: set[int] = {x % 5 for x in range(2)}
+    sa12.add((a3 ^ 9223372036854775807))
+    sa12.discard(3)
+    n11: int = len(sa12 & sb13) * 10 + (1 if 3 in sb13 else 0)
+    tm14 = TreeMap[int, int]()
+    tm14[(-12 % (n11 if n11 != 0 else 3))] = pow(4, 3, 7)
+    tm14[(a3 % (-4 if -4 != 0 else 5))] = 6
+    tm14[(a3 + -3)] = int(0.5)
+    tm14[n11] = (n11 // (n11 if n11 != 0 else -7))
+    n15: int = tm14.min() * 10 + tm14.max() + len(tm14)
+    q16 = Deque[int]()
+    q16.push_front(n15)
+    q16.push_back(min(n11, a3))
+    n15 = q16.pop_back() - q16.pop_front()
+    h17 = Heap[int]()
+    h17.push(-5)
+    h17.push(max(n15, a3))
+    h17.push(min(a3, n11))
+    n18: int = 0
+    n19: int = n18
+    b20: bool = ((a2 + '123') > 'ab')
+    return 0.5
+
+
+
+
+
+
+def main() -> None:
+    pass
+
+
+main()
+if __name__ == "__main__":
+    import sys
+
+    here = sys.modules[__name__]
+    try:
+        print(getattr(here, 'fn1')(4, -3))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn21')(True))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn37')(3, 1))
+    except Exception as e:
+        print(type(e).__name__)
