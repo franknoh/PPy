@@ -43,8 +43,8 @@ Documentation: **[ppy.franknoh.dev](https://ppy.franknoh.dev/)**
   frames on the native path.
 - `ppy convert` and `ppy migrate` bring existing Python over one module at a
   time.
-- @@TESTS@@ tests on Python 3.12, 3.13, and 3.14, covering @@COV@@ of the
-  compiler's @@STMTS@@ statements, plus differential fuzzing of generated
+- 2,480 tests on Python 3.12, 3.13, and 3.14, covering 68% of the
+  compiler's 55k statements, plus differential fuzzing of generated
   programs. 81 diagnostic codes, each documented once.
 
 ## Installation

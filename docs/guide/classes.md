@@ -54,7 +54,9 @@ module, and no `__getattr__` or similar hook. Each field holds a value
 native code can represent:
 
 - a number, a string, a tuple of numbers, or a value class
-- a collection: `Vec[int]`, `HashMap[int, Vec[int]]`
+- a `list`, `dict`, or `set` of what native code holds, such as
+  `dict[str, int]` or `list[list[int]]`
+- a `ppy` collection: `Vec[int]`, `HashMap[int, Vec[int]]`
 - another object, or `None` where the field is `Node | None`
 
 Native code builds an instance by running the class's `__init__`, or for a
@@ -332,8 +334,8 @@ on CPython.
 ## Limitations
 
 - A class with more than one base, a base from another module or a
-  library, or a field native code cannot represent (a `dict`, say), keeps
-  the functions that use it in Python.
+  library, or a field native code cannot represent (a NumPy array, a
+  `list` with no element type), keeps the functions that use it in Python.
 - A call through a generic base whose subclass has type parameters the
   base's arguments do not decide stays in Python, as above.
 - A dataclass's generated `==` and order compare fields that are numbers,
