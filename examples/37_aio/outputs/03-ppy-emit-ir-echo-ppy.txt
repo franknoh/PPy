@@ -86,7 +86,7 @@ func @echo_wait_and_double_resume(%frame: ptr<i64>) -> () attrs {ppy.abi = "resu
     %27 = core.ptr_offset %frame, %26 : ptr<i64>
     %28 = core.load %27 : i64 loc("examples/37_aio/echo.ppy":9:8)
     %29 = core.const 1 : i64
-    %30 = core.add %28, %29 {overflow = "python"} : i64 loc("examples/37_aio/echo.ppy":9:8)
+    %30 = core.add %28, %29 {overflow = "proven"} : i64 loc("examples/37_aio/echo.ppy":9:8)
     %31 = core.const 6 : i64
     %32 = core.ptr_offset %frame, %31 : ptr<i64>
     core.store %30, %32 loc("examples/37_aio/echo.ppy":9:8)

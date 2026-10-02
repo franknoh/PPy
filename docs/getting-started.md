@@ -14,8 +14,10 @@ If you don't use `uv`, run `pip install "ppy-lang[llvm]"` instead.
 The distribution is called `ppy-lang`. It installs three packages: `ppy`,
 `ppy_compiler`, and `ppy_runtime`. Your code writes `import ppy`.
 
-The native backend needs the `llvm` extra (llvmlite). The fastest call
-boundary is built when the CPython headers (`python3-dev`) are present.
+The native backend needs the `llvm` extra (llvmlite). Without it,
+`ppy run` warns once (`W2012`) and runs your program on CPython. The fastest
+call boundary is built when the CPython headers (`python3-dev`) are
+present.
 [Installing](installing.md) has the details.
 
 Check what PPy found on your machine:
@@ -126,7 +128,24 @@ kernels instead:
 [Interop](howto/24_interop.md) and [Migrating a real
 project](internals/migrating.md) cover this in depth.
 
-Two commands help you turn existing Python into PPy:
+Existing Python can also run unchanged. Turn strict mode off for the
+project:
+
+```toml
+[tool.ppy]
+strict = false
+```
+
+Then `ppy run script.py` types each unannotated parameter from the calls
+the project makes to it, its default value, and its doctests, compiles the
+functions that types, and runs the rest on CPython. What the analysis
+cannot follow, such as `eval` or an import that fails, is a `W2010`
+warning and runs as CPython runs it. `ppy explain --summary --no-strict .`
+says how much went native and what kept the rest in Python, and `ppy
+explain module.function` lists the types it inferred and where from.
+[An unannotated module](howto/52_unannotated.md) walks through one.
+
+Two commands turn existing Python into PPy:
 
 ```bash
 uv run ppy convert kernel.py     # untyped Python to strict PPy, inferred from the call sites

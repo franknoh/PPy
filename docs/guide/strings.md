@@ -134,6 +134,10 @@ without its newline, `ppy.scan[str]()` reads the next whitespace-delimited
 token, and `print` writes strings and lists of strings. A line that is not
 UTF-8 is `UnicodeDecodeError`, as CPython reads it.
 
+Under `ppy run`, a native `print` writes into output held until the call
+returns, and `input()` calls Python's own `input`, as
+[Effects in native code](native-effects.md) describes.
+
 ## Where it falls back
 
 Some answers need Python's Unicode tables. These check first and fall back:

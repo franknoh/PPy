@@ -100,7 +100,8 @@ CODES: dict[str, str] = {
     "W2010": (
         "Under `--no-strict`, a strict-mode error with a sound fallback: an untyped value "
         "(`E1201`, `E1202`, `E1204`, `E1306`), an annotation or name the analysis cannot read "
-        "(`E1101`, `E1301` in an annotation), a dynamic feature (`E1103`, `E1501`-`E1504`, "
+        "(`E1101`, `E1301` in an annotation), a value stored into a list or dict element of "
+        "another type (`E1301`), a dynamic feature (`E1103`, `E1501`-`E1504`, "
         "`E1506`, `E1507`), or an operator on a class built on a base it cannot see (`E1302`). "
         "The code stays on CPython, which runs it or raises its own error; the message names "
         "the code it is under strict mode."

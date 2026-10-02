@@ -172,6 +172,7 @@ def _print_function(
         report is not None
         and report.native_ok
         and (lowered is None or lowered.startswith("native"))
+        and "its Python body runs" not in (lowered or "")
     ):
         print(f"python boundary: {_boundary(info)}")
     print(f"jit: {_jit_detail(info, report)}")
@@ -294,10 +295,15 @@ def _lowering_outcome(bundle: AnalysisBundle, info: FunctionInfo) -> str | None:
         # The body lowered: that is the answer, whatever the contract feared.
         rule = getattr(module, "effects", {}).get(info.qualname)
         found = f"native; {rule}" if rule else "native"
-        withheld = getattr(module.functions[info.qualname], "withheld", "")
+        entry = module.functions[info.qualname]
+        withheld = getattr(entry, "withheld", "")
         if withheld:
             # Native callers call it natively; Python's call runs its body.
             found += f"; called from Python, its Python body runs: it {withheld}"
+        elif not getattr(entry, "exposed", True):
+            # The cost model kept the boundary off: the same body runs, only slower.
+            why = getattr(entry, "exposure_reason", "") or "the crossing costs more than it saves"
+            found += f"; called from Python, its Python body runs: {why}"
         return found
     reason = module.rejected.get(info.qualname)
     return f"boxed: {reason}" if reason else None

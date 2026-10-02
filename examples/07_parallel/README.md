@@ -143,9 +143,9 @@ PPy on CPython 3.13.13, from a checkout on a native filesystem.
 **`python  parallel.ppy`**
 
 ```text
-fused serial        114.8 ms   sample=-0.249979000059
-fused parallel      123.4 ms   sample=-0.249979000059
-numpy               121.4 ms   sample=-0.249979000059
+fused serial        109.3 ms   sample=-0.249979000059
+fused parallel      109.3 ms   sample=-0.249979000059
+numpy               112.6 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True
@@ -154,9 +154,9 @@ relaxed close   : True
 **`ppy     parallel.ppy`**
 
 ```text
-fused serial        113.8 ms   sample=-0.249979000059
-fused parallel      127.6 ms   sample=-0.249979000059
-numpy               132.2 ms   sample=-0.249979000059
+fused serial         99.7 ms   sample=-0.249979000059
+fused parallel       98.9 ms   sample=-0.249979000059
+numpy                99.4 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True
@@ -165,9 +165,9 @@ relaxed close   : True
 **`ppy run parallel.ppy`**
 
 ```text
-fused serial         14.9 ms   sample=-0.249979000059
-fused parallel        5.6 ms   sample=-0.249979000059
-numpy                18.3 ms   sample=-0.249979000059
+fused serial         14.3 ms   sample=-0.249979000059
+fused parallel        4.5 ms   sample=-0.249979000059
+numpy                26.0 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True

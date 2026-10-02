@@ -18,17 +18,17 @@ ppy run threads.ppy
 **`python  threads.ppy`**
 
 ```text
-1 thread    3364.0 ms
-2 threads   6794.2 ms
+1 thread    3314.1 ms
+2 threads   6709.8 ms
 scaling       0.99x
 ```
 
 **`ppy run threads.ppy`**
 
 ```text
-1 thread     130.3 ms
-2 threads    129.6 ms
-scaling       2.01x
+1 thread     130.7 ms
+2 threads    147.4 ms
+scaling       1.77x
 ```
 
 <!-- outputs:end -->
@@ -52,8 +52,11 @@ generated wrapper therefore wraps the call in `Py_BEGIN_ALLOW_THREADS`.
 
 ## When the GIL stays held
 
-- A function with an effect that can reach the interpreter keeps the GIL.
-- A function that performs I/O is not lowered at all.
+- A function with an effect that can reach the interpreter keeps the GIL:
+  one that prints, reads input, opens a file, or calls a Python function
+  ([Effects in native code](../../docs/guide/native-effects.md)).
+- A short straight-line function keeps it too. Releasing and retaking the
+  GIL costs about 20 ns, more than such a body saves.
 - Borrowed buffers get the same treatment NumPy gives them: the boundary
   pins the memory for the whole call.
 

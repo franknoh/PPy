@@ -124,8 +124,10 @@ Some code should stay as it is:
   `.ppy`, but it will not lower. That is fine: the loops that read its numbers
   can.
 - **`try`/`except` that uses more than the class and message.** A handler
-  reading `e.args`, or `raise ... from ...`, keeps its function in Python.
-  One that matches by class and reads `str(e)` lowers; see
+  that matches by class and reads `str(e)`, or `e.args` of an exception
+  raised with one string or none, lowers, and so does `raise ... from` a
+  name or a new exception. Other uses of `e`, and a cause computed by a call
+  (`raise X from f()`), keep the function in Python; see
   [exceptions and generators](../guide/exceptions-and-generators.md).
 
 ## What to expect from the numbers

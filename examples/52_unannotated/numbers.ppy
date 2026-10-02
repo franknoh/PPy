@@ -1,0 +1,90 @@
+def is_prime(number):
+    """
+    >>> is_prime(97)
+    True
+    >>> is_prime(91)
+    False
+    """
+    if number < 2:
+        return False
+    if number % 2 == 0:
+        return number == 2
+    divisor = 3
+    while divisor * divisor <= number:
+        if number % divisor == 0:
+            return False
+        divisor += 2
+    return True
+
+
+def digit_sum(number, base=10):
+    """
+    >>> digit_sum(1234)
+    10
+    >>> digit_sum(255, 16)
+    30
+    """
+    total = 0
+    while number > 0:
+        total += number % base
+        number //= base
+    return total
+
+
+def collatz_steps(start):
+    """
+    >>> collatz_steps(27)
+    111
+    """
+    steps = 0
+    while start != 1:
+        start = start // 2 if start % 2 == 0 else 3 * start + 1
+        steps += 1
+    return steps
+
+
+def longest_collatz(limit):
+    """
+    >>> longest_collatz(10)
+    (9, 19)
+    """
+    best, best_start = 0, 1
+    for start in range(1, limit):
+        steps = collatz_steps(start)
+        if steps > best:
+            best, best_start = steps, start
+    return best_start, best
+
+
+def count_primes(limit):
+    """
+    >>> count_primes(100)
+    25
+    """
+    return sum(1 for n in range(limit) if is_prime(n))
+
+
+def harshad_numbers(limit, base=10):
+    """
+    >>> harshad_numbers(25)
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 18, 20, 21, 24]
+    """
+    return [n for n in range(1, limit) if n % digit_sum(n, base) == 0]
+
+
+def mean(values):
+    """
+    >>> mean([1.0, 2.0, 4.5])
+    2.5
+    """
+    return sum(values) / len(values)
+
+
+if __name__ == "__main__":
+    print("primes below 2,000,000:", count_primes(2_000_000))
+    print("longest Collatz chain below 1,000,000:", longest_collatz(1_000_000))
+    found = harshad_numbers(1_000_000)
+    print("Harshad numbers below 1,000,000:", len(found), "the last", found[-1])
+    print("mean digit sum:", mean([float(digit_sum(n)) for n in range(1_000_000)]))
+    print("is_prime(2**31 - 1):", is_prime(2**31 - 1))
+    print("digit_sum(10**30 - 1):", digit_sum(10**30 - 1))

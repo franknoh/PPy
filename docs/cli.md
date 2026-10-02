@@ -13,7 +13,11 @@ These go before the subcommand.
 | `-q`, `--quiet` | only errors |
 | `--color {auto,always,never}` | ANSI colour in diagnostics |
 | `-O`, `--opt-level {0,1,2,3}` | override `[tool.ppy] opt-level` |
-| `--no-strict` | report strict-mode errors that have a sound fallback as `W2010` warnings |
+| `--no-strict` | turn strict mode off for this invocation, as `strict = false` does: infer unannotated parameters from the project's calls, defaults, and doctests, and report the strict-mode errors that have a sound fallback as `W2010` (`W2011` for a value that may be `None`) |
+
+`--no-strict` is also accepted after the subcommand (`ppy run --no-strict
+FILE`, `ppy check --no-strict`, `ppy explain --no-strict`).
+[The subset](guide/subset.md) says what it downgrades and what it infers.
 
 `-O` overrides the project default. It does not override a per-function
 `@ppy.opt(n)`, which is a contract on that function.
@@ -28,6 +32,11 @@ ppy run FILE.ppy [-- ARGS...]    # compile through LLVM, then run
 ```
 
 Everything after `--` reaches the program as `sys.argv[1:]`.
+
+Without llvmlite (the `llvm` extra), `ppy run` prints one `W2012` warning
+with the install command and runs the program on CPython, with the same
+output and exit code. `--profile`, `--pgo`, and the other options that only
+make sense for native code stop with `E1801` instead.
 
 `ppy run` keeps Python-integer semantics by default, as `ppy build` does.
 Its options:
@@ -748,9 +757,27 @@ ppy explain LOCATION
 code. For a function it reports:
 
 - the semantic type, effects, and purity
-- the backend decision
+- the backend decision: `native`, or `boxed` with the first construct that
+  kept it in Python. A native function with effects also names the rule it
+  runs under ([Effects in native code](guide/native-effects.md)), and one
+  that Python calls through its Python body says why: the crossing costs
+  more than the body saves, or a barrier follows a copied argument
+- the Python boundary a native function has
 - the representation chosen for each parameter
+- the types that were inferred rather than annotated, and where each came
+  from (under `--no-strict`; see below)
 - each library call's lowering, with its guards
+
+```text
+inferred (not annotated):
+  number: int, from 3 calls (numbers.ppy:90, numbers.ppy:72, numbers.ppy:88)
+  base: int, from 1 call (numbers.ppy:72) and the default value
+  (the Python boundary checks these at each call, and runs the Python body otherwise)
+  return: int, from the body's return statements
+```
+
+`--no-strict` (before or after `explain`) analyzes as `ppy run --no-strict`
+does.
 
 ### `--summary`
 
@@ -770,9 +797,11 @@ the code goes native and what keeps the rest in Python:
   and calls whose effects are unknown list the calls seen most often
 - for native functions Python does not call natively, why the boundary is
   not used (it costs more than the body saves, it passes objects, and so on)
-- a nested function runs where the function around it runs, so it is
-  native when that function is, and otherwise names the function around it;
-  its statements count under itself, not twice
+- a nested function that shares no variable with the functions around it
+  has an entry of its own and is counted like any function; one that shares
+  a variable runs where the function around it runs, so it is native when
+  that function is, and otherwise names the function around it; its
+  statements count under itself, not twice
 - files that could not be analyzed or lowered, which are reported and do
   not stop the summary
 
@@ -783,7 +812,10 @@ the code goes native and what keeps the rest in Python:
 | `--json` | everything as JSON: the totals, every reason, and every function with its tier and reason |
 
 A module the analysis follows an import into is not counted; name it to
-include it. [Finding what stays in Python](guide/native-lowering.md#finding-what-stays-in-python)
+include it. Without `--no-strict` the summary analyzes in strict mode, so
+on code without annotations every unannotated function counts as Python;
+`ppy explain --summary --no-strict` shows what `ppy run --no-strict`
+compiles. [Finding what stays in Python](guide/native-lowering.md#finding-what-stays-in-python)
 walks through reading one.
 
 ## `ppy inspect`
