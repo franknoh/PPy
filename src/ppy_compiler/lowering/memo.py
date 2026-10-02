@@ -27,8 +27,8 @@ import ast
 import hashlib
 
 from ..analysis import types as T
-from ..backend.llvm.lowering import Unsupported
 from ..analysis.closures import is_plain_callable
+from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, PtrType, Successor, TupleType, Value
 from ..ir.dialects import core
 from .collections import HANDLE, STR, _pointer, shape_of
