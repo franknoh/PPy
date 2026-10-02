@@ -259,8 +259,13 @@ def define_cached(frontend, info, node: ast.FunctionDef, constants: dict) -> lis
     body = frontend.declare(dataclass_replace(info, qualname=spelled), body_signature)
     # The body is called from the entry only: nothing else may find it by name.
     frontend.declared.pop(spelled, None)
-    lowering = _FunctionLowering(frontend, body, body_signature, info, constants)
-    lowering.run(node)
-    entry = _FunctionLowering(frontend, function, signature, info, constants)
-    entry.memo_run(node, body.name, tuple(function.results), bound)
+    try:
+        lowering = _FunctionLowering(frontend, body, body_signature, info, constants)
+        lowering.run(node)
+        entry = _FunctionLowering(frontend, function, signature, info, constants)
+        entry.memo_run(node, body.name, tuple(function.results), bound)
+    except Unsupported:
+        # Neither half is kept: the function stays in Python whole.
+        frontend.module.functions.pop(body.name, None)
+        raise
     return lowering.proved

@@ -1509,6 +1509,7 @@ class _Checker:
             return
         resolved = self.annotations.resolve(node.annotation)
         declared = Binding(resolved.type, resolved.facts)
+        bound_type = resolved.type
         if node.value is not None:
             value = self._expr_expecting(node.value, env, resolved.type)
             if _display_fits(node.value, value.type, resolved.type):
@@ -1531,9 +1532,20 @@ class _Checker:
             else:
                 declared = Binding(resolved.type, self._merge_declared(resolved.facts, value.facts))
                 declared = Binding(declared.type, self._check_width(declared, node.value))
-        self._bind_target(
-            node.target, declared, env, declared_type=resolved.type, source=node.value
-        )
+            made = T.strip_literal(value.type)
+            if (
+                isinstance(resolved.type, T.Instance)
+                and not resolved.type.args
+                and resolved.type.name in {"collections.deque", *stdlib.LIBRARY_MAPPINGS}
+                and isinstance(made, T.Instance)
+                and made.name == resolved.type.name
+                and made.args
+            ):
+                # `counts: defaultdict = defaultdict(int)`: what the annotation
+                # leaves out, the value and the writes after it say.
+                declared = Binding(made, declared.facts)
+                bound_type = made
+        self._bind_target(node.target, declared, env, declared_type=bound_type, source=node.value)
         if isinstance(node.target, ast.Name) and any(
             fact is not None
             for fact in (resolved.facts.dtype, resolved.facts.shape, resolved.facts.ownership)

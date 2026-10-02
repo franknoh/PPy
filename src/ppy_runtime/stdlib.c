@@ -1275,3 +1275,49 @@ void ppy_memo_store(int8_t *handle, const int8_t *key, const int8_t *value) {
     }
     table[1]++;
 }
+
+/* `a += b`, `a -= b`, `a |= b`, `a &= b` of two `Counter`s (`op` 0 to 3),
+   in place, as `Counter`'s methods do them, and then every count not above
+   zero let go of (`_keep_positive`). */
+void ppy_counter_inplace(int8_t *handle, int8_t *other, int64_t op) {
+    if (op <= 1) {
+        ppy_counter_merge(handle, other, op == 0 ? 1 : -1);
+    } else if (op == 2) {
+        for (int64_t e = ppy_coll_step(other, -1); e >= 0; e = ppy_coll_step(other, e)) {
+            const int8_t *key = (const int8_t *)ppy_coll_record(other, e);
+            int64_t theirs = *ppy_coll_value_words(other, e);
+            int64_t at = ppy_map_find(handle, key);
+            int64_t mine = at >= 0 ? *ppy_coll_value_words(handle, at) : 0;
+            if (theirs > mine) {
+                at = ppy_map_put(handle, key);
+                *ppy_coll_value_words(handle, at) = theirs;
+            }
+        }
+    } else {
+        for (int64_t e = ppy_coll_step(handle, -1); e >= 0; e = ppy_coll_step(handle, e)) {
+            int64_t at = ppy_map_find(other, (const int8_t *)ppy_coll_record(handle, e));
+            int64_t theirs = at >= 0 ? *ppy_coll_value_words(other, at) : 0;
+            if (theirs < *ppy_coll_value_words(handle, e)) {
+                *ppy_coll_value_words(handle, e) = theirs;
+            }
+        }
+    }
+    int64_t keys = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    int64_t *gone = (int64_t *)calloc((size_t)(((int64_t *)handle)[0] * keys + 1), 8);
+    if (gone == NULL) {
+        ppy_coll_fail();
+    }
+    int64_t n = 0;
+    for (int64_t e = ppy_coll_step(handle, -1); e >= 0; e = ppy_coll_step(handle, e)) {
+        if (*ppy_coll_value_words(handle, e) <= 0) {
+            memcpy(gone + n * keys, ppy_coll_record(handle, e), (size_t)(keys * 8));
+            ppy_coll_hold_key(handle, gone + n * keys, 1);
+            n++;
+        }
+    }
+    for (int64_t i = 0; i < n; i++) {
+        ppy_map_remove(handle, (const int8_t *)(gone + i * keys));
+        ppy_coll_hold_key(handle, gone + i * keys, -1);
+    }
+    free(gone);
+}

@@ -492,6 +492,26 @@ class LibraryLowering:
             raises="OverflowError: the result does not fit in a 64-bit integer",
         )
 
+    def _augment_set(self, node: ast.AugAssign) -> bool:
+        """`c += d`, `c -= d`, `c |= d`, `c &= d` of `Counter`s: `c` itself
+        changes, and keeps only its positive counts."""
+        assert isinstance(node.target, ast.Name)
+        kind = self._flavored(node.target)
+        if kind is None or kind.flavor != _COUNTER:
+            return super()._augment_set(node)  # type: ignore[misc,no-any-return]
+        operation = _COUNTER_OPERATORS.get(type(node.op))
+        if operation is None:
+            raise Unsupported(f"`{ast.unparse(node)}` has no native lowering")
+        if self._flavored(node.value) != kind:
+            raise Unsupported("a `Counter` combines with another of its own key type")
+        other, other_owned = self._handle(node.value)
+        handle, owned = self._handle(node.target)
+        self._rt("ppy_counter_inplace", (handle, other, self._word(operation)), None)  # type: ignore[attr-defined]
+        self._counted_in_word("Counter" + {0: " +=", 1: " -=", 2: " |=", 3: " &="}[operation])
+        self._done_with(other, other_owned)  # type: ignore[attr-defined]
+        self._done_with(handle, owned)  # type: ignore[attr-defined]
+        return True
+
     def _counter_combined(self, kind: Kind, node: ast.BinOp) -> Value:
         """`a + b`, `a - b`, `a | b`, `a & b` of two `Counter`s: a new one."""
         operation = _COUNTER_OPERATORS.get(type(node.op))
@@ -886,13 +906,19 @@ class LibraryLowering:
             signature = frontend.signature(info)
             function = frontend.declare(info, signature)
             frontend.declared.pop(info.qualname, None)
-            _FunctionLowering(frontend, function, signature, info, {}).run(definition)
+            try:
+                _FunctionLowering(frontend, function, signature, info, {}).run(definition)
+            except Unsupported:
+                frontend.module.functions.pop(function.name, None)
+                raise
             found = made[id(compare)] = function.name
         return core.callback(self.b, found)  # type: ignore[attr-defined]
 
     # -- equality -------------------------------------------------------------------------
 
     def _collection_equality(self, node: ast.Compare) -> Value | None:
+        if not all(isinstance(op, (ast.Eq, ast.NotEq)) for op in node.ops):
+            return super()._collection_equality(node)  # type: ignore[misc,no-any-return]
         for side in (node.left, *node.comparators):
             kind = self._flavored(side)
             if kind is not None and kind.flavor in {_COUNTER, _ORDERED}:
