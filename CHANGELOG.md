@@ -203,6 +203,24 @@ none differing.
 - Fixed: a generator held in a name and walked by a `for` without `break`
   stopped after one value in native code.
 
+### Examples and documentation
+
+- New examples, each agreeing on all three paths (mean of five runs):
+  - `52_unannotated`: types inferred from calls, defaults, and doctests,
+    with `ppy explain` showing where each came from. python 7.22 s,
+    `ppy run` 1.96 s.
+  - `53_caches_and_counters`: `random.Random`, `Counter`, `defaultdict`,
+    `@cache`, and `@lru_cache`. python 1.47 s, `ppy run` 0.78 s, standalone
+    0.76 s.
+  - `54_objects_and_grids`: a grid and objects written in place by native
+    code and read back by Python. python 2.26 s, `ppy run` 0.58 s.
+- The guide, the reference, and the README describe 0.6.0: what lowers,
+  what a call across the boundary costs (a native two-int call 29 ns,
+  CPython 30 ns), `--no-strict` and inference, and `ppy run` without
+  llvmlite.
+- `examples/run_overhead.json` is re-recorded: no example is slower warm
+  under `ppy run` than under `python`.
+
 ### Known limitations
 
 - `*args` parameters, cached methods, cached functions with default
