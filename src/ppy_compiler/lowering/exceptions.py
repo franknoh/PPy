@@ -830,19 +830,18 @@ class OwnedTemporaries:  # pylint: disable=too-few-public-methods
 
     def _handle(self, node: ast.expr) -> tuple[Value, bool]:
         handle, owned = super()._handle(node)  # type: ignore[misc]
-        live = getattr(self, "_live", None)
-        if owned and live is not None and not any(h is handle for h in live):
+        live: list[Value] = getattr(self, "_live", [])
+        if owned and all(held is not handle for held in live):
             live.append(handle)
         return handle, owned
 
     def _statement(self, node: ast.stmt) -> None:
-        live = getattr(self, "_live", None)
-        mark = len(live) if live is not None else 0
+        live: list[Value] = getattr(self, "_live", [])
+        mark = len(live)
         try:
             super()._statement(node)  # type: ignore[misc]
         finally:
-            if live is not None:
-                del live[mark:]
+            del live[mark:]
 
 
 def _calls_super_init(node: ast.FunctionDef) -> bool:
