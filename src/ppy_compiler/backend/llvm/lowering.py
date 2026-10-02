@@ -601,6 +601,7 @@ def _loop_work(function: ast.AST, name: str, own: str) -> int:
     the heaviest loop that touches it (names it, or follows a field), less a
     lookup into `name` itself, which costs native code what it costs Python.
     A function that walks by calling itself counts its body."""
+    local = _local_names(function)
     best = 0
     walked = False
     for loop in ast.walk(function):
@@ -615,20 +616,46 @@ def _loop_work(function: ast.AST, name: str, own: str) -> int:
         if name not in names and not follows:
             continue
         walked = True
-        best = max(best, sum(_work_of(statement, name) for statement in body))
+        best = max(best, sum(_work_of(statement, name, local) for statement in body))
     if not walked and own:
-        # Recursion over linked objects, or a builtin over the whole: the
-        # function's own work is what each element costs it.
-        return sum(_work_of(statement, name) for statement in getattr(function, "body", []))
+        # Recursion over linked objects, a builtin over the whole, or a global
+        # only a callee reads: the function's own work is what it costs.
+        return sum(_work_of(statement, name, local) for statement in getattr(function, "body", []))
     return best
 
 
 #: A call of one of the program's functions counts as this many operations:
 #: it is a body of its own, which may loop.
-_CALL_WORK = 4
+_CALL_WORK = 6
 
 
-def _work_of(node: ast.AST, name: str) -> int:
+def _local_names(function: ast.AST) -> frozenset[str]:
+    """The names the function binds: its parameters and what it assigns."""
+    found = {
+        n.id for n in ast.walk(function) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+    }
+    arguments = getattr(function, "args", None)
+    if arguments is not None:
+        found.update(
+            a.arg for a in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs)
+        )
+    return frozenset(found)
+
+
+def _program_call(call: ast.Call, local: frozenset[str]) -> bool:
+    """A call of one of the program's functions: `f(x)`, or `module.f(x)`."""
+    func = call.func
+    if isinstance(func, ast.Name):
+        return func.id not in _BUILTIN_NAMES
+    return (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id not in local
+        and func.value.id not in _BUILTIN_NAMES
+    )
+
+
+def _work_of(node: ast.AST, name: str, local: frozenset[str] = frozenset()) -> int:
     count = 0
     for child in ast.walk(node):
         if not isinstance(child, _LOOP_WORK):
@@ -639,11 +666,7 @@ def _work_of(node: ast.AST, name: str) -> int:
             and child.value.id == name
         ):
             continue
-        if (
-            isinstance(child, ast.Call)
-            and isinstance(child.func, ast.Name)
-            and child.func.id not in _BUILTIN_NAMES
-        ):
+        if isinstance(child, ast.Call) and _program_call(child, local):
             count += _CALL_WORK
             continue
         count += 1

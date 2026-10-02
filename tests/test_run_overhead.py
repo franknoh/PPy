@@ -156,7 +156,7 @@ def test_work_that_grows_with_the_argument_crosses(exposure, name: str):  # type
         ("lookups", False, "copying the collections"),
         ("weighed", True, ""),
         # Copying a chain of objects costs more than a short walk over it.
-        ("chain", False, "copying the collections"),
+        ("chain", False, "object"),
     ],
 )
 def test_the_crossing_is_taken_where_it_is_cheaper(exposure, name: str, exposed: bool, why: str):  # type: ignore[no-untyped-def]
