@@ -232,7 +232,7 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
             for handle in reversed(held):
                 if _still_owned(handle, site, tree, registry):
                     core.call_extern(builder, "ppy_coll_release", (handle,), ())
-        self._cleanups = []
+        self._cleanups.clear()
 
     def _raise_made(self, name: str, tag: int, message: Value, known: Value) -> None:
         """Raise a new exception of class `name`, taking `message`."""

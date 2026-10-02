@@ -379,14 +379,15 @@ def _mismatch(name: str, wanted: str, result: object) -> TypeError:
 def _exact_word(value: object, kind: int) -> int | None:
     """The word of a number or bool exactly of `kind`, or None: an `int` that
     fits 64 bits (not a `bool`), a `float`, a `bool`."""
+    exact = type(value)
     if kind == _INT:
-        if type(value) is int and _I64_LOW <= value <= _I64_HIGH:
+        if isinstance(value, int) and exact is int and _I64_LOW <= value <= _I64_HIGH:
             return value
         return None
     if kind == _FLOAT:
-        return _bits(value) if type(value) is float else None
+        return _bits(value) if isinstance(value, float) and exact is float else None
     if kind == _BOOL:
-        return int(value) if type(value) is bool else None
+        return int(value) if isinstance(value, bool) else None
     return None
 
 
