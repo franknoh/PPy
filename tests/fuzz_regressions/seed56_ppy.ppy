@@ -1,0 +1,133 @@
+# fuzz: path=ppy seed=56 (stdout differs)
+# fuzz: unannotated
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+class Failed(ValueError):
+    def __init__(self, code: int, where: str) -> None:
+        super().__init__(f"{where}: {code}")
+        self.code: int = code
+        self.where: str = where
+
+
+@dataclass(order=True)
+class Tag:
+    rank: int
+    label: str
+
+
+def countdown(n: int) -> Iterator[int]:
+    pass
+
+
+def pairs(n: int) -> Iterator[int]:
+    yield from countdown(n)
+
+
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+
+
+def fn1(a2, a3):
+    m4 = HashMap[int, int]()
+    m4[(6 + 3037000499)] = m4.get((6 + 3037000499), 0) + 5
+    m4[-8] = m4.get(-8, 0) + (-4611686018427387904 * -7)
+    m4[(-10 + -7)] = m4.get((-10 + -7), 0) + 3
+    n5: int = len(m4) * 100
+    h7 = Heap[int]()
+    h7.push(-12)
+    h7.push((n5 >> (n5 % 61)))
+    h7.push((n5 * n5))
+    n8: int = 0
+    f9: float = (a3 - a3)
+    t10 = (n5, float(n5))
+    n11, f12 = t10
+    return ((n8 * n8) >= n5)
+
+
+def fn18(a19):
+    k20: int = 0
+    h23 = Heap[int]()
+    h23.push(1)
+    h23.push(a19)
+    h23.push((k20 // (k20 if k20 != 0 else -7)))
+    h23.push(-5)
+    h23.push((k20 if ((4611686018427387904 % (k20 if k20 != 0 else -7)) <= (k20 - k20)) else a19))
+    n24: int = 0
+    s25: str = ' spaced out '
+    xs27: list[int] = [(7 // (-8 if -8 != 0 else -3)), (k20 + a19), n24, (k20 * a19)]
+    xs27[-1] = xs27[0] + len(xs27)
+    n26: int = xs27[(n24 if (a19 < (a19 - 7)) else a19) % len(xs27)] + xs27[-1]
+    return str((-4611686018427387904 - k20)).replace('', ' spaced out ')
+
+
+
+
+def main() -> None:
+    print(fn1(False, 0.5))
+    print(fn1(False, 1e-300))
+    print(fn1(True, -2.5))
+    print(fn18(-12))
+
+
+main()
+if __name__ == "__main__":
+    import sys
+
+    here = sys.modules[__name__]
+    try:
+        print(getattr(here, 'fn1')('y', 'x'))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn18')(2.5))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn28')('7'))
+    except Exception as e:
+        print(type(e).__name__)

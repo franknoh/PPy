@@ -129,15 +129,69 @@ def _makes_new_object(node: ast.expr) -> bool:
 _RAISING_OPERATORS = (ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.LShift, ast.RShift)
 
 
+def _raises_nothing_unknown(node: ast.expr) -> bool:
+    """Every operator in it that can raise has a known value itself, so it
+    did not raise: `('a' if -3 // n > 1 else 'a')` is always `'a'`, unless
+    `n` is 0, and then CPython raises before it is anything."""
+    return all(
+        has_const(child)
+        for child in ast.walk(node)
+        if isinstance(child, ast.BinOp) and isinstance(child.op, _RAISING_OPERATORS)
+    )
+
+
+def _makes_bool(node: ast.expr) -> bool:
+    """Whatever its operands, this expression's value is a `bool`."""
+    if isinstance(node, ast.Compare):
+        return True
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return True
+    return isinstance(node, ast.Constant) and isinstance(node.value, bool)
+
+
 def _cannot_raise(node: ast.expr) -> bool:
     """Pure, and no operator in it can raise: what may be deleted outright, or
-    moved to where it runs when the program would not have run it."""
+    moved to where it runs when the program would not have run it.
+
+    An operator raises when its operands are of types it does not take, so
+    each operand must be a number, a string, or None by the analysis: `x + 12`
+    with `x` of no known type raises `TypeError` for a string."""
     if not _is_pure_expr(node):
         return False
-    return not any(
-        isinstance(child, ast.BinOp) and isinstance(child.op, _RAISING_OPERATORS)
-        for child in ast.walk(node)
-    )
+    for child in ast.walk(node):
+        if isinstance(child, ast.BinOp):
+            if isinstance(child.op, _RAISING_OPERATORS):
+                return False
+            if not (_plain(child.left) and _plain(child.right)):
+                return False
+        elif isinstance(child, ast.UnaryOp):
+            if not _plain(child.operand):
+                return False
+        elif isinstance(child, ast.Compare):
+            operands = [child.left, *child.comparators]
+            if not all(isinstance(op, (ast.Is, ast.IsNot)) for op in child.ops) and not all(
+                _plain(operand) for operand in operands
+            ):
+                return False
+        elif isinstance(child, ast.BoolOp):
+            if not all(_plain(value) for value in child.values):
+                return False
+        elif isinstance(child, ast.FormattedValue):
+            # `f"{x:>6}"` raises for bytes, and a format spec may not suit the value.
+            if not _plain(child.value) or child.format_spec is not None:
+                return False
+    return True
+
+
+#: Values whose operators raise only on a mix of them, which the checker
+#: reports: numbers, strings, and None.
+_PLAIN = frozenset({T.INT, T.FLOAT, T.BOOL, T.STR, T.NONE})
+
+
+def _plain(node: ast.expr) -> bool:
+    if isinstance(node, ast.Constant):
+        return True
+    return T.strip_literal(type_of(node)) in _PLAIN
 
 
 def _assigned_names(nodes: list[ast.stmt]) -> set[str]:
@@ -249,6 +303,7 @@ class ConstantFold(Pass):
             and _is_load(node)
             and has_const(node)
             and _is_pure_expr(node)
+            and _raises_nothing_unknown(node)
         ):
             value = const_of(node)
             if isinstance(value, (int, float, complex, str, bytes, bool, type(None))):
@@ -386,7 +441,10 @@ class Peephole(Pass):
             and isinstance(node.operand.op, ast.Not)
         ):
             inner = node.operand.operand
-            if type_of(inner) == T.BOOL:
+            # Only where the expression itself makes a bool: a name's type
+            # may be inferred from the calls the program makes, and a caller
+            # outside it may pass `1` where the program passes `True`.
+            if type_of(inner) == T.BOOL and _makes_bool(inner):
                 self.context.count("peepholes")
                 return inner
         return node

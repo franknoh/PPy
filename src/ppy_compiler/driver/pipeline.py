@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..analysis import stdlib
+from ..analysis.call_inference import CallSiteInference, new_errors
 from ..analysis.checker import ProjectAnalysis, analyze
 from ..analysis.contracts import ContractReport, verify
-from ..analysis.inference import infer_private_parameters, private_candidates
 from ..analysis.symbols import ProjectSymbols
 from ..cache import CacheKey, CacheStore
 from ..cache.keys import digest, environment_fingerprint
@@ -62,6 +62,12 @@ class AnalysisBundle:
     global_writes: object | None = None
     #: Project-wide annotation-reflection index, filled in by conversion.
     reflection: object | None = None
+    #: The analysis before parameter types were taken from call sites, or
+    #: None if none were. The Python the program runs as (the Python
+    #: backend, and the bodies native code falls back to) is optimized from
+    #: this one: it has no native entry to check an inferred type, so it
+    #: trusts only what the source says.
+    python_analysis: ProjectAnalysis | None = None
 
     @property
     def ok(self) -> bool:
@@ -132,8 +138,14 @@ def analyze_paths(
     backend: str = "python",
     follow_imports: bool = True,
     overlays: dict[Path, str] | None = None,
+    infer_calls: bool = True,
 ) -> AnalysisBundle:
-    """Parse, resolve, type-check, and verify contracts for the given entries."""
+    """Parse, resolve, type-check, and verify contracts for the given entries.
+
+    `infer_calls=False` leaves unannotated parameters unknown under
+    `--no-strict`: `ppy convert` runs its own inference, whose answers are
+    the annotations it writes.
+    """
     diagnostics = DiagnosticBag()
     for problem in project.plugins.problems:
         # A plugin the project asked for and cannot have: an error, not a
@@ -166,7 +178,9 @@ def analyze_paths(
         symbols.register_external_type(qualname, display)
     symbols.build()
 
-    previous = None if project.config.strict else _infer_private_parameters(project, symbols)
+    previous = python_analysis = None
+    if not project.config.strict and infer_calls:
+        previous, python_analysis = _infer_parameters(project, symbols)
     analysis = analyze(
         symbols,
         diagnostics,
@@ -184,35 +198,58 @@ def analyze_paths(
         reports=reports,
         diagnostics=diagnostics,
         entry=graph.entry,
+        python_analysis=python_analysis if previous is not None else None,
     )
 
 
-def _infer_private_parameters(project: Project, symbols: ProjectSymbols) -> ProjectAnalysis | None:
-    """Under `--no-strict`, a module-private function's unannotated parameters
-    take the types its call sites pass (`_scale([1, 2], 2)` makes `xs` a
-    `list[int]`). A caller typed only once its callee is typed reaches it on a
-    later round. The rounds report nothing; the analysis after them does."""
-    candidates = private_candidates(symbols)
-    if not candidates:
-        return None
-    analysis = None
-    for _round in range(_PRIVATE_INFERENCE_ROUNDS):
-        analysis = analyze(
+def _infer_parameters(
+    project: Project, symbols: ProjectSymbols
+) -> tuple[ProjectAnalysis | None, ProjectAnalysis | None]:
+    """Under `--no-strict`, a function's unannotated parameters take the type
+    its calls pass (`count_divisors(28)` makes `n` an `int`; see
+    `analysis.call_inference`). A caller typed only once its callee is typed
+    reaches it on a later round. An inference the checker then finds an error
+    in is taken back: the source did not say it, so it must not be reported.
+    The rounds report nothing; the analysis after them does. Returns the
+    last round's analysis, and the one before anything was inferred."""
+    inference = CallSiteInference(symbols)
+    if not inference.candidates:
+        return None, None
+
+    def check(previous: ProjectAnalysis | None) -> ProjectAnalysis:
+        return analyze(
             symbols,
             DiagnosticBag(),
             strict=False,
             dynamic_policy=project.config.dynamic_boundaries,
             plugins=project.plugins,
-            previous=analysis,
+            previous=previous,
         )
-        if not infer_private_parameters(symbols, analysis, candidates):
+
+    baseline = analysis = check(None)
+    inference.remember_fields()
+    for attempt in range(_RETRACTIONS + 1):
+        for _round in range(_INFERENCE_ROUNDS):
+            if not inference.step(analysis):
+                break
+            analysis = check(analysis)
+        errors = new_errors(baseline, analysis)
+        if not errors:
             break
-    return analysis
+        if attempt == _RETRACTIONS:
+            inference.retract_all()
+        else:
+            inference.retract(errors, analysis)
+        analysis = check(analysis)
+    return analysis, baseline
 
 
 #: Each round types the callees of what the round before typed; call chains
-#: of private helpers deeper than this keep their last links unannotated.
-_PRIVATE_INFERENCE_ROUNDS = 4
+#: deeper than this keep their last links unannotated.
+_INFERENCE_ROUNDS = 6
+#: How many times inference may be taken back where an error points and
+#: redone; past that, all of it is taken back.
+_RETRACTIONS = 4
 
 
 def module_cache_key(
@@ -239,6 +276,15 @@ def module_cache_key(
         for d in info.directives
     ]
     config = bundle.project.config
+    # A parameter typed from its calls depends on the modules that call it,
+    # which the module's own source and imports do not cover.
+    inferred = sorted(
+        f"{info.qualname}|{info.signature()}"
+        for info in bundle.symbols.functions.values()
+        if info.module == module_name and any(p.inferred for p in info.params)
+    )
+    if inferred:
+        extra = (*extra, f"inferred={digest('inferred', tuple(inferred))}")
     if target == "llvm":
         from ..backend.builtin import builtin_backend
 
@@ -487,10 +533,11 @@ def build_python(
             stats["cache_hits"] = stats.get("cache_hits", 0) + 1
             continue
 
+        trusted = bundle.python_analysis or bundle.analysis
         result: OptimizationResult = Optimizer(
             symbols,
-            module_analysis,
-            bundle.analysis,
+            trusted.modules.get(module.name, module_analysis),
+            trusted,
             level=level,
             fusion=plan,
             adjustments=tweaks,

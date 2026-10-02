@@ -22,6 +22,7 @@ from ppy_compiler.testing.fuzz import (
     OVERFLOW_64,
     STATE_PATHS,
     TIMED_OUT,
+    UNANNOTATED_MARK,
     Result,
     compare,
     generate_program,
@@ -70,6 +71,21 @@ def test_programs_with_module_state_agree(seed: int):
     paths = tuple(p for p in _available() if p in STATE_PATHS)
     source = generate_program(seed, state=True)
     assert "G_TABLE" in source and "class Link" in source
+    mismatches = compare(run_program(source, paths))
+    assert not mismatches, [
+        (m.path, m.reason, m.expected.last_error, m.found.last_error, m.found.stderr[-2000:])
+        for m in mismatches
+    ]
+
+
+@pytest.mark.parametrize("seed", SEEDS[:2])
+def test_unannotated_programs_agree(seed: int):
+    """Functions without annotations, typed from `main`'s calls under
+    `--no-strict`, then called from Python with other types: the native
+    entries refuse those and the Python bodies run."""
+    paths = tuple(p for p in _available() if p in STATE_PATHS)
+    source = generate_program(seed, unannotated=True)
+    assert source.startswith(UNANNOTATED_MARK) and "getattr(here," in source
     mismatches = compare(run_program(source, paths))
     assert not mismatches, [
         (m.path, m.reason, m.expected.last_error, m.found.last_error, m.found.stderr[-2000:])

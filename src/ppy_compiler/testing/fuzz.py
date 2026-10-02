@@ -43,6 +43,7 @@ __all__ = [
     "ALL_PATHS",
     "OVERFLOW_64",
     "TIMED_OUT",
+    "UNANNOTATED_MARK",
     "Mismatch",
     "Result",
     "compare",
@@ -253,6 +254,7 @@ class _Generator:
         state: bool = False,
         stdlib: bool = False,
         calls: bool = False,
+        unannotated: bool = False,
         boundary: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
@@ -264,6 +266,10 @@ class _Generator:
         #: Per function: its parameters, their kinds, their defaults, and
         #: where the keyword-only ones start.
         self.signatures: dict[str, tuple[list[str], list[str], dict[str, str], int]] = {}
+        #: Functions without annotations, whose types `--no-strict` infers
+        #: from the calls `main` makes; Python then calls them with others.
+        self.unannotated = unannotated
+        self.foreign = random.Random(seed ^ 0xA77)
         self.fresh = 0
         self.seed = seed
         #: Whether functions print too, between checks that may fall back.
@@ -1215,7 +1221,10 @@ class _Generator:
         signature = ", ".join(f"{p}: {k}" for p, k in zip(params, kinds, strict=True))
         if self.calls:
             signature = self.call_signature(name, params, kinds)
-        w.put(f"def {name}({signature}) -> {ret}:")
+        if self.unannotated:
+            w.put(f"def {name}({_unannotated(signature)}):")
+        else:
+            w.put(f"def {name}({signature}) -> {ret}:")
         w.depth += 1
         scope = _Scope()
         for param, kind in zip(params, kinds, strict=True):
@@ -1368,6 +1377,8 @@ class _Generator:
 
     def program(self) -> str:
         w = _Writer()
+        if self.unannotated:
+            w.lines.append(UNANNOTATED_MARK)
         if self.stdlib:
             w.lines.extend(["import bisect", "import heapq", "import itertools", "import random"])
             w.lines.extend(["import functools", "import operator"])
@@ -1381,10 +1392,13 @@ class _Generator:
         if self.with_boundary:
             w.lines.extend(_BOUNDARY_PRELUDE.splitlines())
         calls: list[str] = []
+        foreign: list[tuple[str, str]] = []
         for _ in range(self.rng.randint(3, 6)):
             name = self.name("fn")
             kinds, _ret = self.function(w, name)
             calls.extend(self.call(name, kinds) for _ in range(self.rng.randint(1, 3)))
+            if self.unannotated:
+                foreign.append(self.foreign_call(name, kinds))
         after = self.state_part(w) if self.with_state else []
         if self.with_boundary:
             after.extend(self.boundary_part(w))
@@ -1398,7 +1412,31 @@ class _Generator:
         w.put("")
         w.put("")
         w.put("main()")
+        if foreign:
+            # Python calls each function by a name the analysis cannot follow,
+            # with other types: the native entry must refuse them and run the
+            # Python body, which prints what CPython prints.
+            w.put('if __name__ == "__main__":')
+            w.put("    import sys")
+            w.put("")
+            w.put("    here = sys.modules[__name__]")
+            for call in foreign:
+                w.put("    try:")
+                w.put(f"        print(getattr(here, {call[0]!r})({call[1]}))")
+                w.put("    except Exception as e:")
+                w.put("        print(type(e).__name__)")
         return "\n".join(w.lines) + "\n"
+
+    def foreign_call(self, name: str, kinds: list[str]) -> tuple[str, str]:
+        """A call of `name` with arguments of other types than `main` passes."""
+        rng = self.foreign
+        others = {
+            "int": ("True", "2.5", "'7'", "-3"),
+            "float": ("3", "True", "'x'", "-0.5"),
+            "str": ("4", "b'ab'", "'ok'"),
+            "bool": ("1", "0", "'y'", "False"),
+        }
+        return name, ", ".join(rng.choice(others[k]) for k in kinds)
 
     def state_part(self, w: _Writer) -> list[str]:
         """The functions over module state and objects, and what `main` does with them."""
@@ -1510,12 +1548,28 @@ class _Generator:
         return after
 
 
+#: The first line of a program whose functions have no annotations; it runs
+#: without strict mode.
+UNANNOTATED_MARK = "# fuzz: unannotated"
+
+
+def _unannotated(signature: str) -> str:
+    """A parameter list with its annotations taken out, defaults kept."""
+    tree = ast.parse(f"def f({signature}): pass")
+    function = tree.body[0]
+    assert isinstance(function, ast.FunctionDef)
+    for argument in (*function.args.posonlyargs, *function.args.args, *function.args.kwonlyargs):
+        argument.annotation = None
+    return ast.unparse(function.args)
+
+
 def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     seed: int,
     prints: bool = False,
     state: bool = False,
     stdlib: bool = False,
     calls: bool = False,
+    unannotated: bool = False,
     *,
     boundary: bool = False,
 ) -> str:
@@ -1527,11 +1581,14 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     `heapq`, `bisect`, `itertools`, `functools`, `operator`, and
     `collections`' containers, and a `random.Random` of their own. With
     `calls`, functions take defaults and keyword-only parameters, and `main`
-    calls them by keyword and leaves defaults out. With `boundary`, a function
-    Python calls natively writes through lists of lists, a dict of lists, a
-    set, and objects that share rows and point at each other (`STATE_PATHS`
-    too)."""
-    return _Generator(seed, prints, state, stdlib, calls, boundary).program()
+    calls them by keyword and leaves defaults out. With `unannotated`, the
+    functions have no annotations and the program runs without strict mode,
+    which infers their types from `main`'s calls; Python then calls each
+    with arguments of other types, which the native entry must hand to the
+    Python body. With `boundary`, a function Python calls natively writes
+    through lists of lists, a dict of lists, a set, and objects that share
+    rows and point at each other (`STATE_PATHS` too)."""
+    return _Generator(seed, prints, state, stdlib, calls, unannotated, boundary).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
@@ -1661,7 +1718,8 @@ def run_program(
     compilers = _compilers()
     with tempfile.TemporaryDirectory(prefix="ppy-fuzz-") as scratch:
         root = Path(scratch)
-        (root / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+        strict = "false" if source.startswith(UNANNOTATED_MARK) else "true"
+        (root / "pyproject.toml").write_text(f"[tool.ppy]\nstrict = {strict}\n", encoding="utf-8")
         (root / "prog.ppy").write_text(source, encoding="utf-8")
         for path in paths:
             results[path] = _run_path(path, root, python, env, compilers, timeout)
@@ -1758,6 +1816,10 @@ def compare(results: dict[str, Result]) -> list[Mismatch]:
             found.append(Mismatch(path, "stdout differs", expected, result))
         elif (result.status == 0) != (expected.status == 0):
             found.append(Mismatch(path, "exit status differs", expected, result))
+        elif expected.status < 0 and result.status == expected.status:
+            # Both killed by the same signal (the memory cap, say): neither
+            # wrote a last line of its own to compare.
+            continue
         elif expected.status != 0 and result.last_error != expected.last_error:
             found.append(Mismatch(path, "the error differs", expected, result))
     return found

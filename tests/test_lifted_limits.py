@@ -146,8 +146,17 @@ def stop(n: int) -> int:
     return a + b
 
 
+def drained(n: int) -> int:
+    it = countdown(n)
+    count = 0
+    for x in it:
+        count += x
+    return count
+
+
 def main() -> None:
     print(header_then_rows(6), header_then_rows(1), partial(9), short(2), short(0), stop(5))
+    print(drained(4), drained(0))
     try:
         stop(1)
     except StopIteration:
@@ -354,7 +363,7 @@ main()
 
 PROGRAMS = {
     "exceptions": (EXCEPTIONS, ["parse", "plain", "chained", "uncaught"]),
-    "generators": (GENERATORS, ["header_then_rows", "partial", "short", "stop"]),
+    "generators": (GENERATORS, ["header_then_rows", "partial", "short", "stop", "drained"]),
     "words": (WORDS, ["joined"]),
     "sets": (SETS, ["build", "pairs", "algebra", "shown"]),
     "keys": (KEYS, ["floats", "bools", "counted"]),

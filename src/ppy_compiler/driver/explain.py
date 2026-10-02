@@ -6,6 +6,7 @@ import argparse
 import re
 from pathlib import Path
 
+from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis
 from ..analysis.contracts import ContractReport
 from ..analysis.representation import select
@@ -62,7 +63,7 @@ def _summary(options: argparse.Namespace, reporter: Reporter) -> int:
         for target in missing:
             reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
         return 2
-    project = open_project(targets[0])
+    project = open_project(targets[0], config_overrides=_overrides(options))
     entries = sorted({entry for target in targets for entry in collect_sources(target)})
     bundle = analyze_paths(project, entries, backend="llvm")
     failures: dict[str, str] = {}
@@ -80,8 +81,16 @@ def _summary(options: argparse.Namespace, reporter: Reporter) -> int:
     return 0
 
 
+def _overrides(options: argparse.Namespace) -> dict[str, object]:
+    """`--no-strict`, given to `explain` or before it, is the mode explained."""
+    overrides: dict[str, object] = {}
+    if getattr(options, "no_strict", False):
+        overrides["strict"] = False
+    return overrides
+
+
 def _analyze(target: Path, options: argparse.Namespace) -> AnalysisBundle:
-    project = open_project(target)
+    project = open_project(target, config_overrides=_overrides(options))
     entries = collect_sources(target)
     return analyze_paths(project, entries, backend="llvm")
 
@@ -188,6 +197,7 @@ def _print_function(
             print(f"  {line}")
     returned = select(info.ret, info.ret_facts, escapes=True, layouts=layouts)
     print(f"  return: {info.ret} -> {returned}")
+    _print_inferred(info)
 
     facts = info.ret_facts.describe()
     if facts:
@@ -209,6 +219,27 @@ def _print_function(
                 for guard in note.guards:
                     print(f"      guard: {guard}")
     _print_rewrites(bundle, info, start, end)
+
+
+def _print_inferred(info: FunctionInfo) -> None:
+    """Which types the source does not say, and where they came from."""
+    lines = [
+        f"{param.name}: {param.type}, from {param.origin}"
+        for param in info.params
+        if param.inferred and param.origin
+    ]
+    if lines:
+        # A Python caller crosses the wrapper, which checks each argument's
+        # exact type and runs the Python body when one is something else.
+        lines.append(
+            "(the Python boundary checks these at each call, and runs the Python body otherwise)"
+        )
+    if not info.ret_annotated and not isinstance(info.ret, T.UnknownType):
+        lines.append(f"return: {info.ret}, from the body's return statements")
+    if lines:
+        print("inferred (not annotated):")
+        for line in lines:
+            print(f"  {line}")
 
 
 def _print_rewrites(bundle: AnalysisBundle, info: FunctionInfo, start: int, end: int) -> None:
