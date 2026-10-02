@@ -26,10 +26,12 @@ __all__ = [
     "Scope",
     "callable_spelled",
     "captured_names",
+    "closure_nodes",
     "free_names",
     "is_plain_callable",
     "own_names",
     "rebound_by_closures",
+    "shared_with_closures",
 ]
 
 Scope = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
@@ -116,6 +118,57 @@ def free_names(node: Scope) -> set[str]:
         elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
             used |= free_names(child)
     return used - own - _declared(node, ast.Global)
+
+
+#: Calls whose `key=` lambda is lowered in place, its body run per element.
+_INLINE_KEYS = frozenset({"sorted", "min", "max"})
+
+
+def _inline_key(call: ast.Call, lambda_: ast.Lambda) -> bool:
+    if not any(k.arg == "key" and k.value is lambda_ for k in call.keywords):
+        return False
+    func = call.func
+    if isinstance(func, ast.Name):
+        return func.id in _INLINE_KEYS
+    return isinstance(func, ast.Attribute) and func.attr == "sort"
+
+
+def closure_nodes(node: ast.FunctionDef) -> list[Scope]:
+    """The nested functions and lambdas directly in `node`'s scope that become
+    closures: every one but a sort key's lambda, whose body runs in place."""
+    inline: set[int] = set()
+    found: list[Scope] = []
+    pending: list[ast.AST] = list(node.body)
+    while pending:
+        current = pending.pop()
+        if isinstance(current, ast.Call):
+            for keyword in current.keywords:
+                if isinstance(keyword.value, ast.Lambda) and _inline_key(current, keyword.value):
+                    inline.add(id(keyword.value))
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            found.append(current)
+            pending.extend(current.decorator_list)
+            pending.extend(current.args.defaults)
+            continue
+        if isinstance(current, ast.Lambda):
+            if id(current) not in inline:
+                found.append(current)
+            pending.extend(current.args.defaults)
+            if id(current) in inline:
+                pending.append(current.body)
+            continue
+        if isinstance(current, ast.ClassDef):
+            continue
+        pending.extend(ast.iter_child_nodes(current))
+    return found
+
+
+def shared_with_closures(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """The names of `node` that the closures it makes share with it."""
+    shared: set[str] = set()
+    for child in closure_nodes(node):
+        shared |= free_names(child)
+    return shared & own_names(node)
 
 
 def rebound_by_closures(node: Scope) -> set[str]:

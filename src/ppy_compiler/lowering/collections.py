@@ -2399,6 +2399,9 @@ class CollectionLowering:
             return self._word(0)
         shape = kind.value
         if attr == "get" and shape is not None:
+            if len(arguments) != 2:
+                # `d.get(k)` is `None` on a miss: a number or `None` has no native form.
+                raise Unsupported("`get` without a default can return `None`")
             if shape.kind not in {"int", "float", "bool"}:
                 raise Unsupported("`get` with a default takes a map of numbers natively")
             default = self._coerce(self._expr(arguments[1]), shape.kind)  # type: ignore[attr-defined]
