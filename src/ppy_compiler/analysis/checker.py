@@ -323,6 +323,11 @@ def _is_place(node: ast.expr) -> bool:
     return isinstance(node, (ast.Attribute, ast.Subscript))
 
 
+#: Sequences indexed by an int, giving an element, or sliced, giving the same.
+_INDEXED_SEQUENCES = frozenset(
+    {"list", "Sequence", "MutableSequence", "Buffer", "memoryview", "array"}
+)
+
 #: Containers a callee cannot write through: a `list[int]` is a `Sequence[float]`.
 _READ_ONLY_CONTAINERS = frozenset(
     {"Sequence", "Iterable", "Collection", "Container", "Reversible", "AbstractSet", "Mapping"}
@@ -3839,7 +3844,7 @@ class _Checker:
                 wanted = "`peek` and `pop`" if "Heap" in base.name else "its methods"
                 self._error("E1301", f"a `{base.name}` is read by {wanted}", node)
                 return Binding(C.value_of(base))
-            if base.name in {"list", "Sequence", "MutableSequence", "Buffer", "memoryview", "array"}:
+            if base.name in _INDEXED_SEQUENCES:
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(base if is_slice else B.element_type(base))
             if base.name == "dict":
