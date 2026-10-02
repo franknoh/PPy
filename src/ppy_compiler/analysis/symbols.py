@@ -598,7 +598,9 @@ class ProjectSymbols:
         #: table it consults is a hundred signatures, and was built on every
         #: attribute read.
         self.method_cache: dict[tuple[T.Type, str], T.Type | None] = {}
-        self.alias_cache: dict[tuple[int, frozenset[str], frozenset[str]], object] = {}
+        self.alias_cache: dict[
+            tuple[int, frozenset[str], frozenset[str], frozenset[str]], object
+        ] = {}
         #: Whether every function already carries a summary from an earlier
         #: `analyze`, so the next one can start confirming instead of seeding.
         self.seeded = False

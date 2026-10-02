@@ -25,6 +25,7 @@ the function by its address.
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..analysis import types as T
@@ -1077,7 +1078,7 @@ class LibraryLowering:
         self._walk(source, visit)  # type: ignore[attr-defined]
 
 
-def _raising() -> dict[str, object]:
+def _raising() -> dict[str, Callable[[], object]]:
     import collections  # pylint: disable=import-outside-toplevel
     import functools  # pylint: disable=import-outside-toplevel
 
@@ -1088,5 +1089,4 @@ def _raising() -> dict[str, object]:
 
 
 def _text(key: str) -> str:
-    action = _raising()[key]
-    return said(action)  # type: ignore[arg-type]
+    return said(_raising()[key])

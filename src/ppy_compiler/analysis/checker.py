@@ -2330,12 +2330,17 @@ class _Checker:
 
         def canonical(expr: ast.expr) -> str | None:
             found = resolver.canonical(expr)
+            if found in {"builtins.max", "builtins.min"}:
+                # Only a bare `max` the module leaves alone is the one the
+                # lambda's body calls by that name.
+                found = None
             if (
                 found is None
                 and isinstance(expr, ast.Name)
                 and expr.id in {"max", "min"}
                 and expr.id not in self.symbols.functions
                 and expr.id not in self.symbols.imports
+                and expr.id not in self.symbols.globals
             ):
                 return f"builtins.{expr.id}"
             return found
@@ -2772,8 +2777,11 @@ class _Checker:
                     self._note_mutation(node.args[0], env)
                     self._widen_heap(callee.type.qualname, node, args, env)
                 if decided is not None and callee.type.qualname.startswith("random.Random."):
-                    if isinstance(node.func, ast.Attribute):
-                        # A draw moves the instance's own state.
+                    if isinstance(node.func, ast.Attribute) and not isinstance(
+                        node.func.value, ast.Call
+                    ):
+                        # A draw moves the instance's own state; one made for
+                        # the call is nobody else's.
                         self._note_mutation(node.func.value, env)
                     if callee.type.qualname == "random.Random.shuffle" and node.args:
                         self._note_mutation(node.args[0], env)

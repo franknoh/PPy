@@ -558,19 +558,17 @@ def _partial_lambda(
     if count is None or len(bound) > count:
         return None
     for argument in bound:
-        if _constant(argument) or (isinstance(argument, ast.Name) and stable(argument.id)):
+        if _written_constant(argument) or (isinstance(argument, ast.Name) and stable(argument.id)):
             continue
         return None
-    rest = [_arg_name(i) for i in range(count - len(bound))]
-    called = ast.Call(
-        ast.Name(function.id, ast.Load()),
-        [_copied(a) for a in bound] + rest,  # type: ignore[operator]
-        [],
-    )
-    return _lambda(node, len(rest), called)
+    passed: list[ast.expr] = [_copied(a) for a in bound]
+    rest = count - len(bound)
+    passed.extend(_arg_name(i) for i in range(rest))
+    called = ast.Call(ast.Name(function.id, ast.Load()), passed, [])
+    return _lambda(node, rest, called)
 
 
-def _constant(node: ast.expr) -> bool:
+def _written_constant(node: ast.expr) -> bool:
     """A number, a string, a bool, or `None` written out, or a negative number."""
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
         node = node.operand
