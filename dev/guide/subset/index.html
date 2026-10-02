@@ -4468,11 +4468,29 @@ disagree about what a class body runs.
 <p>Strict mode is the default. <code>--no-strict</code> downgrades only the errors that have
 a sound fallback: an unannotated parameter (<code>E1201</code>), an unknown attribute
 (<code>E1202</code>), an unvouched decorator (<code>E1204</code>), iterating something that is not
-iterable (<code>E1302</code>), and a call with no known signature (<code>E1306</code>). Each is
-still reported, as a <code>W2010</code> warning that names the code it replaces, and the
-code involved runs on CPython. Type mismatches (<code>E1301</code>) and the rest stay
-errors, with one exception: a value that may be <code>None</code> where one that is not
-is needed.</p>
+iterable (<code>E1302</code>), and a call with no known signature (<code>E1306</code>). Code the
+analysis cannot read but CPython runs is downgraded too:</p>
+<ul>
+<li>an annotation it cannot resolve, such as a type from a module that is not
+  there or one it does not model (<code>E1101</code>, or <code>E1301</code> for the annotation's
+  form). The value is treated as unknown.</li>
+<li>a name nothing defines (<code>E1101</code>). CPython raises <code>NameError</code> if the line
+  runs.</li>
+<li>a star import (<code>E1103</code>). It may rebind any name, so no function in that
+  module is compiled.</li>
+<li><code>eval</code>, <code>exec</code>, <code>globals()</code>, <code>locals()</code>, <code>vars()</code>, <code>__import__</code> of a
+  computed name, <code>getattr</code> or <code>setattr</code> with a computed name, and a class
+  built by a metaclass or on a computed base (<code>E1501</code> to <code>E1504</code>, <code>E1506</code>,
+  <code>E1507</code>).</li>
+<li>an operator on an instance of a class whose base the analysis cannot see
+  (<code>E1302</code>).</li>
+</ul>
+<p>Each is still reported, as a <code>W2010</code> warning that names the code it replaces,
+and the function involved runs on CPython, which runs it or raises its own
+error. So a script whose sibling import fails ends with CPython's
+<code>ImportError</code>, not with a compile error. Type mismatches (<code>E1301</code>) and the
+rest stay errors, with one exception: a value that may be <code>None</code> where one
+that is not is needed.</p>
 <p>A program often passes a <code>Node | None</code> where a <code>Node</code> is declared, or reads
 <code>.value</code> from something that may be <code>None</code>, because it knows the <code>None</code>
 never arrives on that path. Strict mode refuses this (<code>E1301</code>, <code>E1206</code>).
