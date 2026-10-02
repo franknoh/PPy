@@ -147,7 +147,6 @@ class MemoLowering:  # pylint: disable=attribute-defined-outside-init
                     f"a cached function taking `{parameter.type}` keeps its cache in Python"
                 )
             keys.extend(zip(kinds, self._argument_words(parameter.name, kinds), strict=True))
-        key_kinds = [kind for kind, _ in keys]
         key_buffer = self._words_buffer("memo.key", keys)
         if held_at is None:
             table = rt(
