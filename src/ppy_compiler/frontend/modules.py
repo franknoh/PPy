@@ -218,8 +218,14 @@ def build_graph(
     root: Path | None = None,
     follow_imports: bool = True,
     overlays: dict[Path, str] | None = None,
+    strict: bool = True,
 ) -> ModuleGraph:
-    """Parse the entry files and, transitively, every project module they import."""
+    """Parse the entry files and, transitively, every project module they import.
+
+    A star import is an error under strict mode. Under `--no-strict` it is
+    `W2010`: CPython runs it, and the checker keeps the module's functions on
+    the Python path, since the import may rebind any name in it.
+    """
     forget_filesystem()
     search_paths = [p for p in search_paths if p.is_dir()]
     graph = ModuleGraph(
@@ -249,11 +255,12 @@ def build_graph(
             continue
         for edge in module.imports:
             if edge.star:
+                message = f"`from {edge.target} import *` leaves the module namespace unanalyzable"
                 diagnostics.add(
                     Diagnostic(
-                        "E1103",
-                        Severity.ERROR,
-                        f"`from {edge.target} import *` leaves the module namespace unanalyzable",
+                        "E1103" if strict else "W2010",
+                        Severity.ERROR if strict else Severity.WARNING,
+                        message if strict else f"{message} (E1103 under strict mode)",
                         Span(
                             path,
                             edge.node.lineno,

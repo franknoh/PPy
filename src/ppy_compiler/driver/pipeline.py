@@ -155,6 +155,7 @@ def analyze_paths(
         root=project.root,
         follow_imports=follow_imports,
         overlays=overlays,
+        strict=project.config.strict,
     )
     symbols = ProjectSymbols(
         graph, diagnostics, strict=project.config.strict, generics=project.config.generics

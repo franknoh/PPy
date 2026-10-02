@@ -852,6 +852,20 @@ class _Checker:
         self._provisional_locals: set[str] = set()
         self._blockers: list[str] = []
         self._native_blockers: list[str] = []
+        #: Under `--no-strict`, why the function stays on CPython whatever the
+        #: road: code the analysis could not follow, so it cannot be lowered.
+        self._python_only: list[str] = []
+        #: Under `--no-strict`, a `from m import *` may rebind any name the
+        #: analysis believes it knows, so nothing in the module goes native.
+        self._star_blockers: tuple[str, ...] = (
+            ()
+            if strict
+            else tuple(
+                f"the module star-imports `{node.module}`, which may rebind any name"
+                for node in ast.walk(symbols.module.tree)
+                if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names)
+            )
+        )
         #: What the next lambda's parameters are, where its use says: a
         #: collection's `sort(key=...)` hands it an element.
         self._lambda_parameters: tuple[T.Type, ...] | None = None
@@ -989,6 +1003,7 @@ class _Checker:
             self._provisional_locals,
             self._blockers,
             self._native_blockers,
+            self._python_only,
             self._escaping,
             self._mutated,
             self._delegated,
@@ -1014,7 +1029,8 @@ class _Checker:
         self._provisional_returns = []
         self._provisional_locals = set()
         self._blockers = []
-        self._native_blockers = []
+        self._native_blockers = list(self._star_blockers)
+        self._python_only = list(self._star_blockers)
         self._escaping = set()
         self._mutated = set()
         self._delegated = set()
@@ -1105,6 +1121,7 @@ class _Checker:
             self._provisional_locals,
             self._blockers,
             self._native_blockers,
+            self._python_only,
             self._escaping,
             self._mutated,
             self._delegated,
@@ -1218,6 +1235,7 @@ class _Checker:
             unknown_callees=tuple(dict.fromkeys(self._unknown)),
             purity_blockers=tuple(dict.fromkeys(self._blockers)),
             native_blockers=tuple(dict.fromkeys(self._native_blockers)),
+            python_only=tuple(dict.fromkeys(self._python_only)),
             escaping=set(self._escaping),
             mutated_params=set(self._mutated),
             settled_globals=dict(self._settled_reads),
@@ -2165,7 +2183,7 @@ class _Checker:
         if isinstance(target, ast.Name):
             binding = env.get(target.id)
             if binding is None:
-                self._error("E1101", f"`{target.id}` is used before it is bound", target)
+                self._unreadable("E1101", f"`{target.id}` is used before it is bound", target)
                 return Binding(T.UNKNOWN)
             return binding
         return self._expr(target, env)
@@ -2290,7 +2308,7 @@ class _Checker:
             # The two builtin singletons that are values, not callables:
             # `return NotImplemented` is how an operator method declines.
             return Binding(T.OBJECT)
-        self._error("E1101", f"`{node.id}` is not defined at this point", node)
+        self._unreadable("E1101", f"`{node.id}` is not defined at this point", node)
         return Binding(T.UNKNOWN)
 
     def _inherited_type(self) -> T.Type | None:
@@ -4233,11 +4251,15 @@ class _Checker:
         left_base = _widest_numeric(left_base)
         right_base = _widest_numeric(right_base)
         if not (T.is_numeric(left_base) and T.is_numeric(right_base)):
-            self._error(
-                "E1302",
-                f"`{_ARITH_OPS.get(op, '?')}` is not defined for `{left.type}` and `{right.type}`",
-                node,
+            message = (
+                f"`{_ARITH_OPS.get(op, '?')}` is not defined for `{left.type}` and `{right.type}`"
             )
+            if self._opaque_instance(left_base) or self._opaque_instance(right_base):
+                # A class built on a base the analysis cannot see may have
+                # the operator from it; CPython knows, so `--no-strict` asks it.
+                self._unreadable("E1302", message, node)
+            else:
+                self._error("E1302", message, node)
             return Binding(T.UNKNOWN)
 
         if (
@@ -6342,6 +6364,7 @@ class _Checker:
             self._dynamic_seen = True
             self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
             self._native_blockers.append(message)
+            self._python_only.append(message)
             self._strictly(code, message, node, help=help)
             return
         self._error(code, message, node, help=help)
@@ -7219,6 +7242,34 @@ class _Checker:
                 help=help,
             )
         )
+
+    def _opaque_instance(self, t: T.Type) -> bool:
+        """An instance of a project class with a base the analysis cannot see:
+        one computed at runtime, or one from outside the project and the builtins."""
+        base = T.strip_literal(t)
+        if not isinstance(base, T.Instance):
+            return False
+        info = self.project.classes.get(base.name)
+        if info is None:
+            return False
+        if any(not _static_base(b) for b in info.node.bases):
+            return True
+        return any(
+            entry not in self.project.classes and entry not in T.BUILTIN_MRO
+            for entry in info.mro or ()
+        )
+
+    def _unreadable(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
+        """Code the analysis cannot follow but CPython runs, or fails in itself.
+
+        Strict mode refuses it. Under `--no-strict` it is `W2010`, and the
+        function it is in stays on the Python path, where CPython does what it
+        does -- runs it, or raises its own `NameError`.
+        """
+        if not self.strict:
+            self._native_blockers.append(message)
+            self._python_only.append(message)
+        self._strictly(code, message, node, help)
 
     def _may_be_none(self, code: str, message: str, node: ast.AST) -> None:
         """`W2011`: under `--no-strict`, a value that may be `None` where one
