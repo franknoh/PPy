@@ -128,8 +128,8 @@ BUILTIN_MRO: dict[str, tuple[str, ...]] = {
     "complex": ("complex", "object"),
     "str": ("str", "Sequence", "Iterable", "object"),
     "bytes": ("bytes", "Sequence", "Iterable", "object"),
-    "bytearray": ("bytearray", "Sequence", "Iterable", "object"),
-    "list": ("list", "Sequence", "Iterable", "object"),
+    "bytearray": ("bytearray", "MutableSequence", "Sequence", "Iterable", "object"),
+    "list": ("list", "MutableSequence", "Sequence", "Iterable", "object"),
     "tuple": ("tuple", "Sequence", "Iterable", "object"),
     "dict": ("dict", "Mapping", "Iterable", "object"),
     "set": ("set", "Iterable", "object"),
@@ -185,6 +185,7 @@ BUILTIN_MRO.update(
 
 _ABSTRACT_MRO: dict[str, tuple[str, ...]] = {
     "Sequence": ("Sequence", "Iterable", "object"),
+    "MutableSequence": ("MutableSequence", "Sequence", "Iterable", "object"),
     "Iterable": ("Iterable", "object"),
     "Iterator": ("Iterator", "Iterable", "object"),
     "Mapping": ("Mapping", "object"),

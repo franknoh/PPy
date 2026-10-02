@@ -76,6 +76,10 @@ class FunctionAnalysis:
     unknown_callees: tuple[str, ...] = ()
     purity_blockers: tuple[str, ...] = ()
     native_blockers: tuple[str, ...] = ()
+    #: Under `--no-strict`, code in the body the analysis could not follow --
+    #: an undefined name, a dynamic feature, a star import -- which CPython
+    #: runs. The function stays on CPython on every road; this says why.
+    python_only: tuple[str, ...] = ()
     parallel_blockers: tuple[str, ...] = ()
     escaping: set[str] = field(default_factory=set)
     mutated_params: set[str] = field(default_factory=set)
