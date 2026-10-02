@@ -2115,6 +2115,8 @@ class _Checker:
             if isinstance(container, T.Instance) and container.name in C.COLLECTIONS:
                 self._store_element(container, value, target)
                 written = _collection_root(target.value)
+            elif isinstance(container, T.Instance) and not isinstance(target.slice, ast.Slice):
+                self._store_builtin_element(container, value, target)
             self._effects = self._effects.add(
                 Effect.WRITE_OBJECT, raises=("IndexError", "KeyError", "TypeError")
             )
@@ -6096,6 +6098,36 @@ class _Checker:
         stored = T.strip_literal(value.type)
         if element == T.INT and stored == T.FLOAT:
             self._error("E1301", "a `float` does not fit an `int` element", target)
+            return
+        if (
+            _settled_type(stored)
+            and _settled_type(element)
+            and not T.is_assignable(stored, element)
+        ):
+            # `rows[i][j] = parts` with `parts` a list, where the rows hold
+            # strings: CPython stores it, and native code holds no such row.
+            self._unreadable("E1301", f"a `{stored}` does not fit a `{element}` element", target)
+
+    def _store_builtin_element(
+        self, container: T.Instance, value: Binding, target: ast.Subscript
+    ) -> None:
+        """`rows[i] = x` on a list or a dict: a value its elements can hold.
+
+        CPython stores anything; native code holds a list of strings as
+        strings, so a list stored in one is not something it can run."""
+        if container.name == "list" and len(container.args) == 1:
+            element = container.args[0]
+        elif container.name == "dict" and len(container.args) == 2:
+            element = container.args[1]
+        else:
+            return
+        stored = T.strip_literal(value.type)
+        if (
+            _settled_type(stored)
+            and _settled_type(element)
+            and not T.is_assignable(stored, element)
+        ):
+            self._unreadable("E1301", f"a `{stored}` does not fit a `{element}` element", target)
 
     def _typed_input(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.input[T]()` and `ppy.scan[T](...)`: a read typed by what was asked for.
@@ -7534,6 +7566,19 @@ def _unresolved_summary(cascaded: int, modules: dict[str, ModuleAnalysis]) -> Di
         help="resolve the origins above -- annotate the parameter, or add a stub or plugin "
         "for the call -- and the rest follow",
     )
+
+
+def _settled_type(t: T.Type) -> bool:
+    """A type with nothing unknown, `Any`, dynamic, or variable in it."""
+    if isinstance(t, (T.UnknownType, T.AnyType, T.DynamicType, T.NeverType, T.TypeVar_)):
+        return False
+    if isinstance(t, T.Instance):
+        return all(_settled_type(a) for a in t.args)
+    if isinstance(t, T.Tuple_):
+        return all(_settled_type(i) for i in t.items)
+    if isinstance(t, T.Union_):
+        return all(_settled_type(m) for m in t.members)
+    return True
 
 
 def _nesting(t: T.Type) -> int:

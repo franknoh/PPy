@@ -296,9 +296,11 @@ class GeneratorLowering:  # pylint: disable=attribute-defined-outside-init
             inline.consumer = self._scope()
             self._enter(generator)
             stack.append(inline)
-        reached = self._open()  # type: ignore[attr-defined]
-        if reached:
+        if self._open():  # type: ignore[attr-defined]
             core.br(self.b, Successor(resume))  # type: ignore[attr-defined]
+        # A `for` over a held generator ends its body with a branch straight
+        # to `resume`, so the step can come back with its own block closed.
+        reached = self._reached_block(resume)  # type: ignore[attr-defined]
         self.b.at_end(resume)  # type: ignore[attr-defined]
         if not reached:
             # The step never comes back (`next` took the first value): nothing
