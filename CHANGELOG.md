@@ -105,6 +105,8 @@ none differing.
 - `random.Random(seed)` instances are native generators, draw for draw with
   CPython. One that Python passes in is drawn from in place and put back
   before a fallback.
+- A nested `@cache` table hashes each miss once and grows in small steps
+  while small.
 - Fixed: copying a string-keyed map in the collections runtime asked for
   about 64 GiB of scratch memory.
 - `scripts/fuzz.py --stdlib` fuzzes seeded random numbers and these modules.
@@ -114,7 +116,10 @@ none differing.
 
 - Native calls bind keyword arguments and constant defaults, and a Python
   caller's keywords and defaults reach the native entry instead of the
-  Python body.
+  Python body. The generated wrapper binds them in C: a call with a keyword
+  or a default left out costs about 40 ns, as in CPython, where a first
+  version took 1.5 µs. A call that does not bind raises CPython's
+  `TypeError`.
 - Native code takes back results from Python functions that change nothing,
   falling back on a mismatch, and results from other callees only where
   their type is certain. Before, a `float`, `bool`, or `str` result was
@@ -127,7 +132,13 @@ none differing.
 - Fixed: a nested function with the name of a module-level function called
   the module one.
 - Fixed: temporaries were leaked when a check raised inside a `try` that
-  native code catches.
+  native code catches, and a temporary closure that raised leaked its cells.
+- Fixed: a nested function that read a list parameter of the function
+  around it crashed under `ppy run` and in standalone builds.
+- Fixed: `rng.choice(xs)` over a list of strings freed the element it
+  returned, a use after free.
+- Fixed: `d.get(k)` with no default crashed `ppy run`; such a function now
+  stays in Python.
 - New example `51_clinic`: a seeded clinic simulation with `random`,
   `heapq`, `math`, dataclasses crossing the boundary, and prints from native
   code.
@@ -208,7 +219,7 @@ none differing.
 - New examples, each agreeing on all three paths (mean of five runs):
   - `52_unannotated`: types inferred from calls, defaults, and doctests,
     with `ppy explain` showing where each came from. python 7.22 s,
-    `ppy run` 1.96 s.
+    `ppy run` 0.49 s.
   - `53_caches_and_counters`: `random.Random`, `Counter`, `defaultdict`,
     `@cache`, and `@lru_cache`. python 1.47 s, `ppy run` 0.78 s, standalone
     0.76 s.
