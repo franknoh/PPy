@@ -30,17 +30,22 @@ Documentation: **[ppy.franknoh.dev](https://ppy.franknoh.dev/)**
   a package installs.
 - 8 library plugins: NumPy, PyTorch, JAX/Flax, pydantic, FastAPI/Uvicorn,
   SciPy, pandas, and PyArrow.
+- Python's own `str`, `list`, `dict`, `set`, classes, exceptions, and
+  generators compile without a rewrite, and so do `random`, `math`,
+  `heapq`, `bisect`, `itertools`, `collections`, `functools`, and
+  `operator`, with CPython's results (`random` draw for draw).
 - Collections that compile, with no pointers: `ppy.Vec`, `Deque`, `Heap`,
   `LinkedList`, `HashMap`, `HashSet`, `TreeMap`, and `TreeSet`.
-- A native call with two `int` arguments costs 47 ns, against 28 ns for a
-  plain Python call. It is 65 ns with a borrowed buffer, and 86 ns when a
-  guard fails and the Python body runs. No Python frames are on the native
-  path.
+- A native call with two `int` arguments costs 29 ns from Python, against
+  30 ns for CPython's own call. It is 67 ns with a borrowed buffer of 100
+  ints, and 82 ns when a guard fails and the Python body runs. Lists, dicts,
+  sets, and objects cross in the same generated C wrapper, with no Python
+  frames on the native path.
 - `ppy convert` and `ppy migrate` bring existing Python over one module at a
   time.
-- 1,736 tests on Python 3.12, 3.13, and 3.14, covering 74% of the compiler's
-  40k statements, plus differential fuzzing of generated programs. 78
-  diagnostic codes, each documented once.
+- @@TESTS@@ tests on Python 3.12, 3.13, and 3.14, covering @@COV@@ of the
+  compiler's @@STMTS@@ statements, plus differential fuzzing of generated
+  programs. 81 diagnostic codes, each documented once.
 
 ## Installation
 
@@ -49,13 +54,14 @@ uv add "ppy-lang[llvm]"        # or: pip install "ppy-lang[llvm]"
 uv run ppy doctor              # reports what it found
 ```
 
-Pin an exact version before 1.0 (`ppy-lang[llvm]==0.3.0`). A minor release
+Pin an exact version before 1.0 (`ppy-lang[llvm]==0.6.0`). A minor release
 may change the language, and the [changelog](CHANGELOG.md) says what
 changed.
 
 Extras enable the rest: `solver`, `numpy`, `torch`, `jax`, `pydantic`,
 `uvicorn`, `scipy`, `pandas`, `pyarrow`, `bind`. A missing library only
-disables its plugin. The details are in
+disables its plugin. Without the `llvm` extra, `ppy run` warns once
+(`W2012`) and runs the program on CPython. The details are in
 [Installing](https://ppy.franknoh.dev/latest/installing/).
 
 ## Example
@@ -215,6 +221,16 @@ types, and classifies whatever remains (`--report migration.json`,
 A module that converts cleanly gets the compiler. A module that does not
 keeps running as Python next to it.
 
+Existing Python can also run as it is. With `strict = false` in
+`[tool.ppy]` (or `--no-strict`), `ppy run` types unannotated parameters
+from the calls the project makes, their default values, and their
+doctests, compiles what that types, and runs the rest on CPython. Code the
+analysis cannot follow (`eval`, a star import, an import that fails) is a
+`W2010` warning, not an error, and runs as CPython runs it. Of 400
+TheAlgorithms/Python scripts run both ways, 387 print the same under
+`ppy run --no-strict` as under CPython and none differ; the other 13 are
+skipped as nondeterministic or slow.
+
 Given this untyped Python:
 
 ```python
@@ -333,7 +349,7 @@ wrongly. It reads its own `[tool.ppy.backends.<name>]` configuration. Its
 distribution, version, and fingerprint are part of the cache key, so
 upgrading it invalidates what the old version built.
 
-The backend interface is **experimental** in 0.3. It is documented, tested,
+The backend interface is **experimental**. It is documented, tested,
 and versioned separately from the compiler, and it may still change. See
 [Backends](https://ppy.franknoh.dev/latest/internals/backends/),
 [the Backend API](https://ppy.franknoh.dev/latest/api/backends/),

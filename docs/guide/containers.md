@@ -141,11 +141,14 @@ squares after what it held.
 
 ## Printing
 
-In a standalone build, `print(xs)`, `print(d)`, and an f-string field
-holding a list or a dict write what `repr` writes: numbers, strings with
-their quotes, tuples, nested containers, and dataclasses shown as
-`Point(x=1, y=2.0)`. A set of ints or of tuples of ints prints in CPython's
-order, and an empty one as `set()`.
+Natively, under `ppy run` and in a standalone build, `print(xs)`,
+`print(d)`, and an f-string field holding a list or a dict write what
+`repr` writes: numbers, strings with their quotes, tuples, nested
+containers, and dataclasses shown as `Point(x=1, y=2.0)`. A set of ints or
+of tuples of ints prints in CPython's order, and an empty one as `set()`.
+A list parameter lent as a buffer (a list of numbers the function only
+reads) has no `repr` natively, so printing one keeps the function in
+Python.
 
 ## Limitations
 
@@ -161,8 +164,8 @@ order, and an empty one as `set()`.
   natively take a key giving numbers or tuples of them, and `min` and `max`
   with a key pick among numbers. [Functions as values](closures.md) has the
   rest.
-- `any` and `all` of a generator stay in Python, because they stop at the
-  first answer and a list built first would not; of a list they are native.
+- `any` and `all` of a generator are native and stop at the first answer,
+  as CPython's do; of a list they are native too.
 - A standalone binary's `KeyError` for a string key says `KeyError` without
   the key.
 - A container of objects or dataclasses crosses from Python as

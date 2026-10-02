@@ -52,8 +52,11 @@ generated wrapper therefore wraps the call in `Py_BEGIN_ALLOW_THREADS`.
 
 ## When the GIL stays held
 
-- A function with an effect that can reach the interpreter keeps the GIL.
-- A function that performs I/O is not lowered at all.
+- A function with an effect that can reach the interpreter keeps the GIL:
+  one that prints, reads input, opens a file, or calls a Python function
+  ([Effects in native code](../../docs/guide/native-effects.md)).
+- A short straight-line function keeps it too. Releasing and retaking the
+  GIL costs about 20 ns, more than such a body saves.
 - Borrowed buffers get the same treatment NumPy gives them: the boundary
   pins the memory for the whole call.
 

@@ -1,6 +1,6 @@
 # Compatibility
 
-PPy is at version 0.3. Some parts of it are more settled than others.
+PPy is at version 0.6. Some parts of it are more settled than others.
 This page says which parts you can build on, which parts will change, and
 what happens when the two sides of a boundary disagree.
 
@@ -17,6 +17,8 @@ The levels of each part:
 | surface | level | notes |
 |---|---|---|
 | the language subset: statements, expressions, the type system | settling | new constructs are added; accepted code is not un-accepted without a note |
+| `--no-strict` (`strict = false`): `W2010`, `W2011`, and parameter types inferred from calls, defaults, and doctests | settling | since 0.6. What it accepts only grows; which functions compile may change from release to release, never what a program prints |
+| what compiles natively under `ppy run`, and the cost model that decides which functions Python calls natively | experimental | grows every release; `ppy explain --summary` reports it. A function moving between native and Python changes speed, not output |
 | `ppy.pure`, `ppy.opt`, `ppy.native`, `ppy.jit`, `ppy.dynamic`, `ppy.check` | settling | the directives a program is written around |
 | `ppy.input`, `ppy.scan`, `ppy.buffer`, `ppy.read_ints`, `ppy.read_token` | experimental | `input` reads lines and `scan` tokens since 0.3; the spelling may still change |
 | `ppy.check`, `ppy.assume` | experimental | `check` validates all the way down since 0.3; `assume` is the unchecked crossing |
@@ -24,6 +26,7 @@ The levels of each part:
 | `ppy.aio`, `ppy.cuda`, `ppy.hip`, `ppy.xla` | experimental | added in 0.2; the runtimes behind them (epoll, the CUDA driver, PJRT) are the newest code in the tree |
 | the canonical IR (`ppy_compiler.ir`) and `.ppyir` | settling | the text carries a schema and dialect versions a reader refuses rather than guesses at; public from 0.2.0 at schema 1 |
 | `ppy emit`, `ppy inspect --stage`, `--report-opt`, `--sanitize`, `--profile`/`--pgo` | experimental | developer tools; the text they print is for people and may be reworded |
+| `ppy explain` and `ppy explain --summary`, text and `--json` | experimental | added in 0.5 (`--summary`); the reasons are reworded as the lowering grows |
 | `ppy check` / `ppy run` / `ppy build` and their flags | settling | flags are added; removals get a deprecation release |
 | `ppy convert` / `ppy migrate` output | settling | the output is regenerated from source, so a change shows up as a diff, not a break |
 | diagnostic codes (`E1xxx`, `W2xxx`, `R3xxx`) | settling | a code keeps its meaning; new codes are added freely |

@@ -86,17 +86,25 @@ to a native build in about ten minutes.
   StableHLO, across 19 IR dialects. Other packages can
   [register their own backend](internals/backends.md).
 - **Strings, classes, and collections.** [`str`](guide/strings.md),
-  [classes with inheritance](guide/classes.md), and
+  [lists, dicts, and sets](guide/containers.md),
+  [classes with inheritance](guide/classes.md),
+  [the standard library's `random`, `math`, `heapq`, `collections`, and
+  `functools`](guide/stdlib.md), and
   [`Vec`, `HashMap`, `TreeMap`, and six more](guide/collections.md)
   compile to native code, reference counted with cycles collected, and
   give the same answers as CPython.
+- **Existing Python as it is.** Without strict mode, `ppy run` types
+  unannotated parameters from the project's calls, defaults, and doctests,
+  and runs what the analysis cannot follow on CPython
+  ([Types from call sites](guide/subset.md#types-from-call-sites)).
 - **Eight library plugins.** NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.
 - **A cheap call boundary.** A native call with two `int` arguments costs
-  47 ns, against 28 ns for a plain Python call, with no Python frames on the
-  native path.
+  29 ns from Python, against 30 ns for CPython's own call. Lists, dicts,
+  sets, and objects cross in the same generated C wrapper, and what a call
+  writes comes back into the caller's objects.
 - **Tested.** @@TEST_FUNCTIONS@@ test functions on Python 3.12, 3.13, and
-  3.14, with 74% statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
+  3.14, with @@COV@@ statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
   each documented in one place.
 
 </div>
@@ -119,7 +127,9 @@ namespace mutation, and unrestricted runtime reflection are restricted, or
 isolated behind an explicit `ppy.dynamic` boundary. That is the trade for
 analysis and native code you can rely on.
 
-To bring an existing Python project over, use `ppy migrate`
-([how a real project went](internals/migrating.md)).
+To run an existing Python project, turn strict mode off
+(`strict = false` in `[tool.ppy]`): what the analysis cannot follow is a
+warning and runs on CPython. To bring it over to strict PPy, use
+`ppy migrate` ([how a real project went](internals/migrating.md)).
 
 </div>
