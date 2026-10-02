@@ -210,7 +210,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.6.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.6.0</span>
   </div>
 </a>
       </div>
@@ -417,7 +417,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.6.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.6.0</span>
   </div>
 </a>
     </div>
@@ -4190,6 +4190,78 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="0.6.0 — unreleased">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#effects-in-native-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Effects in native code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#globals-and-objects-across-the-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Globals and objects across the boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#more-expressions-and-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More expressions and loops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-standard-library-natively" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The standard library natively
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-checker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The checker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4282,7 +4354,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#known-limitations" class="md-nav__link">
+  <a href="#known-limitations_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Known limitations
@@ -4376,7 +4448,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-checker" class="md-nav__link">
+  <a href="#the-checker_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         The checker
@@ -4605,6 +4677,78 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="0.6.0 — unreleased">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#effects-in-native-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Effects in native code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#globals-and-objects-across-the-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Globals and objects across the boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#more-expressions-and-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More expressions and loops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-standard-library-natively" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The standard library natively
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-checker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The checker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4697,7 +4841,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#known-limitations" class="md-nav__link">
+  <a href="#known-limitations_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Known limitations
@@ -4791,7 +4935,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-checker" class="md-nav__link">
+  <a href="#the-checker_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         The checker
@@ -4999,6 +5143,135 @@
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <h2 id="060-unreleased">0.6.0 — unreleased<a class="headerlink" href="#060-unreleased" title="Permanent link">&para;</a></h2>
+<p>More ordinary Python runs natively under <code>ppy run</code>: functions that print,
+read input, or call back into Python; functions that read module globals or
+take the project's objects; <code>isinstance</code>, chained comparisons, <code>in</code>, integer
+powers, and generators passed around as values; and <code>random</code>, <code>math</code>,
+<code>heapq</code>, <code>bisect</code>, and <code>itertools</code>. The checker accepts more of the typing
+module, and a native function given an <code>int</code> for a <code>float</code> parameter now
+returns what CPython returns. With <code>--no-strict</code>, <code>ppy run</code> no longer
+refuses a program CPython runs. On TheAlgorithms/Python, the functions
+Python calls natively went from 231 to 523, and 387 of 400 scripts print
+the same as under CPython, with the other 13 skipped as nondeterministic
+or slow and none differing.</p>
+<h3 id="effects-in-native-code">Effects in native code<a class="headerlink" href="#effects-in-native-code" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Functions that print, read input, read and write text files, or call
+  Python functions compile under <code>ppy run</code>.</li>
+<li>A native call holds what it prints until it returns, and drops it if it
+    falls back to Python, so nothing is printed twice.</li>
+<li><code>input()</code>, <code>print(flush=True)</code>, files, and calls into Python are
+    barriers. The compiler proves nothing falls back after one, or the
+    function stays in Python.</li>
+<li><code>ppy explain</code> says which rule each function runs under.</li>
+<li><code>scripts/fuzz.py --prints</code> fuzzes prints between checks that may fall
+  back.</li>
+<li>New guide page: Effects in native code.</li>
+</ul>
+<h3 id="globals-and-objects-across-the-boundary">Globals and objects across the boundary<a class="headerlink" href="#globals-and-objects-across-the-boundary" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Under <code>ppy run</code>, a function that reads a module global bound once and
+  never rebound runs natively. The boundary reads the global at each call,
+  and a written global container is copied back to the module's object. Such
+  a function stays in Python if it also has a barrier.</li>
+<li>Objects of the project's classes, and dataclass values in containers,
+  cross between Python and native code. Shared objects and cycles stay
+  shared, written fields come back to the caller's objects, and a returned
+  object is the caller's own where it came from one.</li>
+<li>Fixed: a store to a <code>global</code> name inside a function was dropped by the
+  Python backend's optimizer, and reads of that global elsewhere were folded
+  to the module's first value.</li>
+<li>Fixed: a function taking a read-only list beside a written container
+  crashed when Python called it, and failed to compile when called from
+  another module.</li>
+</ul>
+<h3 id="more-expressions-and-loops">More expressions and loops<a class="headerlink" href="#more-expressions-and-loops" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>isinstance</code> with builtin classes compiles where the types decide the
+  answer.</li>
+<li>Chained comparisons compile, with each operand evaluated once.</li>
+<li><code>in</code> and <code>not in</code> compile over tuple and set displays, tuple values, and
+  <code>range</code>, with no range built.</li>
+<li><code>flag is True</code> compiles between two bools.</li>
+<li>Integer <code>**</code> and <code>pow(a, b[, m])</code> compile. A result past 64 bits, or a
+  negative exponent, falls back.</li>
+<li><code>a = b = value</code> compiles, and so does a conditional tuple assignment.</li>
+<li><code>for</code> compiles over:</li>
+<li><code>range</code> with a step known only at run time, and <code>reversed(range(...))</code>;</li>
+<li>strings, tuples, and list parameters, under <code>enumerate</code>, <code>zip</code>, and
+    <code>reversed</code>;</li>
+<li>with <code>else</code>.</li>
+<li><code>for x in obj</code> and <code>iter(obj)</code> are typed from the class's <code>__iter__</code>.</li>
+<li>Generators that are returned, passed to another function, stepped inside
+  a loop or a branch, made by an <code>__iter__</code> method, or that yield from
+  themselves compile. Each gets a heap frame with a reference count, which
+  the collector sees.</li>
+<li><code>e.args</code> of an exception raised with one string or none compiles.</li>
+<li>A native function no longer turns an <code>int</code> into a <code>float</code> where the
+  difference would show. <code>f(0)</code> of <code>def f(x: float) -&gt; float: return x</code> is
+  <code>0</code>, as in CPython. Elsewhere, ints up to 2**53 are still taken and
+  converted.</li>
+<li>Fixed: returning from inside a loop over a generator leaked the
+  generator's locals in native code.</li>
+</ul>
+<h3 id="the-standard-library-natively">The standard library natively<a class="headerlink" href="#the-standard-library-natively" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>random</code> runs natively: CPython's Mersenne Twister and <code>random.py</code>'s
+  algorithms, draw for draw. Under <code>ppy run</code> native code draws from Python's
+  own generator, so a seeded program prints the same numbers on every path,
+  and a native call that falls back restores the generator first.</li>
+<li><code>math</code> runs natively: <code>gcd</code>, <code>comb</code>, <code>isqrt</code>, <code>factorial</code>, <code>fsum</code>,
+  <code>hypot</code>, <code>dist</code>, <code>isclose</code>, <code>log</code> with a base, the trigonometric and
+  hyperbolic functions, and the constants.</li>
+<li><code>heapq</code> and <code>bisect</code> over plain lists, finite <code>itertools</code> iterators where
+  a loop or call consumes them, an annotated <code>collections.deque</code>, and the
+  <code>string</code> constants run natively.</li>
+<li>Fixed: <code>math.sqrt</code>, <code>log</code>, <code>exp</code>, <code>pow</code>, and <code>sin</code> of arguments outside
+  their domain gave a NaN or an infinity in native code instead of raising.</li>
+<li><code>scripts/fuzz.py --stdlib</code> fuzzes seeded random numbers and these modules.</li>
+<li>New guide page: The standard library.</li>
+</ul>
+<h3 id="the-checker">The checker<a class="headerlink" href="#the-checker" title="Permanent link">&para;</a></h3>
+<ul>
+<li>It accepts <code>typing.Self</code>, old-style <code>TypeVar</code> and <code>Generic[T]</code>, and named
+  tuples in all three forms (<code>namedtuple</code>, the functional <code>NamedTuple</code>, and
+  <code>class P(NamedTuple)</code>).</li>
+<li>It accepts <code>setattr</code> and assignment of class attributes, methods called
+  through their class, <code>__import__</code> with a constant name, and generator
+  expressions where a <code>Generator</code> is declared.</li>
+<li>It types <code>Queue</code>, <code>deque</code>, <code>Counter</code>, <code>OrderedDict</code>, <code>defaultdict</code>,
+  <code>datetime</code>, <code>Decimal</code>, and <code>Fraction</code>, and their operators.</li>
+<li><code>list[int]</code> is accepted where a function only reads a <code>list[int | float]</code>
+  or <code>Sequence[float]</code>.</li>
+<li><code>--no-strict</code> reports a value that may be <code>None</code> as <code>W2011</code> and runs the
+  program. Native code raises CPython's <code>AttributeError</code> where the <code>None</code>
+  arrives.</li>
+<li><code>--no-strict</code> infers a private helper's unannotated parameters from its
+  call sites.</li>
+<li><code>return []</code> beside a declared return type no longer keeps a function in
+  Python.</li>
+<li>Fixed: <code>(-2) ** c</code> printed <code>-(2 ** c)</code> under the Python backend after
+  constant folding.</li>
+<li><code>--no-strict</code> no longer stops <code>ppy run</code> with a compile error on code
+  CPython runs. Unresolvable annotations, undefined names, star imports,
+  <code>eval</code>, <code>exec</code>, <code>globals()</code>, <code>vars()</code>, computed <code>getattr</code>, <code>setattr</code>, and
+  <code>__import__</code>, metaclasses, and computed bases are <code>W2010</code> warnings, and
+  that code runs on CPython. A script whose import fails ends with CPython's
+  <code>ImportError</code> or <code>ModuleNotFoundError</code>.</li>
+<li><code>MutableSequence</code> is accepted in annotations, and a bare <code>Generator</code>
+  accepts a generator expression.</li>
+</ul>
+<h3 id="known-limitations">Known limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>defaultdict</code>, <code>Counter</code>, <code>OrderedDict</code>, <code>functools</code>, <code>operator</code>, and
+  <code>random.Random</code> instances stay in Python. So does a <code>deque</code> the checker
+  sees without its element type, and <code>list(q)</code> and <code>q[i] = x</code> of a deque.</li>
+<li>A temporary list that is live when a check raises inside a <code>try</code> that
+  native code catches is leaked (<code>[1, 2][5]</code> inside <code>try</code>/<code>except
+  IndexError</code>).</li>
+<li>On Python 3.14 a standalone binary prints the generic <code>math domain error</code>
+  where 3.14's message includes the value.</li>
+</ul>
 <h2 id="050-2026-09-30">0.5.0 — 2026-09-30<a class="headerlink" href="#050-2026-09-30" title="Permanent link">&para;</a></h2>
 <p>Ordinary Python goes native without a rewrite. Plain lists, dicts, and sets
 compile, and so do exceptions, generators, closures, lambdas, and functions
@@ -5195,7 +5468,7 @@ the bugs it and a corpus of public programs found are fixed.</p>
 <li>An empty <code>{}</code> or <code>[]</code> takes the type of what fills it.</li>
 <li>A <code>return</code> after <code>while True:</code> with no <code>break</code> is no longer checked.</li>
 </ul>
-<h3 id="known-limitations">Known limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h3>
+<h3 id="known-limitations_1">Known limitations<a class="headerlink" href="#known-limitations_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>A native function with a <code>float</code> parameter given an <code>int</code> works with it as
   a float, so a result CPython keeps an <code>int</code> comes back a float: <code>f(0)</code>
@@ -5429,7 +5702,7 @@ CPython would have said.</p>
 <li>Editing the C runtimes in a development tree invalidates cached native
   artifacts.</li>
 </ul>
-<h3 id="the-checker">The checker<a class="headerlink" href="#the-checker" title="Permanent link">&para;</a></h3>
+<h3 id="the-checker_1">The checker<a class="headerlink" href="#the-checker_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>--no-strict</code> now downgrades findings instead of dropping them. These are
   now reported as <code>W2010</code> warnings that name the code they replace; they

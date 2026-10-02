@@ -212,7 +212,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.6.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.6.0</span>
   </div>
 </a>
       </div>
@@ -419,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.6.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.6.0</span>
   </div>
 </a>
     </div>
@@ -4152,6 +4152,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#with-all-of-060" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With all of 0.6.0
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4326,6 +4337,17 @@
     <span class="md-ellipsis">
       
         After the standard library went native
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#with-all-of-060" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With all of 0.6.0
       
     </span>
   </a>
@@ -4701,6 +4723,117 @@ programs that draw are compared too. 357 match, 33 differ, and 10 were
 skipped as nondeterministic or slow under CPython. Of the programs that
 import <code>random</code> and ran, all but two match. All 33 differences also differ
 on the tree before this change, with the same seed: none is new.</p>
+<h2 id="with-all-of-060">With all of 0.6.0<a class="headerlink" href="#with-all-of-060" title="Permanent link">&para;</a></h2>
+<p>The same summary over the same tree, with everything 0.6.0 lowers: effects
+in native code, module globals and objects across the boundary, the new
+expressions and loops, and the standard library.</p>
+<table>
+<thead>
+<tr>
+<th>tier</th>
+<th style="text-align: right;">functions</th>
+<th style="text-align: right;">statements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>native, called from Python</td>
+<td style="text-align: right;">523 (11%)</td>
+<td style="text-align: right;">5,312 (14%)</td>
+</tr>
+<tr>
+<td>native, called from native code</td>
+<td style="text-align: right;">713 (15%)</td>
+<td style="text-align: right;">3,161 (9%)</td>
+</tr>
+<tr>
+<td>Python</td>
+<td style="text-align: right;">3,450 (74%)</td>
+<td style="text-align: right;">28,496 (77%)</td>
+</tr>
+</tbody>
+</table>
+<p>Against 0.5.0, the functions Python calls natively went from 231 to 523, and
+all compiled functions from 652 to 1,236.</p>
+<p>Several reasons left the table: calls with unknown effects (840 functions)
+and I/O (355), which native code now holds as effects; <code>isinstance</code> (154);
+random numbers (138); calls back into Python (91); generators that are
+returned or passed on (72); <code>for</code> over a tuple (55); and chained comparisons
+(49). Reading a module global that can change fell from 217 functions to 61.</p>
+<p>Some freed functions stop at the next reason in their body, so the top of
+the table is now:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">statements</th>
+<th style="text-align: right;">functions</th>
+<th>reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">3,008</td>
+<td style="text-align: right;">428</td>
+<td>a parameter or result with no annotation the checker could infer</td>
+</tr>
+<tr>
+<td style="text-align: right;">2,059</td>
+<td style="text-align: right;">202</td>
+<td>writes to a parameter native code copies</td>
+</tr>
+<tr>
+<td style="text-align: right;">1,803</td>
+<td style="text-align: right;">140</td>
+<td>writes to an object native code does not own</td>
+</tr>
+<tr>
+<td style="text-align: right;">905</td>
+<td style="text-align: right;">143</td>
+<td>a <code>numpy.ndarray</code> parameter</td>
+</tr>
+<tr>
+<td style="text-align: right;">731</td>
+<td style="text-align: right;">79</td>
+<td>a <code>list[Any]</code> parameter</td>
+</tr>
+<tr>
+<td style="text-align: right;">630</td>
+<td style="text-align: right;">94</td>
+<td>a nested function whose enclosing function stays in Python</td>
+</tr>
+<tr>
+<td style="text-align: right;">615</td>
+<td style="text-align: right;">61</td>
+<td>reads a module global that can change</td>
+</tr>
+<tr>
+<td style="text-align: right;">540</td>
+<td style="text-align: right;">41</td>
+<td>writes through a name the compiler cannot follow</td>
+</tr>
+<tr>
+<td style="text-align: right;">396</td>
+<td style="text-align: right;">36</td>
+<td>calls a Python function whose result native code cannot take back</td>
+</tr>
+<tr>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">41</td>
+<td>keyword arguments have no native ABI</td>
+</tr>
+</tbody>
+</table>
+<p>Of the compiled functions Python does not call natively, 329 are too small
+for the boundary to pay off and 208 do less with their collections than
+copying them in costs.</p>
+<p>The 400-script comparison, run again on the same programs: 387 match and 13
+are skipped as nondeterministic or slow under CPython. None differs, down
+from 34 when the 0.6.0 work began. The last eight were programs <code>ppy run</code>
+refused at compile time under <code>strict = false</code>: an import of a sibling
+module that CPython also fails to find, a <code>MutableSequence[T]</code> parameter, a
+generator expression assigned to a bare <code>Generator</code>, and <code>globals()</code> passed
+to <code>timeit</code>. Under <code>--no-strict</code> these are now warnings, and that code runs
+on CPython.</p>
 
 
 
