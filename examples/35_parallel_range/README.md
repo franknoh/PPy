@@ -33,14 +33,14 @@ ppy emit c ranges.ppy
 <summary>166 lines</summary>
 
 ```text
-optimization report: PPy (O2, ir road)
+optimization report: ppy-docs (O2, ir road)
 module ranges
   ranges.count_odd: native, bound to Python
   ranges.dot: native, bound to Python
   ranges.dot_relaxed: native, bound to Python
   ranges.fill: native, native callers only
   ranges.squares: native, native callers only
-  ranges.main: Python -- has effects that must run on CPython: IO
+  ranges.main: Python -- a stack allocation needs a constant, positive size
   block merged: 18
   dead code removed: 114
   note: 10

@@ -1184,7 +1184,7 @@ int32_t ranges_squares__par1(int64_t *out, int64_t __ppy_begin_, int64_t __ppy_e
     int64_t i = __ppy_begin_;
     while (i < __ppy_end_) {
         out[i] = i * i;
-        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
+        i += 1;
     }
     *out_2 = 0;
     return 0;
@@ -1197,7 +1197,7 @@ int32_t ranges_dot__par2(double *a, int64_t a_len, double *b, int64_t b_len, int
     int64_t i = __ppy_begin_;
     while (i < __ppy_end_) {
         total += a[i] * b[i];
-        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
+        i += 1;
     }
     *out = total;
     return 0;
@@ -1210,7 +1210,7 @@ int32_t ranges_dot_relaxed__par3(double *a, int64_t a_len, double *b, int64_t b_
     int64_t i = __ppy_begin_;
     while (i < __ppy_end_) {
         total += a[i] * b[i];
-        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
+        i += 1;
     }
     *out = total;
     return 0;
@@ -1224,7 +1224,7 @@ int32_t ranges_count_odd__par4(int64_t scale, int64_t *xs, int64_t xs_len, int64
         if (((r != 0 && (xs[i] < 0) != (2 < 0)) ? r + 2 : r) == 1) {
             if (ppy_ovf_add_i64(hits, scale, &hits)) return 1; /* arith.ok */
         }
-        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
+        i += 1;
     }
     *out = hits;
     return 0;
@@ -1234,7 +1234,7 @@ int32_t ranges_fill__par5(double base, double *out, int64_t __ppy_begin_, int64_
     int64_t i = __ppy_begin_;
     while (i < __ppy_end_) {
         out[i] = base + (double)i;
-        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
+        i += 1;
     }
     *out_2 = 0;
     return 0;
@@ -1244,7 +1244,7 @@ int32_t ranges_fill__par6(double *out, int64_t __ppy_begin_, int64_t __ppy_end_,
     int64_t j = __ppy_begin_;
     while (j < __ppy_end_) {
         acc += out[j];
-        if (ppy_ovf_add_i64(j, 1, &j)) return 1; /* arith.ok */
+        j += 1;
     }
     *out_2 = acc;
     return 0;
