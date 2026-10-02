@@ -7568,6 +7568,25 @@ def _unresolved_summary(cascaded: int, modules: dict[str, ModuleAnalysis]) -> Di
     )
 
 
+def _fits(stored: T.Type, element: T.Type) -> bool:
+    """Whether an element store is one the analysis takes: assignable, or a
+    container of narrower numbers (`[0] * n` stored in a `list[list[float]]`),
+    which the native store converts as a declaration does."""
+    if T.is_assignable(stored, element):
+        return True
+    if isinstance(stored, T.Instance) and isinstance(element, T.Instance):
+        return (
+            stored.name == element.name
+            and len(stored.args) == len(element.args) > 0
+            and all(_fits(a, b) for a, b in zip(stored.args, element.args, strict=True))
+        )
+    if isinstance(stored, T.Tuple_) and isinstance(element, T.Tuple_):
+        return len(stored.items) == len(element.items) and all(
+            _fits(a, b) for a, b in zip(stored.items, element.items, strict=True)
+        )
+    return False
+
+
 def _settled_type(t: T.Type) -> bool:
     """A type with nothing unknown, `Any`, dynamic, or variable in it."""
     if isinstance(t, (T.UnknownType, T.AnyType, T.DynamicType, T.NeverType, T.TypeVar_)):
