@@ -101,12 +101,13 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python clinic.ppy` | 2.95 |
-| `ppy run clinic.ppy`, after the first run built the cache | 1.17 |
-| `./dist/clinic`, the standalone binary | 1.13 |
+| `python clinic.ppy` | 2.76 |
+| `ppy run clinic.ppy`, after the first run built the cache | 1.14 |
+| `./dist/clinic`, the standalone binary | 1.12 |
 
-`ppy run` includes the compiler's own start-up and checking the file, which
-the standalone binary does not pay.
+`ppy run` also starts CPython, names the cached build from the project's
+sources, and loads its native library, which the standalone binary does
+not pay.
 
 ## Where the code comes from
 

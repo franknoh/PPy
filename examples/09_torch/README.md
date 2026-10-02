@@ -102,7 +102,7 @@ filesystem.
 ```text
 torch 2.14.0+cpu | cuda False
 # region active: False
-layer on cpu              2.530 us/call   sample=596.816528
+layer on cpu              2.206 us/call   sample=596.816528
 autograd survives the region: True
 ```
 
@@ -111,7 +111,7 @@ autograd survives the region: True
 ```text
 torch 2.14.0+cpu | cuda False
 # region active: True
-layer on cpu              2.069 us/call   sample=596.816528
+layer on cpu              1.842 us/call   sample=596.816528
 autograd survives the region: True
 ```
 
@@ -120,7 +120,7 @@ autograd survives the region: True
 ```text
 torch 2.14.0+cpu | cuda False
 # region active: True
-layer on cpu              2.118 us/call   sample=596.816528
+layer on cpu              2.138 us/call   sample=596.816528
 autograd survives the region: True
 ```
 

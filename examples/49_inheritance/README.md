@@ -56,16 +56,19 @@ ppy build --standalone shapes.ppy -o dist && ./dist/shapes
 
 ## Timing
 
-One machine, wall time for the whole program:
+Wall time for the whole program, the mean of five runs, measured from a
+checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):
 
 | | seconds |
 |---|---:|
-| `python shapes.ppy` | 5.5 |
-| `ppy run shapes.ppy`, after the first run built the cache | 2.3 |
-| `./dist/shapes`, the standalone binary | 0.61 |
+| `python shapes.ppy` | 4.56 |
+| `ppy run shapes.ppy`, after the first run built the cache | 2.80 |
+| `./dist/shapes`, the standalone binary | 2.76 |
 
-`ppy run` includes the compiler's own start-up and checking the file, which
-the standalone binary does not pay.
+`ppy run` also starts CPython, names the cached build from the project's
+sources, and loads its native library, which the standalone binary does
+not pay.
 
 ## Where the code comes from
 

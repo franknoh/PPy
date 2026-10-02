@@ -38,19 +38,19 @@ python model.ppy    && ppy run model.ppy
 
 ```text
 # rank 0/1 device=cpu native=True region=True loader=GeneratedLoader
-rank 0: prep       1.9 ms   checksum=-21015.470416 outside=4103
-rank 0: train  16513.7 ms   loss 1.0412 -> 1.0107
+rank 0: prep       1.8 ms   checksum=-21015.470416 outside=4103
+rank 0: train    683.4 ms   loss 1.0412 -> 1.0107
 ```
 
 **`torchrun --standalone --nproc_per_node=2 train.py`**
 
 ```text
 # rank 0/2 device=cpu native=True region=True loader=GeneratedLoader
-rank 0: prep       1.9 ms   checksum=-21015.470416 outside=4103
-rank 0: train    783.5 ms   loss 1.0412 -> 1.0123
+rank 0: prep       1.8 ms   checksum=-21015.470416 outside=4103
+rank 0: train    659.0 ms   loss 1.0412 -> 1.0123
 # rank 1/2 device=cpu native=True region=True loader=GeneratedLoader
-rank 1: prep       1.9 ms   checksum=-20883.104755 outside=4005
-rank 1: train    781.9 ms   loss 1.0486 -> 1.0239
+rank 1: prep       1.8 ms   checksum=-20883.104755 outside=4005
+rank 1: train    657.1 ms   loss 1.0486 -> 1.0239
 ```
 
 **`accelerate launch --multi_gpu --num_processes 2 train.py`**
@@ -61,8 +61,8 @@ rank 1: train    781.9 ms   loss 1.0486 -> 1.0239
 
 ```text
 # rank 0/1 device=cpu native=False region=False loader=PPySourceLoader
-rank 0: prep     125.0 ms   checksum=-21015.470416 outside=4103
-rank 0: train  12706.6 ms   loss 1.0412 -> 1.0107
+rank 0: prep     118.9 ms   checksum=-21015.470416 outside=4103
+rank 0: train    161.7 ms   loss 1.0412 -> 1.0107
 ```
 
 **`python features.ppy && ppy run features.ppy`**

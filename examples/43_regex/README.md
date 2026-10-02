@@ -27,7 +27,7 @@ ppy emit c patterns.ppy
 989986 bytes
 119454 7 25007528 7143
 True False
-# four passes: 78.8 ms
+# four passes: 76.2 ms
 ```
 
 **`ppy run patterns.ppy`**
@@ -36,7 +36,7 @@ True False
 989986 bytes
 119454 7 25007528 7143
 True False
-# four passes: 9.7 ms
+# four passes: 9.9 ms
 ```
 
 **`ppy emit ir patterns.ppy`**

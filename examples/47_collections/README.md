@@ -54,14 +54,16 @@ which raises, and a standalone binary stops.
 
 ## Timing
 
-One machine, five runs each, wall time for the whole program:
+Wall time for the whole program, the mean of five runs, measured from a
+checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):
 
 | | seconds |
 |---|---:|
-| `python graphs.ppy` (the reference classes under CPython) | 4.3 |
-| `idiomatic.py`: the same algorithms with `list`, `deque`, `heapq`, `dict`, `bisect` | 2.3 |
-| `ppy run graphs.ppy`, after the first run built the cache | 0.39 |
-| `./dist/graphs`, the standalone binary | 0.19 |
+| `python graphs.ppy` (the reference classes under CPython) | 5.14 |
+| `idiomatic.py`: the same algorithms with `list`, `deque`, `heapq`, `dict`, `bisect` | 2.34 |
+| `ppy run graphs.ppy`, after the first run built the cache | 0.32 |
+| `./dist/graphs`, the standalone binary | 0.29 |
 
 The reference classes are slower than Python's built-ins because every
 method is a Python call. `idiomatic.py` is there so the comparison is with

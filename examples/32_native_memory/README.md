@@ -73,7 +73,7 @@ func @native_memory_fill(%p: ptr<f64>, %n: i64, %scale: f64) -> f64 attrs {effec
     %17 = core.add %14, %16 : f64
     core.store %17, %total_addr
     %18 = core.load %i_addr : i64
-    %19 = core.add %18, %3 {overflow = "python"} : i64
+    %19 = core.add %18, %3 {overflow = "proven"} : i64
     core.store %19, %i_addr
     core.br ^for.head3
 ^for.end6:
@@ -110,7 +110,7 @@ func @native_memory_norm(%p: ptr<f64, generic, const>, %n: i64) -> f64 attrs {ef
     %11 = core.call_extern %6, %10 {abi = "c", callee = "hypot"} : f64
     core.store %11, %acc_addr
     %12 = core.load %i_addr : i64
-    %13 = core.add %12, %3 {overflow = "python"} : i64
+    %13 = core.add %12, %3 {overflow = "proven"} : i64
     core.store %13, %i_addr
     core.br ^for.head3
 ^for.end6:
@@ -148,7 +148,7 @@ func @native_memory_scratch(%n: i64) -> i64 attrs {effects = ["alloc", "may_rais
     %21 = core.or %18, %20 : bool
     %22 = core.const true : bool
     %23 = core.xor %21, %22 : bool
-    core.guard %23 {kind = "overflow", message = "hoisted guard"}
+    core.guard %23 {kind = "overflow", message = "hoisted guard", raises = "OverflowError: the result does not fit in a 64-bit integer"}
     core.store %3, %i_addr loc("examples/32_native_memory/native_memory.ppy":34:4)
     core.br ^for.head3
 ^for.head3:
@@ -164,7 +164,7 @@ func @native_memory_scratch(%n: i64) -> i64 attrs {effects = ["alloc", "may_rais
     %31 = core.mul %29, %30 {overflow = "proven"} : i64
     core.store %31, %28
     %32 = core.load %i_addr : i64
-    %33 = core.add %32, %4 {overflow = "python"} : i64
+    %33 = core.add %32, %4 {overflow = "proven"} : i64
     core.store %33, %i_addr
     core.br ^for.head3
 ^for.end6:
@@ -183,7 +183,7 @@ func @native_memory_scratch(%n: i64) -> i64 attrs {effects = ["alloc", "may_rais
     %41 = core.add %36, %40 {overflow = "python"} : i64
     core.store %41, %acc_addr
     %42 = core.load %i_addr : i64
-    %43 = core.add %42, %7 {overflow = "python"} : i64
+    %43 = core.add %42, %7 {overflow = "proven"} : i64
     core.store %43, %i_addr
     core.br ^for.head9
 ^for.end12:
@@ -223,7 +223,7 @@ func @native_memory_bytes_of(%p: ptr<u8, generic, const>, %n: i64) -> i64 attrs 
     %12 = core.add %6, %11 {overflow = "python"} : i64
     core.store %12, %total_addr
     %13 = core.load %i_addr : i64
-    %14 = core.add %13, %3 {overflow = "python"} : i64
+    %14 = core.add %13, %3 {overflow = "proven"} : i64
     core.store %14, %i_addr
     core.br ^for.head3
 ^for.end6:

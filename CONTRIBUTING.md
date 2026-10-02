@@ -241,6 +241,21 @@ class, a generic function, `try` with `except`, `else`, and `finally`,
 `next`, or a collection, all printed from `main()`. A seed is the
 same program on every machine (`--show SEED` prints it).
 
+Flags add a domain to the programs, each one where a change of that kind
+is most likely to break something:
+
+| flag | adds |
+|---|---|
+| `--prints` | tagged prints between checks that may fall back; a path that prints a tagged line more often than CPython fails |
+| `--state` | settled module globals read and written across functions, and a chain of objects native code walks and writes (paths with Python) |
+| `--boundary` | `@ppy.native` functions writing through lists of lists, dicts of lists, sets, and objects Python passes, shared and cyclic (paths with Python) |
+| `--stdlib` | seeded `random` and `random.Random` draws, `math`, `heapq`, `bisect`, `itertools`, `functools`, `operator`, and the `collections` containers |
+| `--calls` | constant defaults and keyword-only parameters, called by keyword with defaults left out |
+| `--unannotated` | functions with no annotations, run with `strict = false` and called afterwards from Python with arguments of other types (paths with Python by default) |
+
+`--paths python,ppy,run` limits a batch to some of the paths. Flags
+combine (`--unannotated --calls`).
+
 Every path is held to CPython's output, exit status, and last line of
 stderr. One difference is allowed, because it is documented: where CPython
 computes an integer past 64 bits, a standalone binary and emitted C stop
@@ -337,7 +352,25 @@ and the comparison projects' toolchains. The workflow commits what moved back
 to `dev`.
 
 A hosted runner has none of that, which is why `benchmark.yml` only reports
-on a schedule. The runner lives in `~/actions-runner` on that machine and
+on a schedule.
+
+### Tables the runner does not refresh
+
+Three kinds of number are measured by hand, from a `/tmp` checkout with
+nothing else running, and committed with the change that moved them:
+
+- `python scripts/run_overhead.py --write` times every example with
+  `python`, with `ppy run` from an empty cache, and with `ppy run` warm, and
+  records `examples/run_overhead.json`; the performance page is built from
+  it. It flags a warm run slower than `python` beyond the margin. Run it in
+  the default environment (`uv sync`): an example whose libraries are not
+  installed is left out, as are the device examples.
+- `python examples/bench_boundary.py` prints the cost of a call for each
+  shape that crosses the boundary. The table in the native lowering guide
+  ("What a call costs") is its output under `ppy run` beside the same
+  program under `python`.
+- An example README's own timing table (`51_clinic` and later) is the mean
+  of five runs of each command. The runner lives in `~/actions-runner` on that machine and
 stops with it. `~/actions-runner/start.sh` brings it back.
 
 A change that touches only prose (the docs, a README, the changelog, a

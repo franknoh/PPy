@@ -136,8 +136,8 @@ function in Python:
 14.0 25.0 25.0 7.0
 25.0
 # native: False
-distance2 (8 float ops)      58.8 ns/call
-steps     (200 iters)      4551.9 ns/call
+distance2 (8 float ops)      62.2 ns/call
+steps     (200 iters)      4665.5 ns/call
 ```
 
 **`ppy     value_classes.ppy`**
@@ -147,7 +147,7 @@ steps     (200 iters)      4551.9 ns/call
 25.0
 # native: False
 distance2 (8 float ops)      60.7 ns/call
-steps     (200 iters)      4451.3 ns/call
+steps     (200 iters)      4636.6 ns/call
 ```
 
 **`ppy run value_classes.ppy`**
@@ -156,8 +156,8 @@ steps     (200 iters)      4451.3 ns/call
 14.0 25.0 25.0 7.0
 25.0
 # native: False
-distance2 (8 float ops)      58.4 ns/call
-steps     (200 iters)       322.6 ns/call
+distance2 (8 float ops)     205.8 ns/call
+steps     (200 iters)       350.6 ns/call
 ```
 
 <!-- outputs:end -->

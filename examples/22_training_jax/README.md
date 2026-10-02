@@ -21,8 +21,8 @@ ppy run train.ppy
 ```text
 # device: cpu
 # native prep: False
-prep      67.9 ms   checksum=-21433.891867
-train     94.8 ms   loss 1.0663 -> 1.0109
+prep      69.1 ms   checksum=-21433.891867
+train     96.8 ms   loss 1.0663 -> 1.0109
 ```
 
 **`ppy run train.ppy`**
@@ -30,8 +30,8 @@ train     94.8 ms   loss 1.0663 -> 1.0109
 ```text
 # device: cpu
 # native prep: True
-prep       0.9 ms   checksum=-21433.891867
-train    111.2 ms   loss 1.0663 -> 1.0109
+prep       0.8 ms   checksum=-21433.891867
+train     94.1 ms   loss 1.0663 -> 1.0109
 ```
 
 <!-- outputs:end -->

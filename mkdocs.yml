@@ -162,6 +162,8 @@ nav:
           - howto/49_inheritance.md
           - howto/50_errors_and_generators.md
           - howto/51_clinic.md
+          - howto/53_caches_and_counters.md
+          - howto/54_objects_and_grids.md
       - Accelerators:
           - howto/38_cuda.md
           - howto/44_tile.md
@@ -186,6 +188,7 @@ nav:
           - howto/24_interop.md
           - howto/26_project.md
           - howto/30_migrate.md
+          - howto/52_unannotated.md
   - Reference:
       - reference/index.md
       - Command line: cli.md

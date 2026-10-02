@@ -69,18 +69,20 @@ Two things keep allocation down, as CPython does the same two:
 
 ## Timing
 
-One machine, five runs each, median wall time for the whole program:
+Wall time for the whole program, the mean of five runs, measured from a
+checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):
 
 | | seconds |
 |---|---:|
-| `python text.ppy` | 2.05 |
-| `idiomatic.py`: the same work with `str`, `dict`, `Counter`, `defaultdict`, and `sorted` | 1.85 |
-| `ppy run text.ppy`, after the first run built the cache | 2.27 |
-| `./dist/text`, the standalone binary | 1.16 |
+| `python text.ppy` | 1.87 |
+| `idiomatic.py`: the same work with `str`, `dict`, `Counter`, `defaultdict`, and `sorted` | 1.67 |
+| `ppy run text.ppy`, after the first run built the cache | 0.53 |
+| `./dist/text`, the standalone binary | 0.49 |
 
-Measured inside the process, `report` itself takes about 1.8 seconds under
-`ppy run` and 1.1 in the standalone binary; the rest of `ppy run`'s time is
-starting the interpreter and loading the cached native code. Under
+Measured inside the process, `report` itself takes 0.48 seconds under
+`ppy run` and 1.82 under CPython; the rest of `ppy run`'s time is starting
+the interpreter and loading the cached native code. Under
 CPython, `text.ppy` runs its `Vec` and `HashMap` as the reference classes
 in Python, which is why it trails `idiomatic.py`.
 

@@ -42,7 +42,7 @@ Each package and what it holds:
 | package | contents |
 |---|---|
 | `ppy` (runtime) | the import hook and the inert directives/markers, and the modules a program writes against (`native`, `ffi`, `simd`, `cpu`, `atomic`, `concurrent`, `autodiff`, `cuda`, `hip`, `xla`, `aio`), each a Python implementation that answers the same as the compiled one. This is all a plain CPython run ever loads. |
-| `ppy_runtime` | everything a *built artifact* needs at launch: the native ABI as data (`abi`), the guarded binding trampolines (`binding`), generated-module identity and execution (`generated`, `execute`), the binder protocol (`dispatch`), and the manifest-driven launch path (`manifest`, `launch`), and the runtimes native code calls into: `aio` (the epoll loop, one C file compiled once), `cuda` (the driver API through ctypes, launching PTX), `xla` (the PJRT bridge), `exported` and `regions` (staged artifacts and compiled torch regions). The hard rule: this package never imports `ppy_compiler`. Uninstalling the compiler must not break a built application, and a test keeps that true by poisoning the compiler and running a launcher. |
+| `ppy_runtime` | everything a *built artifact* needs at launch: the native ABI as data (`abi`), the guarded binding trampolines (`binding`), generated-module identity and execution (`generated`, `execute`), the binder protocol (`dispatch`), and the manifest-driven launch path (`manifest`, `launch`), and the runtimes native code calls into: the collections runtime (`collections.c`, `strings.c`, `exceptions.c`, with `stdlib.c` and `random.c` for the standard library and `pyio.c` for held output and calls into Python, compiled once per machine into the user cache), `effects` (the Python side of held output and barriers), `aio` (the epoll loop, one C file compiled once), `cuda` (the driver API through ctypes, launching PTX), `xla` (the PJRT bridge), `exported` and `regions` (staged artifacts and compiled torch regions). The hard rule: this package never imports `ppy_compiler`. Uninstalling the compiler must not break a built application, and a test keeps that true by poisoning the compiler and running a launcher. |
 | `frontend/` | source loading, the module graph, ambiguity detection (`E1003`). |
 | `migration/` | the `ppy migrate` layer over the shared conversion engine: deterministic rewrite passes (`pipeline`, `dynamic`, `globals`) that prove each rewrite equivalent before making it, and the classified report (`report`) that says what remains. |
 | `analysis/` | `results` (what analysis produced: the types every other package reads), `symbols` (declarations), `checker` (types, refinements, effects), `binding` (one shared call-argument binder), `lexical` (point-sensitive name resolution: what a name means at each statement, shared by decorator identity, reflection, and the write index), `aliasing` (flow-sensitive local alias analysis: mutation and escape resolve through what a name may refer to rather than its spelling), `inference` (staged evidence/generalization fixpoint with a convergence guard), `decorators` (what each known decorator does, that unknown means opaque, and the shared `class_construction` facts behind both strict class checking and safe hoisting), `global_writes` (scope-aware project-wide write index behind `Final`), `reflection` (who reads annotations at runtime, blocking their materialization), `codec` (exact-inverse serialization of analysis facts for the cache), `render` (types back to annotation source). |
@@ -160,14 +160,27 @@ Python implementation, so a refused guard is a C-to-Python call instead of a
 call path (`@ppy.jit` keeps a thin Python watcher only while it is still
 learning which argument shapes repeat).
 
-Measured with `examples/bench_boundary.py`:
+The same wrapper carries what used to need Python frames:
 
-| call | time |
-|---|---|
-| plain Python call (baseline) | 28 ns |
-| forced-native two-int call | 47 ns |
-| borrowed buffer | 65 ns |
-| guard failure into the fallback | 86 ns |
+- Lists, dicts, sets, and objects of the project's classes cross in C
+  (`backend/llvm/crossing.c`), from type tables emitted for each signature.
+  Each argument is copied into a runtime handle, an object reached twice
+  becomes one handle, and after a call that writes through a parameter
+  every container and object that came in is copied back into the
+  caller's object. An element that did not change keeps its Python object.
+- A function that prints, reads input, or calls into Python enters and
+  leaves its call, commits held output, and drops it on a fallback in C
+  (`wrapper_effects.c`); it calls back into Python only for a raise after a
+  barrier or a write that failed.
+- A function that reads settled module globals keeps a Python frame that
+  reads them, which then calls the C entry.
+- A call with keywords, or with defaults left out, is bound in Python
+  against the function's signature (`binding.keyed`) and then calls the C
+  entry in order.
+
+A two-int call costs 29 ns through the wrapper, against 30 ns for CPython's
+own call. [What a call costs](../guide/native-lowering.md#what-a-call-costs)
+has the measured table for each shape, from `examples/bench_boundary.py`.
 
 Built artifacts ship the compiled wrapper and bind through it at launch. The
 ctypes trampoline remains only as the fallback where no C toolchain exists
@@ -175,10 +188,13 @@ ctypes trampoline remains only as the fallback where no C toolchain exists
 
 ## Threads
 
-Generated wrappers release the GIL around native calls
-(`Py_BEGIN_ALLOW_THREADS`), so `@ppy.native` functions scale on threads:
+Generated wrappers release the GIL around a native call whose body loops
+or calls another function (`Py_BEGIN_ALLOW_THREADS`), so `@ppy.native`
+functions scale on threads:
 measured 1.95× on two threads against 0.98× for the same code on plain
-CPython (`examples/28_threads`).
+CPython (`examples/28_threads`). A short straight-line body keeps the GIL,
+since dropping and retaking it costs about 20 ns, and so does a function
+that prints, reads, or calls into Python.
 
 `@ppy.parallel` loops run on a process-wide worker pool sized by
 `[tool.ppy.parallel] threads`.

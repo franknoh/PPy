@@ -24,52 +24,52 @@ clang -O3 algorithms.c -o algorithms_clang -lm && ./algorithms_clang
 **`python  algorithms.ppy`**
 
 ```text
-sieve 2e6              195.0 ms   -> 148933
-collatz 3e5           1209.1 ms   -> 442
-knapsack 400x2e4       480.0 ms   -> 199600
-edit 2000x2000         515.0 ms   -> 1846
-floyd 220              473.4 ms   -> 558837
-matmul 220             505.6 ms   -> 18883
-union-find 5e5         155.6 ms   -> 250000
-fermat 6e4              26.3 ms   -> 6114
+sieve 2e6              185.9 ms   -> 148933
+collatz 3e5           1176.6 ms   -> 442
+knapsack 400x2e4       447.5 ms   -> 199600
+edit 2000x2000         499.4 ms   -> 1846
+floyd 220              465.6 ms   -> 558837
+matmul 220             522.3 ms   -> 18883
+union-find 5e5         167.2 ms   -> 250000
+fermat 6e4              25.9 ms   -> 6114
 ```
 
 **`ppy run algorithms.ppy`**
 
 ```text
-sieve 2e6                9.9 ms   -> 148933
-collatz 3e5             41.8 ms   -> 442
-knapsack 400x2e4         5.1 ms   -> 199600
-edit 2000x2000           3.7 ms   -> 1846
+sieve 2e6               10.4 ms   -> 148933
+collatz 3e5             44.0 ms   -> 442
+knapsack 400x2e4         5.4 ms   -> 199600
+edit 2000x2000           3.0 ms   -> 1846
 floyd 220                3.2 ms   -> 558837
-matmul 220               4.0 ms   -> 18883
-union-find 5e5           3.3 ms   -> 250000
-fermat 6e4               2.7 ms   -> 6114
+matmul 220               3.9 ms   -> 18883
+union-find 5e5           3.5 ms   -> 250000
+fermat 6e4               2.8 ms   -> 6114
 ```
 
 **`gcc   -O3 algorithms.c -o algorithms_c     -lm && ./algorithms_c`**
 
 ```text
-sieve 2e6               15.9 ms   -> 148933
-collatz 3e5             43.6 ms   -> 442
-knapsack 400x2e4         2.6 ms   -> 199600
-edit 2000x2000           3.8 ms   -> 1846
-floyd 220                5.8 ms   -> 558837
-matmul 220               2.5 ms   -> 18883
-union-find 5e5           3.7 ms   -> 250000
+sieve 2e6               16.3 ms   -> 148933
+collatz 3e5             42.8 ms   -> 442
+knapsack 400x2e4         2.5 ms   -> 199600
+edit 2000x2000           4.2 ms   -> 1846
+floyd 220                5.3 ms   -> 558837
+matmul 220               2.2 ms   -> 18883
+union-find 5e5           4.1 ms   -> 250000
 fermat 6e4               1.8 ms   -> 6114
 ```
 
 **`clang -O3 algorithms.c -o algorithms_clang -lm && ./algorithms_clang`**
 
 ```text
-sieve 2e6               18.7 ms   -> 148933
-collatz 3e5             40.2 ms   -> 442
+sieve 2e6               14.6 ms   -> 148933
+collatz 3e5             34.1 ms   -> 442
 knapsack 400x2e4         2.0 ms   -> 199600
 edit 2000x2000           3.6 ms   -> 1846
-floyd 220                3.0 ms   -> 558837
-matmul 220               3.9 ms   -> 18883
-union-find 5e5           3.9 ms   -> 250000
+floyd 220                2.9 ms   -> 558837
+matmul 220               4.4 ms   -> 18883
+union-find 5e5           4.9 ms   -> 250000
 fermat 6e4               1.5 ms   -> 6114
 ```
 
