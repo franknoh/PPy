@@ -1970,6 +1970,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2478,6 +2482,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3122,6 +3182,8 @@
       
         
       
+        
+      
     
     
     
@@ -3294,6 +3356,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -5370,10 +5460,13 @@
 </tr>
 <tr>
 <td><code>--no-strict</code></td>
-<td>report strict-mode errors that have a sound fallback as <code>W2010</code> warnings</td>
+<td>turn strict mode off for this invocation, as <code>strict = false</code> does: infer unannotated parameters from the project's calls, defaults, and doctests, and report the strict-mode errors that have a sound fallback as <code>W2010</code> (<code>W2011</code> for a value that may be <code>None</code>)</td>
 </tr>
 </tbody>
 </table>
+<p><code>--no-strict</code> is also accepted after the subcommand (<code>ppy run --no-strict
+FILE</code>, <code>ppy check --no-strict</code>, <code>ppy explain --no-strict</code>).
+<a href="../guide/subset/">The subset</a> says what it downgrades and what it infers.</p>
 <p><code>-O</code> overrides the project default. It does not override a per-function
 <code>@ppy.opt(n)</code>, which is a contract on that function.</p>
 <h2 id="ppy-and-ppy-run"><code>ppy</code> and <code>ppy run</code><a class="headerlink" href="#ppy-and-ppy-run" title="Permanent link">&para;</a></h2>
@@ -5382,6 +5475,10 @@
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>FILE.ppy<span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span><span class="w">    </span><span class="c1"># compile through LLVM, then run</span>
 </code></pre></div>
 <p>Everything after <code>--</code> reaches the program as <code>sys.argv[1:]</code>.</p>
+<p>Without llvmlite (the <code>llvm</code> extra), <code>ppy run</code> prints one <code>W2012</code> warning
+with the install command and runs the program on CPython, with the same
+output and exit code. <code>--profile</code>, <code>--pgo</code>, and the other options that only
+make sense for native code stop with <code>E1801</code> instead.</p>
 <p><code>ppy run</code> keeps Python-integer semantics by default, as <code>ppy build</code> does.
 Its options:</p>
 <table>
@@ -6219,12 +6316,27 @@ cannot read is refused with its line (<code>E1806</code>).</p>
 code. For a function it reports:</p>
 <ul>
 <li>the semantic type, effects, and purity</li>
-<li>the backend decision</li>
+<li>the backend decision: <code>native</code>, or <code>boxed</code> with the first construct that
+  kept it in Python. A native function with effects also names the rule it
+  runs under (<a href="../guide/native-effects/">Effects in native code</a>), and one
+  that Python calls through its Python body says why: the crossing costs
+  more than the body saves, or a barrier follows a copied argument</li>
+<li>the Python boundary a native function has</li>
 <li>the representation chosen for each parameter</li>
+<li>the types that were inferred rather than annotated, and where each came
+  from (under <code>--no-strict</code>; see below)</li>
 <li>each library call's lowering, with its guards</li>
 </ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>inferred (not annotated):
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>  number: int, from 3 calls (numbers.ppy:90, numbers.ppy:72, numbers.ppy:88)
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>  base: int, from 1 call (numbers.ppy:72) and the default value
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>  (the Python boundary checks these at each call, and runs the Python body otherwise)
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>  return: int, from the body's return statements
+</code></pre></div>
+<p><code>--no-strict</code> (before or after <code>explain</code>) analyzes as <code>ppy run --no-strict</code>
+does.</p>
 <h3 id="-summary"><code>--summary</code><a class="headerlink" href="#-summary" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>ppy<span class="w"> </span>explain<span class="w"> </span>--summary<span class="w"> </span><span class="o">[</span>PATH<span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>--limit<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--modules<span class="o">]</span><span class="w"> </span><span class="o">[</span>--json<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>ppy<span class="w"> </span>explain<span class="w"> </span>--summary<span class="w"> </span><span class="o">[</span>PATH<span class="w"> </span>...<span class="o">]</span><span class="w"> </span><span class="o">[</span>--limit<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--modules<span class="o">]</span><span class="w"> </span><span class="o">[</span>--json<span class="o">]</span>
 </code></pre></div>
 <p>Over files or directories (the current directory by default), how much of
 the code goes native and what keeps the rest in Python:</p>
@@ -6238,9 +6350,11 @@ the code goes native and what keeps the rest in Python:</p>
   and calls whose effects are unknown list the calls seen most often</li>
 <li>for native functions Python does not call natively, why the boundary is
   not used (it costs more than the body saves, it passes objects, and so on)</li>
-<li>a nested function runs where the function around it runs, so it is
-  native when that function is, and otherwise names the function around it;
-  its statements count under itself, not twice</li>
+<li>a nested function that shares no variable with the functions around it
+  has an entry of its own and is counted like any function; one that shares
+  a variable runs where the function around it runs, so it is native when
+  that function is, and otherwise names the function around it; its
+  statements count under itself, not twice</li>
 <li>files that could not be analyzed or lowered, which are reported and do
   not stop the summary</li>
 </ul>
@@ -6267,12 +6381,15 @@ the code goes native and what keeps the rest in Python:</p>
 </tbody>
 </table>
 <p>A module the analysis follows an import into is not counted; name it to
-include it. <a href="../guide/native-lowering/#finding-what-stays-in-python">Finding what stays in Python</a>
+include it. Without <code>--no-strict</code> the summary analyzes in strict mode, so
+on code without annotations every unannotated function counts as Python;
+<code>ppy explain --summary --no-strict</code> shows what <code>ppy run --no-strict</code>
+compiles. <a href="../guide/native-lowering/#finding-what-stays-in-python">Finding what stays in Python</a>
 walks through reading one.</p>
 <h2 id="ppy-inspect"><code>ppy inspect</code><a class="headerlink" href="#ppy-inspect" title="Permanent link">&para;</a></h2>
 <p>Print generated artifacts.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>python,llvm<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--ir<span class="o">]</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span>--stage<span class="w"> </span><span class="o">{</span>analysis,ir,canonical,optimized,tensor,columnar,gpu,stablehlo,llvm<span class="o">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>python,llvm<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--ir<span class="o">]</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span>--stage<span class="w"> </span><span class="o">{</span>analysis,ir,canonical,optimized,tensor,columnar,gpu,stablehlo,llvm<span class="o">}</span>
 </code></pre></div>
 <p>By default it prints the optimized Python, including plugin rewrites. Read
 it when a result differs from plain CPython.</p>
@@ -6337,7 +6454,7 @@ it when a result differs from plain CPython.</p>
 </tbody>
 </table>
 <h2 id="ppy-test"><code>ppy test</code><a class="headerlink" href="#ppy-test" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>differential,pytest<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>differential,pytest<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span>
 </code></pre></div>
 <table>
 <thead>
@@ -6357,11 +6474,11 @@ it when a result differs from plain CPython.</p>
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--backend<span class="w"> </span>pytest<span class="w"> </span>tests<span class="w"> </span>--<span class="w"> </span>-k<span class="w"> </span>buffers<span class="w"> </span>-q
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--backend<span class="w"> </span>pytest<span class="w"> </span>tests<span class="w"> </span>--<span class="w"> </span>-k<span class="w"> </span>buffers<span class="w"> </span>-q
 </code></pre></div>
 <h2 id="ppy-lint"><code>ppy lint</code><a class="headerlink" href="#ppy-lint" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>auto,pyright,pylint,ruff,mypy<span class="o">}]</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">         </span><span class="o">[</span>--all-rules<span class="o">]</span><span class="w"> </span><span class="o">[</span>--no-strict<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>auto,pyright,pylint,ruff,mypy<span class="o">}]</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">         </span><span class="o">[</span>--all-rules<span class="o">]</span><span class="w"> </span><span class="o">[</span>--no-strict<span class="o">]</span>
 </code></pre></div>
 <table>
 <thead>
@@ -6392,7 +6509,7 @@ output back to your <code>.ppy</code> files.</p>
 <code>typeCheckingMode = "strict"</code>). A linter runs the project's own rule
 selection, because "every rule there is" is a different kind of setting.
 Use <code>--all-rules</code> when that is what you want.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span>--backend<span class="w"> </span>pyright<span class="w"> </span>src
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span>--backend<span class="w"> </span>pyright<span class="w"> </span>src
 </code></pre></div>
 <p>The staging tree mirrors the project. Each tool config at the root
 (<code>pyproject.toml</code>, <code>pyrightconfig.json</code>, <code>.pylintrc</code>, <code>ruff.toml</code>,
@@ -6401,7 +6518,7 @@ staged sources. Imports resolve, and the project's own configuration
 (<code>extraPaths</code>, per-rule overrides, execution environments) keeps applying.</p>
 <h2 id="ppy-fmt"><code>ppy fmt</code><a class="headerlink" href="#ppy-fmt" title="Permanent link">&para;</a></h2>
 <p>Format source.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>ppy<span class="w"> </span>fmt<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--check<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>ppy<span class="w"> </span>fmt<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--check<span class="o">]</span>
 </code></pre></div>
 <table>
 <thead>
@@ -6427,9 +6544,9 @@ then applies the project's own style on top.</p>
 byte-identical on every machine. Pass <code>--format</code>, or set
 <code>[tool.ppy.convert] format = true</code>, to apply the project's style on top.</p>
 <h2 id="ppy-cache"><code>ppy cache</code><a class="headerlink" href="#ppy-cache" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>ppy<span class="w"> </span>cache<span class="w"> </span>status
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>ppy<span class="w"> </span>cache<span class="w"> </span>clean
-<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>ppy<span class="w"> </span>cache<span class="w"> </span>gc<span class="w"> </span><span class="o">[</span>--max-age-days<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--max-bytes<span class="w"> </span>N<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>ppy<span class="w"> </span>cache<span class="w"> </span>status
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>ppy<span class="w"> </span>cache<span class="w"> </span>clean
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>ppy<span class="w"> </span>cache<span class="w"> </span>gc<span class="w"> </span><span class="o">[</span>--max-age-days<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--max-bytes<span class="w"> </span>N<span class="o">]</span>
 </code></pre></div>
 <h3 id="cache-keys">Cache keys<a class="headerlink" href="#cache-keys" title="Permanent link">&para;</a></h3>
 <p>A cache key covers:</p>
@@ -6496,7 +6613,7 @@ every file of the project is why that record exists.</p>
 <p>Removes the whole cache directory. <code>ppy cache clean</code> empties it but leaves
 the directory. Neither touches an output directory named with <code>build -o</code>.</p>
 <h2 id="ppy-doctor"><code>ppy doctor</code><a class="headerlink" href="#ppy-doctor" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>ppy<span class="w"> </span>doctor<span class="w"> </span><span class="o">[</span>--verbose<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>ppy<span class="w"> </span>doctor<span class="w"> </span><span class="o">[</span>--verbose<span class="o">]</span>
 </code></pre></div>
 <p>Run it first when something compiles on one machine and not another. It
 prints:</p>
@@ -6510,13 +6627,13 @@ prints:</p>
 <p>An installed backend that cannot be loaded is printed as <code>unusable</code> with
 the reason. A name that two distributions register is reported.</p>
 <h2 id="ppy-lsp"><code>ppy lsp</code><a class="headerlink" href="#ppy-lsp" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>ppy<span class="w"> </span>lsp<span class="w"> </span><span class="o">[</span>--root<span class="w"> </span>DIR<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>ppy<span class="w"> </span>lsp<span class="w"> </span><span class="o">[</span>--root<span class="w"> </span>DIR<span class="o">]</span>
 </code></pre></div>
 <p>Runs a language server (LSP) over stdio.</p>
 <h2 id="shared-build-and-run-options">Shared build and run options<a class="headerlink" href="#shared-build-and-run-options" title="Permanent link">&para;</a></h2>
 <h3 id="sanitizers-sanitize">Sanitizers: <code>--sanitize</code><a class="headerlink" href="#sanitizers-sanitize" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--sanitize<span class="w"> </span>bounds,overflow<span class="w"> </span>foo.ppy
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>--sanitize<span class="w"> </span>pointer,alignment<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--sanitize<span class="w"> </span>bounds,overflow<span class="w"> </span>foo.ppy
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>--sanitize<span class="w"> </span>pointer,alignment<span class="w"> </span>.
 </code></pre></div>
 <p>A sanitizer instruments the IR with checks the program did not ask for.</p>
 <table>
@@ -6580,10 +6697,10 @@ tool can count by category across versions. A build guided by a profile
 lists the profile first: the file, its runs, and each measured function's
 calls, hotness, and argument kinds.</p>
 <h3 id="profile-guided-optimization-profile-pgo">Profile-guided optimization: <code>--profile</code>, <code>--pgo</code><a class="headerlink" href="#profile-guided-optimization-profile-pgo" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>foo.ppy<span class="w">            </span><span class="c1"># runs, then writes foo.ppyprof</span>
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>--profile-out<span class="w"> </span>p.ppyprof<span class="w"> </span>foo.ppy<span class="w"> </span>--<span class="w"> </span>args
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
-<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>ppy<span class="w"> </span>run<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>foo.ppy<span class="w">            </span><span class="c1"># runs, then writes foo.ppyprof</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>--profile-out<span class="w"> </span>p.ppyprof<span class="w"> </span>foo.ppy<span class="w"> </span>--<span class="w"> </span>args
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>ppy<span class="w"> </span>run<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
 </code></pre></div>
 <p><strong>Recording.</strong> A profiling run is a JIT run with counters. Each native
 function counts its blocks and the taken edge of each conditional branch.

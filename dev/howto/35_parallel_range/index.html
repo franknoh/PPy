@@ -1980,6 +1980,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2650,6 +2654,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3287,6 +3347,8 @@
       
         
       
+        
+      
     
     
     
@@ -3462,6 +3524,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4510,14 +4600,14 @@ backend decides how the chunks run.</p>
 <p><strong><code>ppy build ranges.ppy --report-opt</code></strong></p>
 <details class="note">
 <summary>166 lines</summary>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>optimization report: PPy (O2, ir road)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>optimization report: ppy-docs (O2, ir road)
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>module ranges
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  ranges.count_odd: native, bound to Python
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  ranges.dot: native, bound to Python
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  ranges.dot_relaxed: native, bound to Python
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  ranges.fill: native, native callers only
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>  ranges.squares: native, native callers only
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  ranges.main: Python -- has effects that must run on CPython: IO
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  ranges.main: Python -- a stack allocation needs a constant, positive size
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  block merged: 18
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>  dead code removed: 114
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>  note: 10
@@ -5867,7 +5957,7 @@ backend decides how the chunks run.</p>
 <a id="__codelineno-3-1184" name="__codelineno-3-1184" href="#__codelineno-3-1184"></a>    int64_t i = __ppy_begin_;
 <a id="__codelineno-3-1185" name="__codelineno-3-1185" href="#__codelineno-3-1185"></a>    while (i &lt; __ppy_end_) {
 <a id="__codelineno-3-1186" name="__codelineno-3-1186" href="#__codelineno-3-1186"></a>        out[i] = i * i;
-<a id="__codelineno-3-1187" name="__codelineno-3-1187" href="#__codelineno-3-1187"></a>        if (ppy_ovf_add_i64(i, 1, &amp;i)) return 1; /* arith.ok */
+<a id="__codelineno-3-1187" name="__codelineno-3-1187" href="#__codelineno-3-1187"></a>        i += 1;
 <a id="__codelineno-3-1188" name="__codelineno-3-1188" href="#__codelineno-3-1188"></a>    }
 <a id="__codelineno-3-1189" name="__codelineno-3-1189" href="#__codelineno-3-1189"></a>    *out_2 = 0;
 <a id="__codelineno-3-1190" name="__codelineno-3-1190" href="#__codelineno-3-1190"></a>    return 0;
@@ -5880,7 +5970,7 @@ backend decides how the chunks run.</p>
 <a id="__codelineno-3-1197" name="__codelineno-3-1197" href="#__codelineno-3-1197"></a>    int64_t i = __ppy_begin_;
 <a id="__codelineno-3-1198" name="__codelineno-3-1198" href="#__codelineno-3-1198"></a>    while (i &lt; __ppy_end_) {
 <a id="__codelineno-3-1199" name="__codelineno-3-1199" href="#__codelineno-3-1199"></a>        total += a[i] * b[i];
-<a id="__codelineno-3-1200" name="__codelineno-3-1200" href="#__codelineno-3-1200"></a>        if (ppy_ovf_add_i64(i, 1, &amp;i)) return 1; /* arith.ok */
+<a id="__codelineno-3-1200" name="__codelineno-3-1200" href="#__codelineno-3-1200"></a>        i += 1;
 <a id="__codelineno-3-1201" name="__codelineno-3-1201" href="#__codelineno-3-1201"></a>    }
 <a id="__codelineno-3-1202" name="__codelineno-3-1202" href="#__codelineno-3-1202"></a>    *out = total;
 <a id="__codelineno-3-1203" name="__codelineno-3-1203" href="#__codelineno-3-1203"></a>    return 0;
@@ -5893,7 +5983,7 @@ backend decides how the chunks run.</p>
 <a id="__codelineno-3-1210" name="__codelineno-3-1210" href="#__codelineno-3-1210"></a>    int64_t i = __ppy_begin_;
 <a id="__codelineno-3-1211" name="__codelineno-3-1211" href="#__codelineno-3-1211"></a>    while (i &lt; __ppy_end_) {
 <a id="__codelineno-3-1212" name="__codelineno-3-1212" href="#__codelineno-3-1212"></a>        total += a[i] * b[i];
-<a id="__codelineno-3-1213" name="__codelineno-3-1213" href="#__codelineno-3-1213"></a>        if (ppy_ovf_add_i64(i, 1, &amp;i)) return 1; /* arith.ok */
+<a id="__codelineno-3-1213" name="__codelineno-3-1213" href="#__codelineno-3-1213"></a>        i += 1;
 <a id="__codelineno-3-1214" name="__codelineno-3-1214" href="#__codelineno-3-1214"></a>    }
 <a id="__codelineno-3-1215" name="__codelineno-3-1215" href="#__codelineno-3-1215"></a>    *out = total;
 <a id="__codelineno-3-1216" name="__codelineno-3-1216" href="#__codelineno-3-1216"></a>    return 0;
@@ -5907,7 +5997,7 @@ backend decides how the chunks run.</p>
 <a id="__codelineno-3-1224" name="__codelineno-3-1224" href="#__codelineno-3-1224"></a>        if (((r != 0 &amp;&amp; (xs[i] &lt; 0) != (2 &lt; 0)) ? r + 2 : r) == 1) {
 <a id="__codelineno-3-1225" name="__codelineno-3-1225" href="#__codelineno-3-1225"></a>            if (ppy_ovf_add_i64(hits, scale, &amp;hits)) return 1; /* arith.ok */
 <a id="__codelineno-3-1226" name="__codelineno-3-1226" href="#__codelineno-3-1226"></a>        }
-<a id="__codelineno-3-1227" name="__codelineno-3-1227" href="#__codelineno-3-1227"></a>        if (ppy_ovf_add_i64(i, 1, &amp;i)) return 1; /* arith.ok */
+<a id="__codelineno-3-1227" name="__codelineno-3-1227" href="#__codelineno-3-1227"></a>        i += 1;
 <a id="__codelineno-3-1228" name="__codelineno-3-1228" href="#__codelineno-3-1228"></a>    }
 <a id="__codelineno-3-1229" name="__codelineno-3-1229" href="#__codelineno-3-1229"></a>    *out = hits;
 <a id="__codelineno-3-1230" name="__codelineno-3-1230" href="#__codelineno-3-1230"></a>    return 0;
@@ -5917,7 +6007,7 @@ backend decides how the chunks run.</p>
 <a id="__codelineno-3-1234" name="__codelineno-3-1234" href="#__codelineno-3-1234"></a>    int64_t i = __ppy_begin_;
 <a id="__codelineno-3-1235" name="__codelineno-3-1235" href="#__codelineno-3-1235"></a>    while (i &lt; __ppy_end_) {
 <a id="__codelineno-3-1236" name="__codelineno-3-1236" href="#__codelineno-3-1236"></a>        out[i] = base + (double)i;
-<a id="__codelineno-3-1237" name="__codelineno-3-1237" href="#__codelineno-3-1237"></a>        if (ppy_ovf_add_i64(i, 1, &amp;i)) return 1; /* arith.ok */
+<a id="__codelineno-3-1237" name="__codelineno-3-1237" href="#__codelineno-3-1237"></a>        i += 1;
 <a id="__codelineno-3-1238" name="__codelineno-3-1238" href="#__codelineno-3-1238"></a>    }
 <a id="__codelineno-3-1239" name="__codelineno-3-1239" href="#__codelineno-3-1239"></a>    *out_2 = 0;
 <a id="__codelineno-3-1240" name="__codelineno-3-1240" href="#__codelineno-3-1240"></a>    return 0;
@@ -5927,7 +6017,7 @@ backend decides how the chunks run.</p>
 <a id="__codelineno-3-1244" name="__codelineno-3-1244" href="#__codelineno-3-1244"></a>    int64_t j = __ppy_begin_;
 <a id="__codelineno-3-1245" name="__codelineno-3-1245" href="#__codelineno-3-1245"></a>    while (j &lt; __ppy_end_) {
 <a id="__codelineno-3-1246" name="__codelineno-3-1246" href="#__codelineno-3-1246"></a>        acc += out[j];
-<a id="__codelineno-3-1247" name="__codelineno-3-1247" href="#__codelineno-3-1247"></a>        if (ppy_ovf_add_i64(j, 1, &amp;j)) return 1; /* arith.ok */
+<a id="__codelineno-3-1247" name="__codelineno-3-1247" href="#__codelineno-3-1247"></a>        j += 1;
 <a id="__codelineno-3-1248" name="__codelineno-3-1248" href="#__codelineno-3-1248"></a>    }
 <a id="__codelineno-3-1249" name="__codelineno-3-1249" href="#__codelineno-3-1249"></a>    *out_2 = acc;
 <a id="__codelineno-3-1250" name="__codelineno-3-1250" href="#__codelineno-3-1250"></a>    return 0;

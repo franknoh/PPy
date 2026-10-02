@@ -1978,6 +1978,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2489,6 +2493,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3276,6 +3336,8 @@
       
         
       
+        
+      
     
     
     
@@ -3451,6 +3513,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4562,19 +4652,19 @@ filesystem.</p>
 <p><strong><code>python  torch_region.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>torch 2.14.0+cpu | cuda False
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a># region active: False
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>layer on cpu              2.530 us/call   sample=596.816528
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>layer on cpu              2.206 us/call   sample=596.816528
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>autograd survives the region: True
 </code></pre></div>
 <p><strong><code>ppy     torch_region.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>torch 2.14.0+cpu | cuda False
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a># region active: True
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>layer on cpu              2.069 us/call   sample=596.816528
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>layer on cpu              1.842 us/call   sample=596.816528
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>autograd survives the region: True
 </code></pre></div>
 <p><strong><code>ppy run torch_region.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>torch 2.14.0+cpu | cuda False
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a># region active: True
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>layer on cpu              2.118 us/call   sample=596.816528
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>layer on cpu              2.138 us/call   sample=596.816528
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>autograd survives the region: True
 </code></pre></div>
 <!-- outputs:end -->

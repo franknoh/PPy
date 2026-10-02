@@ -1357,6 +1357,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Eligibility and profitability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-call-costs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a call costs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2138,6 +2155,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2646,6 +2667,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3290,6 +3367,8 @@
       
         
       
+        
+      
     
     
     
@@ -3462,6 +3541,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4377,6 +4484,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Eligibility and profitability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-a-call-costs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a call costs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4517,12 +4641,11 @@ a function may contain to lower.</p>
 <p>A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit <code>@ppy.native</code>/<code>@ppy.jit</code>/<code>@ppy.specialize</code>/<code>@ppy.parallel</code> gets the
 boundary. Native callers call its native symbol directly, boundary or not.</p>
-<p>The generated wrapper's call costs about what a Python call does: 31 ns for
+<p>The generated wrapper's call costs about what a Python call does: 29 ns for
 <code>def add(x: int, y: int) -&gt; int: return x + y</code> called from Python, against
-33 ns for CPython's own call of it, measured with <code>examples/bench_boundary.py</code>.
-So straight-line work pays from two operations (<code>0.5 * base * height</code>), and
-a one-operation helper stays on the Python side (remarked as <code>R3004</code>). The
-rest costs more:</p>
+30 ns for CPython's own call of it. So straight-line work pays from two
+operations (<code>0.5 * base * height</code>), and a one-operation helper stays on the
+Python side (remarked as <code>R3004</code>). The rest costs more:</p>
 <table>
 <thead>
 <tr>
@@ -4567,8 +4690,79 @@ checks its arguments and raises stays a native caller's, and so does a
 its own terms.</p>
 <p>A container or an object is copied whole on each call, so the body has to
 do work in proportion to it (<a href="../containers/#between-functions">Lists, dicts, and sets</a>).</p>
-<p><code>ppy explain FILE.ppy:name</code> reports the decision and, when the answer is no,
-the first blocking construct.</p>
+<p><code>ppy explain module.name</code> (or <code>FILE.ppy:LINE</code>) reports the decision and,
+when the answer is no, the first blocking construct.</p>
+<h3 id="what-a-call-costs">What a call costs<a class="headerlink" href="#what-a-call-costs" title="Permanent link">&para;</a></h3>
+<p><code>examples/bench_boundary.py</code> calls each shape below many times from a
+Python loop and prints the time per call. The <code>ppy run</code> column is the
+program as <code>ppy run</code> runs it; the CPython column is the same program under
+<code>python</code>. The median of three runs, in nanoseconds:</p>
+<table>
+<thead>
+<tr>
+<th>call</th>
+<th style="text-align: right;"><code>ppy run</code></th>
+<th style="text-align: right;">CPython</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>x + y</code> of two ints, kept in Python by the cost model</td>
+<td style="text-align: right;">29</td>
+<td style="text-align: right;">30</td>
+</tr>
+<tr>
+<td><code>x + y</code> of two ints, <code>@ppy.native</code></td>
+<td style="text-align: right;">29</td>
+<td style="text-align: right;">30</td>
+</tr>
+<tr>
+<td>a loop of 100 additions</td>
+<td style="text-align: right;">65</td>
+<td style="text-align: right;">886</td>
+</tr>
+<tr>
+<td><code>sum</code> of a borrowed buffer of 100 ints</td>
+<td style="text-align: right;">67</td>
+<td style="text-align: right;">254</td>
+</tr>
+<tr>
+<td>a guard that fails, so the Python body runs</td>
+<td style="text-align: right;">82</td>
+<td style="text-align: right;">36</td>
+</tr>
+<tr>
+<td>a <code>list[int]</code> of 100 written in place, <code>@ppy.native</code></td>
+<td style="text-align: right;">1,496</td>
+<td style="text-align: right;">2,538</td>
+</tr>
+<tr>
+<td>a <code>dict[int, int]</code> of 100 read, <code>@ppy.native</code></td>
+<td style="text-align: right;">2,109</td>
+<td style="text-align: right;">1,742</td>
+</tr>
+<tr>
+<td>a chain of 10 objects walked, <code>@ppy.native</code></td>
+<td style="text-align: right;">831</td>
+<td style="text-align: right;">141</td>
+</tr>
+<tr>
+<td>a function returning <code>None</code> that fills a list of 100</td>
+<td style="text-align: right;">553</td>
+<td style="text-align: right;">553</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>@ppy.native</code> <code>x + y</code> row is the wrapper alone: parsing the arguments,
+the exact type checks, and boxing the result. A failed guard costs the
+wrapper plus a Python call. The written list copies 100 ints in and back
+and still wins, because the body does a multiplication and a remainder per
+element; filling a list of 100 costs the same both ways, since copying it
+back takes what the native loop saves. The dict and object rows are
+the shapes the cost model keeps off the boundary: one addition per entry or
+per object does not pay for copying it, and without <code>@ppy.native</code> Python
+runs their Python bodies. Measured on Python 3.14 on an Intel Core Ultra 9
+386H under WSL2.</p>
 <h2 id="byte-wide-buffers">Byte-wide buffers<a class="headerlink" href="#byte-wide-buffers" title="Permanent link">&para;</a></h2>
 <p>A buffer's element is a machine word unless it says otherwise.
 <code>Buffer[ppy.i8]</code> and <code>Buffer[ppy.u8]</code> are one byte each, which is what text
@@ -4579,14 +4773,29 @@ integer arithmetic. Writing a value that does not fit in a byte falls back to
 CPython rather than wrapping. An <code>array.array("b", ...)</code> is what such a buffer
 is made of.</p>
 <h2 id="types-that-lower">Types that lower<a class="headerlink" href="#types-that-lower" title="Permanent link">&para;</a></h2>
-<p>A function lowers when its types are:</p>
+<p>A function lowers when each of its parameters, locals, and its result has
+a type native code holds, and its body stays inside the modeled subset.
+The types are:</p>
 <ul>
-<li>scalars</li>
-<li><code>Buffer[T]</code></li>
-<li>homogeneous <code>list[int]</code>/<code>list[float]</code>, or <code>Sequence</code> of those</li>
-<li>all-scalar <code>@dataclass</code> value classes (flattened into scalar arguments)</li>
+<li><code>int</code>, <code>float</code>, <code>bool</code>, <code>None</code>, the fixed-width markers, and tuples of
+  these</li>
+<li><code>str</code> (<a href="../strings/">Strings</a>)</li>
+<li><code>list</code>, <code>dict</code>, and <code>set</code> of any of these, nested too
+  (<a href="../containers/">Lists, dicts, and sets</a>), and <code>Sequence</code> of them; a list
+  of numbers a function only reads is lent as a buffer</li>
+<li><code>Buffer[T]</code> and the <code>ppy</code> collections (<code>Vec</code>, <code>HashMap</code>, ...)</li>
+<li>value classes, copied as their fields, and object classes, held by
+  handle (<a href="../classes/">Classes</a>)</li>
+<li><code>deque</code>, <code>Counter</code>, <code>defaultdict</code>, <code>OrderedDict</code>, and <code>random.Random</code>
+  (<a href="../stdlib/">The standard library</a>)</li>
+<li>generators and iterators of one of these types
+  (<a href="../exceptions-and-generators/">Exceptions and generators</a>), and
+  function values (<a href="../closures/">Functions as values</a>)</li>
 </ul>
-<p>and its body stays inside the modeled subset.</p>
+<p>A parameter has to be annotated, or under <code>--no-strict</code> inferred from the
+calls the project makes (<a href="../subset/#types-from-call-sites">Types from call sites</a>).
+<code>list[Any]</code>, a bare <code>list</code>, and NumPy arrays have no native form, and a
+function that takes one runs as Python.</p>
 <h2 id="what-the-body-may-contain">What the body may contain<a class="headerlink" href="#what-the-body-may-contain" title="Permanent link">&para;</a></h2>
 <p>The subset includes what a loop is normally made of:</p>
 <ul>
@@ -4685,12 +4894,21 @@ the method stay in Python.</p>
 out, the boundary binds the call by the Python function's own signature,
 with its own default values, and calls the native entry in order. A call
 that does not bind goes to the Python function, which raises CPython's
-<code>TypeError</code>.</p>
+<code>TypeError</code>. The binding runs in Python, so such a call costs more than one
+with every argument by position: about 1.5 µs for <code>digit_sum(n)</code> of
+<code>def digit_sum(number: int, base: int = 10)</code>, against 68 ns for
+<code>digit_sum(n, 10)</code> and 155 ns for CPython's call. A Python loop that calls
+a native function many times should pass every argument by position.</p>
 <p>A function whose writes all happen inside a callee it handed a buffer to
 lowers too: the write lands in the caller's memory either way. The reverse
 also lowers: filling memory you allocated and then passing it on.</p>
-<p>A call to a function that did not lower keeps its caller on the Python side,
-because the call would otherwise name a symbol nothing defines.</p>
+<p>A call to a function that did not lower goes through Python under <code>ppy run</code>:
+the native caller boxes the arguments, calls the Python function with the
+GIL held, and takes back a result of the type the checker gave the call.
+Which results it may take, and why such a call is often a barrier, is in
+<a href="../native-effects/#calls-into-python">Calls into Python</a>. A standalone
+binary has no Python to call, so there the caller does not lower either,
+and the build stops with <code>E1803</code>.</p>
 <p><code>int(x)</code> of a float truncates toward zero, as CPython does, when the result
 is a 64-bit word. The machine's conversion has no answer for the rest (x86
 gives -2**63, and C leaves it undefined), so each case is a guard:</p>
@@ -4729,23 +4947,32 @@ the largest or smallest word: Python's integers have no largest.</p>
 <h2 id="finding-what-stays-in-python">Finding what stays in Python<a class="headerlink" href="#finding-what-stays-in-python" title="Permanent link">&para;</a></h2>
 <p><code>ppy explain --summary</code> answers, for a file, a directory, or a project, how
 much of the code goes native and what keeps the rest in Python. Here it is
-over the <code>sorts</code> folder of TheAlgorithms/Python, trimmed:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>167 functions, 1389 statements
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  native, called from Python              1 functions (  1%)        8 statements (  1%)
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  native, called from native code         0 functions (  0%)        0 statements (  0%)
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  Python                                166 functions ( 99%)     1381 statements ( 99%)
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  (76 of the Python functions are generic: each native caller compiles its own instance)
+over the <code>sorts</code> folder of TheAlgorithms/Python with <code>--no-strict</code>, trimmed
+to the first two reasons:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>175 functions, 1389 statements
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  native, called from Python              2 functions (  1%)       24 statements (  2%)
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  native, called from native code         2 functions (  1%)       18 statements (  1%)
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  Python                                171 functions ( 98%)     1347 statements ( 97%)
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  (73 of the Python functions are generic: each native caller compiles its own instance)
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>what keeps functions in Python, by statements kept out (a function can count under more than one):
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>      161 statements     13 functions  calls code whose effects are unknown (a library, or a call the checker cannot type)
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>      annotate it, add a stub or plugin, or call it outside the hot function
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>      most often: `dict.fromkeys` (1), `file.readlines` (1), `file.write` (1), `heapq.heapify` (1)
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>      see https://ppy.franknoh.dev/latest/guide/effects/
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>      sorts/benchmark_sorts.py:56 sorts.benchmark_sorts.is_sorted
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>      155 statements      9 functions  writes to a parameter native code copies
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>      return the new value, or take a `Buffer`, a list, or a ppy collection
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>      see https://ppy.franknoh.dev/latest/guide/native/
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>      143 statements     10 functions  writes to a parameter native code copies
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>      return the new value, or take a `Buffer`, a list, or a ppy collection
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>      see https://ppy.franknoh.dev/latest/guide/native/
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>      sorts/circle_sort.py:50 sorts.circle_sort.circle_sort.&lt;locals&gt;.circle_sort_util
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>      sorts/dutch_national_flag_sort.py:33 sorts.dutch_national_flag_sort.dutch_national_flag_sort
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>       53 statements     10 functions  a parameter or result with no annotation the checker could infer
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>      annotate it, or run `ppy convert` to write the inferred annotations
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>      see https://ppy.franknoh.dev/latest/guide/subset/
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>      sorts/external_sort.py:13 sorts.external_sort.FileSplitter.__init__
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>      sorts/external_sort.py:26 sorts.external_sort.FileSplitter.split
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>      sorts/external_sort.py:48 sorts.external_sort.NWayMerge.select
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>  ... 60 more reasons, 70 functions (--limit to see more, --json for all)
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>native, but Python calls the Python body (why its boundary is not used):
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>      1 functions  copying its strings across costs what one pass over them saves
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>      1 functions  copying the collections in costs more than the body does with them
 </code></pre></div>
 <p>Read it from the top down:</p>
 <ul>
@@ -4759,14 +4986,21 @@ over the <code>sorts</code> folder of TheAlgorithms/Python, trimmed:</p>
 <li>A generic function is not a blocker: it has no entry point of its own and
   is compiled for each native caller that names its types. Most of <code>sorts</code>
   is generic sorts that nothing calls natively.</li>
-<li>A nested function lowers with the function around it. When that one
-  stays in Python, the nested one says so, and the reason to fix is the
-  outer function's.</li>
+<li>A nested function that shares no variable with the functions around it
+  is counted on its own, since it has an entry of its own
+  (<a href="../closures/#a-nested-function-in-a-python-function">Functions as values</a>).
+  One that shares a variable lowers with the function around it: it counts
+  as native and called from native code when that function is native, and
+  otherwise says that the function around it stays in Python, which is the
+  reason to fix.</li>
 <li>Each reason says what to do and links the page that explains it. The
   first places it occurs are listed with their line.</li>
 </ul>
 <p><code>--json</code> gives every function with its tier and reason, for a script or a
-dashboard. See <a href="../../cli/#ppy-explain">the command</a>.</p>
+dashboard. See <a href="../../cli/#ppy-explain">the command</a>. Without <code>--no-strict</code>
+the summary analyzes as <code>ppy check</code> does, so an unannotated parameter is an
+error and its function counts as Python; on code written without
+annotations, pass <code>--no-strict</code> to see what <code>ppy run --no-strict</code> compiles.</p>
 <h2 id="threads">Threads<a class="headerlink" href="#threads" title="Permanent link">&para;</a></h2>
 <p>The generated wrapper releases the GIL around a native call that loops or
 calls another function, so <code>@ppy.native</code> functions scale across threads. A

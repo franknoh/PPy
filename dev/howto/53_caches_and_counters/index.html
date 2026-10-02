@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/directives/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/53_caches_and_counters/">
       
       
-        <link rel="prev" href="../subset/">
+        <link rel="prev" href="../51_clinic/">
       
       
-        <link rel="next" href="../strings/">
+        <link rel="next" href="../54_objects_and_grids/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Directives and markers - PPy</title>
+        <title>Caches and counters - PPy</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#directives-and-markers" class="md-skip">
+        <a href="#caches-and-counters" class="md-skip">
           Skip to content
         </a>
       
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Directives and markers
+              Caches and counters
             
           </span>
         </div>
@@ -270,13 +270,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../guide/" class="md-tabs__link">
           
   
   
@@ -294,11 +292,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../howto/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -578,8 +578,6 @@
       
   
   
-    
-  
   
   
     
@@ -641,23 +639,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../guide/" class="md-nav__link ">
               
   
   
@@ -675,13 +670,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -701,7 +696,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../subset/" class="md-nav__link">
+      <a href="../../guide/subset/" class="md-nav__link">
         
   
   
@@ -726,37 +721,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Directives and markers
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../guide/directives/" class="md-nav__link">
         
   
   
@@ -772,48 +740,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#directives" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Directives
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#markers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Markers
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -826,7 +752,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../strings/" class="md-nav__link">
+      <a href="../../guide/strings/" class="md-nav__link">
         
   
   
@@ -854,7 +780,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../containers/" class="md-nav__link">
+      <a href="../../guide/containers/" class="md-nav__link">
         
   
   
@@ -882,7 +808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../collections/" class="md-nav__link">
+      <a href="../../guide/collections/" class="md-nav__link">
         
   
   
@@ -910,7 +836,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../classes/" class="md-nav__link">
+      <a href="../../guide/classes/" class="md-nav__link">
         
   
   
@@ -938,7 +864,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../exceptions-and-generators/" class="md-nav__link">
+      <a href="../../guide/exceptions-and-generators/" class="md-nav__link">
         
   
   
@@ -966,7 +892,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../closures/" class="md-nav__link">
+      <a href="../../guide/closures/" class="md-nav__link">
         
   
   
@@ -994,7 +920,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../native/" class="md-nav__link">
+      <a href="../../guide/native/" class="md-nav__link">
         
   
   
@@ -1022,7 +948,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../simd-cpu/" class="md-nav__link">
+      <a href="../../guide/simd-cpu/" class="md-nav__link">
         
   
   
@@ -1050,7 +976,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../concurrency/" class="md-nav__link">
+      <a href="../../guide/concurrency/" class="md-nav__link">
         
   
   
@@ -1078,7 +1004,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../parallel/" class="md-nav__link">
+      <a href="../../guide/parallel/" class="md-nav__link">
         
   
   
@@ -1106,7 +1032,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../autodiff/" class="md-nav__link">
+      <a href="../../guide/autodiff/" class="md-nav__link">
         
   
   
@@ -1134,7 +1060,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../aio/" class="md-nav__link">
+      <a href="../../guide/aio/" class="md-nav__link">
         
   
   
@@ -1162,7 +1088,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../gpu/" class="md-nav__link">
+      <a href="../../guide/gpu/" class="md-nav__link">
         
   
   
@@ -1190,7 +1116,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tensors/" class="md-nav__link">
+      <a href="../../guide/tensors/" class="md-nav__link">
         
   
   
@@ -1218,7 +1144,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../xla/" class="md-nav__link">
+      <a href="../../guide/xla/" class="md-nav__link">
         
   
   
@@ -1246,7 +1172,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../generics/" class="md-nav__link">
+      <a href="../../guide/generics/" class="md-nav__link">
         
   
   
@@ -1274,7 +1200,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../effects/" class="md-nav__link">
+      <a href="../../guide/effects/" class="md-nav__link">
         
   
   
@@ -1302,7 +1228,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../native-effects/" class="md-nav__link">
+      <a href="../../guide/native-effects/" class="md-nav__link">
         
   
   
@@ -1330,7 +1256,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../input/" class="md-nav__link">
+      <a href="../../guide/input/" class="md-nav__link">
         
   
   
@@ -1358,7 +1284,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../native-lowering/" class="md-nav__link">
+      <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
   
@@ -1386,7 +1312,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../regex/" class="md-nav__link">
+      <a href="../../guide/regex/" class="md-nav__link">
         
   
   
@@ -1414,7 +1340,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../stdlib/" class="md-nav__link">
+      <a href="../../guide/stdlib/" class="md-nav__link">
         
   
   
@@ -1446,6 +1372,8 @@
       
   
   
+    
+  
   
   
     
@@ -1471,20 +1399,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../howto/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -1502,13 +1433,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1528,7 +1459,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/comparisons/" class="md-nav__link">
+      <a href="../comparisons/" class="md-nav__link">
         
   
   
@@ -1590,17 +1521,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
             
   
   
@@ -1636,7 +1570,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/01_basics/" class="md-nav__link">
+      <a href="../01_basics/" class="md-nav__link">
         
   
   
@@ -1664,7 +1598,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/02_arbitrary_precision/" class="md-nav__link">
+      <a href="../02_arbitrary_precision/" class="md-nav__link">
         
   
   
@@ -1692,7 +1626,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/03_effects_and_contracts/" class="md-nav__link">
+      <a href="../03_effects_and_contracts/" class="md-nav__link">
         
   
   
@@ -1720,7 +1654,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/04_classes/" class="md-nav__link">
+      <a href="../04_classes/" class="md-nav__link">
         
   
   
@@ -1748,7 +1682,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/08_native_data/" class="md-nav__link">
+      <a href="../08_native_data/" class="md-nav__link">
         
   
   
@@ -1776,7 +1710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/10_narrowing/" class="md-nav__link">
+      <a href="../10_narrowing/" class="md-nav__link">
         
   
   
@@ -1804,7 +1738,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/11_numerics/" class="md-nav__link">
+      <a href="../11_numerics/" class="md-nav__link">
         
   
   
@@ -1832,7 +1766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/13_value_classes/" class="md-nav__link">
+      <a href="../13_value_classes/" class="md-nav__link">
         
   
   
@@ -1860,7 +1794,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/14_tuples/" class="md-nav__link">
+      <a href="../14_tuples/" class="md-nav__link">
         
   
   
@@ -1888,7 +1822,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/16_dynamic/" class="md-nav__link">
+      <a href="../16_dynamic/" class="md-nav__link">
         
   
   
@@ -1916,7 +1850,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/17_containers/" class="md-nav__link">
+      <a href="../17_containers/" class="md-nav__link">
         
   
   
@@ -1944,7 +1878,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/18_errors/" class="md-nav__link">
+      <a href="../18_errors/" class="md-nav__link">
         
   
   
@@ -1972,7 +1906,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/19_strings/" class="md-nav__link">
+      <a href="../19_strings/" class="md-nav__link">
         
   
   
@@ -2005,8 +1939,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -2053,18 +1989,21 @@
     
       
       
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
             
   
   
@@ -2082,7 +2021,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2100,7 +2039,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/12_buffers_and_jit/" class="md-nav__link">
+      <a href="../12_buffers_and_jit/" class="md-nav__link">
         
   
   
@@ -2128,7 +2067,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/15_algorithms/" class="md-nav__link">
+      <a href="../15_algorithms/" class="md-nav__link">
         
   
   
@@ -2156,7 +2095,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/28_threads/" class="md-nav__link">
+      <a href="../28_threads/" class="md-nav__link">
         
   
   
@@ -2184,7 +2123,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/32_native_memory/" class="md-nav__link">
+      <a href="../32_native_memory/" class="md-nav__link">
         
   
   
@@ -2212,7 +2151,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/33_simd_and_cpu/" class="md-nav__link">
+      <a href="../33_simd_and_cpu/" class="md-nav__link">
         
   
   
@@ -2240,7 +2179,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/34_atomics_and_threads/" class="md-nav__link">
+      <a href="../34_atomics_and_threads/" class="md-nav__link">
         
   
   
@@ -2268,7 +2207,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/35_parallel_range/" class="md-nav__link">
+      <a href="../35_parallel_range/" class="md-nav__link">
         
   
   
@@ -2296,7 +2235,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/36_autodiff/" class="md-nav__link">
+      <a href="../36_autodiff/" class="md-nav__link">
         
   
   
@@ -2324,7 +2263,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/37_aio/" class="md-nav__link">
+      <a href="../37_aio/" class="md-nav__link">
         
   
   
@@ -2352,7 +2291,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/40_generics/" class="md-nav__link">
+      <a href="../40_generics/" class="md-nav__link">
         
   
   
@@ -2380,7 +2319,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/42_toolbox/" class="md-nav__link">
+      <a href="../42_toolbox/" class="md-nav__link">
         
   
   
@@ -2408,7 +2347,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/43_regex/" class="md-nav__link">
+      <a href="../43_regex/" class="md-nav__link">
         
   
   
@@ -2436,7 +2375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/47_collections/" class="md-nav__link">
+      <a href="../47_collections/" class="md-nav__link">
         
   
   
@@ -2464,7 +2403,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/48_strings/" class="md-nav__link">
+      <a href="../48_strings/" class="md-nav__link">
         
   
   
@@ -2492,7 +2431,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/49_inheritance/" class="md-nav__link">
+      <a href="../49_inheritance/" class="md-nav__link">
         
   
   
@@ -2520,7 +2459,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/50_errors_and_generators/" class="md-nav__link">
+      <a href="../50_errors_and_generators/" class="md-nav__link">
         
   
   
@@ -2548,7 +2487,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/51_clinic/" class="md-nav__link">
+      <a href="../51_clinic/" class="md-nav__link">
         
   
   
@@ -2573,10 +2512,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2592,6 +2558,103 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-prints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-runs-natively" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it runs natively
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-code-comes-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the code comes from
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#53_caches_and_counterswordsppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        53_caches_and_counters/words.ppy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2604,7 +2667,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
         
   
   
@@ -2656,17 +2719,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
             
   
   
@@ -2702,7 +2768,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/38_cuda/" class="md-nav__link">
+      <a href="../38_cuda/" class="md-nav__link">
         
   
   
@@ -2730,7 +2796,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/44_tile/" class="md-nav__link">
+      <a href="../44_tile/" class="md-nav__link">
         
   
   
@@ -2758,7 +2824,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/39_xla/" class="md-nav__link">
+      <a href="../39_xla/" class="md-nav__link">
         
   
   
@@ -2786,7 +2852,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
+      <a href="../45_multi_gpu_jax/" class="md-nav__link">
         
   
   
@@ -2854,17 +2920,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
             
   
   
@@ -2900,7 +2969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/05_numpy/" class="md-nav__link">
+      <a href="../05_numpy/" class="md-nav__link">
         
   
   
@@ -2928,7 +2997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/06_pydantic/" class="md-nav__link">
+      <a href="../06_pydantic/" class="md-nav__link">
         
   
   
@@ -2956,7 +3025,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/07_parallel/" class="md-nav__link">
+      <a href="../07_parallel/" class="md-nav__link">
         
   
   
@@ -2984,7 +3053,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/09_torch/" class="md-nav__link">
+      <a href="../09_torch/" class="md-nav__link">
         
   
   
@@ -3012,7 +3081,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/46_gpt2/" class="md-nav__link">
+      <a href="../46_gpt2/" class="md-nav__link">
         
   
   
@@ -3040,7 +3109,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/21_training_torch/" class="md-nav__link">
+      <a href="../21_training_torch/" class="md-nav__link">
         
   
   
@@ -3068,7 +3137,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/22_training_jax/" class="md-nav__link">
+      <a href="../22_training_jax/" class="md-nav__link">
         
   
   
@@ -3096,7 +3165,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/25_jax_export/" class="md-nav__link">
+      <a href="../25_jax_export/" class="md-nav__link">
         
   
   
@@ -3124,7 +3193,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/27_uvicorn/" class="md-nav__link">
+      <a href="../27_uvicorn/" class="md-nav__link">
         
   
   
@@ -3152,7 +3221,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/29_flax/" class="md-nav__link">
+      <a href="../29_flax/" class="md-nav__link">
         
   
   
@@ -3180,7 +3249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/31_torchrun/" class="md-nav__link">
+      <a href="../31_torchrun/" class="md-nav__link">
         
   
   
@@ -3208,7 +3277,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/41_columnar/" class="md-nav__link">
+      <a href="../41_columnar/" class="md-nav__link">
         
   
   
@@ -3264,17 +3333,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
             
   
   
@@ -3310,7 +3382,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/20_inventory/" class="md-nav__link">
+      <a href="../20_inventory/" class="md-nav__link">
         
   
   
@@ -3338,7 +3410,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/23_inference/" class="md-nav__link">
+      <a href="../23_inference/" class="md-nav__link">
         
   
   
@@ -3366,7 +3438,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/24_interop/" class="md-nav__link">
+      <a href="../24_interop/" class="md-nav__link">
         
   
   
@@ -3394,7 +3466,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/26_project/" class="md-nav__link">
+      <a href="../26_project/" class="md-nav__link">
         
   
   
@@ -3422,7 +3494,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/30_migrate/" class="md-nav__link">
+      <a href="../30_migrate/" class="md-nav__link">
         
   
   
@@ -3450,7 +3522,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../howto/52_unannotated/" class="md-nav__link">
+      <a href="../52_unannotated/" class="md-nav__link">
         
   
   
@@ -4365,10 +4437,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#directives" class="md-nav__link">
+  <a href="#run-it" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Directives
+        Run it
       
     </span>
   </a>
@@ -4376,10 +4448,65 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#markers" class="md-nav__link">
+  <a href="#what-it-prints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Markers
+        What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-runs-natively" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it runs natively
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-code-comes-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the code comes from
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#53_caches_and_counterswordsppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        53_caches_and_counters/words.ppy
       
     </span>
   </a>
@@ -4406,124 +4533,242 @@
   
 
 
-<h1 id="directives-and-markers">Directives and markers<a class="headerlink" href="#directives-and-markers" title="Permanent link">&para;</a></h1>
-<p>PPy adds two kinds of annotation: directives, which are decorators on a
-function, and markers, which are type aliases. Both come from the <code>ppy</code>
-package.</p>
-<h2 id="directives">Directives<a class="headerlink" href="#directives" title="Permanent link">&para;</a></h2>
-<p>Each directive works bare (<code>@ppy.pure</code>) and called (<code>@ppy.pure()</code>). A
-directive is a contract the compiler verifies. The compiler does not trust it
-as a hint.</p>
+<h1 id="caches-and-counters">Caches and counters<a class="headerlink" href="#caches-and-counters" title="Permanent link">&para;</a></h1>
+<p>Word statistics with <code>collections.Counter</code> and <code>defaultdict</code>, words drawn
+from a seeded <code>random.Random</code>, and two dynamic programs memoized with
+<code>functools.cache</code> and <code>lru_cache</code>. All of it compiles to native code, on
+<code>ppy run</code> and in a standalone binary, with CPython's answers.</p>
+<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>words.ppy
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>words.ppy
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>--standalone<span class="w"> </span>words.ppy<span class="w"> </span>-o<span class="w"> </span>dist<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>./dist/words
+</code></pre></div>
+<!-- outputs:start -->
+<h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
+<p><strong><code>python  words.ppy</code></strong>, <strong><code>ppy run words.ppy</code></strong>, <strong><code>ppy build --standalone words.ppy -o dist &amp;&amp; ./dist/words</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>300000 words, 99370 different
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  ne     5090
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  mi     5005
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  ant    4999
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>a e i o: [314741, 209800, 210487, 210676]
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>lengths 2 to 12: [39719, 9943, 32288, 16067, 27578, 19151, 25111, 20810, 24311, 21702, 23411]
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>nearest of 150 words: mean distance 4.927, most 7
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>cheapest order for a chain of 250 matrices: 1041250 multiplications
+</code></pre></div>
+<!-- outputs:end -->
+
+<h2 id="the-program">The program<a class="headerlink" href="#the-program" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>make_words(seed, count)</code> builds 300,000 words of one to six syllables,
+  each drawn with <code>rng.randint(1, 6)</code> and <code>rng.choice(syllables)</code> from a
+  <code>random.Random(seed)</code>.</li>
+<li><code>report</code> counts the words with <code>Counter(words)</code> and prints the three most
+  common with <code>most_common(3)</code>.</li>
+<li><code>letter_counts(words, "aeio")</code> counts every letter into a
+  <code>Counter[str]</code> and reads four of them back. A missing key reads 0, as in
+  CPython.</li>
+<li><code>length_counts(words)</code> counts word lengths into a
+  <code>defaultdict(int)</code> and reads the lengths 2 to 12, including those no word
+  has, which the <code>defaultdict</code> adds with 0.</li>
+<li><code>distance(a, b)</code> is the edit distance written top-down, as
+  TheAlgorithms/Python writes it: a nested function <code>d(i, j)</code> under
+  <code>@cache</code> that reads <code>a</code> and <code>b</code> from the function around it.
+  <code>nearest(words)</code> gives each of 150 words, sampled with
+  <code>random.Random(seed + 1).sample(sorted(counts), 150)</code>, the distance to
+  its nearest neighbour among the others: 22,350 calls of <code>distance</code>.</li>
+<li><code>cheapest(i, j)</code> under <code>@lru_cache(maxsize=None)</code> is the cheapest order
+  to multiply a chain of 250 matrices, whose sizes <code>size(i)</code> gives. Each
+  entry tries every split point <code>k</code> and looks up <code>cheapest(i, k)</code> and
+  <code>cheapest(k, j)</code>.</li>
+</ul>
+<h2 id="how-it-runs-natively">How it runs natively<a class="headerlink" href="#how-it-runs-natively" title="Permanent link">&para;</a></h2>
+<p><code>ppy explain --summary words.ppy</code> counts all ten functions as native.
+<code>report</code> is one call from Python into native code; everything it calls
+runs natively from there, and what it prints is held until it returns.</p>
+<ul>
+<li><strong><code>random.Random(seed)</code></strong> is a native generator: CPython's Mersenne
+  Twister state, seeded as CPython seeds it, and <code>randint</code>, <code>choice</code>, and
+  <code>sample</code> drawing the same numbers as <code>random.py</code>. The sample therefore
+  picks the same 150 words on every path.</li>
+<li><strong><code>Counter</code> and <code>defaultdict</code></strong> are the runtime's dict with a flavor. A
+  <code>Counter</code>'s missing key reads 0 without being added; a <code>defaultdict</code>'s
+  missing key gets its factory's value (<code>int()</code> is 0) before the read.
+  <code>most_common</code> ranks as <code>sorted(..., reverse=True)</code> does, so ties keep
+  insertion order, as in CPython.</li>
+<li><strong><code>@cache</code> on a nested function</strong> gives <code>d</code> a table of its own each time
+  <code>distance</code> runs, held by its closure, and its recursive calls look in the
+  table first. The arguments are two ints, the result an int.</li>
+<li><strong><code>@lru_cache</code> on a module function</strong> is the same lookup in one table
+  that lives as long as the program. A function that read
+  <code>cheapest.cache_info()</code> would keep CPython's cache and run as Python, so
+  that the counts it reports are CPython's.</li>
+</ul>
+<h2 id="timing">Timing<a class="headerlink" href="#timing" title="Permanent link">&para;</a></h2>
+<p>Wall time for the whole program, the mean of five runs, measured from a
+checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):</p>
 <table>
 <thead>
 <tr>
-<th>directive</th>
-<th>meaning</th>
+<th></th>
+<th style="text-align: right;">seconds</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>@ppy.pure</code></td>
-<td>no observable effects: no I/O, no global or nonlocal writes, no mutation of arguments. Local allocation and mutation of locally created values are fine. Violations are <code>E1601</code>/<code>E1602</code>.</td>
+<td><code>python words.ppy</code></td>
+<td style="text-align: right;">1.47</td>
 </tr>
 <tr>
-<td><code>@ppy.opt(n)</code></td>
-<td>per-function optimization level 0–3, overriding the project default.</td>
+<td><code>ppy run words.ppy</code>, after the first run built the cache</td>
+<td style="text-align: right;">0.78</td>
 </tr>
 <tr>
-<td><code>@ppy.native</code></td>
-<td>lower to LLVM. <code>require=True</code> makes any fallback to the Python body an error (<code>E1702</code>).</td>
-</tr>
-<tr>
-<td><code>@ppy.parallel</code></td>
-<td>parallelize the eligible loop. <code>require=True</code> makes failure an error (<code>E1701</code>).</td>
-</tr>
-<tr>
-<td><code>@ppy.jit</code></td>
-<td>specialize at runtime on the argument classes actually seen.</td>
-</tr>
-<tr>
-<td><code>@ppy.specialize</code></td>
-<td>ahead-of-time specialization on declared value classes.</td>
-</tr>
-<tr>
-<td><code>@ppy.inline</code> / <code>@ppy.noinline</code></td>
-<td>force or forbid inlining into callers.</td>
-</tr>
-<tr>
-<td><code>@ppy.fastmath</code></td>
-<td>permit floating-point reassociation in this function; without it, reduction order is preserved bit-for-bit.</td>
-</tr>
-<tr>
-<td><code>@ppy.jax</code></td>
-<td>stage this function for build-time StableHLO export (a plain <code>@jax.jit</code> decorator marks it too).</td>
-</tr>
-<tr>
-<td><code>@ppy.dynamic</code> / <code>with ppy.dynamic():</code></td>
-<td>an explicit boundary inside which dynamic features are allowed. Each value it produces is <code>Dynamic</code>, and stays <code>Dynamic</code> through attribute hops and arithmetic until a <code>ppy.check[T]</code> clears it.</td>
-</tr>
-<tr>
-<td><code>@ppy.reflective</code></td>
-<td>the function's annotations are runtime-visible state, as written: <code>ppy convert</code>/<code>ppy migrate</code> will not add to them or rely on rewriting them.</td>
+<td><code>./dist/words</code>, the standalone binary</td>
+<td style="text-align: right;">0.76</td>
 </tr>
 </tbody>
 </table>
-<p>A typo in a directive name is <code>E1205</code>, reported with a suggestion.</p>
-<h2 id="markers">Markers<a class="headerlink" href="#markers" title="Permanent link">&para;</a></h2>
-<p>Markers are ordinary <code>Annotated</code> aliases from <code>ppy</code>:</p>
+<p>Timed one part at a time inside the program, in seconds, the mean of five
+runs:</p>
 <table>
 <thead>
 <tr>
-<th>marker</th>
-<th>meaning</th>
+<th>part</th>
+<th style="text-align: right;">CPython</th>
+<th style="text-align: right;"><code>ppy run</code></th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>i8 i16 i32 i64 u8 u16 u32 u64</code></td>
-<td>fixed-width integer contract. A value provably outside the range is <code>E1401</code>; a check the contract mode forbids is <code>E1402</code>.</td>
+<td><code>make_words</code></td>
+<td style="text-align: right;">0.157</td>
+<td style="text-align: right;">0.106</td>
 </tr>
 <tr>
-<td><code>f16 f32 f64</code></td>
-<td>floating-point width.</td>
+<td><code>letter_counts</code></td>
+<td style="text-align: right;">0.131</td>
+<td style="text-align: right;">0.100</td>
 </tr>
 <tr>
-<td><code>bf16</code></td>
-<td>bfloat16 element format, distinct from IEEE float16.</td>
+<td><code>nearest</code> (22,350 <code>distance</code> calls)</td>
+<td style="text-align: right;">0.618</td>
+<td style="text-align: right;">0.347</td>
 </tr>
 <tr>
-<td><code>Tensor[dtype, shape]</code></td>
-<td>a common tensor contract, including dtype and dimensions; storage belongs to the selected backend. See <a href="../tensors/">Common tensors</a>.</td>
-</tr>
-<tr>
-<td><code>Buffer[T]</code></td>
-<td>a borrowed writable buffer (<code>memoryview</code> over <code>array.array</code>), zero-copy in and out of native code. <code>T</code> may be <code>int</code>, <code>float</code>, or <code>ppy.i8</code>/<code>ppy.u8</code> for one byte per element.</td>
-</tr>
-<tr>
-<td><code>Array[T]</code>, <code>Vector[T]</code></td>
-<td>contiguous numeric containers with a known element type.</td>
-</tr>
-<tr>
-<td><code>Range(lo, hi)</code></td>
-<td>an integer refinement the checker propagates.</td>
-</tr>
-<tr>
-<td><code>Dynamic</code></td>
-<td>an explicit Python-dynamic boundary value. Entering is free; leaving is not: <code>Dynamic -&gt; Dynamic</code> flows freely, but <code>Dynamic -&gt; int</code> is <code>E1508</code> until a <code>ppy.check[T]</code> validates it. <code>Any</code> at runtime.</td>
-</tr>
-<tr>
-<td><code>Length(n)</code>, <code>Shape(...)</code>, <code>DType("f32")</code>, <code>Contiguous</code>, <code>NoAlias</code></td>
-<td>container refinements; <code>Shape</code>/<code>DType</code> are what makes a <code>@ppy.jax</code> function exportable.</td>
-</tr>
-<tr>
-<td><code>Owned[T]</code>, <code>Borrowed[T]</code>, <code>Mut[T]</code></td>
-<td>how a parameter holds its value. <code>Borrowed</code> is read for the call and no longer: not returned (<code>E1611</code>), not stored where it outlives the call (<code>E1612</code>), not written (<code>E1613</code>). <code>Mut</code> is a borrow the function may write through. <code>Owned</code> hands the value over. A <code>Buffer[T]</code> is <code>Borrowed</code> unless the program says otherwise.</td>
+<td><code>cheapest(0, 250)</code></td>
+<td style="text-align: right;">0.500</td>
+<td style="text-align: right;">0.077</td>
 </tr>
 </tbody>
 </table>
-<p>Examples: <a href="../../howto/01_basics/">Basics</a>,
-<a href="../../howto/03_effects_and_contracts/">Effects and contracts</a>,
-<a href="../../howto/12_buffers_and_jit/">Buffers and JIT</a>.</p>
+<p><code>cheapest</code> gains the most: each entry runs a loop of lookups into one
+table. <code>nearest</code> gains the least: every <code>distance</code> call makes a new table
+for <code>d</code>, and most of its entries are computed once and read once, so the
+native code spends its time on the table rather than on the arithmetic.
+CPython's <code>cache</code> is written in C, and a hit costs it little more than a
+call.</p>
+<h2 id="where-the-code-comes-from">Where the code comes from<a class="headerlink" href="#where-the-code-comes-from" title="Permanent link">&para;</a></h2>
+<p><code>words.ppy</code> is hand-written.</p>
+<p>Read on: <a href="../../guide/stdlib/">the standard library guide</a>.</p>
+<h2 id="53_caches_and_counterswordsppy"><code>53_caches_and_counters/words.ppy</code><a class="headerlink" href="#53_caches_and_counterswordsppy" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">Counter</span><span class="p">,</span> <span class="n">defaultdict</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cache</span><span class="p">,</span> <span class="n">lru_cache</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_words</span><span class="p">(</span><span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">syllables</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"ka"</span><span class="p">,</span> <span class="s2">"lo"</span><span class="p">,</span> <span class="s2">"mi"</span><span class="p">,</span> <span class="s2">"ne"</span><span class="p">,</span> <span class="s2">"ru"</span><span class="p">,</span> <span class="s2">"sa"</span><span class="p">,</span> <span class="s2">"to"</span><span class="p">,</span> <span class="s2">"vi"</span><span class="p">,</span> <span class="s2">"ant"</span><span class="p">,</span> <span class="s2">"est"</span><span class="p">]</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">words</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>        <span class="n">word</span> <span class="o">=</span> <span class="s2">""</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">)):</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>            <span class="n">word</span> <span class="o">+=</span> <span class="n">rng</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">syllables</span><span class="p">)</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>        <span class="n">words</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">word</span><span class="p">)</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="k">return</span> <span class="n">words</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="k">def</span><span class="w"> </span><span class="nf">letter_counts</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">letters</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="n">counts</span><span class="p">:</span> <span class="n">Counter</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">()</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>    <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">words</span><span class="p">:</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>        <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">word</span><span class="p">:</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>            <span class="n">counts</span><span class="p">[</span><span class="n">ch</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">counts</span><span class="p">[</span><span class="n">ch</span><span class="p">]</span> <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">letters</span><span class="p">]</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="k">def</span><span class="w"> </span><span class="nf">length_counts</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>    <span class="n">lengths</span><span class="p">:</span> <span class="n">defaultdict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>    <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">words</span><span class="p">:</span>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>        <span class="n">lengths</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">word</span><span class="p">)]</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">lengths</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">13</span><span class="p">)]</span>
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="k">def</span><span class="w"> </span><span class="nf">distance</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>    <span class="nd">@cache</span>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">d</span><span class="p">(</span><span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>        <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>            <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="o">-</span> <span class="n">j</span>
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>        <span class="k">if</span> <span class="n">j</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="p">):</span>
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a>            <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span>
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>        <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="n">b</span><span class="p">[</span><span class="n">j</span><span class="p">]:</span>
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>            <span class="k">return</span> <span class="n">d</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>        <span class="k">return</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">d</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">),</span> <span class="n">d</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">d</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a>
+<a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a>    <span class="k">return</span> <span class="n">d</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>
+<a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a>
+<a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="k">def</span><span class="w"> </span><span class="nf">nearest</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a>    <span class="n">found</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a>    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">words</span><span class="p">:</span>
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a>        <span class="n">best</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a>        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">words</span><span class="p">:</span>
+<a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a>            <span class="k">if</span> <span class="n">a</span> <span class="o">!=</span> <span class="n">b</span><span class="p">:</span>
+<a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a>                <span class="n">best</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">best</span><span class="p">,</span> <span class="n">distance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">))</span>
+<a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a>        <span class="n">found</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">best</span><span class="p">)</span>
+<a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a>    <span class="k">return</span> <span class="n">found</span>
+<a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a>
+<a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a>
+<a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a><span class="k">def</span><span class="w"> </span><span class="nf">size</span><span class="p">(</span><span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="mi">37</span><span class="p">)</span> <span class="o">%</span> <span class="mi">50</span> <span class="o">+</span> <span class="mi">5</span>
+<a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a>
+<a id="__codelineno-2-61" name="__codelineno-2-61" href="#__codelineno-2-61"></a>
+<a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a><span class="nd">@lru_cache</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-2-63" name="__codelineno-2-63" href="#__codelineno-2-63"></a><span class="k">def</span><span class="w"> </span><span class="nf">cheapest</span><span class="p">(</span><span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-64" name="__codelineno-2-64" href="#__codelineno-2-64"></a>    <span class="k">if</span> <span class="n">j</span> <span class="o">-</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+<a id="__codelineno-2-65" name="__codelineno-2-65" href="#__codelineno-2-65"></a>        <span class="k">return</span> <span class="mi">0</span>
+<a id="__codelineno-2-66" name="__codelineno-2-66" href="#__codelineno-2-66"></a>    <span class="n">best</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+<a id="__codelineno-2-67" name="__codelineno-2-67" href="#__codelineno-2-67"></a>    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">):</span>
+<a id="__codelineno-2-68" name="__codelineno-2-68" href="#__codelineno-2-68"></a>        <span class="n">cost</span> <span class="o">=</span> <span class="n">cheapest</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="n">cheapest</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="o">+</span> <span class="n">size</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">*</span> <span class="n">size</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">*</span> <span class="n">size</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+<a id="__codelineno-2-69" name="__codelineno-2-69" href="#__codelineno-2-69"></a>        <span class="k">if</span> <span class="n">best</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">cost</span> <span class="o">&lt;</span> <span class="n">best</span><span class="p">:</span>
+<a id="__codelineno-2-70" name="__codelineno-2-70" href="#__codelineno-2-70"></a>            <span class="n">best</span> <span class="o">=</span> <span class="n">cost</span>
+<a id="__codelineno-2-71" name="__codelineno-2-71" href="#__codelineno-2-71"></a>    <span class="k">return</span> <span class="n">best</span>
+<a id="__codelineno-2-72" name="__codelineno-2-72" href="#__codelineno-2-72"></a>
+<a id="__codelineno-2-73" name="__codelineno-2-73" href="#__codelineno-2-73"></a>
+<a id="__codelineno-2-74" name="__codelineno-2-74" href="#__codelineno-2-74"></a><span class="k">def</span><span class="w"> </span><span class="nf">report</span><span class="p">(</span><span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a>    <span class="n">words</span> <span class="o">=</span> <span class="n">make_words</span><span class="p">(</span><span class="n">seed</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
+<a id="__codelineno-2-76" name="__codelineno-2-76" href="#__codelineno-2-76"></a>    <span class="n">counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
+<a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="s2">"words,"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">counts</span><span class="p">),</span> <span class="s2">"different"</span><span class="p">)</span>
+<a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a>    <span class="k">for</span> <span class="n">word</span><span class="p">,</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">counts</span><span class="o">.</span><span class="n">most_common</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+<a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">word</span><span class="si">:</span><span class="s2">&lt;6</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a>    <span class="n">vowels</span> <span class="o">=</span> <span class="n">letter_counts</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="s2">"aeio"</span><span class="p">)</span>
+<a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"a e i o:"</span><span class="p">,</span> <span class="n">vowels</span><span class="p">)</span>
+<a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a>    <span class="n">lengths</span> <span class="o">=</span> <span class="n">length_counts</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
+<a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"lengths 2 to 12:"</span><span class="p">,</span> <span class="n">lengths</span><span class="p">)</span>
+<a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a>    <span class="n">picked</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="n">seed</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">counts</span><span class="p">),</span> <span class="mi">150</span><span class="p">)</span>
+<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a>    <span class="n">found</span> <span class="o">=</span> <span class="n">nearest</span><span class="p">(</span><span class="n">picked</span><span class="p">)</span>
+<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"nearest of 150 words: mean distance </span><span class="si">{</span><span class="nb">sum</span><span class="p">(</span><span class="n">found</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">found</span><span class="p">)</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">, most </span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">found</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a>    <span class="n">cost</span> <span class="o">=</span> <span class="n">cheapest</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">250</span><span class="p">)</span>
+<a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"cheapest order for a chain of 250 matrices:"</span><span class="p">,</span> <span class="n">cost</span><span class="p">,</span> <span class="s2">"multiplications"</span><span class="p">)</span>
+<a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a>
+<a id="__codelineno-2-90" name="__codelineno-2-90" href="#__codelineno-2-90"></a>
+<a id="__codelineno-2-91" name="__codelineno-2-91" href="#__codelineno-2-91"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-92" name="__codelineno-2-92" href="#__codelineno-2-92"></a>    <span class="n">report</span><span class="p">(</span><span class="mi">300_000</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
+<a id="__codelineno-2-93" name="__codelineno-2-93" href="#__codelineno-2-93"></a>
+<a id="__codelineno-2-94" name="__codelineno-2-94" href="#__codelineno-2-94"></a>
+<a id="__codelineno-2-95" name="__codelineno-2-95" href="#__codelineno-2-95"></a><span class="n">main</span><span class="p">()</span>
+</code></pre></div>
+<p>Source: <a href="https://github.com/franknoh/PPy/blob/main/examples/53_caches_and_counters"><code>examples/53_caches_and_counters</code></a>.</p>
 
 
 
@@ -4561,7 +4806,7 @@ as a hint.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../subset/" class="md-footer__link md-footer__link--prev" aria-label="Previous: The subset">
+          <a href="../51_clinic/" class="md-footer__link md-footer__link--prev" aria-label="Previous: A clinic simulation">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4571,20 +4816,20 @@ as a hint.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                The subset
+                A clinic simulation
               </div>
             </div>
           </a>
         
         
           
-          <a href="../strings/" class="md-footer__link md-footer__link--next" aria-label="Next: Strings">
+          <a href="../54_objects_and_grids/" class="md-footer__link md-footer__link--next" aria-label="Next: Objects and grids across the boundary">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Strings
+                Objects and grids across the boundary
               </div>
             </div>
             <div class="md-footer__button md-icon">

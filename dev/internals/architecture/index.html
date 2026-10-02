@@ -1970,6 +1970,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2478,6 +2482,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3122,6 +3182,8 @@
       
         
       
+        
+      
     
     
     
@@ -3294,6 +3356,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4529,7 +4619,7 @@ canonical IR after the shared passes and nothing above it
 </tr>
 <tr>
 <td><code>ppy_runtime</code></td>
-<td>everything a <em>built artifact</em> needs at launch: the native ABI as data (<code>abi</code>), the guarded binding trampolines (<code>binding</code>), generated-module identity and execution (<code>generated</code>, <code>execute</code>), the binder protocol (<code>dispatch</code>), and the manifest-driven launch path (<code>manifest</code>, <code>launch</code>), and the runtimes native code calls into: <code>aio</code> (the epoll loop, one C file compiled once), <code>cuda</code> (the driver API through ctypes, launching PTX), <code>xla</code> (the PJRT bridge), <code>exported</code> and <code>regions</code> (staged artifacts and compiled torch regions). The hard rule: this package never imports <code>ppy_compiler</code>. Uninstalling the compiler must not break a built application, and a test keeps that true by poisoning the compiler and running a launcher.</td>
+<td>everything a <em>built artifact</em> needs at launch: the native ABI as data (<code>abi</code>), the guarded binding trampolines (<code>binding</code>), generated-module identity and execution (<code>generated</code>, <code>execute</code>), the binder protocol (<code>dispatch</code>), and the manifest-driven launch path (<code>manifest</code>, <code>launch</code>), and the runtimes native code calls into: the collections runtime (<code>collections.c</code>, <code>strings.c</code>, <code>exceptions.c</code>, with <code>stdlib.c</code> and <code>random.c</code> for the standard library and <code>pyio.c</code> for held output and calls into Python, compiled once per machine into the user cache), <code>effects</code> (the Python side of held output and barriers), <code>aio</code> (the epoll loop, one C file compiled once), <code>cuda</code> (the driver API through ctypes, launching PTX), <code>xla</code> (the PJRT bridge), <code>exported</code> and <code>regions</code> (staged artifacts and compiled torch regions). The hard rule: this package never imports <code>ppy_compiler</code>. Uninstalling the compiler must not break a built application, and a test keeps that true by poisoning the compiler and running a launcher.</td>
 </tr>
 <tr>
 <td><code>frontend/</code></td>
@@ -4610,7 +4700,7 @@ canonical IR after the shared passes and nothing above it
 answer. A guard that fails at runtime falls back to the Python body instead of
 answering differently.</p>
 <p>The invariant is checked by tests. <code>examples/run_all.py</code> runs all
-61 example programs on all three paths and diffs the output,
+64 example programs on all three paths and diffs the output,
 and the test suite does the same per feature.</p>
 <h2 id="cache-and-incremental-builds">Cache and incremental builds<a class="headerlink" href="#cache-and-incremental-builds" title="Permanent link">&para;</a></h2>
 <p>The store is content-addressed: a key is a blake2b digest over the source, the
@@ -4703,41 +4793,38 @@ Python implementation, so a refused guard is a C-to-Python call instead of a
 <code>NotImplemented</code> bounced through a Python frame. No Python code stands on the
 call path (<code>@ppy.jit</code> keeps a thin Python watcher only while it is still
 learning which argument shapes repeat).</p>
-<p>Measured with <code>examples/bench_boundary.py</code>:</p>
-<table>
-<thead>
-<tr>
-<th>call</th>
-<th>time</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>plain Python call (baseline)</td>
-<td>28 ns</td>
-</tr>
-<tr>
-<td>forced-native two-int call</td>
-<td>47 ns</td>
-</tr>
-<tr>
-<td>borrowed buffer</td>
-<td>65 ns</td>
-</tr>
-<tr>
-<td>guard failure into the fallback</td>
-<td>86 ns</td>
-</tr>
-</tbody>
-</table>
+<p>The same wrapper carries what used to need Python frames:</p>
+<ul>
+<li>Lists, dicts, sets, and objects of the project's classes cross in C
+  (<code>backend/llvm/crossing.c</code>), from type tables emitted for each signature.
+  Each argument is copied into a runtime handle, an object reached twice
+  becomes one handle, and after a call that writes through a parameter
+  every container and object that came in is copied back into the
+  caller's object. An element that did not change keeps its Python object.</li>
+<li>A function that prints, reads input, or calls into Python enters and
+  leaves its call, commits held output, and drops it on a fallback in C
+  (<code>wrapper_effects.c</code>); it calls back into Python only for a raise after a
+  barrier or a write that failed.</li>
+<li>A function that reads settled module globals keeps a Python frame that
+  reads them, which then calls the C entry.</li>
+<li>A call with keywords, or with defaults left out, is bound in Python
+  against the function's signature (<code>binding.keyed</code>) and then calls the C
+  entry in order.</li>
+</ul>
+<p>A two-int call costs 29 ns through the wrapper, against 30 ns for CPython's
+own call. <a href="../../guide/native-lowering/#what-a-call-costs">What a call costs</a>
+has the measured table for each shape, from <code>examples/bench_boundary.py</code>.</p>
 <p>Built artifacts ship the compiled wrapper and bind through it at launch. The
 ctypes trampoline remains only as the fallback where no C toolchain exists
 (<code>W2004</code> says so once).</p>
 <h2 id="threads">Threads<a class="headerlink" href="#threads" title="Permanent link">&para;</a></h2>
-<p>Generated wrappers release the GIL around native calls
-(<code>Py_BEGIN_ALLOW_THREADS</code>), so <code>@ppy.native</code> functions scale on threads:
+<p>Generated wrappers release the GIL around a native call whose body loops
+or calls another function (<code>Py_BEGIN_ALLOW_THREADS</code>), so <code>@ppy.native</code>
+functions scale on threads:
 measured 1.95× on two threads against 0.98× for the same code on plain
-CPython (<code>examples/28_threads</code>).</p>
+CPython (<code>examples/28_threads</code>). A short straight-line body keeps the GIL,
+since dropping and retaking it costs about 20 ns, and so does a function
+that prints, reads, or calls into Python.</p>
 <p><code>@ppy.parallel</code> loops run on a process-wide worker pool sized by
 <code>[tool.ppy.parallel] threads</code>.</p>
 

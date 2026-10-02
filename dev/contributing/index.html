@@ -1970,6 +1970,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2478,6 +2482,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3122,6 +3182,8 @@
       
         
       
+        
+      
     
     
     
@@ -3294,6 +3356,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4360,6 +4450,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#tables-the-runner-does-not-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tables the runner does not refresh
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4677,6 +4778,17 @@
     <span class="md-ellipsis">
       
         Where the benchmarks run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tables-the-runner-does-not-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tables the runner does not refresh
       
     </span>
   </a>
@@ -5006,6 +5118,44 @@ class, a generic function, <code>try</code> with <code>except</code>, <code>else
 <code>raise</code> and <code>assert</code>, and generators consumed by a loop, a reduction,
 <code>next</code>, or a collection, all printed from <code>main()</code>. A seed is the
 same program on every machine (<code>--show SEED</code> prints it).</p>
+<p>Flags add a domain to the programs, each one where a change of that kind
+is most likely to break something:</p>
+<table>
+<thead>
+<tr>
+<th>flag</th>
+<th>adds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--prints</code></td>
+<td>tagged prints between checks that may fall back; a path that prints a tagged line more often than CPython fails</td>
+</tr>
+<tr>
+<td><code>--state</code></td>
+<td>settled module globals read and written across functions, and a chain of objects native code walks and writes (paths with Python)</td>
+</tr>
+<tr>
+<td><code>--boundary</code></td>
+<td><code>@ppy.native</code> functions writing through lists of lists, dicts of lists, sets, and objects Python passes, shared and cyclic (paths with Python)</td>
+</tr>
+<tr>
+<td><code>--stdlib</code></td>
+<td>seeded <code>random</code> and <code>random.Random</code> draws, <code>math</code>, <code>heapq</code>, <code>bisect</code>, <code>itertools</code>, <code>functools</code>, <code>operator</code>, and the <code>collections</code> containers</td>
+</tr>
+<tr>
+<td><code>--calls</code></td>
+<td>constant defaults and keyword-only parameters, called by keyword with defaults left out</td>
+</tr>
+<tr>
+<td><code>--unannotated</code></td>
+<td>functions with no annotations, run with <code>strict = false</code> and called afterwards from Python with arguments of other types (paths with Python by default)</td>
+</tr>
+</tbody>
+</table>
+<p><code>--paths python,ppy,run</code> limits a batch to some of the paths. Flags
+combine (<code>--unannotated --calls</code>).</p>
 <p>Every path is held to CPython's output, exit status, and last line of
 stderr. One difference is allowed, because it is documented: where CPython
 computes an integer past 64 bits, a standalone binary and emitted C stop
@@ -5085,8 +5235,25 @@ a partial run. Where the toolchains live is read from <code>PPY_COMPARE_PYTHON</
 and the comparison projects' toolchains. The workflow commits what moved back
 to <code>dev</code>.</p>
 <p>A hosted runner has none of that, which is why <code>benchmark.yml</code> only reports
-on a schedule. The runner lives in <code>~/actions-runner</code> on that machine and
-stops with it. <code>~/actions-runner/start.sh</code> brings it back.</p>
+on a schedule.</p>
+<h3 id="tables-the-runner-does-not-refresh">Tables the runner does not refresh<a class="headerlink" href="#tables-the-runner-does-not-refresh" title="Permanent link">&para;</a></h3>
+<p>Three kinds of number are measured by hand, from a <code>/tmp</code> checkout with
+nothing else running, and committed with the change that moved them:</p>
+<ul>
+<li><code>python scripts/run_overhead.py --write</code> times every example with
+  <code>python</code>, with <code>ppy run</code> from an empty cache, and with <code>ppy run</code> warm, and
+  records <code>examples/run_overhead.json</code>; the performance page is built from
+  it. It flags a warm run slower than <code>python</code> beyond the margin. Run it in
+  the default environment (<code>uv sync</code>): an example whose libraries are not
+  installed is left out, as are the device examples.</li>
+<li><code>python examples/bench_boundary.py</code> prints the cost of a call for each
+  shape that crosses the boundary. The table in the native lowering guide
+  ("What a call costs") is its output under <code>ppy run</code> beside the same
+  program under <code>python</code>.</li>
+<li>An example README's own timing table (<code>51_clinic</code> and later) is the mean
+  of five runs of each command. The runner lives in <code>~/actions-runner</code> on that machine and
+stops with it. <code>~/actions-runner/start.sh</code> brings it back.</li>
+</ul>
 <p>A change that touches only prose (the docs, a README, the changelog, a
 recorded measurement) skips the test matrix. <code>ci.yml</code> sorts the changed
 files first, a skipped required check satisfies the branch protection, and

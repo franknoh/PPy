@@ -2138,6 +2138,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2646,6 +2650,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3290,6 +3350,8 @@
       
         
       
+        
+      
     
     
     
@@ -3462,6 +3524,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4699,6 +4789,9 @@ when the function does more than one pass of work over its strings; see
 without its newline, <code>ppy.scan[str]()</code> reads the next whitespace-delimited
 token, and <code>print</code> writes strings and lists of strings. A line that is not
 UTF-8 is <code>UnicodeDecodeError</code>, as CPython reads it.</p>
+<p>Under <code>ppy run</code>, a native <code>print</code> writes into output held until the call
+returns, and <code>input()</code> calls Python's own <code>input</code>, as
+<a href="../native-effects/">Effects in native code</a> describes.</p>
 <h2 id="where-it-falls-back">Where it falls back<a class="headerlink" href="#where-it-falls-back" title="Permanent link">&para;</a></h2>
 <p>Some answers need Python's Unicode tables. These check first and fall back:
 under <code>ppy run</code> the call runs as Python, and a standalone binary stops.</p>

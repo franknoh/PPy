@@ -2088,6 +2088,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2596,6 +2600,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3240,6 +3300,8 @@
       
         
       
+        
+      
     
     
     
@@ -3412,6 +3474,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4575,11 +4665,14 @@ and native callers still call it natively. <code>ppy explain</code> gives the re
 <p><code>grow(xs, 3)</code> from Python runs natively and leaves <code>xs</code> holding the three
 squares after what it held.</p>
 <h2 id="printing">Printing<a class="headerlink" href="#printing" title="Permanent link">&para;</a></h2>
-<p>In a standalone build, <code>print(xs)</code>, <code>print(d)</code>, and an f-string field
-holding a list or a dict write what <code>repr</code> writes: numbers, strings with
-their quotes, tuples, nested containers, and dataclasses shown as
-<code>Point(x=1, y=2.0)</code>. A set of ints or of tuples of ints prints in CPython's
-order, and an empty one as <code>set()</code>.</p>
+<p>Natively, under <code>ppy run</code> and in a standalone build, <code>print(xs)</code>,
+<code>print(d)</code>, and an f-string field holding a list or a dict write what
+<code>repr</code> writes: numbers, strings with their quotes, tuples, nested
+containers, and dataclasses shown as <code>Point(x=1, y=2.0)</code>. A set of ints or
+of tuples of ints prints in CPython's order, and an empty one as <code>set()</code>.
+A list parameter lent as a buffer (a list of numbers the function only
+reads) has no <code>repr</code> natively, so printing one keeps the function in
+Python.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
 <li>A tuple element holding a string or an object (<code>list[tuple[str, int]]</code>)
@@ -4594,8 +4687,8 @@ order, and an empty one as <code>set()</code>.</p>
   natively take a key giving numbers or tuples of them, and <code>min</code> and <code>max</code>
   with a key pick among numbers. <a href="../closures/">Functions as values</a> has the
   rest.</li>
-<li><code>any</code> and <code>all</code> of a generator stay in Python, because they stop at the
-  first answer and a list built first would not; of a list they are native.</li>
+<li><code>any</code> and <code>all</code> of a generator are native and stop at the first answer,
+  as CPython's do; of a list they are native too.</li>
 <li>A standalone binary's <code>KeyError</code> for a string key says <code>KeyError</code> without
   the key.</li>
 <li>A container of objects or dataclasses crosses from Python as

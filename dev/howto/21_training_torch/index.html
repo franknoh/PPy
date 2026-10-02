@@ -1978,6 +1978,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2489,6 +2493,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3287,6 +3347,8 @@
       
         
       
+        
+      
     
     
     
@@ -3462,6 +3524,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4502,15 +4592,15 @@ to under 1 ms, and the training step became one ATen region.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># device: cpu
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a># native prep: False
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a># aten region: False
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>prep      66.7 ms   checksum=-21282.454900
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>train    142.6 ms   loss 1.0250 -&gt; 1.0019
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>prep      67.7 ms   checksum=-21282.454900
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>train    255.5 ms   loss 1.0250 -&gt; 1.0019
 </code></pre></div>
 <p><strong><code>ppy run train.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a># device: cpu
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a># native prep: True
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a># aten region: True
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>prep       1.1 ms   checksum=-21282.454900
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>train    320.7 ms   loss 1.0250 -&gt; 1.0019
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>prep       0.9 ms   checksum=-21282.454900
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>train    892.3 ms   loss 1.0250 -&gt; 1.0019
 </code></pre></div>
 <!-- outputs:end -->
 

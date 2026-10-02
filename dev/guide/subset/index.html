@@ -2133,6 +2133,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2641,6 +2645,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3285,6 +3345,8 @@
       
         
       
+        
+      
     
     
     
@@ -3457,6 +3519,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4529,7 +4619,9 @@ disagree about what a class body runs.
   models.</p>
 </li>
 </ul>
-<p>Strict mode is the default. <code>--no-strict</code> downgrades only the errors that have
+<p>Strict mode is the default. <code>--no-strict</code> on the command line, or
+<code>strict = false</code> in <code>[tool.ppy]</code>, turns it off for a run or for the
+project. Without strict mode the compiler downgrades only the errors that have
 a sound fallback: an unannotated parameter (<code>E1201</code>), an unknown attribute
 (<code>E1202</code>), an unvouched decorator (<code>E1204</code>), iterating something that is not
 iterable (<code>E1302</code>), and a call with no known signature (<code>E1306</code>). Code the
@@ -4548,13 +4640,15 @@ analysis cannot read but CPython runs is downgraded too:</p>
   <code>E1507</code>).</li>
 <li>an operator on an instance of a class whose base the analysis cannot see
   (<code>E1302</code>).</li>
+<li>a value stored into a list or dict element whose type does not match the
+  element type (<code>E1301</code>), such as a list stored where the rows hold strings.</li>
 </ul>
 <p>Each is still reported, as a <code>W2010</code> warning that names the code it replaces,
 and the function involved runs on CPython, which runs it or raises its own
 error. So a script whose sibling import fails ends with CPython's
-<code>ImportError</code>, not with a compile error. Type mismatches (<code>E1301</code>) and the
-rest stay errors, with one exception: a value that may be <code>None</code> where one
-that is not is needed.</p>
+<code>ImportError</code>, not with a compile error. Other type mismatches (<code>E1301</code>)
+and the rest stay errors, with one exception: a value that may be <code>None</code>
+where one that is not is needed.</p>
 <p>A program often passes a <code>Node | None</code> where a <code>Node</code> is declared, or reads
 <code>.value</code> from something that may be <code>None</code>, because it knows the <code>None</code>
 never arrives on that path. Strict mode refuses this (<code>E1301</code>, <code>E1206</code>).
@@ -4614,6 +4708,10 @@ says which types were inferred and from where:</p>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  return: int, from the body's return statements
 </code></pre></div>
 <p>Strict mode does not infer: an unannotated parameter is still <code>E1201</code>.</p>
+<p><a href="../../howto/52_unannotated/">An unannotated module</a> is a worked example:
+seven functions with no annotations, each typed from its calls and
+defaults, and the boundary running the Python body for an argument that
+does not fit.</p>
 <h2 id="accepted-forms-of-ordinary-python">Accepted forms of ordinary Python<a class="headerlink" href="#accepted-forms-of-ordinary-python" title="Permanent link">&para;</a></h2>
 <p>These are valid Python that the checker accepts and types:</p>
 <ul>
@@ -4649,7 +4747,10 @@ says which types were inferred and from where:</p>
 their type arguments (<code>Queue[int].get()</code> is an <code>int</code>). <code>datetime</code> and <code>date</code>
 with <code>timedelta</code>, <code>Decimal</code> and <code>Fraction</code> with themselves and with numbers,
 and <code>Counter</code> with <code>Counter</code> under <code>+ - &amp; |</code> have their operators typed, and
-their fields and common methods too. Code that uses them runs on CPython.</p>
+their fields and common methods too. <code>deque</code>, <code>Counter</code>, <code>OrderedDict</code>, and
+<code>defaultdict</code> also compile to native code
+(<a href="../stdlib/">The standard library</a>); code that uses the queues,
+<code>datetime</code>, <code>Decimal</code>, or <code>Fraction</code> runs on CPython.</p>
 <h2 id="compatibility-policy">Compatibility policy<a class="headerlink" href="#compatibility-policy" title="Permanent link">&para;</a></h2>
 <p>PPy makes three separate compatibility claims and holds each to a different
 standard:</p>

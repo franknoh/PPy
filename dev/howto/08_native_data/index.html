@@ -2082,6 +2082,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2593,6 +2597,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3243,6 +3303,8 @@
       
         
       
+        
+      
     
     
     
@@ -3418,6 +3480,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4405,7 +4495,10 @@ values, and which stay boxed. <code>ppy explain</code> says which is which, and 
 <ul>
 <li>Scalars, fixed-size tuples, and all-scalar classes are handed over flat.</li>
 <li>A <code>list[float]</code> is copied into a buffer on the way in.</li>
-<li>Everything else stays on the Python side.</li>
+<li>Other lists, dicts, sets, and objects are copied into native handles,
+  and back after a call that writes them
+  (<a href="../../guide/containers/">Lists, dicts, and sets</a>); this example
+  does not use them.</li>
 </ul>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>native_data.ppy

@@ -1970,6 +1970,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2478,6 +2482,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3122,6 +3182,8 @@
       
         
       
+        
+      
     
     
     
@@ -3294,6 +3356,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4633,10 +4723,13 @@ emit. Each diagnostic has a stable code (spec 29.1).</p>
 <ul>
 <li><code>E</code> codes are errors, <code>W</code> codes are warnings, and <code>R</code> codes are remarks.</li>
 <li><code>ppy explain E1301</code> prints the description of a code.</li>
-<li><code>--no-strict</code> downgrades the strict-mode errors that have a sound
-  fallback to <code>W2010</code> warnings, and a value that may be <code>None</code> used where
-  one that is not is needed to <code>W2011</code>. Both name the code they replace. It
-  never downgrades the rest.</li>
+<li><code>--no-strict</code> (or <code>strict = false</code> in <code>[tool.ppy]</code>) downgrades the
+  strict-mode errors that have a sound fallback to <code>W2010</code> warnings, and a
+  value that may be <code>None</code> used where one that is not is needed to <code>W2011</code>.
+  Both name the code they replace. It never downgrades the rest. Without
+  strict mode an unannotated parameter is first typed from the project's
+  calls, defaults, and doctests, and only one nothing types is <code>W2010</code>
+  (<a href="../../guide/subset/#types-from-call-sites">Types from call sites</a>).</li>
 </ul>
 <h2 id="source-and-module-structure">Source and module structure<a class="headerlink" href="#source-and-module-structure" title="Permanent link">&para;</a></h2>
 <table>
@@ -5107,7 +5200,7 @@ emit. Each diagnostic has a stable code (spec 29.1).</p>
 </tr>
 <tr>
 <td><code>W2010</code></td>
-<td>Under <code>--no-strict</code>, a strict-mode error with a sound fallback: an untyped value (<code>E1201</code>, <code>E1202</code>, <code>E1204</code>, <code>E1306</code>), an annotation or name the analysis cannot read (<code>E1101</code>, or <code>E1301</code> in an annotation), a dynamic feature (<code>E1103</code>, <code>E1501</code> to <code>E1504</code>, <code>E1506</code>, <code>E1507</code>), or an operator on a class built on a base the analysis cannot see (<code>E1302</code>). The code involved stays on CPython, which runs it or raises its own error. The message names the code it is under strict mode.</td>
+<td>Under <code>--no-strict</code>, a strict-mode error with a sound fallback: an untyped value (<code>E1201</code>, <code>E1202</code>, <code>E1204</code>, <code>E1306</code>), an annotation or name the analysis cannot read (<code>E1101</code>, or <code>E1301</code> in an annotation), a value stored into a list or dict element of another type (<code>E1301</code>), a dynamic feature (<code>E1103</code>, <code>E1501</code> to <code>E1504</code>, <code>E1506</code>, <code>E1507</code>), or an operator on a class built on a base the analysis cannot see (<code>E1302</code>). The code involved stays on CPython, which runs it or raises its own error. The message names the code it is under strict mode.</td>
 </tr>
 <tr>
 <td><code>W2011</code></td>

@@ -1980,6 +1980,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2615,6 +2619,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3265,6 +3325,8 @@
       
         
       
+        
+      
     
     
     
@@ -3440,6 +3502,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4495,7 +4585,9 @@ native code.</p>
   body runs with the value. A generator expression is lowered the same way.</li>
 </ul>
 <h2 id="timing">Timing<a class="headerlink" href="#timing" title="Permanent link">&para;</a></h2>
-<p>One machine, wall time for the whole program:</p>
+<p>Wall time for the whole program, the mean of five runs, measured from a
+checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):</p>
 <table>
 <thead>
 <tr>
@@ -4506,20 +4598,21 @@ native code.</p>
 <tbody>
 <tr>
 <td><code>python ledger.ppy</code></td>
-<td style="text-align: right;">2.1</td>
+<td style="text-align: right;">2.14</td>
 </tr>
 <tr>
 <td><code>ppy run ledger.ppy</code>, after the first run built the cache</td>
-<td style="text-align: right;">0.43</td>
+<td style="text-align: right;">0.30</td>
 </tr>
 <tr>
 <td><code>./dist/ledger</code>, the standalone binary</td>
-<td style="text-align: right;">0.29</td>
+<td style="text-align: right;">0.31</td>
 </tr>
 </tbody>
 </table>
-<p><code>ppy run</code> includes the compiler's own start-up and checking the file, which
-the standalone binary does not pay.</p>
+<p><code>ppy run</code> also starts CPython, names the cached build from the project's
+sources, and loads its native library, which the standalone binary does
+not pay.</p>
 <h2 id="where-the-code-comes-from">Where the code comes from<a class="headerlink" href="#where-the-code-comes-from" title="Permanent link">&para;</a></h2>
 <p><code>ledger.ppy</code> is hand-written.</p>
 <p>Read on: <a href="../../guide/exceptions-and-generators/">the exceptions and generators guide</a>.</p>

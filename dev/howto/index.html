@@ -1978,6 +1978,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2489,6 +2493,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3139,6 +3199,8 @@
       
         
       
+        
+      
     
     
     
@@ -3314,6 +3376,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4358,7 +4448,7 @@ check that it still does.</p>
 </tr>
 <tr>
 <td><a href="19_strings/">Strings</a></td>
-<td>Three small string functions, checked in strict mode and proven pure.</td>
+<td>Three small string functions, checked in strict mode and proven pure, and all three compiled to native code: <code>initials</code> splits and uppercases, <code>is_palindrome</code> indexes a string from both ends, and <code>word_count</code> counts words into a <code>dict</code>.</td>
 </tr>
 </tbody>
 </table>
@@ -4438,6 +4528,14 @@ check that it still does.</p>
 <tr>
 <td><a href="51_clinic/">A clinic simulation</a></td>
 <td>A seeded simulation of a clinic over 2,000 days, run three times with six, seven, and eight doctors.</td>
+</tr>
+<tr>
+<td><a href="53_caches_and_counters/">Caches and counters</a></td>
+<td>Word statistics with <code>collections.Counter</code> and <code>defaultdict</code>, words drawn from a seeded <code>random.Random</code>, and two dynamic programs memoized with <code>functools.cache</code> and <code>lru_cache</code>.</td>
+</tr>
+<tr>
+<td><a href="54_objects_and_grids/">Objects and grids across the boundary</a></td>
+<td>Python code owns the data here: a 128 by 128 grid of ints for the Game of Life, and sixty <code>Body</code> objects for a gravity simulation.</td>
 </tr>
 </tbody>
 </table>
@@ -4555,6 +4653,10 @@ check that it still does.</p>
 <tr>
 <td><a href="30_migrate/">Migration</a></td>
 <td>A small legacy telemetry script, run through <code>ppy migrate</code> instead of <code>ppy convert</code>.</td>
+</tr>
+<tr>
+<td><a href="52_unannotated/">An unannotated module</a></td>
+<td>A module of number-theory helpers written the way script collections such as TheAlgorithms/Python write them: no annotations, a doctest on each function, and the work under <code>if __name__ == "__main__":</code>.</td>
 </tr>
 </tbody>
 </table>

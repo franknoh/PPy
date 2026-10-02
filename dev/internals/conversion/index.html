@@ -1970,6 +1970,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2478,6 +2482,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3122,6 +3182,8 @@
       
         
       
+        
+      
     
     
     
@@ -3294,6 +3356,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4011,6 +4101,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#inference-without-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inference without conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#when-a-type-does-not-settle" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4531,6 +4632,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#inference-without-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inference without conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#when-a-type-does-not-settle" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4841,6 +4953,33 @@ being computed, and is not treated as an answer.</p>
 <li><strong>Empty containers.</strong> <code>out = []</code> gets its element type from what is
    appended, and the annotation is written at the assignment.</li>
 </ol>
+<h3 id="inference-without-conversion">Inference without conversion<a class="headerlink" href="#inference-without-conversion" title="Permanent link">&para;</a></h3>
+<p><code>ppy run --no-strict</code> (and <code>ppy check</code>, <code>ppy explain</code> without strict mode)
+infers parameter types too, but with a separate pass
+(<code>analysis/call_inference.py</code>) that writes nothing to the source. Its
+rules are narrower than the converter's, because nothing reviews its
+result and native code runs on it:</p>
+<ul>
+<li>it takes one type per parameter: <code>int</code> with <code>float</code> joins to <code>float</code>, an
+  object type with <code>None</code> to <code>X | None</code>, and any other union leaves the
+  parameter unknown, where the converter would write the union;</li>
+<li>a default value counts as a call, and a parameter no call types takes
+  what its module's doctests pass as literals;</li>
+<li>methods that override one another take their evidence together;</li>
+<li>a function used as a value, a decorated one, one called with <code>*args</code> or
+  <code>**kwargs</code>, a nested function, and a dunder other than <code>__init__</code> are
+  left alone;</li>
+<li>an inferred type that makes the checker report an error the analysis
+  without it did not is taken back, first for the functions involved, then
+  for the module, and at last for everything.</li>
+</ul>
+<p>Each native entry checks the exact type of every argument when Python calls
+it, so a caller with other types runs the Python body. The Python backend
+and the bodies <code>ppy run</code> falls back to are optimized from the analysis
+before inference, since nothing guards them. <code>ppy convert</code> and <code>ppy
+migrate</code> do not use this pass, and their output does not depend on it.
+<a href="../../guide/subset/#types-from-call-sites">Types from call sites</a> has the
+user-facing rules.</p>
 <h3 id="when-a-type-does-not-settle">When a type does not settle<a class="headerlink" href="#when-a-type-does-not-settle" title="Permanent link">&para;</a></h3>
 <p>A parameter that still has no stable type is reported (<code>E1304</code>), never
 silently made <code>Any</code>. That report is the finding. The errors downstream of it

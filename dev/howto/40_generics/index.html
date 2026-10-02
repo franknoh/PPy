@@ -1980,6 +1980,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2639,6 +2643,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3276,6 +3336,8 @@
       
         
       
+        
+      
     
     
     
@@ -3451,6 +3513,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4580,7 +4670,7 @@ instances directly from the loop, and the loop is the same code either way.</p>
 </code></pre></div>
 <p><strong><code>ppy emit ir generic.ppy</code></strong></p>
 <details class="note">
-<summary>97 lines</summary>
+<summary>102 lines</summary>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ppyir 1
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>module @generic
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>dialect core 1
@@ -4620,7 +4710,7 @@ instances directly from the loop, and the loop is the same code either way.</p>
 <a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a>    %19 = core.add %7, %18 : f64
 <a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>    core.store %19, %total_addr
 <a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a>    %20 = core.load %i_addr : i64
-<a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>    %21 = core.add %20, %3 {overflow = "python"} : i64
+<a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>    %21 = core.add %20, %3 {overflow = "proven"} : i64
 <a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a>    core.store %21, %i_addr
 <a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>    core.br ^for.head3
 <a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a>^for.end6:
@@ -4639,45 +4729,50 @@ instances directly from the loop, and the loop is the same code either way.</p>
 <a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a>    %0 = core.load %x_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
 <a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a>    %1 = core.load %hi_addr : f64
 <a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a>    %2 = core.cmp.lt %0, %1 : bool
-<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>    %3 = core.load %lo_addr : f64
-<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>    %4 = core.load %x_addr : f64
-<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a>    %5 = core.call %3, %4 {callee = @generic_largest__float} : f64
-<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a>    %6 = core.load %hi_addr : f64
-<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a>    %7 = core.select %2, %5, %6 : f64
-<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a>    core.ret %7
-<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a>}
-<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a>
-<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a>func @generic_largest__float(%a: f64, %b: f64) -&gt; f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__float", ppy.releases_gil = true, ppy.symbol = "ppy_generic_largest__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":17:0) {
-<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a>^entry:
-<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a>    %a_addr = core.alloca : ptr&lt;f64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
-<a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a>    core.store %a, %a_addr
-<a id="__codelineno-6-71" name="__codelineno-6-71" href="#__codelineno-6-71"></a>    %b_addr = core.alloca : ptr&lt;f64, stack&gt;
-<a id="__codelineno-6-72" name="__codelineno-6-72" href="#__codelineno-6-72"></a>    core.store %b, %b_addr
-<a id="__codelineno-6-73" name="__codelineno-6-73" href="#__codelineno-6-73"></a>    %0 = core.load %a_addr : f64 loc("examples/40_generics/generic.ppy":18:4)
-<a id="__codelineno-6-74" name="__codelineno-6-74" href="#__codelineno-6-74"></a>    %1 = core.load %b_addr : f64
-<a id="__codelineno-6-75" name="__codelineno-6-75" href="#__codelineno-6-75"></a>    %2 = core.cmp.gt %0, %1 : bool
-<a id="__codelineno-6-76" name="__codelineno-6-76" href="#__codelineno-6-76"></a>    %3 = core.load %a_addr : f64
-<a id="__codelineno-6-77" name="__codelineno-6-77" href="#__codelineno-6-77"></a>    %4 = core.load %b_addr : f64
-<a id="__codelineno-6-78" name="__codelineno-6-78" href="#__codelineno-6-78"></a>    %5 = core.select %2, %3, %4 : f64
-<a id="__codelineno-6-79" name="__codelineno-6-79" href="#__codelineno-6-79"></a>    core.ret %5
-<a id="__codelineno-6-80" name="__codelineno-6-80" href="#__codelineno-6-80"></a>}
-<a id="__codelineno-6-81" name="__codelineno-6-81" href="#__codelineno-6-81"></a>
-<a id="__codelineno-6-82" name="__codelineno-6-82" href="#__codelineno-6-82"></a>func @generic_largest__int(%a: i64, %b: i64) -&gt; i64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__int", ppy.releases_gil = true, ppy.symbol = "ppy_generic_largest__int", ppy.type_arguments = ["int"]} loc("examples/40_generics/generic.ppy":17:0) {
-<a id="__codelineno-6-83" name="__codelineno-6-83" href="#__codelineno-6-83"></a>^entry:
-<a id="__codelineno-6-84" name="__codelineno-6-84" href="#__codelineno-6-84"></a>    %a_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
-<a id="__codelineno-6-85" name="__codelineno-6-85" href="#__codelineno-6-85"></a>    core.store %a, %a_addr
-<a id="__codelineno-6-86" name="__codelineno-6-86" href="#__codelineno-6-86"></a>    %b_addr = core.alloca : ptr&lt;i64, stack&gt;
-<a id="__codelineno-6-87" name="__codelineno-6-87" href="#__codelineno-6-87"></a>    core.store %b, %b_addr
-<a id="__codelineno-6-88" name="__codelineno-6-88" href="#__codelineno-6-88"></a>    %0 = core.load %a_addr : i64 loc("examples/40_generics/generic.ppy":18:4)
-<a id="__codelineno-6-89" name="__codelineno-6-89" href="#__codelineno-6-89"></a>    %a_entry = core.load %a_addr : i64
-<a id="__codelineno-6-90" name="__codelineno-6-90" href="#__codelineno-6-90"></a>    %1 = core.load %b_addr : i64
-<a id="__codelineno-6-91" name="__codelineno-6-91" href="#__codelineno-6-91"></a>    %b_entry = core.load %b_addr : i64
-<a id="__codelineno-6-92" name="__codelineno-6-92" href="#__codelineno-6-92"></a>    %2 = core.cmp.gt %0, %1 : bool
-<a id="__codelineno-6-93" name="__codelineno-6-93" href="#__codelineno-6-93"></a>    %3 = core.load %a_addr : i64
-<a id="__codelineno-6-94" name="__codelineno-6-94" href="#__codelineno-6-94"></a>    %4 = core.load %b_addr : i64
-<a id="__codelineno-6-95" name="__codelineno-6-95" href="#__codelineno-6-95"></a>    %5 = core.select %2, %3, %4 : i64
-<a id="__codelineno-6-96" name="__codelineno-6-96" href="#__codelineno-6-96"></a>    core.ret %5
-<a id="__codelineno-6-97" name="__codelineno-6-97" href="#__codelineno-6-97"></a>}
+<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>    core.cond_br %2, ^ifexp.then1, ^ifexp.else2
+<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>^ifexp.then1:
+<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a>    %3 = core.load %lo_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
+<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a>    %4 = core.load %x_addr : f64
+<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a>    %5 = core.call %3, %4 {callee = @generic_largest__float} : f64
+<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a>    core.br ^ifexp.end3(%5)
+<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a>^ifexp.else2:
+<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a>    %6 = core.load %hi_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
+<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a>    core.br ^ifexp.end3(%6)
+<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a>^ifexp.end3(%ifexp: f64):
+<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a>    core.ret %ifexp loc("examples/40_generics/generic.ppy":30:4)
+<a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a>}
+<a id="__codelineno-6-71" name="__codelineno-6-71" href="#__codelineno-6-71"></a>
+<a id="__codelineno-6-72" name="__codelineno-6-72" href="#__codelineno-6-72"></a>func @generic_largest__float(%a: f64, %b: f64) -&gt; f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__float", ppy.releases_gil = false, ppy.symbol = "ppy_generic_largest__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":17:0) {
+<a id="__codelineno-6-73" name="__codelineno-6-73" href="#__codelineno-6-73"></a>^entry:
+<a id="__codelineno-6-74" name="__codelineno-6-74" href="#__codelineno-6-74"></a>    %a_addr = core.alloca : ptr&lt;f64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
+<a id="__codelineno-6-75" name="__codelineno-6-75" href="#__codelineno-6-75"></a>    core.store %a, %a_addr
+<a id="__codelineno-6-76" name="__codelineno-6-76" href="#__codelineno-6-76"></a>    %b_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-77" name="__codelineno-6-77" href="#__codelineno-6-77"></a>    core.store %b, %b_addr
+<a id="__codelineno-6-78" name="__codelineno-6-78" href="#__codelineno-6-78"></a>    %0 = core.load %a_addr : f64 loc("examples/40_generics/generic.ppy":18:4)
+<a id="__codelineno-6-79" name="__codelineno-6-79" href="#__codelineno-6-79"></a>    %1 = core.load %b_addr : f64
+<a id="__codelineno-6-80" name="__codelineno-6-80" href="#__codelineno-6-80"></a>    %2 = core.cmp.gt %0, %1 : bool
+<a id="__codelineno-6-81" name="__codelineno-6-81" href="#__codelineno-6-81"></a>    %3 = core.load %a_addr : f64
+<a id="__codelineno-6-82" name="__codelineno-6-82" href="#__codelineno-6-82"></a>    %4 = core.load %b_addr : f64
+<a id="__codelineno-6-83" name="__codelineno-6-83" href="#__codelineno-6-83"></a>    %5 = core.select %2, %3, %4 : f64
+<a id="__codelineno-6-84" name="__codelineno-6-84" href="#__codelineno-6-84"></a>    core.ret %5
+<a id="__codelineno-6-85" name="__codelineno-6-85" href="#__codelineno-6-85"></a>}
+<a id="__codelineno-6-86" name="__codelineno-6-86" href="#__codelineno-6-86"></a>
+<a id="__codelineno-6-87" name="__codelineno-6-87" href="#__codelineno-6-87"></a>func @generic_largest__int(%a: i64, %b: i64) -&gt; i64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__int", ppy.releases_gil = false, ppy.symbol = "ppy_generic_largest__int", ppy.type_arguments = ["int"]} loc("examples/40_generics/generic.ppy":17:0) {
+<a id="__codelineno-6-88" name="__codelineno-6-88" href="#__codelineno-6-88"></a>^entry:
+<a id="__codelineno-6-89" name="__codelineno-6-89" href="#__codelineno-6-89"></a>    %a_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
+<a id="__codelineno-6-90" name="__codelineno-6-90" href="#__codelineno-6-90"></a>    core.store %a, %a_addr
+<a id="__codelineno-6-91" name="__codelineno-6-91" href="#__codelineno-6-91"></a>    %b_addr = core.alloca : ptr&lt;i64, stack&gt;
+<a id="__codelineno-6-92" name="__codelineno-6-92" href="#__codelineno-6-92"></a>    core.store %b, %b_addr
+<a id="__codelineno-6-93" name="__codelineno-6-93" href="#__codelineno-6-93"></a>    %0 = core.load %a_addr : i64 loc("examples/40_generics/generic.ppy":18:4)
+<a id="__codelineno-6-94" name="__codelineno-6-94" href="#__codelineno-6-94"></a>    %a_entry = core.load %a_addr : i64
+<a id="__codelineno-6-95" name="__codelineno-6-95" href="#__codelineno-6-95"></a>    %1 = core.load %b_addr : i64
+<a id="__codelineno-6-96" name="__codelineno-6-96" href="#__codelineno-6-96"></a>    %b_entry = core.load %b_addr : i64
+<a id="__codelineno-6-97" name="__codelineno-6-97" href="#__codelineno-6-97"></a>    %2 = core.cmp.gt %0, %1 : bool
+<a id="__codelineno-6-98" name="__codelineno-6-98" href="#__codelineno-6-98"></a>    %3 = core.load %a_addr : i64
+<a id="__codelineno-6-99" name="__codelineno-6-99" href="#__codelineno-6-99"></a>    %4 = core.load %b_addr : i64
+<a id="__codelineno-6-100" name="__codelineno-6-100" href="#__codelineno-6-100"></a>    %5 = core.select %2, %3, %4 : i64
+<a id="__codelineno-6-101" name="__codelineno-6-101" href="#__codelineno-6-101"></a>    core.ret %5
+<a id="__codelineno-6-102" name="__codelineno-6-102" href="#__codelineno-6-102"></a>}
 </code></pre></div>
 </details>
 <!-- outputs:end -->

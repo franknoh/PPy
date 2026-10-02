@@ -1970,6 +1970,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2478,6 +2482,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3122,6 +3182,8 @@
       
         
       
+        
+      
     
     
     
@@ -3294,6 +3356,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4619,8 +4709,10 @@ request.</p>
   <code>.ppy</code>, but it will not lower. That is fine: the loops that read its numbers
   can.</li>
 <li><strong><code>try</code>/<code>except</code> that uses more than the class and message.</strong> A handler
-  reading <code>e.args</code>, or <code>raise ... from ...</code>, keeps its function in Python.
-  One that matches by class and reads <code>str(e)</code> lowers; see
+  that matches by class and reads <code>str(e)</code>, or <code>e.args</code> of an exception
+  raised with one string or none, lowers, and so does <code>raise ... from</code> a
+  name or a new exception. Other uses of <code>e</code>, and a cause computed by a call
+  (<code>raise X from f()</code>), keep the function in Python; see
   <a href="../../guide/exceptions-and-generators/">exceptions and generators</a>.</li>
 </ul>
 <h2 id="what-to-expect-from-the-numbers">What to expect from the numbers<a class="headerlink" href="#what-to-expect-from-the-numbers" title="Permanent link">&para;</a></h2>

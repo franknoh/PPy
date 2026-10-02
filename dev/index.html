@@ -2061,6 +2061,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2569,6 +2573,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3213,6 +3273,8 @@
       
         
       
+        
+      
     
     
     
@@ -3385,6 +3447,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4423,17 +4513,25 @@ to a native build in about ten minutes.</p>
   StableHLO, across 19 IR dialects. Other packages can
   <a href="internals/backends/">register their own backend</a>.</li>
 <li><strong>Strings, classes, and collections.</strong> <a href="guide/strings/"><code>str</code></a>,
-  <a href="guide/classes/">classes with inheritance</a>, and
+  <a href="guide/containers/">lists, dicts, and sets</a>,
+  <a href="guide/classes/">classes with inheritance</a>,
+  <a href="guide/stdlib/">the standard library's <code>random</code>, <code>math</code>, <code>heapq</code>, <code>collections</code>, and
+  <code>functools</code></a>, and
   <a href="guide/collections/"><code>Vec</code>, <code>HashMap</code>, <code>TreeMap</code>, and six more</a>
   compile to native code, reference counted with cycles collected, and
   give the same answers as CPython.</li>
+<li><strong>Existing Python as it is.</strong> Without strict mode, <code>ppy run</code> types
+  unannotated parameters from the project's calls, defaults, and doctests,
+  and runs what the analysis cannot follow on CPython
+  (<a href="guide/subset/#types-from-call-sites">Types from call sites</a>).</li>
 <li><strong>Eight library plugins.</strong> NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.</li>
 <li><strong>A cheap call boundary.</strong> A native call with two <code>int</code> arguments costs
-  47 ns, against 28 ns for a plain Python call, with no Python frames on the
-  native path.</li>
-<li><strong>Tested.</strong> 1440 test functions on Python 3.12, 3.13, and
-  3.14, with 74% statement coverage. 81 diagnostic codes,
+  29 ns from Python, against 30 ns for CPython's own call. Lists, dicts,
+  sets, and objects cross in the same generated C wrapper, and what a call
+  writes comes back into the caller's objects.</li>
+<li><strong>Tested.</strong> 1441 test functions on Python 3.12, 3.13, and
+  3.14, with 68% statement coverage. 81 diagnostic codes,
   each documented in one place.</li>
 </ul>
 </div>
@@ -4456,7 +4554,7 @@ to a native build in about ten minutes.</p>
 </tr>
 <tr>
 <td><a href="howto/">Examples</a></td>
-<td>51 folders and 61 programs with their commands and output. 18 of them are measured against Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop; the results are collected on the <a href="howto/comparisons/">comparisons page</a>.</td>
+<td>54 folders and 64 programs with their commands and output. 18 of them are measured against Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop; the results are collected on the <a href="howto/comparisons/">comparisons page</a>.</td>
 </tr>
 <tr>
 <td><a href="reference/">Reference</a></td>
@@ -4474,8 +4572,10 @@ support every dynamic behavior. <code>exec</code> and <code>eval</code>, monkey-
 namespace mutation, and unrestricted runtime reflection are restricted, or
 isolated behind an explicit <code>ppy.dynamic</code> boundary. That is the trade for
 analysis and native code you can rely on.</p>
-<p>To bring an existing Python project over, use <code>ppy migrate</code>
-(<a href="internals/migrating/">how a real project went</a>).</p>
+<p>To run an existing Python project, turn strict mode off
+(<code>strict = false</code> in <code>[tool.ppy]</code>): what the analysis cannot follow is a
+warning and runs on CPython. To bring it over to strict PPy, use
+<code>ppy migrate</code> (<a href="internals/migrating/">how a real project went</a>).</p>
 </div>
 
 

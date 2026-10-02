@@ -1980,6 +1980,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2604,6 +2608,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3254,6 +3314,8 @@
       
         
       
+        
+      
     
     
     
@@ -3429,6 +3491,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4433,14 +4523,14 @@ file and the same <code>threading.Thread</code>.</p>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
 <p><strong><code>python  threads.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>1 thread    3364.0 ms
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>2 threads   6794.2 ms
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>1 thread    3314.1 ms
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>2 threads   6709.8 ms
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>scaling       0.99x
 </code></pre></div>
 <p><strong><code>ppy run threads.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>1 thread     130.3 ms
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2 threads    129.6 ms
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>scaling       2.01x
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>1 thread     130.7 ms
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2 threads    147.4 ms
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>scaling       1.77x
 </code></pre></div>
 <!-- outputs:end -->
 
@@ -4458,8 +4548,11 @@ file and the same <code>threading.Thread</code>.</p>
 generated wrapper therefore wraps the call in <code>Py_BEGIN_ALLOW_THREADS</code>.</p>
 <h2 id="when-the-gil-stays-held">When the GIL stays held<a class="headerlink" href="#when-the-gil-stays-held" title="Permanent link">&para;</a></h2>
 <ul>
-<li>A function with an effect that can reach the interpreter keeps the GIL.</li>
-<li>A function that performs I/O is not lowered at all.</li>
+<li>A function with an effect that can reach the interpreter keeps the GIL:
+  one that prints, reads input, opens a file, or calls a Python function
+  (<a href="../../guide/native-effects/">Effects in native code</a>).</li>
+<li>A short straight-line function keeps it too. Releasing and retaking the
+  GIL costs about 20 ns, more than such a body saves.</li>
 <li>Borrowed buffers get the same treatment NumPy gives them: the boundary
   pins the memory for the whole call.</li>
 </ul>

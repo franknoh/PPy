@@ -1970,6 +1970,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2478,6 +2482,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3122,6 +3182,8 @@
       
         
       
+        
+      
     
     
     
@@ -3294,6 +3356,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4408,7 +4498,7 @@
 
 
 <h1 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Permanent link">&para;</a></h1>
-<p>PPy is at version 0.3. Some parts of it are more settled than others.
+<p>PPy is at version 0.6. Some parts of it are more settled than others.
 This page says which parts you can build on, which parts will change, and
 what happens when the two sides of a boundary disagree.</p>
 <h2 id="stability-levels">Stability levels<a class="headerlink" href="#stability-levels" title="Permanent link">&para;</a></h2>
@@ -4450,6 +4540,16 @@ what happens when the two sides of a boundary disagree.</p>
 <td>new constructs are added; accepted code is not un-accepted without a note</td>
 </tr>
 <tr>
+<td><code>--no-strict</code> (<code>strict = false</code>): <code>W2010</code>, <code>W2011</code>, and parameter types inferred from calls, defaults, and doctests</td>
+<td>settling</td>
+<td>since 0.6. What it accepts only grows; which functions compile may change from release to release, never what a program prints</td>
+</tr>
+<tr>
+<td>what compiles natively under <code>ppy run</code>, and the cost model that decides which functions Python calls natively</td>
+<td>experimental</td>
+<td>grows every release; <code>ppy explain --summary</code> reports it. A function moving between native and Python changes speed, not output</td>
+</tr>
+<tr>
 <td><code>ppy.pure</code>, <code>ppy.opt</code>, <code>ppy.native</code>, <code>ppy.jit</code>, <code>ppy.dynamic</code>, <code>ppy.check</code></td>
 <td>settling</td>
 <td>the directives a program is written around</td>
@@ -4483,6 +4583,11 @@ what happens when the two sides of a boundary disagree.</p>
 <td><code>ppy emit</code>, <code>ppy inspect --stage</code>, <code>--report-opt</code>, <code>--sanitize</code>, <code>--profile</code>/<code>--pgo</code></td>
 <td>experimental</td>
 <td>developer tools; the text they print is for people and may be reworded</td>
+</tr>
+<tr>
+<td><code>ppy explain</code> and <code>ppy explain --summary</code>, text and <code>--json</code></td>
+<td>experimental</td>
+<td>added in 0.5 (<code>--summary</code>); the reasons are reworded as the lowering grows</td>
 </tr>
 <tr>
 <td><code>ppy check</code> / <code>ppy run</code> / <code>ppy build</code> and their flags</td>

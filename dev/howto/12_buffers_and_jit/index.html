@@ -1980,6 +1980,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2639,6 +2643,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3276,6 +3336,8 @@
       
         
       
+        
+      
     
     
     
@@ -3451,6 +3513,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4613,28 +4703,28 @@ native filesystem.</p>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
 <p><strong><code>python  buffers_and_jit.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>list[float] copied        104.387 us   
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Buffer[float] borrowed    158.837 us   0.66x, same sum: True
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>dot, strict order         277.649 us   
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>dot, @ppy.fastmath        257.140 us   1.08x, differs by 0.00e+00
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>digest, generic           263.962 us   
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>digest, @ppy.jit          260.730 us   1.01x, same: True
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>list[float] copied        103.743 us   
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Buffer[float] borrowed    174.309 us   0.60x, same sum: True
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>dot, strict order         261.275 us   
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>dot, @ppy.fastmath        260.866 us   1.00x, differs by 0.00e+00
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>digest, generic           267.616 us   
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>digest, @ppy.jit          264.037 us   1.01x, same: True
 </code></pre></div>
 <p><strong><code>ppy     buffers_and_jit.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>list[float] copied        102.127 us   
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Buffer[float] borrowed    162.701 us   0.63x, same sum: True
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>dot, strict order         261.217 us   
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>dot, @ppy.fastmath        259.543 us   1.01x, differs by 0.00e+00
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>digest, generic           270.856 us   
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>digest, @ppy.jit          268.401 us   1.01x, same: True
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>list[float] copied        103.171 us   
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Buffer[float] borrowed    160.804 us   0.64x, same sum: True
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>dot, strict order         262.343 us   
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>dot, @ppy.fastmath        260.466 us   1.01x, differs by 0.00e+00
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>digest, generic           273.349 us   
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>digest, @ppy.jit          267.708 us   1.02x, same: True
 </code></pre></div>
 <p><strong><code>ppy run buffers_and_jit.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>list[float] copied         11.790 us   
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>Buffer[float] borrowed      3.726 us   3.16x, same sum: True
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>dot, strict order           4.196 us   
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>dot, @ppy.fastmath          0.849 us   4.94x, differs by 4.07e-10
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>digest, generic            11.656 us   
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>digest, @ppy.jit            8.874 us   1.31x, same: True
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>list[float] copied         11.610 us   
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>Buffer[float] borrowed      4.061 us   2.86x, same sum: True
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>dot, strict order           3.925 us   
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>dot, @ppy.fastmath          0.972 us   4.04x, differs by 4.07e-10
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>digest, generic            11.917 us   
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>digest, @ppy.jit            7.818 us   1.52x, same: True
 </code></pre></div>
 <!-- outputs:end -->
 

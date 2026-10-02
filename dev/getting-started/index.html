@@ -2099,6 +2099,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2607,6 +2611,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3251,6 +3311,8 @@
       
         
       
+        
+      
     
     
     
@@ -3423,6 +3485,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4435,8 +4525,10 @@ kernel. Run every command below in your project directory.</p>
 <p>If you don't use <code>uv</code>, run <code>pip install "ppy-lang[llvm]"</code> instead.</p>
 <p>The distribution is called <code>ppy-lang</code>. It installs three packages: <code>ppy</code>,
 <code>ppy_compiler</code>, and <code>ppy_runtime</code>. Your code writes <code>import ppy</code>.</p>
-<p>The native backend needs the <code>llvm</code> extra (llvmlite). The fastest call
-boundary is built when the CPython headers (<code>python3-dev</code>) are present.
+<p>The native backend needs the <code>llvm</code> extra (llvmlite). Without it,
+<code>ppy run</code> warns once (<code>W2012</code>) and runs your program on CPython. The fastest
+call boundary is built when the CPython headers (<code>python3-dev</code>) are
+present.
 <a href="../installing/">Installing</a> has the details.</p>
 <p>Check what PPy found on your machine:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>doctor<span class="w">   </span><span class="c1"># what was found: the compiler, LLVM, the C toolchain, plugin runtimes</span>
@@ -4518,14 +4610,27 @@ kernels instead:</p>
 </ol>
 <p><a href="../howto/24_interop/">Interop</a> and <a href="../internals/migrating/">Migrating a real
 project</a> cover this in depth.</p>
-<p>Two commands help you turn existing Python into PPy:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>convert<span class="w"> </span>kernel.py<span class="w">     </span><span class="c1"># untyped Python to strict PPy, inferred from the call sites</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>migrate<span class="w"> </span>legacy.py<span class="w">     </span><span class="c1"># the permissive form: dynamic features go behind boundaries</span>
+<p>Existing Python can also run unchanged. Turn strict mode off for the
+project:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[tool.ppy]</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">strict</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</code></pre></div>
+<p>Then <code>ppy run script.py</code> types each unannotated parameter from the calls
+the project makes to it, its default value, and its doctests, compiles the
+functions that types, and runs the rest on CPython. What the analysis
+cannot follow, such as <code>eval</code> or an import that fails, is a <code>W2010</code>
+warning and runs as CPython runs it. <code>ppy explain --summary --no-strict .</code>
+says how much went native and what kept the rest in Python, and <code>ppy
+explain module.function</code> lists the types it inferred and where from.
+<a href="../howto/52_unannotated/">An unannotated module</a> walks through one.</p>
+<p>Two commands turn existing Python into PPy:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>convert<span class="w"> </span>kernel.py<span class="w">     </span><span class="c1"># untyped Python to strict PPy, inferred from the call sites</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>migrate<span class="w"> </span>legacy.py<span class="w">     </span><span class="c1"># the permissive form: dynamic features go behind boundaries</span>
 </code></pre></div>
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../guide/">Guide</a>: the subset and the directives, then native memory, SIMD, threads, parallel loops, derivatives, coroutines, GPU kernels, XLA, and generics.</li>
-<li><a href="../howto/">Examples</a>: 51 folders, one page each.</li>
+<li><a href="../howto/">Examples</a>: 54 folders, one page each.</li>
 <li><a href="../cli/">CLI</a>: all commands and options, including <code>ppy emit</code>, <code>inspect --stage</code>, <code>--report-opt</code>, <code>--sanitize</code>, and <code>--profile</code>/<code>--pgo</code>.</li>
 </ul>
 

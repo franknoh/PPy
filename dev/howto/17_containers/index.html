@@ -2093,6 +2093,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2604,6 +2608,62 @@
     
   
     A clinic simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../53_caches_and_counters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caches and counters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../54_objects_and_grids/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Objects and grids across the boundary
   
 
     
@@ -3254,6 +3314,8 @@
       
         
       
+        
+      
     
     
     
@@ -3429,6 +3491,34 @@
     
   
     Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../52_unannotated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    An unannotated module
   
 
     
@@ -4455,10 +4545,13 @@ container the function made and one it was given.</p>
   checks against it.</li>
 </ul>
 <p>All four functions lower to native code: plain lists, dicts, and sets are
-native (see <a href="../../guide/containers/">Lists, dicts, and sets</a>). <code>main</code>
-stays in Python because it prints, and Python calls <code>distinct</code> on its Python
-body, because copying its strings in would cost what its one pass over them
-saves. All of them are strict, typed, and pure.</p>
+native (see <a href="../../guide/containers/">Lists, dicts, and sets</a>).
+Python calls <code>histogram</code> and <code>grow</code> natively. It calls <code>distinct</code> and
+<code>flatten</code> on their Python bodies: each makes one pass over what it is
+given, which costs what copying it in would. <code>main</code> stays in Python,
+because <code>sorted(...items())</code> sorts <code>(key, count)</code> tuples, which native code
+does not order. All of them are strict and typed, and all but <code>main</code> are
+pure.</p>
 <h2 id="local-mutation-is-pure-shared-mutation-is-not">Local mutation is pure, shared mutation is not<a class="headerlink" href="#local-mutation-is-pure-shared-mutation-is-not" title="Permanent link">&para;</a></h2>
 <p><code>flatten</code> extends a list it created, so it is pure. Had it extended <code>rows</code>,
 the write would be an effect on an argument and <code>@ppy.pure</code> would fail with
