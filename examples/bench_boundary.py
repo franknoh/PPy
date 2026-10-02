@@ -31,6 +31,12 @@ def tiny_native(x: int, y: int) -> int:
     return x + y
 
 
+@ppy.native
+@ppy.pure
+def tiny_default(x: int, y: int = 3) -> int:
+    return x + y
+
+
 @ppy.pure
 @ppy.opt(3)
 def loop100(n: int) -> int:
@@ -87,6 +93,7 @@ def filled(xs: list[int]) -> None:
 # into its answer -- and a folded call measures nothing.
 plain = tiny
 native = tiny_native
+defaulted = tiny_default
 looped = loop100
 buffered = summed
 values = array.array("q", range(100))
@@ -109,6 +116,14 @@ def drive_plain(i: int) -> None:
 
 def drive_native(i: int) -> None:
     native(i, 3)
+
+
+def drive_keyword(i: int) -> None:
+    native(i, y=3)
+
+
+def drive_default(i: int) -> None:
+    defaulted(i)
 
 
 def drive_loop(i: int) -> None:
@@ -150,6 +165,8 @@ def rate(label: str, call: Callable[[int], None], rounds: int) -> None:
 def main() -> None:
     rate("tiny, kept in Python", drive_plain, 200000)
     rate("tiny, forced native", drive_native, 200000)
+    rate("tiny, by keyword", drive_keyword, 200000)
+    rate("tiny, default left out", drive_default, 200000)
     rate("native loop, n=100", drive_loop, 200000)
     rate("borrowed buffer, n=100", drive_buffer, 200000)
     rate("guard failure -> fallback", drive_guard, 200000)

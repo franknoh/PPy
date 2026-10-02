@@ -136,8 +136,8 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python numbers.ppy` | 7.22 |
-| `ppy run numbers.ppy`, after the first run built the cache | 1.96 |
+| `python numbers.ppy` | 7.27 |
+| `ppy run numbers.ppy`, after the first run built the cache | 0.50 |
 
 Timed one part at a time inside the program (one run each):
 
@@ -146,16 +146,12 @@ Timed one part at a time inside the program (one run each):
 | `count_primes(2_000_000)` | 2.53 | 0.13 |
 | `longest_collatz(1_000_000)` | 4.19 | 0.17 |
 | `harshad_numbers(1_000_000)` | 0.17 | 0.03 |
-| `mean([float(digit_sum(n)) for n in range(1_000_000)])` | 0.21 | 1.55 |
+| `mean([float(digit_sum(n)) for n in range(1_000_000)])` | 0.21 | 0.11 |
 
-The last line is slower under `ppy run`. Its comprehension runs in Python
-and calls `digit_sum(n)` a million times, leaving `base` to its default.
-A call from Python that leaves out a default, or names an argument, is
-bound by the boundary in Python against the function's signature, which
-costs about 1.5 µs; the same call with both arguments, `digit_sum(n, 10)`,
-costs about 70 ns, against about 155 ns for CPython's own call. A loop
-that calls a native function many times from Python should pass every
-argument by position, or move into a function of its own.
+The last line's comprehension runs in Python and calls `digit_sum(n)` a
+million times, leaving `base` to its default. The generated wrapper binds
+such a call itself, from the parameter names and `__defaults__`, so it
+costs what `digit_sum(n, 10)` does.
 
 The program has no `main()`, so there is no standalone build of it; a
 standalone binary needs a native `main` to start from.

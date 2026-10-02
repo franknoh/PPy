@@ -1054,7 +1054,8 @@ void ppy_memo_free(int8_t *handle) {
     int64_t *table = (int64_t *)handle;
     int64_t stride = ppy_memo_stride(table);
     int64_t *slots = ppy_memo_slots(table);
-    for (int64_t s = 0; s < table[0]; s++) {
+    for (int64_t s = 0; (table[4] | table[5]) != 0 && s < table[0]; s++) {
+        /* Only strings are copies of their own. */
         if (slots[s * stride] == 1) {
             ppy_memo_drop(table, slots + s * stride);
         }
@@ -1119,6 +1120,10 @@ int64_t ppy_memo_hash(const int64_t *table, const int64_t *key, int64_t copied) 
 
 /* Whether a slot's key is the key in a buffer. */
 int64_t ppy_memo_same(const int64_t *table, const int64_t *slot, const int64_t *key) {
+    if ((table[4] | table[6]) == 0) {
+        /* Integers only: the words are the key. */
+        return memcmp(slot + 3, key, (size_t)(table[2] * 8)) == 0;
+    }
     for (int64_t w = 0; w < table[2]; w++) {
         int64_t mine = slot[3 + w];
         if ((table[4] >> w) & 1) {
@@ -1144,6 +1149,9 @@ int64_t ppy_memo_same(const int64_t *table, const int64_t *slot, const int64_t *
 
 /* Whether a key holds a NaN, which no key equals: such a call is not kept. */
 int64_t ppy_memo_nan(const int64_t *table, const int64_t *key) {
+    if (table[6] == 0) {
+        return 0;
+    }
     for (int64_t w = 0; w < table[2]; w++) {
         if ((table[6] >> w) & 1) {
             double x;
@@ -1156,6 +1164,35 @@ int64_t ppy_memo_nan(const int64_t *table, const int64_t *key) {
     return 0;
 }
 
+/* The slot holding the key with `hash`, or -1; with `free`, where the key
+   would go: the first slot on its probe that is not in use. A hit is a use,
+   which only a bounded table keeps count of. */
+int64_t ppy_memo_probe(int64_t *table, const int64_t *words, int64_t hash, int64_t *free) {
+    int64_t stride = ppy_memo_stride(table);
+    int64_t mask = table[0] - 1;
+    int64_t i = hash & mask;
+    int64_t *slots = ppy_memo_slots(table);
+    int64_t open = -1;
+    while (slots[i * stride] != 0) {
+        int64_t *slot = slots + i * stride;
+        if (slot[0] == 1) {
+            if (slot[2] == hash && ppy_memo_same(table, slot, words)) {
+                if (table[9] > 0) {
+                    slot[1] = ++table[8];
+                }
+                return i;
+            }
+        } else if (open < 0) {
+            open = i;
+        }
+        i = (i + 1) & mask;
+    }
+    if (free != NULL) {
+        *free = open >= 0 ? open : i;
+    }
+    return -1;
+}
+
 /* The slot holding `key`, or -1; a hit is a use. */
 int64_t ppy_memo_find(int8_t *handle, const int8_t *key) {
     int64_t *table = (int64_t *)handle;
@@ -1163,19 +1200,7 @@ int64_t ppy_memo_find(int8_t *handle, const int8_t *key) {
     if (table[1] == 0 || ppy_memo_nan(table, words)) {
         return -1;
     }
-    int64_t stride = ppy_memo_stride(table);
-    int64_t mask = table[0] - 1;
-    int64_t i = ppy_memo_hash(table, words, 0) & mask;
-    int64_t *slots = ppy_memo_slots(table);
-    while (slots[i * stride] != 0) {
-        int64_t *slot = slots + i * stride;
-        if (slot[0] == 1 && ppy_memo_same(table, slot, words)) {
-            slot[1] = ++table[8];
-            return i;
-        }
-        i = (i + 1) & mask;
-    }
-    return -1;
+    return ppy_memo_probe(table, words, ppy_memo_hash(table, words, 0), NULL);
 }
 
 /* Where a slot's value words are. */
@@ -1260,7 +1285,9 @@ void ppy_memo_store(int8_t *handle, const int8_t *key, const int8_t *value) {
         return;
     }
     int64_t stride = ppy_memo_stride(table);
-    int64_t found = table[1] ? ppy_memo_find(handle, key) : -1;
+    int64_t hash = ppy_memo_hash(table, words, 0);
+    int64_t open = -1;
+    int64_t found = ppy_memo_probe(table, words, hash, &open);
     if (found >= 0) {
         if (table[9] > 0) {
             return;
@@ -1276,6 +1303,7 @@ void ppy_memo_store(int8_t *handle, const int8_t *key, const int8_t *value) {
         }
         return;
     }
+    int64_t grown = 0;
     if (table[9] > 0 && table[1] >= table[9]) {
         int64_t *slots = ppy_memo_slots(table);
         int64_t *oldest = NULL;
@@ -1291,15 +1319,22 @@ void ppy_memo_store(int8_t *handle, const int8_t *key, const int8_t *value) {
     }
     if (2 * (table[1] + table[10] + 1) > table[0]) {
         /* Over half full, counting the removed: the same size again where
-           what is in use would fill a quarter at most, twice that otherwise. */
-        ppy_memo_grow(table, 4 * (table[1] + 1) <= table[0] ? table[0] : 2 * table[0]);
+           what is in use would fill a quarter at most; four times that while
+           the table is small, so a table each call makes grows twice, not
+           four times, on its way to a few hundred entries; twice otherwise. */
+        int64_t size = table[0];
+        ppy_memo_grow(table, 4 * (table[1] + 1) <= size ? size : size < 1024 ? 4 * size : 2 * size);
+        grown = 1;
     }
-    int64_t hash = ppy_memo_hash(table, words, 0);
     int64_t mask = table[0] - 1;
-    int64_t i = hash & mask;
+    int64_t i = open;
     int64_t *slots = ppy_memo_slots(table);
-    while (slots[i * stride] == 1) {
-        i = (i + 1) & mask;
+    if (grown) {
+        /* Laid out again: the key's place is found anew. */
+        i = hash & mask;
+        while (slots[i * stride] == 1) {
+            i = (i + 1) & mask;
+        }
     }
     int64_t *slot = slots + i * stride;
     slot[0] = 1;

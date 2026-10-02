@@ -146,6 +146,7 @@ static PyObject *ppy_adopt_{index}(PyObject *function) {{
     Py_XDECREF(ppy_types_{index});
     ppy_types_{index} = types;
     ppy_target_{index} = (ppy_fn_{index})&{symbol};
+    ppy_binder_set(&ppy_binder_{index}, function, {count});
 {assignments}    ppy_spec_count_{index} = 0;
     PyObject *named = ppy_named((PyCFunction)(void *)ppy_call_{index}, function);
     if (named != Py_None) {{
@@ -234,6 +235,7 @@ def extension_source(
                 index=index,
                 position=index,
                 symbol=signature.symbol,
+                count=len(signature.parameters),
                 lookup=_lookup(index, signature),
                 assignments=_type_assignments(index, object_params),
             )

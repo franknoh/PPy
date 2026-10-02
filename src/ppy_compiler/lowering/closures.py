@@ -27,55 +27,18 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from ..analysis import types as T
-from ..analysis.closures import Scope, free_names, is_plain_callable, own_names
+from ..analysis.closures import (
+    Scope,
+    free_names,
+    is_plain_callable,
+    shared_with_closures,
+)
 from ..backend.llvm.lowering import Unsupported, _scalar_name
 from ..ir import I64, PtrType, Successor, Value
 from ..ir.dialects import core
 from .collections import HANDLE, Held, Kind, Shape, shape_of
 
 __all__ = ["ClosureLowering"]
-
-#: Calls whose `key=` lambda is lowered in place, its body run per element.
-_INLINE_KEYS = frozenset({"sorted", "min", "max"})
-
-
-def _inline_key(call: ast.Call, lambda_: ast.Lambda) -> bool:
-    if not any(k.arg == "key" and k.value is lambda_ for k in call.keywords):
-        return False
-    func = call.func
-    if isinstance(func, ast.Name):
-        return func.id in _INLINE_KEYS
-    return isinstance(func, ast.Attribute) and func.attr == "sort"
-
-
-def _closure_nodes(node: ast.FunctionDef) -> list[Scope]:
-    """The nested functions and lambdas directly in `node`'s scope that become
-    closures: every one but a sort key's lambda, whose body runs in place."""
-    inline: set[int] = set()
-    found: list[Scope] = []
-    pending: list[ast.AST] = list(node.body)
-    while pending:
-        current = pending.pop()
-        if isinstance(current, ast.Call):
-            for keyword in current.keywords:
-                if isinstance(keyword.value, ast.Lambda) and _inline_key(current, keyword.value):
-                    inline.add(id(keyword.value))
-        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            found.append(current)
-            pending.extend(current.decorator_list)
-            pending.extend(current.args.defaults)
-            continue
-        if isinstance(current, ast.Lambda):
-            if id(current) not in inline:
-                found.append(current)
-            pending.extend(current.args.defaults)
-            if id(current) in inline:
-                pending.append(current.body)
-            continue
-        if isinstance(current, ast.ClassDef):
-            continue
-        pending.extend(ast.iter_child_nodes(current))
-    return found
 
 
 def _plain(typed: T.Callable_) -> T.Callable_:
@@ -114,11 +77,7 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
                 address = core.ptr_offset(self.b, record, self._word(index + 1))  # type: ignore[attr-defined]
                 cell = core.load(self.b, core.cast(self.b, address, PtrType(HANDLE)))
                 self._place(name, cell, typed)
-        shared: set[str] = set()
-        for child in _closure_nodes(node):
-            shared |= free_names(child)
-        shared &= own_names(node)
-        shared -= set(self.captures)
+        shared = shared_with_closures(node) - set(self.captures)
         for name in sorted(shared):
             typed = self._local_type(name)
             if typed is None:
@@ -192,6 +151,10 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
     def _move_into(self, name: str, cell: Value, typed: T.Type) -> None:
         """A variable becomes `cell`'s: a parameter's value moves in, and
         anything else starts empty, as a new cell is."""
+        if name in self.buffers:  # type: ignore[attr-defined]
+            # A lent buffer has no handle to move in; `written_params` holds a
+            # parameter a closure shares by handle, so this is a lowering bug.
+            raise Unsupported(f"`{name}` is a buffer a closure shares")
         held = self.collections.get(name)  # type: ignore[attr-defined]
         slot = self.slots.get(name)  # type: ignore[attr-defined]
         self._place(name, cell, typed)

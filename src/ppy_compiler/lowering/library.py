@@ -182,7 +182,9 @@ class LibraryLowering:
             owner = self._flavored(node.func.value)
             if owner is not None and owner.flavor == _RANDOM:
                 # `r.sample(xs, k)`, `r.choices(xs)`: a new list, the caller's.
-                return self._generator_method(node.func.value, node.func.attr, node), True
+                # `r.choice(xs)` is an element of `xs`, which `xs` keeps.
+                made = self._generator_method(node.func.value, node.func.attr, node)
+                return made, node.func.attr != "choice"
         made = self._counter_call(node, "most_common", "elements")
         if made is not None:
             # A new list, the caller's.

@@ -87,8 +87,8 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 | | seconds |
 |---|---:|
 | `python words.ppy` | 1.47 |
-| `ppy run words.ppy`, after the first run built the cache | 0.78 |
-| `./dist/words`, the standalone binary | 0.76 |
+| `ppy run words.ppy`, after the first run built the cache | 0.74 |
+| `./dist/words`, the standalone binary | 0.71 |
 
 Timed one part at a time inside the program, in seconds, the mean of five
 runs:
@@ -97,7 +97,7 @@ runs:
 |---|---:|---:|
 | `make_words` | 0.157 | 0.106 |
 | `letter_counts` | 0.131 | 0.100 |
-| `nearest` (22,350 `distance` calls) | 0.618 | 0.347 |
+| `nearest` (22,350 `distance` calls) | 0.618 | 0.287 |
 | `cheapest(0, 250)` | 0.500 | 0.077 |
 
 `cheapest` gains the most: each entry runs a loop of lookups into one
