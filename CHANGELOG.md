@@ -3,16 +3,18 @@
 ## 0.6.0 — unreleased
 
 More ordinary Python runs natively under `ppy run`: functions that print,
-read input, or call back into Python; functions that read module globals or
-take the project's objects; `isinstance`, chained comparisons, `in`, integer
-powers, and generators passed around as values; and `random`, `math`,
-`heapq`, `bisect`, and `itertools`. The checker accepts more of the typing
-module, and a native function given an `int` for a `float` parameter now
-returns what CPython returns. With `--no-strict`, `ppy run` no longer
-refuses a program CPython runs. On TheAlgorithms/Python, the functions
-Python calls natively went from 231 to 523, and 387 of 400 scripts print
-the same as under CPython, with the other 13 skipped as nondeterministic
-or slow and none differing.
+read input, or call back into Python; functions that read module globals,
+take the project's objects, or are called with keywords; `isinstance`,
+chained comparisons, `in`, integer powers, and generators passed around as
+values; and `random`, `math`, `heapq`, `bisect`, `itertools`, `Counter`,
+`defaultdict`, and `lru_cache`. The Python boundary copies containers and
+objects in C, so calling native code from Python costs much less. Without
+strict mode, unannotated parameters take their types from the project's
+calls, and `ppy run` no longer refuses a program CPython runs. On
+TheAlgorithms/Python, the functions Python calls natively went from 231 to
+806 (846 without strict mode), and 387 of 400 scripts print the same as
+under CPython, with the other 13 skipped as nondeterministic or slow and
+none differing.
 
 ### Effects in native code
 

@@ -224,48 +224,60 @@ on the tree before this change, with the same seed: none is new.
 
 The same summary over the same tree, with everything 0.6.0 lowers: effects
 in native code, module globals and objects across the boundary, the new
-expressions and loops, and the standard library.
+expressions and loops, the standard library, keyword calls, the boundary
+rewritten in C, and parameter types inferred from calls.
 
-| tier | functions | statements |
+Before 0.6.0, `ppy explain --summary` ran in strict mode even when given
+`--no-strict`, so every table above is a strict-mode count. Both modes are
+shown here; strict mode is the one to compare with the tables above.
+
+| tier | strict | `--no-strict` |
 |---|---:|---:|
-| native, called from Python | 523 (11%) | 5,312 (14%) |
-| native, called from native code | 713 (15%) | 3,161 (9%) |
-| Python | 3,450 (74%) | 28,496 (77%) |
+| native, called from Python | 806 functions (17%), 6,690 statements | 846 (18%), 6,979 |
+| native, called from native code | 527, 2,549 | 572, 2,730 |
+| Python | 3,353 (72%), 27,730 | 3,268 (70%), 27,260 |
 
-Against 0.5.0, the functions Python calls natively went from 231 to 523, and
-all compiled functions from 652 to 1,236.
+In strict mode the functions Python calls natively went from 231 to 806,
+and all compiled functions from 652 to 1,333. `--no-strict` adds the
+functions whose parameter types come from their calls, defaults, and
+doctests.
 
 Several reasons left the table: calls with unknown effects (840 functions)
 and I/O (355), which native code now holds as effects; `isinstance` (154);
 random numbers (138); calls back into Python (91); generators that are
-returned or passed on (72); `for` over a tuple (55); and chained comparisons
-(49). Reading a module global that can change fell from 217 functions to 61.
-
-Some freed functions stop at the next reason in their body, so the top of
-the table is now:
+returned or passed on (72); `for` over a tuple (55); chained comparisons
+(49); and keyword arguments (41). Under `--no-strict` the top of the table
+is now:
 
 | statements | functions | reason |
 |---:|---:|---|
-| 3,008 | 428 | a parameter or result with no annotation the checker could infer |
-| 2,059 | 202 | writes to a parameter native code copies |
-| 1,803 | 140 | writes to an object native code does not own |
-| 905 | 143 | a `numpy.ndarray` parameter |
-| 731 | 79 | a `list[Any]` parameter |
-| 630 | 94 | a nested function whose enclosing function stays in Python |
-| 615 | 61 | reads a module global that can change |
-| 540 | 41 | writes through a name the compiler cannot follow |
-| 396 | 36 | calls a Python function whose result native code cannot take back |
-| 388 | 41 | keyword arguments have no native ABI |
+| 1,840 | 256 | a parameter or result with no annotation the checker could infer |
+| 1,663 | 173 | writes to a parameter native code copies |
+| 1,547 | 116 | writes to an object native code does not own |
+| 963 | 149 | a `numpy.ndarray` parameter |
+| 746 | 80 | a `list[Any]` parameter |
+| 650 | 64 | reads a module global that can change |
+| 516 | 39 | writes through a name the compiler cannot follow |
+| 514 | 48 | calls a Python function whose result native code cannot take back |
+| 447 | 54 | a `ppy.dynamic` boundary |
+| 336 | 51 | a nested function whose enclosing function stays in Python |
 
-Of the compiled functions Python does not call natively, 329 are too small
-for the boundary to pay off and 208 do less with their collections than
-copying them in costs.
+Most of the remaining parameter and object writes are to `self` of classes
+with unannotated or NumPy fields, or through a bare `list` or `dict`
+annotation.
+
+Of the 572 compiled functions Python does not call natively, 309 do less
+with their collections than copying them in costs, 78 return nothing and
+do not loop over their arguments, 49 are too small for the boundary to pay
+off, and 38 call themselves without a loop, so CPython's recursion limit
+stays in force. The boundary now copies containers and objects in C, which
+moved most of the 374 functions that were too small to the native side.
 
 The 400-script comparison, run again on the same programs: 387 match and 13
 are skipped as nondeterministic or slow under CPython. None differs, down
-from 34 when the 0.6.0 work began. The last eight were programs `ppy run`
-refused at compile time under `strict = false`: an import of a sibling
-module that CPython also fails to find, a `MutableSequence[T]` parameter, a
-generator expression assigned to a bare `Generator`, and `globals()` passed
-to `timeit`. Under `--no-strict` these are now warnings, and that code runs
-on CPython.
+from 34 when the 0.6.0 work began. Among the fixes on the way: programs
+`ppy run` refused under `strict = false` (an import of a sibling module
+that CPython also fails to find, a `MutableSequence[T]` parameter, a
+generator expression assigned to a bare `Generator`, `globals()` passed to
+`timeit`), a double free after a native call raised, and a segfault where
+CPython raises `RecursionError`.
