@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.7.0 — unreleased
+
 ## 0.6.0 — 2026-10-03
 
 More ordinary Python runs natively under `ppy run`: functions that print,
