@@ -4302,15 +4302,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#060-unreleased" class="md-nav__link">
+  <a href="#060-2026-10-03" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.6.0 — unreleased
+        0.6.0 — 2026-10-03
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="0.6.0 — unreleased">
+    <nav class="md-nav" aria-label="0.6.0 — 2026-10-03">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4358,10 +4358,54 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-python-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Python boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-checker" class="md-nav__link">
     <span class="md-ellipsis">
       
         The checker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unannotated-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unannotated code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples-and-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples and documentation
       
     </span>
   </a>
@@ -4789,15 +4833,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#060-unreleased" class="md-nav__link">
+  <a href="#060-2026-10-03" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.6.0 — unreleased
+        0.6.0 — 2026-10-03
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="0.6.0 — unreleased">
+    <nav class="md-nav" aria-label="0.6.0 — 2026-10-03">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4845,10 +4889,54 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-python-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Python boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-checker" class="md-nav__link">
     <span class="md-ellipsis">
       
         The checker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unannotated-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unannotated code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples-and-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples and documentation
       
     </span>
   </a>
@@ -5262,18 +5350,20 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
-<h2 id="060-unreleased">0.6.0 — unreleased<a class="headerlink" href="#060-unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="060-2026-10-03">0.6.0 — 2026-10-03<a class="headerlink" href="#060-2026-10-03" title="Permanent link">&para;</a></h2>
 <p>More ordinary Python runs natively under <code>ppy run</code>: functions that print,
-read input, or call back into Python; functions that read module globals or
-take the project's objects; <code>isinstance</code>, chained comparisons, <code>in</code>, integer
-powers, and generators passed around as values; and <code>random</code>, <code>math</code>,
-<code>heapq</code>, <code>bisect</code>, and <code>itertools</code>. The checker accepts more of the typing
-module, and a native function given an <code>int</code> for a <code>float</code> parameter now
-returns what CPython returns. With <code>--no-strict</code>, <code>ppy run</code> no longer
-refuses a program CPython runs. On TheAlgorithms/Python, the functions
-Python calls natively went from 231 to 523, and 387 of 400 scripts print
-the same as under CPython, with the other 13 skipped as nondeterministic
-or slow and none differing.</p>
+read input, or call back into Python; functions that read module globals,
+take the project's objects, or are called with keywords; <code>isinstance</code>,
+chained comparisons, <code>in</code>, integer powers, and generators passed around as
+values; and <code>random</code>, <code>math</code>, <code>heapq</code>, <code>bisect</code>, <code>itertools</code>, <code>Counter</code>,
+<code>defaultdict</code>, and <code>lru_cache</code>. The Python boundary copies containers and
+objects in C, so calling native code from Python costs much less. Without
+strict mode, unannotated parameters take their types from the project's
+calls, and <code>ppy run</code> no longer refuses a program CPython runs. On
+TheAlgorithms/Python, the functions Python calls natively went from 231 to
+806 (846 without strict mode), and 387 of 400 scripts print the same as
+under CPython, with the other 13 skipped as nondeterministic or slow and
+none differing.</p>
 <h3 id="effects-in-native-code">Effects in native code<a class="headerlink" href="#effects-in-native-code" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Functions that print, read input, read and write text files, or call
@@ -5348,8 +5438,82 @@ or slow and none differing.</p>
   <code>string</code> constants run natively.</li>
 <li>Fixed: <code>math.sqrt</code>, <code>log</code>, <code>exp</code>, <code>pow</code>, and <code>sin</code> of arguments outside
   their domain gave a NaN or an infinity in native code instead of raising.</li>
+<li><code>collections.defaultdict</code>, <code>Counter</code>, and <code>OrderedDict</code> run natively,
+  with CPython's missing-key behavior, <code>most_common</code> order, operators, and
+  <code>repr</code>. An unannotated <code>deque(...)</code> is native, and so are <code>list(q)</code>,
+  <code>q[i] = x</code>, and <code>repr(q)</code>.</li>
+<li><code>functools.cache</code> and <code>lru_cache</code> are native, with a native table that
+  recursion goes through. <code>cache_info()</code> and <code>cache_clear()</code> keep CPython's
+  cache.</li>
+<li>Fixed: under <code>ppy run</code>, a cached function that lowered natively ran
+  without its cache, so cached recursion took exponential time.</li>
+<li><code>functools.reduce</code>, <code>partial</code>, and <code>cmp_to_key</code>, and <code>operator</code> functions
+  (<code>add</code>, <code>itemgetter</code>, <code>attrgetter</code>, ...) are native where a function value
+  is used.</li>
+<li><code>random.Random(seed)</code> instances are native generators, draw for draw with
+  CPython. One that Python passes in is drawn from in place and put back
+  before a fallback.</li>
+<li>A nested <code>@cache</code> table hashes each miss once and grows in small steps
+  while small.</li>
+<li>Fixed: copying a string-keyed map in the collections runtime asked for
+  about 64 GiB of scratch memory.</li>
 <li><code>scripts/fuzz.py --stdlib</code> fuzzes seeded random numbers and these modules.</li>
 <li>New guide page: The standard library.</li>
+</ul>
+<h3 id="calls">Calls<a class="headerlink" href="#calls" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Native calls bind keyword arguments and constant defaults, and a Python
+  caller's keywords and defaults reach the native entry instead of the
+  Python body. The generated wrapper binds them in C: a call with a keyword
+  or a default left out costs about 40 ns, as in CPython. A call that does
+  not bind raises CPython's <code>TypeError</code>.</li>
+<li>Native code takes back results from Python functions that change nothing,
+  falling back on a mismatch, and results from other callees only where
+  their type is certain. Before, a <code>float</code>, <code>bool</code>, or <code>str</code> result was
+  taken on trust, so <code>def f() -&gt; float: return 1</code> called from native code
+  raised a <code>TypeError</code> CPython does not.</li>
+<li>A nested function that shares no variable with the function around it
+  runs natively even when that function stays in Python.</li>
+<li>Module-level tuples of numbers are constants, indexable at run time, also
+  in standalone builds.</li>
+<li>Fixed: a nested function with the name of a module-level function called
+  the module one.</li>
+<li>Fixed: temporaries were leaked when a check raised inside a <code>try</code> that
+  native code catches, and a temporary closure that raised leaked its cells.</li>
+<li>Fixed: a nested function that read a list parameter of the function
+  around it crashed under <code>ppy run</code> and in standalone builds.</li>
+<li>Fixed: <code>rng.choice(xs)</code> over a list of strings freed the element it
+  returned, a use after free.</li>
+<li>Fixed: <code>d.get(k)</code> with no default crashed <code>ppy run</code>; such a function now
+  stays in Python.</li>
+<li>New example <code>51_clinic</code>: a seeded clinic simulation with <code>random</code>,
+  <code>heapq</code>, <code>math</code>, dataclasses crossing the boundary, and prints from native
+  code.</li>
+</ul>
+<h3 id="the-python-boundary">The Python boundary<a class="headerlink" href="#the-python-boundary" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Python calls of native functions that take lists, dicts, sets, or objects
+  are about 8 to 35 times faster. The generated wrapper copies them in C,
+  keeping shared and cyclic structure and the identity of what did not
+  change.</li>
+<li>A write through a container argument reaches every container that came
+  in, including one the call removed from its parent.</li>
+<li>Functions that print, read input, or read module globals are called
+  through the generated wrapper. A call costs tens of nanoseconds instead of
+  microseconds.</li>
+<li>Small straight-line functions get a Python boundary from two operations,
+  and a function that returns <code>None</code> and loops over its arguments gets one
+  too. A function whose boundary costs more than it saves stays in Python,
+  priced per element of the containers it takes.</li>
+<li>Fixed: a native function with container arguments that raised crashed
+  <code>ppy run</code> with a double free.</li>
+<li>Fixed: a self-recursive function past the recursion limit crashed where
+  CPython raises <code>RecursionError</code>.</li>
+<li><code>ppy.grad</code> works on a function that has a native entry, and a native
+  method binds its instance.</li>
+<li><code>ppy run</code> without the LLVM extra runs the program on CPython with one
+  warning (<code>W2012</code>). Native-only commands say how to install
+  <code>ppy-lang[llvm]</code>.</li>
 </ul>
 <h3 id="the-checker">The checker<a class="headerlink" href="#the-checker" title="Permanent link">&para;</a></h3>
 <ul>
@@ -5366,8 +5530,6 @@ or slow and none differing.</p>
 <li><code>--no-strict</code> reports a value that may be <code>None</code> as <code>W2011</code> and runs the
   program. Native code raises CPython's <code>AttributeError</code> where the <code>None</code>
   arrives.</li>
-<li><code>--no-strict</code> infers a private helper's unannotated parameters from its
-  call sites.</li>
 <li><code>return []</code> beside a declared return type no longer keeps a function in
   Python.</li>
 <li>Fixed: <code>(-2) ** c</code> printed <code>-(2 ** c)</code> under the Python backend after
@@ -5380,15 +5542,52 @@ or slow and none differing.</p>
   <code>ImportError</code> or <code>ModuleNotFoundError</code>.</li>
 <li><code>MutableSequence</code> is accepted in annotations, and a bare <code>Generator</code>
   accepts a generator expression.</li>
+<li>A value stored into a list or dict element is checked against the element
+  type: <code>E1301</code> in strict mode, and <code>W2010</code> with the function on CPython
+  otherwise.</li>
+</ul>
+<h3 id="unannotated-code">Unannotated code<a class="headerlink" href="#unannotated-code" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Without strict mode, unannotated parameters of any function or method take
+  their types from the project's calls, default values, and doctests, and
+  compile natively. A Python caller passing other types runs the Python
+  body.</li>
+<li><code>ppy explain</code> says which types were inferred and from where.</li>
+<li>Fixed: <code>ppy explain --summary --no-strict</code> analyzed in strict mode.</li>
+<li><code>scripts/fuzz.py --unannotated</code> fuzzes inferred parameter types.</li>
+<li>Fixed: the Python backend removed or folded expressions that raise
+  (<code>y = x + 12</code> with a string <code>x</code>, <code>'a' if 1 // n else 'a'</code> with <code>n == 0</code>,
+  and f-strings with a format spec).</li>
+<li>Fixed: a generator held in a name and walked by a <code>for</code> without <code>break</code>
+  stopped after one value in native code.</li>
+</ul>
+<h3 id="examples-and-documentation">Examples and documentation<a class="headerlink" href="#examples-and-documentation" title="Permanent link">&para;</a></h3>
+<ul>
+<li>New examples, each agreeing on all three paths (mean of five runs):</li>
+<li><code>52_unannotated</code>: types inferred from calls, defaults, and doctests,
+    with <code>ppy explain</code> showing where each came from. python 7.22 s,
+    <code>ppy run</code> 0.49 s.</li>
+<li><code>53_caches_and_counters</code>: <code>random.Random</code>, <code>Counter</code>, <code>defaultdict</code>,
+    <code>@cache</code>, and <code>@lru_cache</code>. python 1.47 s, <code>ppy run</code> 0.78 s, standalone
+    0.76 s.</li>
+<li><code>54_objects_and_grids</code>: a grid and objects written in place by native
+    code and read back by Python. python 2.26 s, <code>ppy run</code> 0.58 s.</li>
+<li>The guide, the reference, and the README describe 0.6.0: what lowers,
+  what a call across the boundary costs (a native two-int call 29 ns,
+  CPython 30 ns), <code>--no-strict</code> and inference, and <code>ppy run</code> without
+  llvmlite.</li>
+<li><code>examples/run_overhead.json</code> is re-recorded: no example is slower warm
+  under <code>ppy run</code> than under <code>python</code>.</li>
 </ul>
 <h3 id="known-limitations">Known limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>defaultdict</code>, <code>Counter</code>, <code>OrderedDict</code>, <code>functools</code>, <code>operator</code>, and
-  <code>random.Random</code> instances stay in Python. So does a <code>deque</code> the checker
-  sees without its element type, and <code>list(q)</code> and <code>q[i] = x</code> of a deque.</li>
-<li>A temporary list that is live when a check raises inside a <code>try</code> that
-  native code catches is leaked (<code>[1, 2][5]</code> inside <code>try</code>/<code>except
-  IndexError</code>).</li>
+<li><code>*args</code> parameters, cached methods, cached functions with default
+  arguments, <code>deque(maxlen=...)</code>, and <code>ChainMap</code> stay in Python.</li>
+<li>A function that writes to <code>self</code> of a class with unannotated or NumPy
+  fields stays in Python, and so does one that takes a bare <code>list</code> or
+  <code>dict</code>.</li>
+<li><code>ppy</code> collections (<code>Vec</code>, <code>HashMap</code>, ...) and functions that draw from
+  <code>random</code> still cross the Python boundary through the slower Python path.</li>
 <li>On Python 3.14 a standalone binary prints the generic <code>math domain error</code>
   where 3.14's message includes the value.</li>
 </ul>
