@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 — unreleased
+## 0.6.0 — 2026-10-03
 
 More ordinary Python runs natively under `ppy run`: functions that print,
 read input, or call back into Python; functions that read module globals,
