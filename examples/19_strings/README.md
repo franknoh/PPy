@@ -1,9 +1,10 @@
 # Strings
 
-Three small string functions, checked in strict mode and proven pure. Two
-of them go native: `initials` splits and uppercases, and `is_palindrome`
-indexes a string from both ends. The third returns a `dict`, which has no
-native form, so it runs as Python, and `ppy explain` says why.
+Three small string functions, checked in strict mode and proven pure, and
+all three compiled to native code: `initials` splits and uppercases,
+`is_palindrome` indexes a string from both ends, and `word_count` counts
+words into a `dict`. Python calls the first two natively. It calls
+`word_count` on its Python body, and `ppy explain` says why.
 
 ## Run it
 
@@ -31,7 +32,7 @@ True False
 ```bash
 ppy explain strings.initials        # llvm backend: native
 ppy explain strings.is_palindrome   # llvm backend: native
-ppy explain strings.word_count      # llvm backend: boxed: returns `dict[str, int]`, which has no native ABI
+ppy explain strings.word_count      # llvm backend: native; called from Python, its Python body runs: copying its strings across costs what one pass over them saves
 ```
 
 `is_palindrome` indexes `cleaned[left]` and `cleaned[right]`. Natively a
@@ -39,8 +40,12 @@ string knows its length in code points and whether it is all ASCII, so an
 index into ASCII text is one step, and the one-character strings the
 comparison reads are static and never allocated.
 
-`word_count` would lower with a `HashMap[str, int]` in place of the `dict`;
-the [Strings example](../48_strings/README.md) counts that way.
+`word_count` makes one pass over its text. Called from Python, the text
+would first be copied into a native string, which costs about what that
+one pass saves, so the cost model leaves Python's call on the Python body;
+a native caller calls it natively. The
+[Strings example](../48_strings/README.md) counts words over 200,000 lines,
+where the work is worth the copy.
 
 ## Very large text
 

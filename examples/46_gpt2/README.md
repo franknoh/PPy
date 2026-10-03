@@ -32,7 +32,7 @@ torch 2.14.0+cpu | cuda False
 # region active: False
 # 6 layers, 12 heads, width 768, batch 1, length 128
 mean=0.004 absmean=0.439 meansq=0.301
-# forward: 22.246 ms
+# forward: 139.359 ms
 cached decode matches the whole forward: True
 ```
 
@@ -43,7 +43,7 @@ torch 2.14.0+cpu | cuda False
 # region active: True
 # 6 layers, 12 heads, width 768, batch 1, length 128
 mean=0.004 absmean=0.439 meansq=0.301
-# forward: 22.646 ms
+# forward: 24.632 ms
 cached decode matches the whole forward: True
 ```
 
@@ -54,7 +54,7 @@ torch 2.14.0+cpu | cuda False
 # region active: True
 # 6 layers, 12 heads, width 768, batch 1, length 128
 mean=0.004 absmean=0.439 meansq=0.301
-# forward: 24.435 ms
+# forward: 25.743 ms
 cached decode matches the whole forward: True
 ```
 

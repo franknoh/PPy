@@ -550,7 +550,10 @@ def grow(xs: list[int], n: int) -> None:
 
 def same(xs: list[list[int]]) -> list[int]:
     for row in xs:
-        row.append(len(row))
+        total = 0
+        for v in row:
+            total += v * v + 1
+        row.append(total % 10 + len(row))
     return xs[0]
 
 
@@ -609,7 +612,7 @@ def test_python_calls_container_functions_natively(tmp_path: Path):
     inner = [7]
     rows = [inner, [8, 9]]
     assert native("same").wrapper(rows) is inner
-    assert rows == [[7, 1], [8, 9, 2]] and rows[0] is inner
+    assert rows == [[7, 1], [8, 9, 9]] and rows[0] is inner
     assert native("kept").wrapper({1, 5, 9}, 6) == 2
     assert histogram.wrapper(["x", 3]) is None
     assert fell == ["histogram"] and histogram.fallbacks == 1
@@ -657,3 +660,49 @@ def test_a_set_of_strings_walked_where_its_order_shows_stays_in_python(tmp_path:
     assert "llvm backend: native" in walked.stdout, walked.stdout
     ordered = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.ordered")
     assert "llvm backend: native" in ordered.stdout, ordered.stdout
+
+
+@requires_llvm
+@requires_cc
+def test_get_without_a_default_stays_in_python(tmp_path: Path):
+    """`d.get(k)` is `None` on a miss, which a number has no native form for:
+    the function stays in Python, with a reason, and the rest of the module
+    lowers (it raised `IndexError` in the lowering before)."""
+    source = """
+    def look(d: dict[int, int], k: int) -> int:
+        v = d.get(k)
+        if v is None:
+            return -1
+        return v
+
+
+    def named(d: dict[str, str], k: str) -> str:
+        return d.get(k) or "?"
+
+
+    def total(d: dict[int, int]) -> int:
+        s = 0
+        for k in range(10):
+            s += d.get(k, 0)
+        return s
+
+
+    def main() -> None:
+        d = {1: 10, 2: 20}
+        print(look(d, 1), look(d, 3), named({"a": "b"}, "a"), named({}, "x"), total(d))
+
+
+    main()
+    """
+    expected = _expected(tmp_path, source)
+    for args in (["-m", "ppy_compiler", "prog.ppy"], ["-m", "ppy_compiler", "run", "prog.ppy"]):
+        done = _run(tmp_path, *args)
+        assert done.returncode == 0, done.stderr
+        assert _output(done).strip() == expected, args
+    look = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.look")
+    assert "without a default can return `None`" in look.stdout, look.stdout
+    total = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.total")
+    assert "llvm backend: native" in total.stdout, total.stdout
+    summary = _run(tmp_path, "-m", "ppy_compiler", "explain", "--summary")
+    assert summary.returncode == 0, summary.stderr
+    assert "without a default can return" in summary.stdout, summary.stdout

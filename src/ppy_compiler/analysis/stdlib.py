@@ -19,10 +19,14 @@ __all__ = [
     "ARRAY_TYPECODES",
     "EXTERNAL_TYPES",
     "INSTANCE_ATTRS",
+    "LIBRARY_MAPPINGS",
+    "MAPPING_OWN",
     "MODULE_ATTRIBUTES",
+    "cache_attribute",
     "call",
     "instance_attribute",
     "lookup",
+    "mapping_of",
 ]
 
 #: `array` type codes and the element type each denotes.
@@ -359,11 +363,14 @@ if importlib.util.find_spec("libcst") is not None:
 _opaque("re", ("Pattern", "Match"))
 _opaque("datetime", ("datetime", "date", "time", "timedelta", "timezone"))
 _opaque("collections", ("deque", "OrderedDict", "Counter", "defaultdict", "ChainMap"))
+_opaque("queue", ("Queue", "LifoQueue", "PriorityQueue", "SimpleQueue"))
 _opaque("decimal", ("Decimal",))
 _opaque("fractions", ("Fraction",))
 _opaque("uuid", ("UUID",))
 _opaque("io", ("TextIOWrapper", "BytesIO", "StringIO", "BufferedReader", "BufferedWriter"))
 _opaque("types", ("ModuleType", "FunctionType", "SimpleNamespace"))
+_opaque("functools", ("_CacheInfo", "partial"))
+_opaque("random", ("Random",))
 _opaque("enum", ("Enum", "IntEnum", "Flag", "IntFlag"))
 _opaque("argparse", ("Namespace", "ArgumentParser"))
 _opaque("subprocess", ("CompletedProcess", "Popen"))
@@ -384,10 +391,248 @@ _opaque(
 )
 
 
-def instance_attribute(name: str, attribute: str) -> tuple[T.Type, EffectSet] | None:
-    """An attribute of a standard-library instance, if the analyzer knows it."""
-    return INSTANCE_ATTRS.get(name, {}).get(attribute)
+#: The element and value types of a generic standard-library collection,
+#: replaced by the instance's type arguments when an attribute is read.
+_ELEMENT = T.TypeVar_("_E", owner="<stdlib>")
+_VALUE = T.TypeVar_("_V", owner="<stdlib>")
 
+_READ = EffectSet.of(Effect.READ_OBJECT)
+_WRITE = EffectSet.of(Effect.WRITE_OBJECT, Effect.ALLOC)
+
+
+def _methods(
+    owner: str, effects: EffectSet, returns: dict[str, T.Type]
+) -> dict[str, tuple[T.Type, EffectSet]]:
+    return {
+        name: (T.Callable_((), ret, f"{owner}.{name}"), effects) for name, ret in returns.items()
+    }
+
+
+def _queue_methods(owner: str) -> dict[str, tuple[T.Type, EffectSet]]:
+    table = _methods(
+        owner, _READ, {"empty": T.BOOL, "full": T.BOOL, "qsize": T.INT, "maxsize": T.INT}
+    )
+    table["maxsize"] = (T.INT, _READ)
+    table |= _methods(
+        owner, _WRITE, {"put": T.NONE, "put_nowait": T.NONE, "task_done": T.NONE, "join": T.NONE}
+    )
+    table |= _methods(
+        owner,
+        _WRITE | EffectSet.of(raises=("queue.Empty",)),
+        {"get": _ELEMENT, "get_nowait": _ELEMENT},
+    )
+    return table
+
+
+for _queue in ("Queue", "LifoQueue", "PriorityQueue", "SimpleQueue"):
+    INSTANCE_ATTRS[f"queue.{_queue}"] = _queue_methods(f"queue.{_queue}")
+
+_DEQUE = "collections.deque"
+INSTANCE_ATTRS[_DEQUE] = (
+    _methods(
+        _DEQUE,
+        _WRITE,
+        {
+            "append": T.NONE,
+            "appendleft": T.NONE,
+            "extend": T.NONE,
+            "extendleft": T.NONE,
+            "rotate": T.NONE,
+            "clear": T.NONE,
+            "insert": T.NONE,
+            "reverse": T.NONE,
+        },
+    )
+    | _methods(
+        _DEQUE,
+        _WRITE | EffectSet.of(raises=("IndexError", "ValueError")),
+        {"pop": _ELEMENT, "popleft": _ELEMENT, "remove": T.NONE},
+    )
+    | _methods(
+        _DEQUE,
+        _READ | EffectSet.of(raises=("ValueError",)),
+        {"count": T.INT, "index": T.INT},
+    )
+    | _methods(
+        _DEQUE,
+        _READ | _ALLOC,
+        {"copy": T.Instance(_DEQUE, (_ELEMENT,), ("collections.deque", "object"))},
+    )
+    | {"maxlen": (T.union(T.INT, T.NONE), _READ)}
+)
+
+_MAPPING_READS: dict[str, T.Type] = {
+    "keys": T.list_of(_ELEMENT),
+    "values": T.list_of(_VALUE),
+    "items": T.list_of(T.Tuple_((_ELEMENT, _VALUE))),
+    "get": T.union(_VALUE, T.NONE),
+}
+_MAPPING_WRITES: dict[str, T.Type] = {
+    "clear": T.NONE,
+    "update": T.NONE,
+    "setdefault": _VALUE,
+}
+
+_COUNTER = "collections.Counter"
+INSTANCE_ATTRS[_COUNTER] = (
+    _methods(_COUNTER, _READ, _MAPPING_READS | {"total": T.INT})
+    | _methods(
+        _COUNTER,
+        _READ | _ALLOC,
+        {
+            "most_common": T.list_of(T.Tuple_((_ELEMENT, T.INT))),
+            "elements": T.list_of(_ELEMENT),
+        },
+    )
+    | _methods(_COUNTER, _WRITE, _MAPPING_WRITES | {"subtract": T.NONE})
+    | _methods(_COUNTER, _WRITE | EffectSet.of(raises=("KeyError",)), {"pop": T.INT})
+)
+
+for _mapping in ("collections.OrderedDict", "collections.defaultdict"):
+    INSTANCE_ATTRS[_mapping] = (
+        _methods(_mapping, _READ, _MAPPING_READS)
+        | _methods(_mapping, _WRITE, _MAPPING_WRITES)
+        | _methods(
+            _mapping,
+            _WRITE | EffectSet.of(raises=("KeyError",)),
+            {
+                "pop": _VALUE,
+                "popitem": T.Tuple_((_ELEMENT, _VALUE)),
+                "move_to_end": T.NONE,
+            },
+        )
+    )
+
+
+#: `collections`' mappings: a dict with more to it, whose subscripts, views,
+#: and plain dict methods are a dict's.
+LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+
+#: The methods each has beyond a dict's, or in place of one.
+MAPPING_OWN: dict[str, frozenset[str]] = {
+    "collections.Counter": frozenset({"most_common", "elements", "total", "update", "subtract"}),
+    "collections.OrderedDict": frozenset({"move_to_end", "popitem"}),
+    "collections.defaultdict": frozenset(),
+}
+
+
+def mapping_of(t: T.Type) -> tuple[T.Type, T.Type] | None:
+    """The key and value types of a `defaultdict`, an `OrderedDict`, or a
+    `Counter` (whose values are ints); None for anything else."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or base.name not in LIBRARY_MAPPINGS:
+        return None
+    if base.name == "collections.Counter":
+        return (base.args[0], T.INT) if len(base.args) == 1 else None
+    return (base.args[0], base.args[1]) if len(base.args) == 2 else None
+
+
+def _random_methods() -> dict[str, tuple[T.Type, EffectSet]]:
+    """`random.Random`'s methods: the module's functions, drawing from the
+    instance's own state, which is a write to it."""
+    from .native_stdlib import MODELS  # pylint: disable=import-outside-toplevel
+
+    found: dict[str, tuple[T.Type, EffectSet]] = {}
+    for qualname, (typed, effects) in MODELS.items():
+        module, _, name = qualname.partition(".")
+        if module != "random":
+            continue
+        assert isinstance(typed, T.Callable_)
+        drawn = EffectSet.of(Effect.WRITE_OBJECT, raises=tuple(effects.raises))
+        if Effect.ALLOC in effects:
+            drawn = drawn.add(Effect.ALLOC)
+        found[name] = (T.Callable_((), typed.ret, f"random.Random.{name}"), drawn)
+    return found
+
+
+def _library(name: str) -> T.Instance:
+    return T.Instance(name, (), EXTERNAL_MRO.get(name, (name, "object")))
+
+
+def _fields(fields: dict[str, T.Type]) -> dict[str, tuple[T.Type, EffectSet]]:
+    return {name: (t, _NO_EFFECTS) for name, t in fields.items()}
+
+
+# Dates, times, and exact numbers are immutable values: their fields and
+# methods read nothing the program can change.
+_DATE_FIELDS = {"year": T.INT, "month": T.INT, "day": T.INT}
+_TIME_FIELDS = {"hour": T.INT, "minute": T.INT, "second": T.INT, "microsecond": T.INT}
+_TEXT = {"isoformat": T.STR, "strftime": T.STR, "ctime": T.STR}
+_DATE_METHODS = _TEXT | {"weekday": T.INT, "isoweekday": T.INT, "toordinal": T.INT}
+for _date, _extra_fields, _extra_methods in (
+    ("datetime.date", {}, {"replace": _library("datetime.date")}),
+    (
+        "datetime.datetime",
+        _TIME_FIELDS,
+        {
+            "replace": _library("datetime.datetime"),
+            "date": _library("datetime.date"),
+            "time": _library("datetime.time"),
+            "timestamp": T.FLOAT,
+        },
+    ),
+):
+    INSTANCE_ATTRS[_date] = _fields(_DATE_FIELDS | _extra_fields) | _methods(
+        _date, _ALLOC | EffectSet.of(raises=("ValueError",)), _DATE_METHODS | _extra_methods
+    )
+INSTANCE_ATTRS["datetime.time"] = _fields(_TIME_FIELDS) | _methods(
+    "datetime.time", _ALLOC, {"isoformat": T.STR, "strftime": T.STR}
+)
+INSTANCE_ATTRS["datetime.timedelta"] = _fields(
+    {"days": T.INT, "seconds": T.INT, "microseconds": T.INT}
+) | _methods("datetime.timedelta", _NO_EFFECTS, {"total_seconds": T.FLOAT})
+INSTANCE_ATTRS["fractions.Fraction"] = _fields(
+    {"numerator": T.INT, "denominator": T.INT}
+) | _methods(
+    "fractions.Fraction",
+    _ALLOC,
+    {
+        "limit_denominator": _library("fractions.Fraction"),
+        "as_integer_ratio": T.Tuple_((T.INT, T.INT)),
+    },
+)
+INSTANCE_ATTRS["decimal.Decimal"] = _methods(
+    "decimal.Decimal",
+    _ALLOC | EffectSet.of(raises=("ArithmeticError",)),
+    {
+        "sqrt": _library("decimal.Decimal"),
+        "quantize": _library("decimal.Decimal"),
+        "exp": _library("decimal.Decimal"),
+        "ln": _library("decimal.Decimal"),
+        "log10": _library("decimal.Decimal"),
+        "to_integral_value": _library("decimal.Decimal"),
+        "normalize": _library("decimal.Decimal"),
+        "is_nan": T.BOOL,
+        "is_zero": T.BOOL,
+        "as_integer_ratio": T.Tuple_((T.INT, T.INT)),
+    },
+)
+
+
+def instance_attribute(
+    name: str, attribute: str, args: tuple[T.Type, ...] = ()
+) -> tuple[T.Type, EffectSet] | None:
+    """An attribute of a standard-library instance, if the analyzer knows it.
+
+    `args` are the instance's type arguments: `Queue[int].get` returns an
+    `int`, and an unparameterized `Queue` gives `Any`."""
+    known = INSTANCE_ATTRS.get(name, {}).get(attribute)
+    if known is None:
+        return None
+    bindings = {
+        _ELEMENT: args[0] if args else T.ANY,
+        _VALUE: args[1] if len(args) > 1 else T.ANY,
+    }
+    if name == "collections.Counter":
+        bindings[_VALUE] = T.INT
+    return T.substitute(known[0], bindings), known[1]
+
+
+#: The wrapper `functools.cache` and `lru_cache` make, and what `cache_info` gives.
+_CACHE_WRAPPER = "functools._lru_cache_wrapper"
+_CACHE_INFO = "functools._CacheInfo"
 
 #: Callables the analyzer knows the result type and effects of.
 _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
@@ -501,8 +746,28 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "functools.reduce": _fn(
         "functools.reduce", T.ANY, _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK)
     ),
+    # A cached function's wrapper: its counts, and emptying it.
+    f"{_CACHE_WRAPPER}.cache_info": _fn(
+        f"{_CACHE_WRAPPER}.cache_info", _library(_CACHE_INFO), EffectSet.of(Effect.READ_GLOBAL)
+    ),
+    f"{_CACHE_WRAPPER}.cache_clear": _fn(
+        f"{_CACHE_WRAPPER}.cache_clear", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)
+    ),
+    f"{_CACHE_WRAPPER}.cache_parameters": _fn(
+        f"{_CACHE_WRAPPER}.cache_parameters", T.dict_of(T.STR, T.ANY), _ALLOC
+    ),
     **_math(),
 }
+
+
+def cache_attribute(function: T.Callable_, attribute: str) -> T.Type | None:
+    """What `f.cache_info` and the rest are of a function `functools.cache` or
+    `lru_cache` wraps; `f.__wrapped__` is the function itself."""
+    if attribute == "__wrapped__":
+        return function
+    found = _FUNCTIONS.get(f"{_CACHE_WRAPPER}.{attribute}")
+    return found[0] if found is not None else None
+
 
 #: Module attributes with a known type.
 MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
@@ -607,8 +872,86 @@ MODULE_ATTRIBUTES.update(
 )
 
 
+def _string_constants() -> None:
+    from .native_stdlib import STRING_CONSTANTS  # pylint: disable=import-outside-toplevel
+
+    for qualname in STRING_CONSTANTS:
+        MODULE_ATTRIBUTES.setdefault(qualname, (T.STR, Facts()))
+
+
+_string_constants()
+
+
+# `T = TypeVar("T", ...)` at module level declares a type parameter; the value
+# is the library's business, and making it has no effect a program sees.
+_TYPE_VAR = T.Instance("typing.TypeVar", (), ("typing.TypeVar", "object"))
+_opaque("typing", ("TypeVar",))
+for _module in ("typing", "typing_extensions"):
+    _FUNCTIONS[f"{_module}.TypeVar"] = (
+        T.Callable_((), _TYPE_VAR, f"{_module}.TypeVar"),
+        _NO_EFFECTS,
+    )
+
+
+#: Arithmetic the standard library defines between its own types: (left, the
+#: operator's symbol, right) to the result, where a side is a class's name or
+#: "number" for `int`/`bool` (and "real" for `int`/`bool`/`float`).
+_OPERATORS: dict[tuple[str, str, str], str] = {}
+
+
+def _operators(left: str, symbols: str, right: str, result: str) -> None:
+    for symbol in symbols.split():
+        _OPERATORS[(left, symbol, right)] = result
+
+
+for _cls in ("datetime.datetime", "datetime.date"):
+    _operators(_cls, "+ -", "datetime.timedelta", _cls)
+    _operators("datetime.timedelta", "+", _cls, _cls)
+    _operators(_cls, "-", _cls, "datetime.timedelta")
+_operators("datetime.timedelta", "+ - %", "datetime.timedelta", "datetime.timedelta")
+_operators("datetime.timedelta", "/", "datetime.timedelta", "float")
+_operators("datetime.timedelta", "//", "datetime.timedelta", "int")
+_operators("datetime.timedelta", "* / //", "real", "datetime.timedelta")
+_operators("real", "*", "datetime.timedelta", "datetime.timedelta")
+for _cls in ("decimal.Decimal", "fractions.Fraction"):
+    _operators(_cls, "+ - * / // % **", _cls, _cls)
+    _operators(_cls, "+ - * / // % **", "number", _cls)
+    _operators("number", "+ - * / // % **", _cls, _cls)
+_operators("fractions.Fraction", "+ - * / // % **", "float", "float")
+_operators("float", "+ - * / // % **", "fractions.Fraction", "float")
+_operators("collections.Counter", "+ - & |", "collections.Counter", "collections.Counter")
+
+
+def operator(left: T.Type, symbol: str, right: T.Type) -> T.Type | None:
+    """What `left <symbol> right` is where the standard library defines it,
+    or None. A `Counter` keeps its left operand's type arguments."""
+
+    def names(t: T.Type) -> list[str]:
+        if t in (T.INT, T.BOOL):
+            return ["number", "real"]
+        if t == T.FLOAT:
+            return ["float", "real"]
+        return [t.name] if isinstance(t, T.Instance) else []
+
+    for a in names(left):
+        for b in names(right):
+            found = _OPERATORS.get((a, symbol, b))
+            if found is None:
+                continue
+            if found in {"int", "float"}:
+                return T.INT if found == "int" else T.FLOAT
+            if isinstance(left, T.Instance) and left.name == found:
+                return left
+            if isinstance(right, T.Instance) and right.name == found:
+                return right
+            return T.Instance(found, (), EXTERNAL_MRO.get(found, (found, "object")))
+    return None
+
+
 def lookup(qualname: str) -> tuple[T.Type, EffectSet] | None:
-    return _FUNCTIONS.get(qualname)
+    from .native_stdlib import MODELS  # pylint: disable=import-outside-toplevel
+
+    return _FUNCTIONS.get(qualname) or MODELS.get(qualname)
 
 
 def call(qualname: str, args: list[tuple[T.Type, Facts]]) -> tuple[T.Type, EffectSet] | None:
@@ -627,3 +970,6 @@ def call(qualname: str, args: list[tuple[T.Type, Facts]]) -> tuple[T.Type, Effec
             _ALLOC | EffectSet.of(raises=("ValueError", "TypeError")),
         )
     return None
+
+
+INSTANCE_ATTRS["random.Random"] = _random_methods()

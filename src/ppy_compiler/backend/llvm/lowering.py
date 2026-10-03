@@ -26,19 +26,28 @@ may not mutate it (spec 13.2, 13.3, 13.5).
 from __future__ import annotations
 
 import ast
+import builtins
+import dataclasses
 from dataclasses import dataclass, field
 
 from ppy_runtime._record import replace
-from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK, NativeParam, NativeSignature
+from ppy_runtime.abi import (
+    STATUS_FALLBACK,
+    STATUS_OK,
+    CrossingClass,
+    NativeParam,
+    NativeSignature,
+)
 from ppy_runtime.collection_boundary import RETURNS_NOTHING
 from ppy_runtime.collection_boundary import parse as crossing_spec
 
 from ...analysis import types as T
 from ...analysis.checker import FunctionAnalysis
-from ...analysis.closures import callable_spelled, is_plain_callable
+from ...analysis.closures import callable_spelled, is_plain_callable, shared_with_closures
 from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
-from ...analysis.symbols import FunctionInfo
+from ...analysis.settled import implicit_parameter_name
+from ...analysis.symbols import FunctionInfo, ParamInfo
 
 __all__ = [
     "STATUS_FALLBACK",
@@ -124,6 +133,9 @@ class LoweredFunction:
     #: The entry Python calls, when it is a thunk around `signature`'s symbol
     #: (strings cross as UTF-8 bytes there, as handles here).
     boundary: NativeSignature | None = None
+    #: Why Python's calls run the Python body whatever the cost says: it copies
+    #: an argument Python could change at a barrier (`_check_effects`).
+    withheld: str = ""
 
     @property
     def python(self) -> NativeSignature:
@@ -146,6 +158,8 @@ class LoweringResult:
     exports: dict[str, str] = field(default_factory=dict)
     #: What the lowering and the passes said about the code, as remarks.
     remarks: tuple[str, ...] = ()
+    #: Per function with effects, the rule they run under (`lowering/effects.py`).
+    effects: dict[str, str] = field(default_factory=dict)
 
 
 def _scalar_name(t: T.Type) -> str | None:
@@ -163,7 +177,7 @@ def _buffer_element(t: T.Type) -> tuple[str, str] | None:
     if base.name not in {"list", "Sequence", "Buffer", "memoryview", "array"}:
         return None
     element = _scalar_name(base.args[0])
-    if element not in _BUFFER_ELEMENTS:
+    if element is None or element not in _BUFFER_ELEMENTS:
         return None
     # A `Sequence` promises only reading, which is what a copied-in buffer
     # does; anything the caller passes is unpacked the same way.
@@ -233,6 +247,17 @@ _COLLECTIONS = frozenset(
 #: Python's own containers, which native code holds as the runtime's collections.
 _BUILTIN_CONTAINERS = frozenset({"list", "dict", "set"})
 
+#: The standard library's containers native code holds (`lowering/library.py`).
+_LIBRARY_CONTAINERS = frozenset(
+    {
+        "collections.deque",
+        "collections.defaultdict",
+        "collections.OrderedDict",
+        "collections.Counter",
+        "random.Random",
+    }
+)
+
 
 def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     """The parameters held by handle rather than lent as buffers: every one, when
@@ -241,12 +266,36 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     A list of numbers only read is lent as a buffer, a copy of its words. A
     function that writes through a parameter may be handed the same list
     twice (`f(xs, xs)`), and a copy would not see the write: then each list
-    goes by handle, and the boundary keeps one object one handle."""
+    goes by handle, and the boundary keeps one object one handle.
+
+    A parameter a nested function or a lambda shares is held by handle too:
+    the closure reads it through a cell, which holds a handle, and can
+    outlive the call a buffer is lent for."""
     if analysis is None:
         return frozenset()
-    if not analysis.mutated_params and not analysis.delegated_writes:
-        return frozenset()
-    return frozenset(p.name for p in analysis.info.params)
+    if not writes(analysis):
+        node = analysis.info.node
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return frozenset()
+        return frozenset(p.name for p in analysis.info.params) & shared_with_closures(node)
+    return frozenset(p.name for p in analysis.info.params) | {
+        implicit_parameter_name(analysis, held) for held in analysis.implicit_globals
+    }
+
+
+def writes(analysis: FunctionAnalysis) -> set[str]:
+    """The parameters the function writes through, itself or by handing them to
+    a callee that does, and the settled globals passed to it that it or a
+    callee writes, by the names it takes them as."""
+    return (
+        analysis.mutated_params
+        | analysis.delegated_writes
+        | {
+            implicit_parameter_name(analysis, held)
+            for held in analysis.implicit_globals
+            if held.written
+        }
+    )
 
 
 def _holds_strings(info: FunctionInfo) -> bool:
@@ -300,6 +349,22 @@ def _collection_param(
         if not is_plain_callable(base):
             return None
         return NativeParam(name, "handle", callable_spelled(base), class_name="callable")
+    if isinstance(base, T.Instance) and base.name in {"Iterator", "Generator"} and base.args:
+        # A generator's frame: native code's own, never crossing to Python.
+        element = T.strip_literal(base.args[0])
+        return NativeParam(name, "handle", f"generator[{element}]", class_name="generator")
+    if isinstance(base, T.Instance) and base.name in _LIBRARY_CONTAINERS:
+        # `deque`, `defaultdict`, `Counter`, `OrderedDict`, `random.Random`:
+        # native code's own, passed by handle, never crossing to Python.
+        if base.name != "random.Random" and not _held_natively(base, layouts):
+            return None
+        from ...lowering.collections import kind_of  # pylint: disable=import-outside-toplevel
+
+        records = {name: (tuple(fields), False) for name, fields in (layouts or {}).items()}
+        kind = kind_of(base, records)
+        if kind is None:
+            return None
+        return NativeParam(name, "handle", kind.spelled, class_name=base.name)
     if isinstance(base, T.Instance) and base.name in _BUILTIN_CONTAINERS and base.args:
         if not written and _buffer_element(base) is not None:
             # A list of numbers the function only reads is lent as a buffer.
@@ -307,6 +372,7 @@ def _collection_param(
         if not _held_natively(base, layouts):
             return None
         return NativeParam(name, "handle", str(base), class_name=base.name)
+    nullable = False
     if isinstance(base, T.Union_):
         members = [m for m in base.members if m != T.NONE]
         if len(members) != 1 or len(members) == len(base.members):
@@ -314,12 +380,15 @@ def _collection_param(
         base = T.strip_literal(members[0])
         if not isinstance(base, T.Instance) or base.name in _COLLECTIONS:
             return None
+        nullable = True
     if not isinstance(base, T.Instance):
         return None
     if base.name in _COLLECTIONS and base.args:
         return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
     if layouts is not None and layouts.get(base.name) == ():
-        return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
+        return NativeParam(
+            name, "handle", collection_spelled(base), class_name=base.name, nullable=nullable
+        )
     return None
 
 
@@ -375,21 +444,35 @@ def eligible(
     allow_io: bool = False,
     allow_launch: bool = False,
     allow_async: bool = False,
+    allow_python: bool = False,
+    allow_globals: bool = False,
 ) -> tuple[bool, str]:
     """Can this function be lowered to a native scalar entry point?
 
     `allow_io` is the standalone build's dispensation: printing goes through
     native shims there, so the IO effect alone is not disqualifying.
     `allow_launch` is the GPU source backends': a kernel launch is written
-    as one, where the CPU backends have no launch runtime yet.
+    as one, where the CPU backends have no launch runtime yet. `allow_python`
+    is `ppy run`'s: a call native code cannot make it makes through Python
+    (`lowering/effects.py`), so a call of unknown effect is the lowering's to
+    refuse, one call at a time. `allow_globals` is `ppy run`'s too: the
+    settled globals the function reads are parameters of `info` (see
+    `with_implicit_globals`), which Python's boundary reads from the module
+    at the call.
     """
-    if info.is_generator:
-        return False, "generators use the boxed runtime"
+    if analysis.python_only:
+        return False, analysis.python_only[0]
+    if info.is_generator and info.is_async:
+        return False, "an async generator runs on CPython"
     if info.is_async and not allow_async:
         return False, "a coroutine runs natively only where the async runtime does"
-    written = analysis.mutated_params | analysis.delegated_writes
+    written = writes(analysis)
+    passes_globals = allow_globals and analysis.globals_native
     for name in sorted(written):
         declared = next((p.type for p in info.params if p.name == name), None)
+        if declared is None and not passes_globals:
+            # A global written where it is not passed: reading it is the blocker.
+            continue
         described = _buffer_element(declared) if declared is not None else None
         handle = _collection_param(name, declared, layouts) if declared is not None else None
         # Writing through a borrowed buffer is visible to the caller, which is
@@ -410,8 +493,17 @@ def eligible(
     violations.discard(Effect.ATOMIC)
     violations.discard(Effect.SYNC)
     violations.discard(Effect.THREAD)
+    # A draw is a write to the generator's state, which native code shares
+    # with Python's `random` (the boundary saves and restores it).
+    violations.discard(Effect.RANDOM)
+    if passes_globals:
+        # Every global it reads is one no one rebinds, passed in as a parameter.
+        violations.discard(Effect.READ_GLOBAL)
     if allow_io:
         violations.discard(Effect.IO)
+    if allow_python:
+        violations.discard(Effect.EXTERNAL_UNKNOWN)
+        violations.discard(Effect.PYTHON_CALLBACK)
     if allow_launch:
         violations.discard(Effect.GPU_LAUNCH)
     if allow_async:
@@ -439,6 +531,23 @@ def eligible(
     return True, ""
 
 
+def with_implicit_globals(info: FunctionInfo, analysis: FunctionAnalysis) -> FunctionInfo:
+    """`info` with the settled globals native code passes it (see
+    `analysis/settled.py`) as parameters after its own."""
+    if not analysis.implicit_globals:
+        return info
+    added = [
+        ParamInfo(
+            implicit_parameter_name(analysis, held),
+            held.type,
+            annotated=True,
+            global_of=held.key,
+        )
+        for held in analysis.implicit_globals
+    ]
+    return dataclasses.replace(info, params=[*info.params, *added])
+
+
 def called_back_only(info: FunctionInfo) -> bool:
     """`def __eq__(self, other: object)` of a class: `other` has no native ABI, and
     what calls it natively is a collection comparing two of its own keys, which
@@ -451,8 +560,16 @@ def called_back_only(info: FunctionInfo) -> bool:
     )
 
 
+#: What counts as an operation of straight-line work.
+_WORK_NODES = (ast.BinOp, ast.UnaryOp, ast.Compare, ast.BoolOp, ast.Call, ast.Subscript, ast.IfExp)
+
+
 def _crossing_costs_more(
-    info: FunctionInfo, layouts: ClassLayouts | None, written: frozenset[str]
+    info: FunctionInfo,
+    layouts: ClassLayouts | None,
+    written: frozenset[str],
+    classes: tuple[CrossingClass, ...] = (),
+    filled: frozenset[str] = frozenset(),
 ) -> str | None:
     """Why copying the function's containers across the boundary would cost more
     than running it natively saves, or None when it pays.
@@ -460,24 +577,135 @@ def _crossing_costs_more(
     The boundary copies a container that crosses whole, in and back, on every
     call. That is work proportional to its size, so the body has to do work
     proportional to it too: a loop that walks it, or works on it element by
-    element. A container of strings costs more still, a native string made
-    for every element, about what one pass of a Python loop spends on it, so
-    it pays only when the body makes more than one pass (a loop in a loop).
+    element. How much work depends on what an element costs to copy, which
+    `_copy_cost` puts in operations of a Python loop's body: a list of
+    numbers next to nothing, a dict's entry or an inner list a few, an object
+    more. A container of strings costs more still, a native string made for
+    every element, about what one pass of a Python loop spends on it, so it
+    pays only when the body makes more than one pass (a loop in a loop).
     """
     crossing = [
-        param.name
+        (param.name, native)
         for param in info.params
         if (native := _native_param(param.name, param.type, layouts, param.name in written))
         is not None
         and native.is_handle
         and native.element != "str"
-        and _crosses(native)
+        and _crosses(native, classes)
     ]
-    if crossing and not _works_through(info.node, crossing):
+    names = [name for name, _native in crossing]
+    if crossing and not _works_through(info.node, names, info.name):
         return "copying the collections in costs more than the body does with them"
+    for name, native in crossing:
+        need = _copy_cost(native, classes, name in filled)
+        if need and _loop_work(info.node, name, info.name) < need:
+            return "copying the collections in costs more than the body does with them"
     if _holds_strings(info) and not _nested_loop(info.node):
         return "copying its strings across costs what one pass over them saves"
     return None
+
+
+def _copy_cost(parameter: NativeParam, classes: tuple[CrossingClass, ...], written: bool) -> int:
+    """What copying one element of a crossing parameter costs, in operations of
+    a CPython loop's body (each about what `s += x` costs), in and back.
+    Measured on the generated wrapper (`crossing.c`): a number in a list costs
+    a few nanoseconds; a dict's or a set's entry is hashed and put; a list in
+    a list, and an object, is a handle made, filled, and let go of."""
+    described = {c.qualname: c for c in classes}
+    spec = crossing_spec(parameter.element, described)
+    if spec is None:
+        return 0
+    if spec.kind == "object" or (spec.value is not None and spec.value.kind == "object"):
+        return 8 if written else 6
+    if spec.key is not None:
+        return 6 if written else 3
+    if spec.value is not None and (spec.value.collection or spec.value.kind == "str"):
+        return 3 if written else 2
+    return 1 if written else 0
+
+
+#: Work in a loop's body, as `_loop_work` counts it.
+_LOOP_WORK = (*_WORK_NODES, ast.AugAssign)
+
+
+def _loop_work(function: ast.AST, name: str, own: str) -> int:
+    """The work a loop does per pass over `name`: the operations in the body of
+    the heaviest loop that touches it (names it, or follows a field), less a
+    lookup into `name` itself, which costs native code what it costs Python.
+    A function that walks by calling itself counts its body."""
+    local = _local_names(function)
+    best = 0
+    walked = False
+    for loop in ast.walk(function):
+        if isinstance(loop, (ast.For, ast.AsyncFor, ast.While)):
+            body: list = loop.body
+        elif isinstance(loop, ast.comprehension):
+            body = loop.ifs
+        else:
+            continue
+        names = {n.id for n in ast.walk(loop) if isinstance(n, ast.Name)}
+        follows = isinstance(loop, ast.While) and _follows_a_field(loop)
+        if name not in names and not follows:
+            continue
+        walked = True
+        best = max(best, sum(_work_of(statement, name, local) for statement in body))
+    if not walked and own:
+        # Recursion over linked objects, a builtin over the whole, or a global
+        # only a callee reads: the function's own work is what it costs.
+        return sum(_work_of(statement, name, local) for statement in getattr(function, "body", []))
+    return best
+
+
+#: A call of one of the program's functions counts as this many operations:
+#: it is a body of its own, which may loop.
+_CALL_WORK = 6
+
+
+def _local_names(function: ast.AST) -> frozenset[str]:
+    """The names the function binds: its parameters and what it assigns."""
+    found = {
+        n.id for n in ast.walk(function) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+    }
+    arguments = getattr(function, "args", None)
+    if arguments is not None:
+        found.update(
+            a.arg for a in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs)
+        )
+    return frozenset(found)
+
+
+def _program_call(call: ast.Call, local: frozenset[str]) -> bool:
+    """A call of one of the program's functions: `f(x)`, or `module.f(x)`."""
+    func = call.func
+    if isinstance(func, ast.Name):
+        return func.id not in _BUILTIN_NAMES
+    return (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id not in local
+        and func.value.id not in _BUILTIN_NAMES
+    )
+
+
+def _work_of(node: ast.AST, name: str, local: frozenset[str] = frozenset()) -> int:
+    count = 0
+    for child in ast.walk(node):
+        if not isinstance(child, _LOOP_WORK):
+            continue
+        if (
+            isinstance(child, ast.Subscript)
+            and isinstance(child.value, ast.Name)
+            and child.value.id == name
+        ):
+            continue
+        if isinstance(child, ast.Call) and _program_call(child, local):
+            count += _CALL_WORK
+            continue
+        count += 1
+    return count
+
+
+_BUILTIN_NAMES = frozenset(dir(builtins))
 
 
 #: Builtins that go over a whole container given to them.
@@ -494,12 +722,14 @@ _WHOLE_METHODS = frozenset(
 )  # fmt: skip
 
 
-def _works_through(function: ast.AST, names: list[str]) -> bool:
+def _works_through(function: ast.AST, names: list[str], own: str = "") -> bool:
     """Whether the function does work that grows with one of `names`, which pays
     for copying it across the boundary: a loop or a comprehension walks it, a
     loop's body calls a method on it or writes an element of it, an operator
     takes it whole (`s & t`), or a builtin or a method goes over all of it
-    (`sum(v)`, `v.sort()`, `", ".join(v)`)."""
+    (`sum(v)`, `v.sort()`, `", ".join(v)`). Objects linked to one another are
+    walked by a loop that follows a field (`node = node.next`) or by the
+    function calling itself on one (`height(node.left)`)."""
     wanted = set(names)
 
     def whole(node: ast.expr) -> bool:
@@ -516,6 +746,16 @@ def _works_through(function: ast.AST, names: list[str]) -> bool:
     for node in ast.walk(function):
         # Work over the whole container without a loop of the function's own.
         if isinstance(node, ast.comprehension) and rooted(node.iter):
+            return True
+        if (
+            own
+            and isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == own
+            and any(isinstance(a, ast.Attribute) and rooted(a) for a in node.args)
+        ):
+            return True
+        if isinstance(node, ast.While) and _follows_a_field(node):
             return True
         if isinstance(node, ast.BinOp) and (whole(node.left) or whole(node.right)):
             return True  # `s & t`, `v + w`
@@ -554,16 +794,29 @@ def _works_through(function: ast.AST, names: list[str]) -> bool:
     return False
 
 
+def _follows_a_field(loop: ast.While) -> bool:
+    """A loop that steps along linked objects: `node = node.next` in its body."""
+    for child in ast.walk(loop):
+        if (
+            isinstance(child, ast.Assign)
+            and len(child.targets) == 1
+            and isinstance(child.targets[0], ast.Name)
+            and isinstance(child.value, ast.Attribute)
+        ):
+            root = child.value
+            while isinstance(root, ast.Attribute):
+                root = root.value
+            if isinstance(root, ast.Name) and root.id == child.targets[0].id:
+                return True
+    return False
+
+
 def _returns_none(t: T.Type) -> bool:
     return t == T.NONE
 
 
 #: Directives that are an explicit request for the native boundary.
 _EXPOSURE_DIRECTIVES = ("native", "jit", "specialize", "parallel")
-
-#: Below this much straight-line work, the ~0.2 us Python/native crossing
-#: costs more than the native body saves over CPython.
-_EXPOSURE_WORK = 16
 
 
 def can_lower_native(
@@ -574,7 +827,10 @@ def can_lower_native(
 
 
 def should_lower_native(
-    info: FunctionInfo, analysis: FunctionAnalysis, layouts: ClassLayouts | None = None
+    info: FunctionInfo,
+    analysis: FunctionAnalysis,
+    layouts: ClassLayouts | None = None,
+    classes: tuple[CrossingClass, ...] = (),
 ) -> tuple[bool, str]:
     """Is native execution through the Python boundary expected to be faster?
 
@@ -593,19 +849,22 @@ def should_lower_native(
             # Device code has no CPU form to bind; a launch runs it, and under
             # CPython its own definition is the reference.
             return False, "device code runs where it is launched"
+    filled = writes(analysis)
     fills = any(
-        _crosses(native) and native is not None and native.name in analysis.mutated_params
+        _crosses(native, classes) and native is not None and native.name in filled
         for native in (
             _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
         )
     )
-    if _returns_none(info.ret) and not fills:
-        # The boundary hands back a value; a function with none to hand
-        # back is native code's to call -- a thread's body, a helper --
-        # unless what it does is fill a collection the caller passed.
+    if _returns_none(info.ret) and not fills and not (info.params and _loops(info.node)):
+        # A function with no value to hand back is native code's to call -- a
+        # thread's body, a helper, a check that raises -- unless what it does
+        # is fill a collection the caller passed, or loop over what it is
+        # given. A `main()` that takes nothing runs once, and Python runs it:
+        # what it calls goes native on its own terms.
         return False, "returns nothing, which has no Python boundary"
     returned = _collection_param("", info.ret, layouts)
-    if returned is not None and returned.element != "str" and not _crosses(returned):
+    if returned is not None and returned.element != "str" and not _crosses(returned, classes):
         return False, "returns an object, which native callers receive by handle"
     for param in info.params:
         native = _native_param(param.name, param.type, layouts, param.name in written)
@@ -613,13 +872,13 @@ def should_lower_native(
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
             return False, "takes a native pointer, which has no Python boundary"
-        crosses = native is not None and (native.element == "str" or _crosses(native))
+        crosses = native is not None and (native.element == "str" or _crosses(native, classes))
         if native is not None and native.is_handle and not crosses:
             return False, "takes an object, which native callers pass by handle"
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
-    refused = _crossing_costs_more(info, layouts, written)
+    refused = _crossing_costs_more(info, layouts, written, classes, frozenset(filled))
     if refused is not None:
         return False, refused
     for param in info.params:
@@ -630,13 +889,58 @@ def should_lower_native(
     for child in ast.walk(info.node):
         if isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension)):
             return True, "contains a loop"
-    work = sum(
-        isinstance(child, (ast.BinOp, ast.Compare, ast.BoolOp, ast.Call, ast.Subscript))
-        for child in ast.walk(info.node)
-    )
-    if work >= _EXPOSURE_WORK:
+    work = sum(isinstance(child, _WORK_NODES) for child in ast.walk(info.node))
+    if _calls_itself(info):
+        # Its depth is the argument's to decide, and native code has no
+        # recursion limit to raise `RecursionError` at: CPython's frames do.
+        return False, "calls itself without a loop; CPython's recursion limit stays in force"
+    if work >= _crossing_cost(info, analysis, layouts, written):
         return True, f"straight-line work ({work} operations)"
     return False, "the boundary crossing costs more than the body saves"
+
+
+#: The crossing's cost in operations of a CPython body, measured with
+#: `examples/bench_boundary.py`: the generated wrapper's call costs what a
+#: Python call does, so a body of two operations already gains. A string is
+#: made natively on the way in and decoded on the way out, about four
+#: operations each; a value class's field is an attribute read. Module
+#: globals the function reads are read by a Python frame in front of the
+#: wrapper. A function that draws random numbers is bound by the Python-level
+#: binding, which saves `random`'s state through `ctypes`. Output a native
+#: call holds is written out through Python when the call ends, which costs
+#: more than CPython's `print` for one line and much less for many: only a
+#: loop that prints pays for it.
+_CROSSING_BASE = 2
+_CROSSING_TEXT = 4
+_CROSSING_GLOBALS = 6
+_CROSSING_SLOW = 16
+_CROSSING_HELD = 40
+
+
+def _crossing_cost(
+    info: FunctionInfo,
+    analysis: FunctionAnalysis,
+    layouts: ClassLayouts | None,
+    written: frozenset[str],
+) -> int:
+    """How much straight-line work pays for a call through the boundary."""
+    if Effect.RANDOM in analysis.effects:
+        return _CROSSING_SLOW
+    if any(effect in analysis.effects for effect in _NEEDS_GIL):
+        return _CROSSING_HELD
+    cost = _CROSSING_BASE + (_CROSSING_GLOBALS if analysis.implicit_globals else 0)
+    for param in info.params:
+        native = _native_param(param.name, param.type, layouts, param.name in written)
+        if native is None:
+            continue
+        if native.is_handle and native.element == "str":
+            cost += _CROSSING_TEXT
+        elif native.is_object:
+            cost += len(native.fields)
+    returned = _collection_param("", info.ret, layouts)
+    if returned is not None and returned.element == "str":
+        cost += _CROSSING_TEXT
+    return cost
 
 
 #: What a standalone build can allocate for itself, and the element it holds.
@@ -665,11 +969,18 @@ def _signature(
     layouts: ClassLayouts | None = None,
     analysis: FunctionAnalysis | None = None,
 ) -> NativeSignature:
-    written = analysis.mutated_params | analysis.delegated_writes if analysis is not None else set()
+    written = writes(analysis) if analysis is not None else set()
+    # Held by handle as the function's IR takes them: each one, when it writes
+    # through any (see `written_params`).
+    held = written_params(analysis)
     parameters = tuple(
-        _written(
-            _native_param(p.name, p.type, layouts, p.name in written) or NativeParam(p.name, "int"),
-            written,
+        _sourced(
+            _written(
+                _native_param(p.name, p.type, layouts, p.name in held)
+                or NativeParam(p.name, "int"),
+                written,
+            ),
+            p.global_of,
         )
         for p in info.params
     )
@@ -684,24 +995,25 @@ def _signature(
         returns = ("i64",)
     return NativeSignature(
         qualname=info.qualname,
-        symbol="ppy_" + info.qualname.replace(".", "_"),
+        symbol="ppy_" + info.qualname.replace(".<locals>.", "_locals_").replace(".", "_"),
         parameters=parameters,
         returns=returns,
-        releases_gil=_releases_gil(analysis) if analysis is not None else False,
+        releases_gil=_releases_gil(analysis) and _runs_long(info)
+        if analysis is not None and not _cached(info)
+        else False,
         cpu_features=_cpu_features(info),
         future=future,
-        returned=_returned(info, returned, parameters),
+        returned=_returned(info, returned),
+        draws=analysis is not None and Effect.RANDOM in analysis.effects,
     )
 
 
-def _returned(
-    info: FunctionInfo, returned: NativeParam | None, parameters: tuple[NativeParam, ...]
-) -> str:
+def _returned(info: FunctionInfo, returned: NativeParam | None) -> str:
     """What the boundary builds from the result: a collection's type, or `None`
-    for a function that returns nothing and takes a collection."""
+    for a function that returns nothing."""
     if returned is not None:
         return returned.element
-    if _returns_none(info.ret) and any(p.is_handle for p in parameters):
+    if _returns_none(info.ret) and not info.is_async:
         return RETURNS_NOTHING
     return ""
 
@@ -713,10 +1025,19 @@ def _written(parameter: NativeParam, written: set[str]) -> NativeParam:
     return parameter
 
 
-def _crosses(parameter: NativeParam | None) -> bool:
+def _sourced(parameter: NativeParam, source: str) -> NativeParam:
+    """A settled global passed as a parameter, marked for the boundary to read."""
+    return replace(parameter, source=source) if source else parameter
+
+
+def _crosses(parameter: NativeParam | None, classes: tuple[CrossingClass, ...] = ()) -> bool:
     """Whether a handle has a Python form at the boundary: a collection of numbers,
-    tuples of numbers, and collections of those, not an object."""
-    return parameter is not None and crossing_spec(parameter.element) is not None
+    strings, tuples of numbers, and collections of those, or an object of a
+    class among `classes`."""
+    if parameter is None:
+        return False
+    described = {c.qualname: c for c in classes}
+    return crossing_spec(parameter.element, described) is not None
 
 
 def _cpu_features(info: FunctionInfo) -> tuple[str, ...]:
@@ -728,7 +1049,20 @@ def _cpu_features(info: FunctionInfo) -> tuple[str, ...]:
 
 #: Effects that mean the body can reach the interpreter while it runs, so the
 #: GIL has to be held for the whole call.
-_NEEDS_GIL = (Effect.PYTHON_CALLBACK, Effect.EXTERNAL_UNKNOWN, Effect.IO)
+# A draw moves `random._inst`'s state, which Python code may be reading.
+_NEEDS_GIL = (Effect.PYTHON_CALLBACK, Effect.EXTERNAL_UNKNOWN, Effect.IO, Effect.RANDOM)
+
+
+def _cached(info: FunctionInfo) -> bool:
+    """A cached function writes its table, which Python's callers share, and
+    one taking a `random.Random` draws from a Python object's memory: the GIL
+    is held for both."""
+    if any(name in {"functools.cache", "functools.lru_cache"} for name in info.decorators):
+        return True
+    return any(
+        isinstance(base := T.strip_literal(p.type), T.Instance) and base.name == "random.Random"
+        for p in info.params
+    )
 
 
 def _releases_gil(analysis: FunctionAnalysis) -> bool:
@@ -741,6 +1075,54 @@ def _releases_gil(analysis: FunctionAnalysis) -> bool:
     the same guarantee NumPy relies on.
     """
     return not any(effect in analysis.effects for effect in _NEEDS_GIL)
+
+
+def _calls_itself(info: FunctionInfo) -> bool:
+    """Whether the body calls the function by its own name (or `self.name`)."""
+    for child in ast.walk(info.node):
+        if not isinstance(child, ast.Call):
+            continue
+        func = child.func
+        if isinstance(func, ast.Name) and func.id == info.name:
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == info.name and info.owner:
+            return True
+    return False
+
+
+def _loops(node: ast.AST) -> bool:
+    return any(
+        isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension))
+        for child in ast.walk(node)
+    )
+
+
+def _runs_long(info: FunctionInfo) -> bool:
+    """Whether a call may run long enough to be worth dropping the GIL for: a
+    loop, or a call that may be one (recursion, a callee's loop). Dropping it
+    and taking it back costs about what a two-operation body does, so a
+    short straight-line body keeps it, as CPython's own builtins do."""
+    for child in ast.walk(info.node):
+        if isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension)):
+            return True
+        if isinstance(child, ast.Call) and not _brief_call(child):
+            return True
+    return False
+
+
+#: Builtins whose call is a step or two natively; `min` and `max` of two or
+#: more values, not of a collection.
+_BRIEF_BUILTINS = frozenset(
+    {"abs", "len", "int", "float", "bool", "round", "divmod", "pow", "ord", "chr"}
+)
+
+
+def _brief_call(call: ast.Call) -> bool:
+    if not isinstance(call.func, ast.Name):
+        return False
+    if call.func.id in {"min", "max"}:
+        return len(call.args) >= 2
+    return call.func.id in _BRIEF_BUILTINS
 
 
 def _abi_name(scalar: str) -> str:

@@ -143,15 +143,14 @@ under "not fixed". The differences, sorted:
   dominated by nothing, and refused a later read of a local, so a whole
   module failed to lower (backtracking/match_word_pattern).
 
-**A PPy difference, not fixed:** a native function with a `float` parameter
-accepts an `int` and converts it, so its result is a float where CPython's
-would be an int. `cross_product((0, 0), (1, 1), (2, 2))`, declared over
-`tuple[float, float]`, returns `0.0` natively and `0` in CPython
-(maths/ear_clipping_polygon_triangulation's doctest shows it now that doctest
-sees native functions). Refusing the int at the boundary is a one-line change
-but sends every such call to Python; converting only where the result cannot
-tell is the better fix and needs the lowering to know it. It is left for
-0.6.0.
+**A PPy difference, fixed in 0.6.0:** a native function with a `float`
+parameter accepted an `int` and converted it, so its result was a float where
+CPython's would be an int. `cross_product((0, 0), (1, 1), (2, 2))`, declared
+over `tuple[float, float]`, returned `0.0` natively and `0` in CPython
+(maths/ear_clipping_polygon_triangulation's doctest showed it). The compiler
+now follows each float parameter through the body, and the boundary refuses
+an `int` only for the parameters whose int-ness would show; see
+[A `float` given an `int`](../guide/native-lowering.md#a-float-given-an-int).
 
 **Checker refusals of valid code, fixed on this branch:**
 
@@ -164,32 +163,121 @@ tell is the better fix and needs the lowering to know it. It is left for
 - A `return None` after a `while 1:` that leaves only by `return` was checked
   as reachable.
 
-**Checker refusals of valid code, not fixed:**
+**Checker refusals of valid code, fixed in 0.6.0:** `typing.Self`,
+`queue.Queue` and the other generic collections of the standard library,
+old-style `TypeVar` with bounds and constraints and `Generic[T]`, a
+`Generator` annotation given a generator expression, `Counter & Counter`,
+`datetime + timedelta`, `Decimal / int`, `setattr` on a class and on an
+object, a class attribute assigned through its class, a method called
+through its class, `__import__("doctest")`, `namedtuple("P", "x y")`,
+`list[int]` passed where the callee only reads a `list[int | float]` or a
+`Sequence[float]` (the call runs on CPython), and the recursive generic
+`RandomizedHeapNode[T] | None`, which is now inferred through the union.
 
-- `typing.Self`, `queue.Queue`, and old-style `TypeVar` (27 corpus files use
-  it) are not supported annotations.
-- A `Generator` annotation given a generator expression, which the checker
-  types as `Iterator`.
-- `Counter & Counter`, `datetime + timedelta`, and `Decimal / int` have no
-  model in the standard-library stubs.
-- `list[int]` passed where `list[int | float]` or `Sequence[float]` is
-  expected. The first is correct under invariance, and the second is kept
-  refused on purpose: accepted, the native code would compute in floats and
-  print `9.0` where CPython prints `9`, the difference above. CPython runs
-  both, and the corpus does it often.
-- Old-style type variables (`T = TypeVar("T")`) used in annotations, and
-  `setattr` on a class.
-- A recursive generic `RandomizedHeapNode[T] | None` compared unequal to
-  itself.
+**Code that may pass `None`:** several programs pass `Node | None` where
+`Node` is declared, or read `.value` from something that may be `None`.
+CPython runs them because the `None` never arrives on that input. Strict
+mode still refuses them. `--no-strict` reports them as `W2011` and runs
+them, and native code raises CPython's `AttributeError` where the `None`
+would arrive.
 
-**Checker refusals of code that is wrong:** several programs pass
-`Node | None` where `Node` is declared, or read `.value` from something that
-may be `None`. CPython runs them because the `None` never arrives on that
-input. PPy refuses them in either mode. Whether non-strict mode should warn
-instead is a policy question for 0.6.0.
+With these, the same 400 scripts give 377 matching, 10 differing, and 13
+skipped. Of the 10, seven are harness artifacts (below), one is a program
+that ends in a `NameError` CPython reaches and PPy refuses first
+(matrix/validate_sudoku_board), one is the `float` parameter difference
+above, and one was a PPy bug the newly accepted programs exposed: constant
+folding turned `(-2) ** c` into `-2 ** c` in the Python backend
+(conversions/negative_binary_base_to_int), now fixed, with a regression.
 
 **Harness artifacts:** copied to a directory of their own, programs that
 import a sibling (`from .stack import Stack`, `from data_structures...`) fail
 on both sides, and programs that read `input()` end in `EOFError` on both
 sides. They count as different only because `ppy run` stops earlier, at the
 check, with its own error.
+
+## After the standard library went native
+
+With `random`, `math`, `heapq`, `bisect`, `itertools`, and `string` lowered
+(see [the guide](../guide/stdlib.md)), the same summary over the same tree:
+
+| tier | functions | statements |
+|---|---:|---:|
+| native, called from Python | 254 (5%) | 2,497 (7%) |
+| native, called from native code | 463 (10%) | 1,870 (5%) |
+| Python | 3,969 (85%) | 32,602 (88%) |
+
+"Draws random numbers" is gone from the reasons: 138 functions and 1,388
+statements. Calls with unknown effects went from 840 functions (8,213
+statements) to 753 (7,416). Some of the freed functions now stop at the
+next reason in their body, which is why a few rows grew: a `for` over a
+tuple (55 to 62 functions), integer `**` (37 to 42), a `list[Any]`
+parameter (56 to 59).
+
+The 400-script comparison ran again with `random` seeded before each
+program on both sides (a `sitecustomize` that calls `random.seed`), so
+programs that draw are compared too. 357 match, 33 differ, and 10 were
+skipped as nondeterministic or slow under CPython. Of the programs that
+import `random` and ran, all but two match. All 33 differences also differ
+on the tree before this change, with the same seed: none is new.
+
+## With all of 0.6.0
+
+The same summary over the same tree, with everything 0.6.0 lowers: effects
+in native code, module globals and objects across the boundary, the new
+expressions and loops, the standard library, keyword calls, the boundary
+rewritten in C, and parameter types inferred from calls.
+
+Before 0.6.0, `ppy explain --summary` ran in strict mode even when given
+`--no-strict`, so every table above is a strict-mode count. Both modes are
+shown here; strict mode is the one to compare with the tables above.
+
+| tier | strict | `--no-strict` |
+|---|---:|---:|
+| native, called from Python | 806 functions (17%), 6,690 statements | 846 (18%), 6,979 |
+| native, called from native code | 527, 2,549 | 572, 2,730 |
+| Python | 3,353 (72%), 27,730 | 3,268 (70%), 27,260 |
+
+In strict mode the functions Python calls natively went from 231 to 806,
+and all compiled functions from 652 to 1,333. `--no-strict` adds the
+functions whose parameter types come from their calls, defaults, and
+doctests.
+
+Several reasons left the table: calls with unknown effects (840 functions)
+and I/O (355), which native code now holds as effects; `isinstance` (154);
+random numbers (138); calls back into Python (91); generators that are
+returned or passed on (72); `for` over a tuple (55); chained comparisons
+(49); and keyword arguments (41). Under `--no-strict` the top of the table
+is now:
+
+| statements | functions | reason |
+|---:|---:|---|
+| 1,840 | 256 | a parameter or result with no annotation the checker could infer |
+| 1,663 | 173 | writes to a parameter native code copies |
+| 1,547 | 116 | writes to an object native code does not own |
+| 963 | 149 | a `numpy.ndarray` parameter |
+| 746 | 80 | a `list[Any]` parameter |
+| 650 | 64 | reads a module global that can change |
+| 516 | 39 | writes through a name the compiler cannot follow |
+| 514 | 48 | calls a Python function whose result native code cannot take back |
+| 447 | 54 | a `ppy.dynamic` boundary |
+| 336 | 51 | a nested function whose enclosing function stays in Python |
+
+Most of the remaining parameter and object writes are to `self` of classes
+with unannotated or NumPy fields, or through a bare `list` or `dict`
+annotation.
+
+Of the 572 compiled functions Python does not call natively, 309 do less
+with their collections than copying them in costs, 78 return nothing and
+do not loop over their arguments, 49 are too small for the boundary to pay
+off, and 38 call themselves without a loop, so CPython's recursion limit
+stays in force. The boundary now copies containers and objects in C, which
+moved most of the 374 functions that were too small to the native side.
+
+The 400-script comparison, run again on the same programs: 387 match and 13
+are skipped as nondeterministic or slow under CPython. None differs, down
+from 34 when the 0.6.0 work began. Among the fixes on the way: programs
+`ppy run` refused under `strict = false` (an import of a sibling module
+that CPython also fails to find, a `MutableSequence[T]` parameter, a
+generator expression assigned to a bare `Generator`, `globals()` passed to
+`timeit`), a double free after a native call raised, and a segfault where
+CPython raises `RecursionError`.

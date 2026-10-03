@@ -545,7 +545,7 @@ $L__BB1_9:
 
 ```text
 ; ---- saxpy [gpu] ----
-func @saxpy_fma(%a: f64, %x: f64, %y: f64) -> f64 attrs {effects = [], gpu.kind = "device", ppy.abi = "ppy", ppy.qualname = "saxpy.fma", ppy.releases_gil = true, ppy.symbol = "ppy_saxpy_fma"} loc("examples/38_cuda/saxpy.ppy":5:0) {
+func @saxpy_fma(%a: f64, %x: f64, %y: f64) -> f64 attrs {effects = [], gpu.kind = "device", ppy.abi = "ppy", ppy.qualname = "saxpy.fma", ppy.releases_gil = false, ppy.symbol = "ppy_saxpy_fma"} loc("examples/38_cuda/saxpy.ppy":5:0) {
 ^entry:
     %a_addr = core.alloca : ptr<f64, stack> loc("examples/38_cuda/saxpy.ppy":5:0)
     core.store %a, %a_addr

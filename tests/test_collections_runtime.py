@@ -322,6 +322,8 @@ def test_nested_collections_are_freed_once_and_never_used_after(tmp_path: Path):
             "support.c",
             "-o",
             str(binary),
+            # `random` and `math` in the runtime call libm.
+            "-lm",
         ],
         cwd=tmp_path,
         check=True,

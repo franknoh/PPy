@@ -125,7 +125,7 @@ Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 **`ppy emit ir generic.ppy`**
 
 <details markdown="1">
-<summary>97 lines</summary>
+<summary>102 lines</summary>
 
 ```text
 ppyir 1
@@ -167,7 +167,7 @@ func @generic_sweep(%n: i64) -> f64 attrs {effects = ["may_raise"], ppy.abi = "p
     %19 = core.add %7, %18 : f64
     core.store %19, %total_addr
     %20 = core.load %i_addr : i64
-    %21 = core.add %20, %3 {overflow = "python"} : i64
+    %21 = core.add %20, %3 {overflow = "proven"} : i64
     core.store %21, %i_addr
     core.br ^for.head3
 ^for.end6:
@@ -186,15 +186,20 @@ func @generic_clamp__float(%x: f64, %lo: f64, %hi: f64) -> f64 attrs {effects = 
     %0 = core.load %x_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
     %1 = core.load %hi_addr : f64
     %2 = core.cmp.lt %0, %1 : bool
-    %3 = core.load %lo_addr : f64
+    core.cond_br %2, ^ifexp.then1, ^ifexp.else2
+^ifexp.then1:
+    %3 = core.load %lo_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
     %4 = core.load %x_addr : f64
     %5 = core.call %3, %4 {callee = @generic_largest__float} : f64
-    %6 = core.load %hi_addr : f64
-    %7 = core.select %2, %5, %6 : f64
-    core.ret %7
+    core.br ^ifexp.end3(%5)
+^ifexp.else2:
+    %6 = core.load %hi_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
+    core.br ^ifexp.end3(%6)
+^ifexp.end3(%ifexp: f64):
+    core.ret %ifexp loc("examples/40_generics/generic.ppy":30:4)
 }
 
-func @generic_largest__float(%a: f64, %b: f64) -> f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__float", ppy.releases_gil = true, ppy.symbol = "ppy_generic_largest__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":17:0) {
+func @generic_largest__float(%a: f64, %b: f64) -> f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__float", ppy.releases_gil = false, ppy.symbol = "ppy_generic_largest__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":17:0) {
 ^entry:
     %a_addr = core.alloca : ptr<f64, stack> loc("examples/40_generics/generic.ppy":17:0)
     core.store %a, %a_addr
@@ -209,7 +214,7 @@ func @generic_largest__float(%a: f64, %b: f64) -> f64 attrs {effects = [], ppy.a
     core.ret %5
 }
 
-func @generic_largest__int(%a: i64, %b: i64) -> i64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__int", ppy.releases_gil = true, ppy.symbol = "ppy_generic_largest__int", ppy.type_arguments = ["int"]} loc("examples/40_generics/generic.ppy":17:0) {
+func @generic_largest__int(%a: i64, %b: i64) -> i64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__int", ppy.releases_gil = false, ppy.symbol = "ppy_generic_largest__int", ppy.type_arguments = ["int"]} loc("examples/40_generics/generic.ppy":17:0) {
 ^entry:
     %a_addr = core.alloca : ptr<i64, stack> loc("examples/40_generics/generic.ppy":17:0)
     core.store %a, %a_addr

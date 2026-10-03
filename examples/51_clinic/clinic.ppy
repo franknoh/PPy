@@ -1,0 +1,97 @@
+import heapq
+import math
+import random
+from dataclasses import dataclass
+
+SHARE: tuple[float, float, float] = (0.1, 0.3, 0.6)
+CARE: tuple[float, float, float] = (25.0, 15.0, 8.0)
+LATE: tuple[float, float, float] = (10.0, 30.0, 120.0)
+
+
+@dataclass
+class Clinic:
+    doctors: int
+    arrivals_per_hour: float
+    seed: int
+
+
+@dataclass
+class Report:
+    days: int = 0
+    seen: int = 0
+    late: int = 0
+    worst: float = 0.0
+    total_wait: float = 0.0
+
+    def add_day(self, seen: int, late: int, longest: float, waited: float) -> None:
+        self.days += 1
+        self.seen += seen
+        self.late += late
+        self.worst = max(self.worst, longest)
+        self.total_wait += waited
+
+
+def level_of(draw: float) -> int:
+    edge = 0.0
+    for level in range(3):
+        edge += SHARE[level]
+        if draw < edge:
+            return level
+    return 2
+
+
+def one_day(clinic: Clinic, report: Report, day: int, hours: float = 10.0) -> None:
+    rate = clinic.arrivals_per_hour / 60.0
+    events: list[tuple[float, int, int]] = []
+    clock = random.expovariate(rate)
+    while clock < hours * 60.0:
+        heapq.heappush(events, (clock, 0, level_of(random.random())))
+        clock += random.expovariate(rate)
+    waiting: list[tuple[int, float]] = []
+    free = clinic.doctors
+    seen = late = 0
+    longest = waited = 0.0
+    while events:
+        now, kind, level = heapq.heappop(events)
+        if kind == 0:
+            heapq.heappush(waiting, (level, now))
+        else:
+            free += 1
+        while free > 0 and waiting:
+            urgency, came = heapq.heappop(waiting)
+            wait = now - came
+            waited += wait
+            longest = max(longest, wait)
+            if wait > LATE[urgency]:
+                late += 1
+            seen += 1
+            free -= 1
+            care = random.lognormvariate(math.log(CARE[urgency]), 0.4)
+            heapq.heappush(events, (now + care, 1, urgency))
+    report.add_day(seen, late, longest, waited)
+    if day % 500 == 0:
+        print(f"  day {day:3d}: {seen} seen, {late} late, longest wait {longest:.1f} min")
+
+
+def run(clinic: Clinic, days: int = 30) -> Report:
+    random.seed(clinic.seed)
+    report = Report()
+    for day in range(days):
+        one_day(clinic, report, day)
+    return report
+
+
+def main() -> None:
+    for doctors in (6, 7, 8):
+        clinic = Clinic(doctors=doctors, arrivals_per_hour=40.0, seed=2026)
+        print(f"{doctors} doctors:")
+        report = run(clinic, days=2000)
+        share = 100.0 * report.late / report.seen
+        mean = report.total_wait / report.seen
+        print(
+            f"  {report.days} days, {report.seen} patients, {share:.2f}% late, "
+            f"mean wait {mean:.1f} min, worst {report.worst:.1f} min"
+        )
+
+
+main()

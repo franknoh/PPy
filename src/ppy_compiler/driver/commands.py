@@ -34,6 +34,9 @@ __all__ = [
     "run_python_backend",
 ]
 
+#: How to get the LLVM backend, as every message that misses it says.
+INSTALL_LLVM = "`pip install 'ppy-lang[llvm]'` (or `uv add 'ppy-lang[llvm]'`)"
+
 
 def _overrides(options: argparse.Namespace) -> dict[str, object]:
     overrides: dict[str, object] = {}
@@ -267,6 +270,20 @@ def run_llvm_backend(
     if not file.is_file():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{file} is not a file"))
         return 2
+    from ..backend.llvm import available
+
+    if not available() and not getattr(options, "profile", False):
+        # Without llvmlite there is no native code to make, but the program
+        # is still Python: it runs on CPython, and says once why it is slow.
+        reporter.emit(
+            Diagnostic(
+                "W2012",
+                Severity.WARNING,
+                "llvmlite is not installed, so this program runs on CPython without native code",
+                help=f"install the LLVM extra for native code: {INSTALL_LLVM}",
+            )
+        )
+        return run_python_backend(file, program_args, options, reporter)
     from .fastrun import remember
 
     # The command line already looked, for its own fast path; the answer holds.
@@ -324,7 +341,7 @@ def run_llvm_backend(
                 "E1801",
                 Severity.ERROR,
                 str(exc),
-                help="install the LLVM extra: `uv pip install 'ppy[llvm]'`",
+                help=f"install the LLVM extra: {INSTALL_LLVM}",
             )
         )
         return 2
@@ -435,6 +452,21 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         if target.suffix == ".ppyir":
             return _build_ir_file_with_backend(backend, target, options, reporter, project)
         return _build_with_backend(backend, target, options, reporter, project)
+    if backend == "llvm":
+        from ..backend.llvm import available
+
+        if not available():
+            reporter.emit(
+                Diagnostic(
+                    "E1801",
+                    Severity.ERROR,
+                    "`ppy build` makes native code, and llvmlite is not installed",
+                    help=(
+                        f"install the LLVM extra: {INSTALL_LLVM}, or build with `--backend python`"
+                    ),
+                )
+            )
+            return 2
     if backend == "python":
         refusal = _python_build_refusal(target, options)
         if refusal is not None:

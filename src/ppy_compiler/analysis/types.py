@@ -128,8 +128,8 @@ BUILTIN_MRO: dict[str, tuple[str, ...]] = {
     "complex": ("complex", "object"),
     "str": ("str", "Sequence", "Iterable", "object"),
     "bytes": ("bytes", "Sequence", "Iterable", "object"),
-    "bytearray": ("bytearray", "Sequence", "Iterable", "object"),
-    "list": ("list", "Sequence", "Iterable", "object"),
+    "bytearray": ("bytearray", "MutableSequence", "Sequence", "Iterable", "object"),
+    "list": ("list", "MutableSequence", "Sequence", "Iterable", "object"),
     "tuple": ("tuple", "Sequence", "Iterable", "object"),
     "dict": ("dict", "Mapping", "Iterable", "object"),
     "set": ("set", "Iterable", "object"),
@@ -185,6 +185,7 @@ BUILTIN_MRO.update(
 
 _ABSTRACT_MRO: dict[str, tuple[str, ...]] = {
     "Sequence": ("Sequence", "Iterable", "object"),
+    "MutableSequence": ("MutableSequence", "Sequence", "Iterable", "object"),
     "Iterable": ("Iterable", "object"),
     "Iterator": ("Iterator", "Iterable", "object"),
     "Mapping": ("Mapping", "object"),
@@ -307,11 +308,14 @@ class TypeVar_(Type):
 
     `bound` is the constraint a type argument must satisfy; `owner` names
     the function that declares it, so two functions' `T`s are two types.
+    `constrained` means `bound` is a union of constraints (`TypeVar("S",
+    int, str)`, `[S: (int, str)]`): the value is one of them, not any mix.
     """
 
     name: str
     bound: Type | None = None
     owner: str = ""
+    constrained: bool = False
 
     def __str__(self) -> str:
         return self.name
@@ -391,6 +395,23 @@ def infer(pattern: Type, actual: Type, bindings: dict[TypeVar_, Type]) -> bool:
             if isinstance(joined, Union_):
                 return False
             bindings[pattern] = joined
+        return True
+    if isinstance(pattern, Union_):
+        # `Node[T] | None` given a `Node[int] | None`, or a `Node[int]`: each
+        # member of what is given binds the member of the pattern it is.
+        fixed = [m for m in pattern.members if not type_variables(m)]
+        open_members = [m for m in pattern.members if type_variables(m)]
+        for member in actual.members if isinstance(actual, Union_) else (actual,):
+            if any(is_assignable(member, f) for f in fixed):
+                continue
+            matching = [
+                m
+                for m in open_members
+                if not (isinstance(m, Instance) and isinstance(member, Instance))
+                or m.name == member.name
+            ]
+            if len(matching) == 1 and not infer(matching[0], member, bindings):
+                return False
         return True
     if isinstance(pattern, Instance) and isinstance(actual, Instance):
         if (
@@ -580,10 +601,29 @@ def join(*types: Type) -> Type:
         for t in present
         if not (isinstance(t, Instance) and is_empty_container(t) and t.name in filled)
     ]
+    # `groups = defaultdict(list)`, whose key the first write gives: the
+    # half-known type is the known one's.
+    present = [t for t in present if not any(_fills(other, t) for other in present)]
     first = present[0]
     if all(t == first for t in present):
         return first
     return union(*present)
+
+
+def _fills(known: Type, partial: Type) -> bool:
+    """Whether `known` is `partial` with the arguments `partial` leaves `Never`
+    written in: `defaultdict[str, int]` of `defaultdict[Never, int]`."""
+    return (
+        isinstance(known, Instance)
+        and isinstance(partial, Instance)
+        and known != partial
+        and known.name == partial.name
+        and len(known.args) == len(partial.args)
+        and all(
+            isinstance(mine, NeverType) or mine == theirs or _fills(theirs, mine)
+            for mine, theirs in zip(partial.args, known.args, strict=True)
+        )
+    )
 
 
 def is_empty_container(t: Type) -> bool:
@@ -713,6 +753,12 @@ def is_assignable(source: Type, target: Type) -> bool:
     return False
 
 
+#: `collections`' mappings, which are dicts with more to them.
+_LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+
+
 def _instance_assignable(source: Instance, target: Instance) -> bool:
     if target.name == "object":
         return True
@@ -730,6 +776,10 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
         return True
     if target.name not in source.resolved_mro:
         return False
+    if source.name != target.name and source.name in _LIBRARY_MAPPINGS and source.args:
+        # A `Counter[str]` held as the dict it is: a `dict[str, int]`.
+        arguments = (*source.args, INT) if source.name == "collections.Counter" else source.args
+        source = Instance("dict", arguments, BUILTIN_MRO.get("dict", ("dict", "object")))
     if source.name != target.name and source.name in GENERIC_BASES:
         # A project class held as one of its bases: `Counted[int]` as a
         # `Stack[int]`, `IntStack` as a `Stack[int]`, by what it gives the base.
@@ -855,6 +905,16 @@ def _tuple_assignable(source: Tuple_, target: Type) -> bool:
 def _callable_assignable(source: Callable_, target: Callable_) -> bool:
     if not is_assignable(source.ret, target.ret):
         return False
+    star = next((p for p in source.params if p.kind == "var_positional"), None)
+    if star is not None:
+        # `def wrapper(*args: T)` takes any number of `T`s, so it is a
+        # `Callable[[T], U]` and a `Callable[[T, T], U]` alike.
+        fixed = [p for p in source.params if p.kind in {"positional_only", "positional_or_keyword"}]
+        element = star.type.items[0] if isinstance(star.type, Tuple_) and star.type.items else ANY
+        return all(
+            is_assignable(tp.type, fixed[index].type if index < len(fixed) else element)
+            for index, tp in enumerate(target.params)
+        )
     required = [p for p in target.params if not p.has_default]
     if len(source.params) < len(required):
         return False

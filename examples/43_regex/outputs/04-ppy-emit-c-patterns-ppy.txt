@@ -162,7 +162,7 @@ int32_t ppy_patterns_sum_values(uint8_t *text, int64_t text_len, int64_t *out) {
             int64_t t10;
             if (ppy_ovf_sub_i64((int64_t)text[i], 48, &t10)) return 1; /* arith.ok */
             if (ppy_ovf_add_i64(t9, t10, &value)) return 1; /* arith.ok */
-            if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
+            i += 1;
         }
         if (ppy_ovf_add_i64(total, value, &total)) return 1; /* arith.ok */
         pos = m_spans[1];

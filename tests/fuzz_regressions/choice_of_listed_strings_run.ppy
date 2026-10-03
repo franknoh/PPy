@@ -1,0 +1,21 @@
+# fuzz: path=run (r.choice of a list of strings was released as if the draw owned it: a use after free)
+import random
+
+SYLLABLES = ["ka", "lo", "mi", "ne", "ru"]
+
+
+def make_words(rng: random.Random, count: int) -> list[str]:
+    words: list[str] = []
+    for _ in range(count):
+        word = ""
+        for _ in range(3):
+            word += rng.choice(SYLLABLES)
+        words.append(word)
+    return words
+
+
+def main() -> None:
+    print(make_words(random.Random(3), 2000)[:5])
+
+
+main()

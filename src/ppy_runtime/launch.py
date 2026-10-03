@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from .abi import NativeSignature
-from .binding import bind, remember, value_class_types
+from .binding import as_method, bind, bind_globals, keyed, remember, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
@@ -96,24 +96,47 @@ class PrebuiltBinder(LibraryBinder):
         self._extensions[library] = extension
         return extension
 
-    def _fast_entry(self, signature, address: int, fallback):  # type: ignore[no-untyped-def]
-        """Bind the shipped C wrapper, which holds the fallback itself."""
+    def _fast_entry(self, signature, address: int, fallback, spelled=None):  # type: ignore[no-untyped-def]
+        """Bind the shipped C wrapper, which holds the fallback itself: `spelled`
+        where the function is passed module globals (`bind_globals`)."""
         index = self._wrapper_entries.get(signature.qualname)
         if self._wrappers is None or index is None:
             return None
-        types = value_class_types(signature, fallback)
+        types = value_class_types(signature, fallback, globals_read=spelled is not None)
         if types is None:
             return None
+        if signature.crosses_collections:
+            from .collection_boundary import attach  # pylint: disable=import-outside-toplevel
+
+            if not attach(self._wrappers, self._library):
+                return None
+        if signature.effects:
+            from .effects import attach as attach_effects  # pylint: disable=import-outside-toplevel
+            from .effects import register_function  # pylint: disable=import-outside-toplevel
+
+            if not attach_effects(self._wrappers, self._library):
+                return None
+            register_function(signature.qualname, fallback)
+        resolve = None
+        if signature.classes:
+            from .collection_boundary import resolver  # pylint: disable=import-outside-toplevel
+
+            resolve = resolver(signature, fallback)
+        held = spelled if spelled is not None else fallback
+        given = (address, types, held) if resolve is None else (address, types, held, resolve)
         try:
-            named = getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
+            named = getattr(self._wrappers, f"bind_{index}")(*given)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
-        if named is not None:
-            # A copy that answers to the function's own name and docstring.
-            return named
-        # The entry point bears the function's qualified name in the library
-        # `ppy build` writes beside the manifest.
-        return getattr(self._wrappers, signature.qualname, None)
+        if named is None:
+            # The entry point bears the function's qualified name in the library
+            # `ppy build` writes beside the manifest.
+            named = getattr(self._wrappers, signature.qualname, None)
+        keyed_set = getattr(self._wrappers, f"keyed_{index}", None)
+        if named is not None and spelled is None and keyed_set is not None:
+            # Keywords and defaults bound as Python binds them, then the entry.
+            keyed_set(keyed(fallback, named, len(signature.parameters)))
+        return named
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
         signature = self._entries.get(module, {}).get(function)
@@ -127,11 +150,27 @@ class PrebuiltBinder(LibraryBinder):
         if not address:
             return fallback
         # A coroutine's future needs the Python-side wrapping; the C wrapper
-        # would hand back the bare handle.
-        entry = None if signature.future else self._fast_entry(signature, address, fallback)
+        # would hand back the bare handle. A function that draws needs
+        # `random`'s state saved around it, which the Python side does.
+        if signature.reads_globals and not (signature.future or signature.draws):
+            # Python reads the globals and passes them after its arguments.
+            read = bind_globals(
+                signature,
+                address,
+                fallback,
+                self._library,
+                lambda spelled: self._fast_entry(signature, address, fallback, spelled),
+            )
+            if read is not None:
+                return read.wrapper
+        entry = (
+            None
+            if signature.future or signature.draws or signature.reads_globals
+            else self._fast_entry(signature, address, fallback)
+        )
         if entry is not None:
-            remember(entry, signature)
-            return entry
+            remember(entry, signature, fallback)
+            return as_method(entry, fallback, function)
         binding = bind(signature, address, fallback, owner=self._library)
         return binding.wrapper
 

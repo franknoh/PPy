@@ -1,0 +1,12 @@
+# fuzz: path=ppy seed=31 (stdout differs: a constant hid the ZeroDivisionError of its test)
+def fn6(a7: int) -> str:
+    if ('a' if ((-3 // a7) > 1) else 'a') > "b":
+        return "x"
+    return ""
+
+
+def main() -> None:
+    print(fn6(0))
+
+
+main()

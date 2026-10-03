@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import hashlib
 import json
@@ -39,7 +40,13 @@ from .link import (
     write_header,
     write_manifest,
 )
-from .lowering import LoweredFunction, LoweringResult, NativeSignature, should_lower_native
+from .lowering import (
+    LoweredFunction,
+    LoweringResult,
+    NativeSignature,
+    should_lower_native,
+    with_implicit_globals,
+)
 from .specialize import SpecializationPolicy, Specializer
 from .wrapper_build import build_wrappers
 
@@ -80,6 +87,8 @@ class NativeModule:
     exports: dict[str, str] = field(default_factory=dict)
     #: What the lowering and the passes said, as remarks; cached with the module.
     remarks: tuple[str, ...] = ()
+    #: Per function with effects, the rule they run under; cached with the module.
+    effects: dict[str, str] = field(default_factory=dict)
     #: Makes `llvm` from `ppyir` when it is first read; None once it has.
     emitter: object = None
 
@@ -148,6 +157,12 @@ def _collect(bundle, opt_level: int | None = None, failures=None) -> dict[str, N
             if function_analysis is None:
                 continue
             candidates[info.qualname] = (info, function_analysis, node)
+        for info in symbols.nested.values():
+            # A nested function is lowered with the function around it, and
+            # on its own where it shares nothing with it (`lowering/calls.py`).
+            function_analysis = analysis.functions.get(info.qualname)
+            if function_analysis is not None and isinstance(info.node, ast.FunctionDef):
+                candidates[info.qualname] = (info, function_analysis, info.node)
 
         reused = _cached_lowering(bundle, module.name, opt_level)
         if reused is not None:
@@ -184,6 +199,7 @@ def _collect(bundle, opt_level: int | None = None, failures=None) -> dict[str, N
             fusion_notes=notes,
             proved=result.proved,
             remarks=result.remarks,
+            effects=result.effects,
             libraries=result.libraries,
             exports=result.exports,
         )
@@ -297,15 +313,22 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
             # The cached module no longer matches the source in front of us.
             return NativeModule(name=name)
         info, _analysis, node = entry
+        if signature.reads_globals:
+            # Lowered with the globals it reads as parameters, as it was then.
+            info = with_implicit_globals(info, _analysis)
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
-        exposed, why = should_lower_native(info, _analysis, layouts)
+        exposed, why = should_lower_native(info, _analysis, layouts, signature.classes)
+        withheld = reused.withheld.get(qualname, "")
+        if withheld:
+            exposed, why = False, withheld
         functions[qualname] = LoweredFunction(
             info,
             signature,
             exposed=exposed,
             exposure_reason=why,
             boundary=reused.boundaries.get(qualname),
+            withheld=withheld,
         )
         sources[qualname] = (info, node)
     return NativeModule(
@@ -322,6 +345,7 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         exports=dict(reused.exports),
         proved=dict(reused.proved),
         remarks=tuple(reused.remarks),
+        effects=dict(reused.effects),
     )
 
 
@@ -1146,6 +1170,9 @@ def _binding_name(info) -> str:  # type: ignore[no-untyped-def]
     """How a generated module names this entry point when it binds it."""
     if info.owner:
         return f"{info.owner.rpartition('.')[2]}.{info.name}"
+    if info.enclosing:
+        # `outer.<locals>.inner`, as the generated module binds it in `outer`.
+        return info.qualname.removeprefix(f"{info.module}.")
     return info.name
 
 
@@ -1209,7 +1236,7 @@ class _Binder(LibraryBinder):
         return binding.wrapper
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
-        from ppy_runtime.binding import adopt, observation_wanted, value_class_types
+        from ppy_runtime.binding import adopt, as_method, observation_wanted, value_class_types
 
         from .runtime import bind as make_binding
 
@@ -1220,18 +1247,45 @@ class _Binder(LibraryBinder):
         policy = SpecializationPolicy.of(info) if info is not None else None
         fast_entry = None
         register = None
-        if wrappers is not None and wrappers.ok:
+        if (
+            wrappers is not None
+            and wrappers.ok
+            and (not signature.effects or wrappers.attach_effects())
+            and (not signature.crosses_collections or wrappers.attach_runtime())
+        ):
+            if signature.reads_globals:
+                read = self._reading_globals(entry, fallback)
+                if read is not None:
+                    return read
             types = value_class_types(signature, fallback)
+            if types is not None and signature.effects:
+                from ppy_runtime.effects import register_function
+
+                # Where its calls into Python find what they name.
+                register_function(signature.qualname, fallback)
             if types is not None:
                 register = wrappers.registrar(qualname)
-                if not (observation_wanted(specializer, policy, info) and register is not None):
+                # A function that draws needs `random`'s state saved around it,
+                # which only the Python-side wrapper does.
+                if not signature.draws and not (
+                    observation_wanted(specializer, policy, info) and register is not None
+                ):
                     # Nothing to watch for: the wrapper holds the fallback in C
                     # and no Python frame stands on the call path at all.
-                    direct = wrappers.bind(qualname, address, types, fallback)
+                    from ppy_runtime.collection_boundary import resolver
+
+                    direct = wrappers.bind(
+                        qualname,
+                        address,
+                        types,
+                        fallback,
+                        resolver(signature, fallback),
+                        arity=len(signature.parameters),
+                    )
                     if direct is not None:
                         binding = adopt(signature, direct, fallback, owner=(engine, wrappers))
                         self.bindings.append(binding)
-                        return self._recorded(qualname, direct)
+                        return self._recorded(qualname, as_method(direct, fallback, function))
                 fast_entry = wrappers.bind(qualname, address, types)
         binding = make_binding(
             signature,
@@ -1244,6 +1298,35 @@ class _Binder(LibraryBinder):
             owner=(engine, wrappers),
             register=register,
         )
+        self.bindings.append(binding)
+        return self._recorded(qualname, binding.wrapper)
+
+    def _reading_globals(self, entry, fallback):  # type: ignore[no-untyped-def]
+        """A function passed the module globals it reads, served by its C entry
+        point: Python reads the globals and passes them after its arguments."""
+        from ppy_runtime.binding import bind_globals, observation_wanted, value_class_types
+        from ppy_runtime.collection_boundary import resolver
+
+        signature, address, specializer, info, wrappers, qualname, engine = entry
+        policy = SpecializationPolicy.of(info) if info is not None else None
+        types = value_class_types(signature, fallback, globals_read=True)
+        if types is None or signature.draws or observation_wanted(specializer, policy, info):
+            return None
+        if signature.effects:
+            from ppy_runtime.effects import register_function
+
+            register_function(signature.qualname, fallback)
+        binding = bind_globals(
+            signature,
+            address,
+            fallback,
+            (engine, wrappers),
+            lambda spelled: wrappers.bind(
+                qualname, address, types, spelled, resolver(signature, fallback)
+            ),
+        )
+        if binding is None:
+            return None
         self.bindings.append(binding)
         return self._recorded(qualname, binding.wrapper)
 

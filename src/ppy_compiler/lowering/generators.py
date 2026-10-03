@@ -283,17 +283,24 @@ class GeneratorLowering:  # pylint: disable=attribute-defined-outside-init
         self._enter(inline.consumer)
         if inline.loops:
             self._loops.append((resume, inline.broken))  # type: ignore[attr-defined]
+        # A `return` in the step leaves the generator where it stands: its
+        # locals go with the function's (`_release_collections`).
+        suspended = self.__dict__.setdefault("_suspended", [])
+        suspended.append(generator.values.get("collections", {}))
         try:
             inline.visit(value, owned)
         finally:
+            suspended.pop()
             if inline.loops:
                 self._loops.pop()  # type: ignore[attr-defined]
             inline.consumer = self._scope()
             self._enter(generator)
             stack.append(inline)
-        reached = self._open()  # type: ignore[attr-defined]
-        if reached:
+        if self._open():  # type: ignore[attr-defined]
             core.br(self.b, Successor(resume))  # type: ignore[attr-defined]
+        # A `for` over a held generator ends its body with a branch straight
+        # to `resume`, so the step can come back with its own block closed.
+        reached = self._reached_block(resume)  # type: ignore[attr-defined]
         self.b.at_end(resume)  # type: ignore[attr-defined]
         if not reached:
             # The step never comes back (`next` took the first value): nothing

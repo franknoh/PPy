@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import math
 from dataclasses import dataclass, field
 
 # The LLVM backend injects this name to supply a fused kernel to a module.
@@ -128,15 +129,69 @@ def _makes_new_object(node: ast.expr) -> bool:
 _RAISING_OPERATORS = (ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.LShift, ast.RShift)
 
 
+def _raises_nothing_unknown(node: ast.expr) -> bool:
+    """Every operator in it that can raise has a known value itself, so it
+    did not raise: `('a' if -3 // n > 1 else 'a')` is always `'a'`, unless
+    `n` is 0, and then CPython raises before it is anything."""
+    return all(
+        has_const(child)
+        for child in ast.walk(node)
+        if isinstance(child, ast.BinOp) and isinstance(child.op, _RAISING_OPERATORS)
+    )
+
+
+def _makes_bool(node: ast.expr) -> bool:
+    """Whatever its operands, this expression's value is a `bool`."""
+    if isinstance(node, ast.Compare):
+        return True
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return True
+    return isinstance(node, ast.Constant) and isinstance(node.value, bool)
+
+
 def _cannot_raise(node: ast.expr) -> bool:
     """Pure, and no operator in it can raise: what may be deleted outright, or
-    moved to where it runs when the program would not have run it."""
+    moved to where it runs when the program would not have run it.
+
+    An operator raises when its operands are of types it does not take, so
+    each operand must be a number, a string, or None by the analysis: `x + 12`
+    with `x` of no known type raises `TypeError` for a string."""
     if not _is_pure_expr(node):
         return False
-    return not any(
-        isinstance(child, ast.BinOp) and isinstance(child.op, _RAISING_OPERATORS)
-        for child in ast.walk(node)
-    )
+    for child in ast.walk(node):
+        if isinstance(child, ast.BinOp):
+            if isinstance(child.op, _RAISING_OPERATORS):
+                return False
+            if not (_plain(child.left) and _plain(child.right)):
+                return False
+        elif isinstance(child, ast.UnaryOp):
+            if not _plain(child.operand):
+                return False
+        elif isinstance(child, ast.Compare):
+            operands = [child.left, *child.comparators]
+            if not all(isinstance(op, (ast.Is, ast.IsNot)) for op in child.ops) and not all(
+                _plain(operand) for operand in operands
+            ):
+                return False
+        elif isinstance(child, ast.BoolOp):
+            if not all(_plain(value) for value in child.values):
+                return False
+        elif isinstance(child, ast.FormattedValue):
+            # `f"{x:>6}"` raises for bytes, and a format spec may not suit the value.
+            if not _plain(child.value) or child.format_spec is not None:
+                return False
+    return True
+
+
+#: Values whose operators raise only on a mix of them, which the checker
+#: reports: numbers, strings, and None.
+_PLAIN = frozenset({T.INT, T.FLOAT, T.BOOL, T.STR, T.NONE})
+
+
+def _plain(node: ast.expr) -> bool:
+    if isinstance(node, ast.Constant):
+        return True
+    return T.strip_literal(type_of(node)) in _PLAIN
 
 
 def _assigned_names(nodes: list[ast.stmt]) -> set[str]:
@@ -217,6 +272,23 @@ class StripDirectives(Pass):
         return node.body  # type: ignore[return-value]
 
 
+def _literal(value: object, where: ast.AST) -> ast.expr:
+    """`value` as source writes it. A negative number is `-2`, the negation
+    of a literal: a bare `Constant(-2)` unparses as `-2`, so `(-2) ** c`
+    would come out as `-2 ** c`, which is `-(2 ** c)`."""
+    negative = (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and (value < 0 or (value == 0 and math.copysign(1.0, value) < 0))
+    )
+    if negative:
+        literal: ast.expr = ast.UnaryOp(ast.USub(), ast.Constant(value=-value))
+        ast.copy_location(literal.operand, where)  # type: ignore[attr-defined]
+    else:
+        literal = ast.Constant(value=value)
+    return ast.copy_location(literal, where)
+
+
 class ConstantFold(Pass):
     """Replace provably constant pure expressions with their value."""
 
@@ -231,11 +303,11 @@ class ConstantFold(Pass):
             and _is_load(node)
             and has_const(node)
             and _is_pure_expr(node)
+            and _raises_nothing_unknown(node)
         ):
             value = const_of(node)
             if isinstance(value, (int, float, complex, str, bytes, bool, type(None))):
-                replacement = ast.Constant(value=value)
-                ast.copy_location(replacement, node)
+                replacement = _literal(value, node)
                 self.context.count("constants_folded")
                 return replacement
         return node
@@ -244,8 +316,7 @@ class ConstantFold(Pass):
         if isinstance(node.ctx, ast.Load) and has_const(node):
             value = const_of(node)
             if isinstance(value, (int, float, str, bytes, bool, type(None))):
-                replacement = ast.Constant(value=value)
-                ast.copy_location(replacement, node)
+                replacement = _literal(value, node)
                 self.context.count("constants_propagated")
                 return replacement
         return node
@@ -370,7 +441,10 @@ class Peephole(Pass):
             and isinstance(node.operand.op, ast.Not)
         ):
             inner = node.operand.operand
-            if type_of(inner) == T.BOOL:
+            # Only where the expression itself makes a bool: a name's type
+            # may be inferred from the calls the program makes, and a caller
+            # outside it may pass `1` where the program passes `True`.
+            if type_of(inner) == T.BOOL and _makes_bool(inner):
                 self.context.count("peepholes")
                 return inner
         return node
@@ -479,6 +553,14 @@ class UnusedLocals(Pass):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         self.generic_visit(node)
         loaded = _loaded_names(node.body)
+        # A store to a name declared `global` or `nonlocal` is not a local's:
+        # the module or the enclosing function reads it.
+        loaded |= {
+            name
+            for child in ast.walk(node)
+            if isinstance(child, (ast.Global, ast.Nonlocal))
+            for name in child.names
+        }
         kept: list[ast.stmt] = []
         for statement in node.body:
             if (
@@ -686,10 +768,32 @@ class InlineSmallFunctions(Pass):
         super().__init__(context)
         self.candidates = candidates
         self.budget = _INLINE_BUDGET.get(context.level, 0)
+        #: Names the functions being visited bind: a call by one of them, or a
+        #: body reading one, is not the module's function or global there.
+        self._shadowed: list[set[str]] = []
+
+    def _scope(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> ast.AST:
+        from ..analysis.closures import own_names  # pylint: disable=import-outside-toplevel
+
+        self._shadowed.append(own_names(node))
+        try:
+            self.generic_visit(node)
+        finally:
+            self._shadowed.pop()
+        return node
+
+    visit_FunctionDef = _scope
+    visit_AsyncFunctionDef = _scope
+    visit_Lambda = _scope
+
+    def _is_shadowed(self, name: str) -> bool:
+        return any(name in names for names in self._shadowed)
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
         self.generic_visit(node)
         if not isinstance(node.func, ast.Name) or node.keywords:
+            return node
+        if self._is_shadowed(node.func.id):
             return node
         entry = self.candidates.get(node.func.id)
         if entry is None:
@@ -699,6 +803,13 @@ class InlineSmallFunctions(Pass):
         if body is None:
             return node
         if _expr_size(body) > self.budget:
+            return node
+        own = {p.name for p in info.params}
+        if any(
+            isinstance(inner, ast.Name) and inner.id not in own and self._is_shadowed(inner.id)
+            for inner in ast.walk(body)
+        ):
+            # The body reads a global the caller's scope binds a local of.
             return node
         params = [p.name for p in info.params]
         if len(params) != len(node.args):

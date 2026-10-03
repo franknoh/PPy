@@ -98,17 +98,35 @@ calls it. A list of numbers that a function only reads is lent to it as a
 buffer, which native code and Python both pass without copying the
 elements; a list it writes, and every other container, goes by handle.
 
-When Python calls such a function, each container argument is copied into
-native memory (strings as their UTF-8 bytes), the result is copied out as a
-new `list`, `dict`, or `set`, and a container the function wrote through is
-copied back into the caller's object, which stays the same object. An
-argument whose contents do not match the declared type runs the Python
-body instead.
+When Python calls such a function, the generated wrapper copies each
+container argument into native memory (strings as their UTF-8 bytes) and
+copies the result out as a new `list`, `dict`, or `set`. After a call that
+writes through a parameter, every container that came in is copied back
+into the caller's object, which stays the same object. That includes one
+the call took out of its parent: after `row = g[0]; row.append(1); g.pop(0)`
+the caller's row has the 1, as in CPython. An element the call left as it
+was keeps its identity. An argument whose contents do not match the
+declared type runs the Python body instead.
 
-Copying a string in or out makes a native string for it, which costs about
-what one pass of a Python loop spends on it. So a function that takes or
-returns a container of strings is called natively from Python only when it
-does more than one pass of work per element, a loop inside its loop, as
+Each object is copied once however often it is reached, and comes back as
+one object: `f(xs, xs)` writes one list, the rows of `[[0] * n] * m` stay
+one row, and a list in two dict values stays one list.
+
+The copy costs time in proportion to what crosses. Measured on the
+generated wrapper:
+
+| element | copied in | and back, after a write |
+|---|---|---|
+| a number in a list | about 1 ns | about 2 ns, more where it changed |
+| a dict's or a set's entry | about 20 ns | about the same again |
+| a list inside a list | about 80 ns, plus its elements | its elements |
+| a string | a native string, about 30 ns | a Python string |
+
+A Python loop's pass costs 10 to 30 ns. So Python calls a function natively
+only where the body does that much with each element: a loop over a list
+of numbers; three or more operations per entry of a dict (`s += k * v + v`,
+not `s += d[k]`); two or more per element of a list of lists; and, for a
+container of strings, more than one pass, a loop inside its loop, as
 `for w in words: for ch in w:` does. Otherwise Python calls its Python body,
 and native callers still call it natively. `ppy explain` gives the reason.
 
@@ -123,11 +141,14 @@ squares after what it held.
 
 ## Printing
 
-In a standalone build, `print(xs)`, `print(d)`, and an f-string field
-holding a list or a dict write what `repr` writes: numbers, strings with
-their quotes, tuples, nested containers, and dataclasses shown as
-`Point(x=1, y=2.0)`. A set of ints or of tuples of ints prints in CPython's
-order, and an empty one as `set()`.
+Natively, under `ppy run` and in a standalone build, `print(xs)`,
+`print(d)`, and an f-string field holding a list or a dict write what
+`repr` writes: numbers, strings with their quotes, tuples, nested
+containers, and dataclasses shown as `Point(x=1, y=2.0)`. A set of ints or
+of tuples of ints prints in CPython's order, and an empty one as `set()`.
+A list parameter lent as a buffer (a list of numbers the function only
+reads) has no `repr` natively, so printing one keeps the function in
+Python.
 
 ## Limitations
 
@@ -143,11 +164,13 @@ order, and an empty one as `set()`.
   natively take a key giving numbers or tuples of them, and `min` and `max`
   with a key pick among numbers. [Functions as values](closures.md) has the
   rest.
-- `any` and `all` of a generator stay in Python, because they stop at the
-  first answer and a list built first would not; of a list they are native.
+- `any` and `all` of a generator are native and stop at the first answer,
+  as CPython's do; of a list they are native too.
 - A standalone binary's `KeyError` for a string key says `KeyError` without
   the key.
-- A container holding objects or dataclasses keeps a Python caller on the
-  Python body; native callers are not affected.
+- A container of objects or dataclasses crosses from Python as
+  [objects do](classes.md#the-python-boundary). A container of objects
+  whose class is an exception or generic keeps a Python caller on the Python
+  body; native callers are not affected.
 
 Examples: [Collections](../howto/47_collections.md), [Strings](../howto/48_strings.md).

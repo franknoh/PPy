@@ -18,7 +18,7 @@ The distribution is `ppy-lang`. It installs three packages:
 
 Before 1.0, a minor release may change the language and the diagnostics.
 The [changelog](changelog.md) says what changed. Pin an exact version
-(`ppy-lang[llvm]==0.3.0`).
+(`ppy-lang[llvm]==0.6.0`).
 
 To install the development tip instead:
 
@@ -44,6 +44,12 @@ rest, so you install only what you use.
 
 A missing library only disables its plugin. `uv run ppy doctor` reports
 what was found and what was not.
+
+Without the `llvm` extra, `ppy run prog.py` prints one warning (`W2012`)
+saying how to install `ppy-lang[llvm]`, then runs the program on CPython
+with the same output and exit code. `ppy build`, `ppy run --profile`, and
+the other commands that only make native code stop with `E1801` and the
+same advice.
 
 ## Toolchain
 

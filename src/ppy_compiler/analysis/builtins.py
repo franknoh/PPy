@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
@@ -38,6 +39,12 @@ _IO = EffectSet.of(Effect.IO)
 _STORAGE_ONLY = frozenset({"i8", "u8"})
 
 
+#: `collections`' mappings, which iterate over their keys as a dict does.
+_LIBRARY_MAPPINGS = frozenset(
+    {"collections.defaultdict", "collections.OrderedDict", "collections.Counter"}
+)
+
+
 def _element_of(t: T.Type) -> T.Type:
     found = _element_storage(t)
     if isinstance(found, T.Instance) and found.name in _STORAGE_ONLY:
@@ -59,6 +66,9 @@ def _element_storage(t: T.Type) -> T.Type:
             return base.items[0]
         return T.join(*base.items) if base.items else T.NEVER
     if isinstance(base, T.Instance):
+        if base.name == "io.TextIOWrapper":
+            # A text file iterates over its lines.
+            return T.STR
         if (
             base.name
             in {
@@ -66,8 +76,12 @@ def _element_storage(t: T.Type) -> T.Type:
                 "set",
                 "frozenset",
                 "Sequence",
+                "MutableSequence",
                 "Iterable",
                 "Iterator",
+                "Generator",
+                "Collection",
+                "Reversible",
                 "Buffer",
                 "memoryview",
                 "array",
@@ -77,7 +91,8 @@ def _element_storage(t: T.Type) -> T.Type:
             return base.args[0]
         if base.name in C.ITERABLE and base.args:
             return C.element_of(base)
-        if base.name == "dict" and base.args:
+        if base.name in {"dict", "collections.deque", *_LIBRARY_MAPPINGS} and base.args:
+            # A deque hands out its elements, a mapping its keys.
             return base.args[0]
         if base.name in {"tuple", "list", "set", "frozenset", "dict", "Sequence", "Iterable"}:
             # Unparameterized: what `isinstance(x, tuple)` leaves, or a
@@ -210,6 +225,10 @@ def _dict(args: Sequence[Arg]) -> BuiltinResult:
         base = T.strip_literal(args[0].type)
         if isinstance(base, T.Instance) and base.name == "dict" and len(base.args) == 2:
             return BuiltinResult(base, Facts(), _ALLOC)
+        if isinstance(base, T.Instance) and base.name in _LIBRARY_MAPPINGS and base.args:
+            # A copy of a `defaultdict`, an `OrderedDict`, or a `Counter`'s counts.
+            value = T.INT if base.name == "collections.Counter" else base.args[-1]
+            return BuiltinResult(T.dict_of(base.args[0], value), Facts(), _ALLOC)
     return BuiltinResult(T.dict_of(T.ANY, T.ANY), Facts(), _ALLOC)
 
 
@@ -305,8 +324,26 @@ def _all_any(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.BOOL, Facts(int_range=IntRange(0, 1)))
 
 
+#: What `open` gives in a text mode.
+TEXT_STREAM = T.Instance("io.TextIOWrapper", (), ("io.TextIOWrapper", "object"))
+
+
 def _open(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.OBJECT, Facts(), _IO | EffectSet.of(Effect.ALLOC, raises=("OSError",)))
+
+
+def opens_text(node: ast.Call) -> bool:
+    """Whether `open(...)` opens a text file: a mode, if given, that is a string
+    literal without `b`."""
+    mode = node.args[1] if len(node.args) > 1 else None
+    for keyword in node.keywords:
+        if keyword.arg == "mode":
+            mode = keyword.value
+        elif keyword.arg is None:
+            return False
+    if mode is None:
+        return True
+    return isinstance(mode, ast.Constant) and isinstance(mode.value, str) and "b" not in mode.value
 
 
 def _input(args: Sequence[Arg]) -> BuiltinResult:
@@ -419,6 +456,12 @@ def _getattr(args: Sequence[Arg]) -> BuiltinResult:
     )
 
 
+def _setattr(args: Sequence[Arg]) -> BuiltinResult:
+    return BuiltinResult(
+        T.NONE, Facts(), EffectSet.of(Effect.WRITE_OBJECT, raises=("AttributeError",))
+    )
+
+
 def _hasattr(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.BOOL, Facts(int_range=IntRange(0, 1)), EffectSet.of(Effect.READ_OBJECT))
 
@@ -484,6 +527,8 @@ BUILTINS: dict[str, Handler] = {
     "memoryview": _memoryview,
     "getattr": _getattr,
     "hasattr": _hasattr,
+    "setattr": _setattr,
+    "delattr": _setattr,
 }
 
 #: Effects attributed to calls into well-known standard-library modules.

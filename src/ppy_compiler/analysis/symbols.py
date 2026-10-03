@@ -118,6 +118,12 @@ class ParamInfo:
     #: Whether a pass filled this type in. Usable, but still open to new
     #: evidence -- which is why it is not the same flag as `annotated`.
     inferred: bool = False
+    #: A settled module global native code takes as this parameter
+    #: (`module:name`); Python callers never pass it.
+    global_of: str = ""
+    #: Where an inferred type came from, in words: the calls, doctests, or
+    #: default value that gave it (`ppy explain` says so).
+    origin: str = ""
 
     @property
     def known(self) -> bool:
@@ -151,6 +157,10 @@ class FunctionInfo:
     dynamic: bool = False
     #: `def f[T: Bound](...)`: the type parameters, resolved with the signature.
     type_params: tuple[T.TypeVar_, ...] = ()
+    #: A caller passes a container with narrower elements than a parameter
+    #: declares (`list[int]` for `Sequence[float]`), which the native
+    #: boundary would convert: the function runs as Python.
+    widened_callers: bool = False
     #: Whether the body yields. The answer needs a walk of the whole function,
     #: and `signature()` asks for it once per function per checked function, so
     #: it is computed once and kept.
@@ -236,6 +246,9 @@ class ClassInfo:
     #: `(int,)` for `Stack` in `class IntStack(Stack[int])`, `(T,)` in
     #: `class Counted[T](Stack[T])`, where `T` is this class's own.
     base_args: dict[str, tuple[T.Type, ...]] = field(default_factory=dict)
+    #: Class attributes the program assigns through the class after the body
+    #: set them (`LRUCache._MAX_CAPACITY = n`): shared state, read as such.
+    rebound: set[str] = field(default_factory=set)
 
     def instance(self, args: tuple[T.Type, ...] = ()) -> T.Instance:
         return T.Instance(self.qualname, args, self.mro or (self.qualname, "object"))
@@ -271,12 +284,21 @@ class ModuleSymbols:
     globals: dict[str, T.Type] = field(default_factory=dict)
     global_facts: dict[str, Facts] = field(default_factory=dict)
     constant_globals: dict[str, object] = field(default_factory=dict)
+    #: Module globals bound once, by a statement of the module's own body, and
+    #: never rebound: no `global` statement names them, no other module assigns
+    #: them through the module, and nothing deletes them. What they hold may
+    #: change; which object they hold does not, once the module has run.
+    settled_globals: set[str] = field(default_factory=set)
     #: Module-level names bound once to `re.compile(<bytes literal>)`: name -> (pattern, flags).
     pattern_globals: dict[str, tuple[bytes, int]] = field(default_factory=dict)
     #: Module-level names bound to `ppy.grad(f)` / `ppy.value_and_grad(f)`:
     #: name -> (f's qualname, argnums, value_and_grad).
     derivatives: dict[str, tuple[str, tuple[int, ...], bool]] = field(default_factory=dict)
     type_aliases: dict[str, ast.expr] = field(default_factory=dict)
+    #: Module-level `T = TypeVar("T", ...)`: name -> the call that declares it.
+    type_vars: dict[str, ast.Call] = field(default_factory=dict)
+    #: The fields of each `namedtuple("P", "x y")` class, which have no type.
+    untyped_fields: dict[str, tuple[str, ...]] = field(default_factory=dict)
     all_exports: tuple[str, ...] | None = None
     #: Point-sensitive lexical bindings for this module's tree.
     lexical: object | None = None
@@ -463,6 +485,15 @@ def _ffi_library_of(resolver: NameResolver, node: ast.expr) -> str | None:
     return None
 
 
+def _number_table(literal: object) -> bool:
+    """A tuple of a few numbers or bools of one type: a constant table native
+    code holds as a value (`(0.1, 0.3, 0.6)`)."""
+    if not isinstance(literal, tuple) or not 0 < len(literal) <= 16:
+        return False
+    kinds = {type(item) for item in literal}
+    return len(kinds) == 1 and kinds <= {int, float, bool}
+
+
 class NameResolver:
     """Resolves annotation names for one module against the whole project."""
 
@@ -579,7 +610,9 @@ class ProjectSymbols:
         #: table it consults is a hundred signatures, and was built on every
         #: attribute read.
         self.method_cache: dict[tuple[T.Type, str], T.Type | None] = {}
-        self.alias_cache: dict[tuple[int, frozenset[str]], object] = {}
+        self.alias_cache: dict[
+            tuple[int, frozenset[str], frozenset[str], frozenset[str]], object
+        ] = {}
         #: Whether every function already carries a summary from an earlier
         #: `analyze`, so the next one can start confirming instead of seeding.
         self.seeded = False
@@ -707,6 +740,7 @@ class ProjectSymbols:
             counts: dict[str, int] = {}
             literals: dict[str, object] = {}
             patterns: dict[str, tuple[bytes, int]] = {}
+            assigned: set[str] = set()
             for node in symbols.module.nodes:
                 if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
                     counts[node.id] = counts.get(node.id, 0) + 1
@@ -722,6 +756,7 @@ class ProjectSymbols:
                     target, value = node.targets[0].id, node.value
                 if target is None or value is None:
                     continue
+                assigned.add(target)
                 compiled = pattern_call(symbols, value)
                 if compiled is not None:
                     patterns[target] = compiled
@@ -729,13 +764,22 @@ class ProjectSymbols:
                 literal = self._constant_value(value)
                 if literal is _NOT_CONSTANT:
                     continue
-                if not isinstance(literal, (int, float, complex, str, bytes, bool, type(None))):
+                if not isinstance(
+                    literal, (int, float, complex, str, bytes, bool, type(None))
+                ) and not _number_table(literal):
                     continue
                 literals[target] = literal
             for name, literal in literals.items():
                 if counts.get(name, 0) != 1 or (symbols.name, name) in rebound:
                     continue
                 symbols.constant_globals[name] = literal
+                if isinstance(literal, tuple):
+                    # A table of numbers: read in place, never a global read.
+                    symbols.globals.setdefault(
+                        name,
+                        T.Tuple_(tuple(T.strip_literal(T.type_of_constant(v)) for v in literal)),
+                    )
+                    continue
                 existing = symbols.global_facts.get(name, Facts())
                 facts = existing.with_(constant=literal, has_constant=True)
                 if isinstance(literal, int) and not isinstance(literal, bool):
@@ -750,13 +794,27 @@ class ProjectSymbols:
                     name, T.Instance("re.Pattern", (), ("re.Pattern", "object"))
                 )
 
+            bound_otherwise = set(symbols.functions) | set(symbols.classes) | set(symbols.imports)
+            module_stores = _module_scope_stores(symbols.module.tree)
+            symbols.settled_globals = {
+                name
+                for name in assigned
+                if module_stores.get(name, 0) == 1
+                and (symbols.name, name) not in rebound
+                and name not in symbols.constant_globals
+                and name not in symbols.pattern_globals
+                and name not in bound_otherwise
+            }
+
     def resolver(self, symbols: ModuleSymbols) -> NameResolver:
         return NameResolver(symbols, self)
 
     def annotation_resolver(self, symbols: ModuleSymbols) -> AnnotationResolver:
-        return AnnotationResolver(
+        resolver = AnnotationResolver(
             self.resolver(symbols), symbols.path, self.diagnostics, strict=self.strict
         )
+        resolver.type_var_decls = symbols.type_vars
+        return resolver
 
     def reexported(self, binding: ImportBinding, depth: int = 0) -> str:
         """Where an imported name really lives, through any package re-export.
@@ -810,9 +868,21 @@ class ProjectSymbols:
         giving a type a name, and an annotation that uses one has to resolve
         through it (spec 8.1).
         """
+        resolver = self.resolver(symbols)
         for node in symbols.module.tree.body:
             if isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
                 symbols.type_aliases[node.name.id] = node.value
+                continue
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Call)
+                and resolver.canonical(node.value.func) in _TYPE_VAR_CALLS
+            ):
+                # `T = TypeVar("T")`: a type parameter declared the old way,
+                # which a generic class or function takes up where it names it.
+                symbols.type_vars[node.targets[0].id] = node.value
                 continue
             target = value = None
             if isinstance(node, ast.Assign) and len(node.targets) == 1:
@@ -854,6 +924,11 @@ class ProjectSymbols:
 
     def _collect_declarations(self, symbols: ModuleSymbols) -> None:
         for node in symbols.module.tree.body:
+            named = _functional_named_tuple(self.resolver(symbols), node)
+            if named is not None:
+                info = self._declare_class(symbols, named[0])
+                symbols.untyped_fields[info.qualname] = named[1]
+                continue
             if isinstance(node, ast.ClassDef):
                 self._declare_class(symbols, node)
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -878,7 +953,9 @@ class ProjectSymbols:
             module=symbols.name,
             node=node,
             path=symbols.path,
-            base_names=tuple(ast.unparse(b) for b in node.bases),
+            base_names=tuple(
+                ast.unparse(b) for b in node.bases if not _generic_marker(resolver, b)
+            ),
             decorators=decorators,
             directives=directives_from(node.decorator_list, resolver),
             is_dataclass=any("dataclass" in d for d in decorators),
@@ -969,10 +1046,14 @@ class ProjectSymbols:
         order = [info.qualname]
         resolver = self.resolver(symbols)
         for base in info.node.bases:
+            if _generic_marker(resolver, base):
+                continue  # `Generic[T]` declares parameters; it is no base
             # `Stack[int]` is `Stack`, given arguments.
             qualname = resolver.canonical(base.value if isinstance(base, ast.Subscript) else base)
             if qualname is None:
                 continue
+            if qualname == "collections.namedtuple":
+                qualname = "typing.NamedTuple"  # the class `namedtuple(...)` made
             parent = self.classes.get(qualname)
             if parent is not None:
                 parent_symbols = self.modules.get(parent.module)
@@ -1009,14 +1090,23 @@ class ProjectSymbols:
         for info in symbols.classes.values():
             # A generic class's fields and methods may name its parameters.
             annotations.type_params = {v.name: v for v in info.type_params}
+            annotations.self_type = info.instance(info.type_params)
             self._resolve_class_fields(symbols, info, annotations)
+            for name in symbols.untyped_fields.get(info.qualname, ()):
+                # `namedtuple("P", "x y")` says nothing of what `x` holds.
+                info.fields[name] = T.ANY
+                info.declared_fields.add(name)
             for base in info.node.bases:
-                if isinstance(base, ast.Subscript):
+                if isinstance(base, ast.Subscript) and not _generic_marker(
+                    annotations.resolver, base
+                ):
                     given = T.strip_literal(annotations.resolve(base).type)
                     if isinstance(given, T.Instance) and given.args:
                         info.base_args[given.name] = given.args
             T.GENERIC_BASES[info.qualname] = (info.type_params, dict(info.base_args))
             annotations.type_params = {}
+            annotations.self_type = None
+        _collect_rebound_class_attributes(symbols)
         for info in list(symbols.functions.values()):
             self._resolve_function(symbols, info, annotations)
         for info in symbols.classes.values():
@@ -1104,11 +1194,27 @@ class ProjectSymbols:
     ) -> None:
         if info.params:
             return
-        own = self._type_params(info, annotations)
+        outer = {v.name: v for v in owner.type_params} if owner is not None else {}
+        self_class = owner
+        enclosing = self.functions.get(info.enclosing) if info.enclosing else None
+        while enclosing is not None:
+            # A closure sees the type parameters of the functions it is in,
+            # and of their classes: `T` in a nested `def inner(x: T)` is theirs.
+            for variable in enclosing.type_params:
+                outer.setdefault(variable.name, variable)
+            cls = self.classes.get(enclosing.owner) if enclosing.owner else None
+            if cls is not None:
+                for variable in cls.type_params:
+                    outer.setdefault(variable.name, variable)
+                self_class = self_class or cls
+            enclosing = self.functions.get(enclosing.enclosing) if enclosing.enclosing else None
+        annotations.self_type = (
+            self_class.instance(self_class.type_params) if self_class is not None else None
+        )
+        own = self._type_params(info, annotations, frozenset(outer))
         info.type_params = tuple(own.values())
         # A method sees its class's type parameters as well as its own; only
         # its own make it a generic function.
-        outer = {v.name: v for v in owner.type_params} if owner is not None else {}
         annotations.type_params = {**outer, **own}
         args = info.node.args
         entries: list[tuple[ast.arg, str, ast.expr | None]] = [
@@ -1157,15 +1263,43 @@ class ProjectSymbols:
             info.ret = resolved.type
             info.ret_facts = resolved.facts
             info.ret_annotated = True
+        if owner is not None and (info.is_static or info.is_classmethod) and owner.type_params:
+            # `RandomizedHeapNode.merge(a, b)` has no receiver to say what the
+            # class's `T` is: a static method that names it is generic in it,
+            # and each call infers it from the arguments.
+            mentioned = {
+                variable
+                for t in (*(p.type for p in info.params), info.ret)
+                for variable in T.type_variables(t)
+            }
+            info.type_params = (
+                *info.type_params,
+                *(v for v in owner.type_params if v in mentioned and v not in info.type_params),
+            )
         annotations.type_params = {}
+        annotations.self_type = None
 
     @staticmethod
     def _type_params(
-        info: FunctionInfo | ClassInfo, annotations: AnnotationResolver
+        info: FunctionInfo | ClassInfo,
+        annotations: AnnotationResolver,
+        outer: frozenset[str] = frozenset(),
     ) -> dict[str, T.TypeVar_]:
-        """The type parameters a `def f[T: Bound]` or a `class C[T]` declares, bounds resolved."""
+        """The type parameters a `def f[T: Bound]` or a `class C[T]` declares, bounds resolved.
+
+        Without that syntax, the old way: a class takes the module's `TypeVar`s
+        its `Generic[...]` (or a generic base) names, and a function those its
+        annotations name that its class (`outer`) does not already bind.
+        """
         declared = getattr(info.node, "type_params", None) or ()
         found: dict[str, T.TypeVar_] = {}
+        decls: dict[str, ast.Call] = getattr(annotations, "type_var_decls", {}) or {}
+        if not declared and decls:
+            for name in _old_style_params(info.node, decls, annotations.resolver):
+                if name in outer or name in found:
+                    continue
+                found[name] = _type_var(name, decls[name], annotations, info.qualname)
+            return found
         for entry in declared:
             if not isinstance(entry, ast.TypeVar):
                 annotations.diagnostics.add(
@@ -1176,6 +1310,13 @@ class ProjectSymbols:
                         "parameters (`T` or `T: Bound`) are supported",
                         Span(info.path, entry.lineno, entry.col_offset),
                     )
+                )
+                continue
+            if isinstance(entry.bound, ast.Tuple):
+                # `[S: (int, str)]`: constrained, as `TypeVar("S", int, str)` is.
+                constraints = [annotations.resolve(e).type for e in entry.bound.elts]
+                found[entry.name] = T.TypeVar_(
+                    entry.name, T.union(*constraints), owner=info.qualname, constrained=True
                 )
                 continue
             bound = annotations.resolve(entry.bound).type if entry.bound is not None else None
@@ -1211,6 +1352,125 @@ class ProjectSymbols:
                 resolved = annotations.resolve(node.annotation)
                 symbols.globals[node.target.id] = resolved.type
                 symbols.global_facts[node.target.id] = resolved.facts
+
+
+_NAMED_TUPLE_CALLS = {"collections.namedtuple", "typing.NamedTuple", "typing_extensions.NamedTuple"}
+
+
+def _functional_named_tuple(
+    resolver: object, node: ast.stmt
+) -> tuple[ast.ClassDef, tuple[str, ...]] | None:
+    """`P = namedtuple("P", "x y")` or `P = NamedTuple("P", [("x", int)])`
+    as the class statement it amounts to, with the fields that have no type."""
+    if not (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and isinstance(node.value, ast.Call)
+        and len(node.value.args) == 2
+    ):
+        return None
+    call = node.value
+    if resolver.canonical(call.func) not in _NAMED_TUPLE_CALLS:  # type: ignore[attr-defined]
+        return None
+    name, spec = call.args
+    if not isinstance(name, ast.Constant) or name.value != node.targets[0].id:
+        return None
+    body: list[ast.stmt] = []
+    untyped: list[str] = []
+    if isinstance(spec, ast.Constant) and isinstance(spec.value, str):
+        untyped = spec.value.replace(",", " ").split()
+    elif isinstance(spec, (ast.List, ast.Tuple)):
+        for element in spec.elts:
+            if isinstance(element, ast.Constant) and isinstance(element.value, str):
+                untyped.append(element.value)
+            elif (
+                isinstance(element, ast.Tuple)
+                and len(element.elts) == 2
+                and isinstance(element.elts[0], ast.Constant)
+                and isinstance(element.elts[0].value, str)
+            ):
+                target = ast.Name(element.elts[0].value, ast.Store())
+                body.append(ast.AnnAssign(target, element.elts[1], None, 1))
+            else:
+                return None
+    else:
+        return None
+    if not untyped and not body:
+        body.append(ast.Pass())
+    # Defaults cover the last fields: `namedtuple("P", "x y", defaults=[0])`.
+    defaults = next((k.value for k in call.keywords if k.arg == "defaults"), None)
+    count = len(defaults.elts) if isinstance(defaults, (ast.List, ast.Tuple)) else 0
+    for index, field_name in enumerate(untyped):
+        value = ast.Constant(None) if index >= len(untyped) - count else None
+        target = ast.Name(field_name, ast.Store())
+        # The annotation is never read: the field's type is set to `Any`.
+        body.append(ast.AnnAssign(target, ast.Constant("object"), value, 1))
+    cls = ast.ClassDef(
+        name=node.targets[0].id,
+        bases=[call.func],
+        keywords=[],
+        body=body,
+        decorator_list=[],
+        type_params=[],
+    )
+    ast.copy_location(cls, node)
+    ast.fix_missing_locations(cls)
+    return cls, tuple(untyped)
+
+
+def class_level(info: ClassInfo, name: str) -> bool:
+    """Does the class body give `name` a value (`PAGE = 8`, `size: int = 10`)?"""
+    for child in info.node.body:
+        if isinstance(child, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in child.targets
+        ):
+            return True
+        if (
+            isinstance(child, ast.AnnAssign)
+            and child.value is not None
+            and isinstance(child.target, ast.Name)
+            and child.target.id == name
+        ):
+            return True
+    return False
+
+
+def _collect_rebound_class_attributes(symbols: ModuleSymbols) -> None:
+    """`Cls.attr = value` anywhere in the module, for a class attribute the
+    body of `Cls` set: a class variable the program changes as it runs."""
+    by_name = {info.name: info for info in symbols.classes.values()}
+    if not by_name:
+        return
+    for node in ast.walk(symbols.module.tree):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "setattr"
+            and len(node.args) == 3
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        ):
+            # `setattr(Cls, "size", 3)` is `Cls.size = 3`.
+            targets = [ast.Attribute(node.args[0], node.args[1].value, ast.Store())]
+        elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+            targets = [node.target]
+        else:
+            continue
+        for target in targets:
+            if (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id in by_name
+            ):
+                info = by_name[target.value.id]
+                if not info.is_enum and class_level(info, target.attr):
+                    info.rebound.add(target.attr)
+                    # `LIMIT = 3` is an `int` once the program changes it.
+                    if target.attr in info.fields:
+                        info.fields[target.attr] = T.strip_literal(info.fields[target.attr])
 
 
 def _is_type_alias_annotation(annotation: ast.expr) -> bool:
@@ -1268,6 +1528,39 @@ def dataclass_keyword(node: ast.ClassDef, option: str) -> object:
             if keyword.arg == option and isinstance(keyword.value, ast.Constant):
                 return keyword.value.value
     return None
+
+
+def _module_scope_stores(tree: ast.Module) -> dict[str, int]:
+    """How often each name is bound, deleted, or imported in the module's own
+    scope: a function's, a class's, a lambda's, or a comprehension's bindings
+    are its own and do not count."""
+    counts: dict[str, int] = {}
+    scopes = (
+        ast.FunctionDef,
+        ast.AsyncFunctionDef,
+        ast.Lambda,
+        ast.ClassDef,
+        ast.ListComp,
+        ast.SetComp,
+        ast.DictComp,
+        ast.GeneratorExp,
+    )
+    pending: list[ast.AST] = [tree]
+    while pending:
+        node = pending.pop()
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, scopes):
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    counts[child.name] = counts.get(child.name, 0) + 1
+                continue
+            if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
+                counts[child.id] = counts.get(child.id, 0) + 1
+            elif isinstance(child, (ast.Import, ast.ImportFrom)):
+                for alias in child.names:
+                    bound = alias.asname or alias.name.partition(".")[0]
+                    counts[bound] = counts.get(bound, 0) + 1
+            pending.append(child)
+    return counts
 
 
 def _dataclass_option(node: ast.ClassDef, option: str) -> bool:
@@ -1494,3 +1787,59 @@ def pattern_call(symbols: ModuleSymbols, node: ast.expr) -> tuple[bytes, int] | 
             return None
         flags = folded
     return pattern, flags
+
+
+#: What declares a type variable the old way.
+_TYPE_VAR_CALLS = frozenset({"typing.TypeVar", "typing_extensions.TypeVar"})
+
+
+def _generic_marker(resolver: object, base: ast.expr) -> bool:
+    """`Generic[T]` in a class's bases: it names parameters, and is no base."""
+    root = base.value if isinstance(base, ast.Subscript) else base
+    canonical = resolver.canonical(root)  # type: ignore[attr-defined]
+    return canonical in {"typing.Generic", "typing_extensions.Generic"}
+
+
+def _old_style_params(node: ast.AST, decls: dict[str, ast.Call], resolver: object) -> list[str]:
+    """The module `TypeVar`s a class's bases or a function's annotations name, in order."""
+    exprs: list[ast.expr] = []
+    if isinstance(node, ast.ClassDef):
+        marked = [b for b in node.bases if _generic_marker(resolver, b)]
+        exprs = [b.slice for b in marked if isinstance(b, ast.Subscript)] or [
+            b.slice for b in node.bases if isinstance(b, ast.Subscript)
+        ]
+    elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        args = node.args
+        every = [*args.posonlyargs, *args.args, *args.kwonlyargs]
+        every += [a for a in (args.vararg, args.kwarg) if a is not None]
+        exprs = [a.annotation for a in every if a.annotation is not None]
+        if node.returns is not None:
+            exprs.append(node.returns)
+    names: list[str] = []
+    for expr in exprs:
+        for child in ast.walk(expr):
+            if isinstance(child, ast.Name) and child.id in decls and child.id not in names:
+                names.append(child.id)
+            elif isinstance(child, ast.Constant) and isinstance(child.value, str):
+                # A forward reference: `"Node[T]"`.
+                try:
+                    inner = ast.parse(child.value, mode="eval").body
+                except SyntaxError:
+                    continue
+                for sub in ast.walk(inner):
+                    if isinstance(sub, ast.Name) and sub.id in decls and sub.id not in names:
+                        names.append(sub.id)
+    return names
+
+
+def _type_var(name: str, call: ast.Call, annotations: object, owner: str) -> T.TypeVar_:
+    """The `TypeVar` a `TypeVar("T", ..., bound=...)` call declares, for `owner`.
+    Constraints (`TypeVar("T", int, str)`) bound it by their union."""
+    bound: T.Type | None = None
+    for keyword in call.keywords:
+        if keyword.arg == "bound":
+            bound = annotations.resolve(keyword.value).type  # type: ignore[attr-defined]
+    constraints = [annotations.resolve(a).type for a in call.args[1:]]  # type: ignore[attr-defined]
+    if constraints and bound is None:
+        return T.TypeVar_(name, T.union(*constraints), owner=owner, constrained=True)
+    return T.TypeVar_(name, bound, owner=owner)

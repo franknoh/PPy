@@ -79,10 +79,11 @@ _SHAPES: tuple[_Shape, ...] = (
         "reference/compatibility/",
     ),
     _shape(
-        r"generators use the boxed runtime",
-        "a generator that is returned, passed on, or stepped inside a loop or a branch",
-        "consume it where it is made, in a `for`, a builtin like `sum`, a comprehension, or "
-        "`next` steps at the top level of the function",
+        r"generators use the boxed runtime|a generator (holds|of|function is|that yields|'s "
+        r"return)|uses a `yield`'s value|an async generator",
+        "a generator native code cannot hold a frame for",
+        "annotate it `Iterator[T]`, yield values of one native type, and do not use a "
+        "`yield`'s value or a return value",
         "guide/exceptions-and-generators/",
     ),
     _shape(
@@ -147,34 +148,43 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/closures/",
     ),
     _shape(
-        r"the function around it stays in Python",
+        r"the function around it stays in Python|with the function around it",
         "a nested function whose enclosing function stays in Python",
-        "it goes native with the function around it; see that function's reason",
+        "pass it what it reads of the function around it as arguments, or see that "
+        "function's reason",
         "guide/closures/",
     ),
     _shape(
+        r"`isinstance` of a `[^`]+` depends on the value",
+        "`isinstance` whose answer the types do not decide (an `int` that may be a `bool`, a "
+        "`float` that may be an `int`)",
+        "annotate the value with the type it is, or test it another way",
+        "guide/native-lowering/",
+    ),
+    _shape(
         r"chained comparison",
-        "a chained comparison (`a < b < c`)",
-        "write it as `a < b and b < c` for now",
+        "a chained comparison or a membership test over values that are not numbers or names",
+        "give the operand a name first",
         "guide/native-lowering/",
     ),
     _shape(
         r"comparison operator has no native lowering",
-        "`in` or `is` against a value that is not a collection (a tuple, a range, a string)",
-        "test membership in a list, dict, set, or string, or compare with `==`",
+        "`in` or `is` against a value native code cannot test (mixed types, an object "
+        "without `__contains__`)",
+        "test membership of one type in a tuple, a range, a list, dict, set, or string",
         "guide/native-lowering/",
     ),
     _shape(
         r"integer operator has no native lowering",
-        "`**` between two integers",
-        "use `pow(a, b)` with a float, or a loop, until integer powers lower",
+        "an integer operator with no native form (`@`)",
+        "use the operator on floats or a ppy tensor",
         "guide/native-lowering/",
     ),
     _shape(
         r"only `for NAME in range",
-        "a `for` loop over something native code does not walk (a tuple, a string of names, an "
-        "object)",
-        "loop over a range, a list, a dict, a set, a string, or a ppy collection",
+        "a `for` loop native code does not walk (an object without a generator `__iter__`)",
+        "loop over a range, a list, a dict, a set, a string, a tuple, a generator, or a ppy "
+        "collection",
         "guide/native-lowering/",
     ),
     _shape(
@@ -208,6 +218,25 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/generics/",
     ),
     _shape(
+        r"can follow `[^`]+\(\)`|can follow `print\(flush=True\)`|can follow a call into Python",
+        "something that may fall back follows an effect native code cannot take back",
+        "do the reading or the call into Python first, and the arithmetic in a function of its own",
+        "guide/native-effects/",
+    ),
+    _shape(
+        r"stays in Python and gives `([^`]+)`",
+        "calls a Python function whose `{0}` result native code cannot take back",
+        "call a function that changes nothing (its result is checked, and falls back), "
+        "or keep the call out of the hot function",
+        "guide/native-effects/",
+    ),
+    _shape(
+        r"`print` whose later argument|`print\(|`print` takes",
+        "a `print` native code does not write",
+        "print strings and numbers, with `sep`, `end`, `file`, and `flush` as literals",
+        "guide/native-effects/",
+    ),
+    _shape(
         r"a caller of a function that did not lower|calls .* which did not lower|"
         r"has no native lowering, so this call",
         "calls a function that stays in Python",
@@ -228,7 +257,10 @@ def _normal(text: str) -> str:
 
 #: Each effect that keeps a function on CPython, in a user's words, and what to do.
 _EFFECTS = {
-    "IO": ("does I/O (`print`, `input`, files)", "read and print in `main`; pass the data in"),
+    "IO": (
+        "does I/O natively out of reach (sockets, `os`, binary files)",
+        "`print`, `input`, and text files go native; keep the rest out of the hot function",
+    ),
     "ReadGlobal": (
         "reads a module global that can change",
         "pass the value in, or make it a constant (`X: Final = ...`)",
@@ -385,12 +417,12 @@ _ENCLOSED = "the function around it stays in Python"
 
 
 def _place_nested(outcomes: list[FunctionOutcome]) -> None:
-    """A nested function is lowered as part of the one it is defined in, so
-    it has no entry of its own in the backend's result: it runs where the
-    function around it runs."""
+    """A nested function is lowered as part of the one it is defined in, and
+    on its own only where it shares nothing with it: one the backend left in
+    Python runs natively anyway where the function around it is native."""
     by_name = {o.qualname: o for o in outcomes}
     for outcome in outcomes:
-        if outcome.reason != "not lowered" or ".<locals>." not in outcome.qualname:
+        if outcome.tier != "python" or ".<locals>." not in outcome.qualname:
             continue
         outer = by_name.get(outcome.qualname.rpartition(".<locals>.")[0])
         if outer is None:
@@ -398,7 +430,7 @@ def _place_nested(outcomes: list[FunctionOutcome]) -> None:
         if outer.tier in {"native", "internal"}:
             outcome.tier = "internal"
             outcome.reason = _CLOSURE
-        else:
+        elif outcome.reason == "not lowered":
             outcome.reason = _ENCLOSED
 
 

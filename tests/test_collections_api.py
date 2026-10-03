@@ -441,6 +441,7 @@ main()
 """
 
 BOUNDARY = """
+import ppy
 from ppy import Deque, HashMap, Heap, TreeSet, Vec
 
 
@@ -469,6 +470,8 @@ def counts(values: Vec[int]) -> HashMap[int, int]:
     return found
 
 
+# Asks for the boundary: one push per row repays less than copying a row.
+@ppy.native
 def first_row(rows: Vec[Vec[int]]) -> Vec[int]:
     for row in rows:
         row.push(9)

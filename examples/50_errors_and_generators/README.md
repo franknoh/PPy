@@ -61,16 +61,19 @@ ppy build --standalone ledger.ppy -o dist && ./dist/ledger
 
 ## Timing
 
-One machine, wall time for the whole program:
+Wall time for the whole program, the mean of five runs, measured from a
+checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):
 
 | | seconds |
 |---|---:|
-| `python ledger.ppy` | 2.1 |
-| `ppy run ledger.ppy`, after the first run built the cache | 0.43 |
-| `./dist/ledger`, the standalone binary | 0.29 |
+| `python ledger.ppy` | 2.14 |
+| `ppy run ledger.ppy`, after the first run built the cache | 0.30 |
+| `./dist/ledger`, the standalone binary | 0.31 |
 
-`ppy run` includes the compiler's own start-up and checking the file, which
-the standalone binary does not pay.
+`ppy run` also starts CPython, names the cached build from the project's
+sources, and loads its native library, which the standalone binary does
+not pay.
 
 ## Where the code comes from
 

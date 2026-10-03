@@ -171,7 +171,7 @@ func @patterns_sum_values(%text: buffer<u8> {ownership = "borrowed", ppy.kind = 
     %44 = core.cmp.ge %36, %41 : bool
     %45 = core.cmp.lt %40, %43 : bool
     %46 = core.and %44, %45 : bool
-    core.guard %46 {kind = "bounds", message = "hoisted bounds check"}
+    core.guard %46 {kind = "bounds", message = "hoisted bounds check", raises = "IndexError: array index out of range"}
     core.store %36, %i_addr loc("examples/43_regex/patterns.ppy":47:8)
     core.br ^for.head9
 ^for.head9:
@@ -188,7 +188,7 @@ func @patterns_sum_values(%text: buffer<u8> {ownership = "borrowed", ppy.kind = 
     %55 = core.add %50, %54 {overflow = "python"} : i64
     core.store %55, %value_addr
     %56 = core.load %i_addr : i64
-    %57 = core.add %56, %11 {overflow = "python"} : i64
+    %57 = core.add %56, %11 {overflow = "proven"} : i64
     core.store %57, %i_addr
     core.br ^for.head9
 ^for.end12:

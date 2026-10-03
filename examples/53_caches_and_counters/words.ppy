@@ -1,0 +1,95 @@
+import random
+from collections import Counter, defaultdict
+from functools import cache, lru_cache
+
+
+def make_words(seed: int, count: int) -> list[str]:
+    syllables = ["ka", "lo", "mi", "ne", "ru", "sa", "to", "vi", "ant", "est"]
+    rng = random.Random(seed)
+    words: list[str] = []
+    for _ in range(count):
+        word = ""
+        for _ in range(rng.randint(1, 6)):
+            word += rng.choice(syllables)
+        words.append(word)
+    return words
+
+
+def letter_counts(words: list[str], letters: str) -> list[int]:
+    counts: Counter[str] = Counter()
+    for word in words:
+        for ch in word:
+            counts[ch] += 1
+    return [counts[ch] for ch in letters]
+
+
+def length_counts(words: list[str]) -> list[int]:
+    lengths: defaultdict[int, int] = defaultdict(int)
+    for word in words:
+        lengths[len(word)] += 1
+    return [lengths[n] for n in range(2, 13)]
+
+
+def distance(a: str, b: str) -> int:
+    @cache
+    def d(i: int, j: int) -> int:
+        if i == len(a):
+            return len(b) - j
+        if j == len(b):
+            return len(a) - i
+        if a[i] == b[j]:
+            return d(i + 1, j + 1)
+        return 1 + min(d(i + 1, j), d(i, j + 1), d(i + 1, j + 1))
+
+    return d(0, 0)
+
+
+def nearest(words: list[str]) -> list[int]:
+    found: list[int] = []
+    for a in words:
+        best = len(a)
+        for b in words:
+            if a != b:
+                best = min(best, distance(a, b))
+        found.append(best)
+    return found
+
+
+def size(i: int) -> int:
+    return (i * 37) % 50 + 5
+
+
+@lru_cache(maxsize=None)
+def cheapest(i: int, j: int) -> int:
+    if j - i < 2:
+        return 0
+    best = -1
+    for k in range(i + 1, j):
+        cost = cheapest(i, k) + cheapest(k, j) + size(i) * size(k) * size(j)
+        if best < 0 or cost < best:
+            best = cost
+    return best
+
+
+def report(count: int, seed: int) -> None:
+    words = make_words(seed, count)
+    counts = Counter(words)
+    print(count, "words,", len(counts), "different")
+    for word, n in counts.most_common(3):
+        print(f"  {word:<6} {n}")
+    vowels = letter_counts(words, "aeio")
+    print("a e i o:", vowels)
+    lengths = length_counts(words)
+    print("lengths 2 to 12:", lengths)
+    picked = random.Random(seed + 1).sample(sorted(counts), 150)
+    found = nearest(picked)
+    print(f"nearest of 150 words: mean distance {sum(found) / len(found):.3f}, most {max(found)}")
+    cost = cheapest(0, 250)
+    print("cheapest order for a chain of 250 matrices:", cost, "multiplications")
+
+
+def main() -> None:
+    report(300_000, 7)
+
+
+main()

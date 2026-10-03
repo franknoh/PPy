@@ -15,23 +15,41 @@ back into the caller's objects after the call, so Python sees the writes.
 
 What crosses is what has a plain native form: numbers, strings, tuples of
 numbers, and collections of them, Python's own `list`, `dict`, and `set`
-included (a string crosses as its UTF-8 bytes, made a native string). A
-dataclass element, an object, or a `LinkedList` (whose node ids are the
-history of its insertions) keeps the function on its Python body when Python
-calls it.
+included (a string crosses as its UTF-8 bytes, made a native string), and
+instances of the project classes the signature describes (`CrossingClass`):
+an object as a handle to its one record of fields, a value class as its
+fields' words in place. An object crosses whole, the objects its fields hold
+with it, each once; one that comes back as a handle it went in as is the
+caller's object again, its fields set to what native code left in them. A
+`LinkedList` (whose node ids are the history of its insertions), or an
+object whose class the signature does not describe, keeps the function on
+its Python body when Python calls it.
 """
 
 from __future__ import annotations
 
 import array
+import contextlib
 import ctypes
 import re
 import struct
+import sys
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["RETURNS_NOTHING", "Boundary", "Spec", "parse", "runtime"]
+from .abi import CrossingClass
+
+__all__ = [
+    "RETURNS_NOTHING",
+    "Boundary",
+    "Spec",
+    "attach",
+    "field_spec",
+    "parse",
+    "resolver",
+    "runtime",
+]
 
 #: A signature's `returned` for a function that returns `None`: its native
 #: entry fills a placeholder word, which the boundary does not hand out.
@@ -63,6 +81,13 @@ _FAMILY = {
 }
 
 
+#: A `random.Random` argument's kind: lent by address, never copied.
+_GENERATOR = "random.Random"
+
+#: `RandomObject`'s state after the object header: `int index`, then 624 words.
+_STATE_BYTES = 4 + 624 * 4
+
+
 class Refused(Exception):
     """An argument that does not match its declared type: the Python body runs instead."""
 
@@ -71,11 +96,18 @@ class Refused(Exception):
 class Spec:
     """One type as the boundary sees it: a scalar, a tuple of scalars, or a collection."""
 
-    #: "int", "float", "bool", "tuple", or a collection's short name.
+    #: "int", "float", "bool", "tuple", "str", a collection's short name,
+    #: "object" (a handle to a project class's instance), or "record" (a value
+    #: class's fields in place).
     kind: str
+    #: A tuple's or a record's words: scalar kinds.
     parts: tuple[str, ...] = ()
     key: Spec | None = None
     value: Spec | None = None
+    #: An object's or a record's class.
+    record: str = ""
+    #: An object that may be `None`, the null handle.
+    nullable: bool = False
 
     @property
     def collection(self) -> bool:
@@ -83,12 +115,17 @@ class Spec:
 
     @property
     def words(self) -> int:
-        return len(self.parts) if self.kind == "tuple" else 1
+        return len(self.parts) if self.kind in {"tuple", "record"} else 1
 
     def _kinds(self) -> tuple[str, ...]:
-        if self.kind == "tuple":
+        if self.kind in {"tuple", "record"}:
             return self.parts
-        return ("handle",) if self.collection or self.kind == "str" else (self.kind,)
+        return ("handle",) if self.reference else (self.kind,)
+
+    @property
+    def reference(self) -> bool:
+        """Held by handle: a collection, a string, or an object."""
+        return self.collection or self.kind in {"str", "object"}
 
     @property
     def floats(self) -> int:
@@ -96,7 +133,7 @@ class Spec:
 
     @property
     def handles(self) -> int:
-        return 1 if self.collection or self.kind == "str" else 0
+        return 1 if self.reference else 0
 
     @property
     def leaves(self) -> int:
@@ -126,12 +163,14 @@ class Spec:
         return base[self.value.python()]
 
 
-_TOKEN = re.compile(r"\s*([A-Za-z_][A-Za-z_0-9.]*|\[|\]|,)")
+_TOKEN = re.compile(r"\s*([A-Za-z_][A-Za-z_0-9.]*|\[|\]|,|\?)")
 
 
-def parse(spelled: str) -> Spec | None:
+def parse(spelled: str, classes: dict[str, CrossingClass] | None = None) -> Spec | None:
     """A type as native signatures spell it (`ppy.HashMap[int, ppy.Vec[float]]`),
-    or None where it does not cross."""
+    or None where it does not cross. A class `classes` describes crosses as
+    one of its instances; `prog.Node?` is one that may be `None`."""
+    classes = classes or {}
     tokens = _TOKEN.findall(spelled)
     if "".join(tokens) != "".join(spelled.split()):
         return None
@@ -145,6 +184,17 @@ def parse(spelled: str) -> Spec | None:
         position += 1
         if name in _SCALARS or name == "str":
             return Spec(name)
+        described = classes.get(name)
+        if described is not None:
+            nullable = position < len(tokens) and tokens[position] == "?"
+            if nullable:
+                position += 1
+            if described.kind == "record":
+                parts = tuple(kind for _field, _offset, kind in described.fields)
+                if any(part not in _SCALARS for part in parts):
+                    return None
+                return Spec("record", parts, record=name)
+            return Spec("object", record=name, nullable=nullable)
         arguments: list[Spec | None] = []
         if position < len(tokens) and tokens[position] == "[":
             position += 1
@@ -176,8 +226,13 @@ def parse(spelled: str) -> Spec | None:
             return Spec(short, key=found[0])
         return Spec(short, value=found[0])
 
+    if tokens == ["random.Random"]:
+        # A generator the caller lends: native code draws from its own state.
+        return Spec(_GENERATOR)
     found = one()
-    if found is None or position != len(tokens) or not found.collection:
+    if found is None or position != len(tokens):
+        return None
+    if not found.collection and not (found.kind == "object" and found.record):
         return None
     return found if _keys_ok(found) else None
 
@@ -189,6 +244,120 @@ def _keys_ok(spec: Spec) -> bool:
         if not (text or key.kind == "int" or (key.kind == "tuple" and set(key.parts) == {"int"})):
             return False
     return spec.value is None or not spec.value.collection or _keys_ok(spec.value)
+
+
+class Classes:
+    """The classes a signature crosses, each with its fields parsed and its
+    Python class found when first wanted: the module is still running its
+    body when a function of it is bound."""
+
+    def __init__(self, described: tuple[CrossingClass, ...], resolve: Any = None) -> None:
+        self.by_name = {c.qualname: c for c in described}
+        self.by_tag = {c.tag: c for c in described if c.kind == "object"}
+        self._resolve = resolve
+        self._types: dict[type, CrossingClass] | None = None
+        self._python: dict[str, type] = {}
+        self.fields: dict[str, list[tuple[str, int, Spec]]] = {}
+        for c in described:
+            if c.kind != "object":
+                continue
+            parsed = []
+            for name, offset, spelled in c.fields:
+                spec = _field_spec(spelled, self.by_name)
+                if spec is None:
+                    self.fields.clear()
+                    self.by_name.clear()
+                    self.by_tag.clear()
+                    return
+                parsed.append((name, offset, spec))
+            self.fields[c.qualname] = parsed
+
+    def python(self, qualname: str) -> Any:
+        """The Python class of `qualname`, or None where the module has none."""
+        if qualname not in self._python:
+            described = self.by_name.get(qualname)
+            if described is None or self._resolve is None:
+                return None
+            resolved = self._resolve(described)
+            if not isinstance(resolved, type):
+                return None
+            self._python[qualname] = resolved
+        return self._python[qualname]
+
+    def of(self, value: Any) -> CrossingClass | None:
+        """The class `value` is an instance of, exactly, among those described."""
+        if self._types is None:
+            types: dict[type, CrossingClass] = {}
+            for described in self.by_name.values():
+                found = self.python(described.qualname)
+                if found is not None:
+                    types[found] = described
+            self._types = types
+        return self._types.get(type(value))
+
+
+def field_spec(spelled: str, classes: dict[str, CrossingClass]) -> Spec | None:
+    """A field's type as the boundary sees it (see `_field_spec`)."""
+    return _field_spec(spelled, classes)
+
+
+def resolver(signature: Any, function: Any) -> Any:
+    """For a generated wrapper whose objects cross: a callable giving the Python
+    class of each class the signature describes, in its order, or None
+    while one is not defined yet. Found where `function` would find it."""
+    if not signature.classes:
+        return None
+    classes = Classes(signature.classes, _finder(function))
+    order = [c.qualname for c in signature.classes]
+
+    def resolve() -> tuple[type, ...] | None:
+        found = tuple(classes.python(qualname) for qualname in order)
+        return found if all(isinstance(t, type) for t in found) else None
+
+    return resolve
+
+
+def _finder(function: Any) -> Any:
+    """How a described class is found: in the namespace `function` reads, where
+    the program defines it, else in its module (`binding._class_finder`)."""
+    namespace = None
+    while function is not None:
+        namespace = getattr(function, "__ppy_globals__", None)
+        if namespace is not None:
+            break
+        wrapped = getattr(function, "__wrapped__", None)
+        if wrapped is None:
+            namespace = getattr(function, "__globals__", None)
+            break
+        function = wrapped
+
+    def find(described: CrossingClass) -> Any:
+        if namespace is not None:
+            found = namespace.get(described.name)
+            if isinstance(found, type) and found.__qualname__ == described.name:
+                return found
+        module = sys.modules.get(described.module)
+        return getattr(module, described.name, None) if module is not None else None
+
+    return find
+
+
+def _field_spec(spelled: str, classes: dict[str, CrossingClass]) -> Spec | None:
+    """A field's type: a scalar, a string, a tuple of scalars, or what `parse` reads."""
+    if spelled in _SCALARS or spelled == "str":
+        return Spec(spelled)
+    if spelled.startswith("tuple["):
+        parts = tuple(part.strip() for part in spelled[6:-1].split(","))
+        if not parts or any(part not in _SCALARS for part in parts):
+            return None
+        return Spec("tuple", parts)
+    found = parse(spelled, classes)
+    if found is None:
+        described = classes.get(spelled)
+        if described is not None and described.kind == "record":
+            parts = tuple(kind for _field, _offset, kind in described.fields)
+            return Spec("record", parts, record=spelled)
+    return found
 
 
 # -- the runtime, through ctypes ------------------------------------------------
@@ -208,6 +377,7 @@ _SIGNATURES: dict[str, tuple[Any, tuple[Any, ...]]] = {
     "ppy_coll_text_keys": (None, (_P, _I)),
     "ppy_str_new_many": (None, (ctypes.c_char_p, ctypes.c_char_p, _I, _P)),
     "ppy_str_gather": (_I, (_P, _I, _P, _P)),
+    "ppy_random_external": (_P, (_I,)),
 }
 
 _loaded: dict[str, Any] = {}
@@ -236,10 +406,59 @@ def runtime(library: Any = None) -> Any:
     return found
 
 
+#: The runtime functions a generated wrapper copies containers with, in the
+#: order its `ppy_runtime` takes their addresses (`crossing.c`).
+_WRAPPER_FUNCTIONS = (
+    "ppy_seq_new",
+    "ppy_map_new",
+    "ppy_seq_push_many",
+    "ppy_coll_put_many",
+    "ppy_coll_copy_out",
+    "ppy_coll_len",
+    "ppy_coll_retain",
+    "ppy_coll_release",
+    "ppy_coll_text_keys",
+    "ppy_str_new_many",
+)
+
+
+def attach(wrappers: Any, library: Any = None) -> bool:
+    """Hand a generated wrapper module the runtime its native code makes handles
+    in (`runtime`); whether it took it. Asked once per module."""
+    hand = getattr(wrappers, "ppy_runtime", None)
+    if hand is None:
+        return False
+    attached = getattr(wrappers, "__ppy_attached__", None)
+    if attached is not None:
+        return bool(attached)
+    rt = runtime(library)
+    taken = False
+    if rt is not None:
+        try:
+            addresses = [
+                ctypes.cast(getattr(rt, n), ctypes.c_void_p).value for n in _WRAPPER_FUNCTIONS
+            ]
+            taken = bool(hand(*addresses))
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            taken = False
+    with contextlib.suppress(AttributeError, TypeError):
+        wrappers.__ppy_attached__ = taken
+    return taken
+
+
 def _format(spec: Spec) -> str:
     """One element's words as `struct` spells them: `q` an integer or a handle, `d` a double."""
-    kinds = spec.parts if spec.kind == "tuple" else (spec.kind,)
+    kinds = spec.parts if spec.kind in {"tuple", "record"} else (spec.kind,)
     return "".join("d" if kind == "float" else "q" for kind in kinds)
+
+
+def _mask_format(floats: int, words: int) -> str:
+    """A record's words as `struct` spells them, from its float mask."""
+    return "".join("d" if floats >> i & 1 else "q" for i in range(words))
+
+
+#: The header word an object's class tag is kept in (`lowering/collections.py`).
+_TAG = 4
 
 
 class Boundary:
@@ -251,8 +470,9 @@ class Boundary:
     foreign call per element.
     """
 
-    def __init__(self, rt: Any) -> None:
+    def __init__(self, rt: Any, classes: Classes | None = None) -> None:
         self.rt = rt
+        self.classes = classes
         #: id of each Python object made native -> its handle, and the object.
         self._handles: dict[int, tuple[int, Any]] = {}
         #: handle -> the Python object it came from or went to.
@@ -260,6 +480,8 @@ class Boundary:
         self._synced: set[int] = set()
         #: Handles this call owns a reference to, let go of at the end.
         self._owned: list[int] = []
+        #: The generators arguments lent, by address, and their state before.
+        self._generators: dict[int, bytes] = {}
 
     # -- in -------------------------------------------------------------------
 
@@ -271,6 +493,10 @@ class Boundary:
 
     def _native(self, value: Any, spec: Spec) -> int:
         """A handle holding one new reference to `value`'s native copy."""
+        if spec.kind == "object":
+            return self._object(value, spec)
+        if spec.kind == _GENERATOR:
+            return self._generator(value)
         seen = self._handles.get(id(value))
         if seen is not None:
             self.rt.ppy_coll_retain(seen[0])
@@ -306,6 +532,90 @@ class Boundary:
             raise
         return handle
 
+    def _object(self, value: Any, spec: Spec) -> int:
+        """An instance of a project class as a handle to its record, the objects
+        and collections its fields hold made native with it."""
+        if value is None:
+            if spec.nullable:
+                return 0
+            raise Refused
+        seen = self._handles.get(id(value))
+        if seen is not None:
+            self.rt.ppy_coll_retain(seen[0])
+            return seen[0]
+        classes = self.classes
+        described = classes.of(value) if classes is not None else None
+        if described is None or spec.record not in described.bases:
+            raise Refused
+        assert classes is not None
+        handle = self.rt.ppy_seq_new(0, described.words, described.floats, described.handles)
+        ctypes.c_int64.from_address(handle + 8 * _TAG).value = described.tag
+        self._handles[id(value)] = (handle, value)
+        self._objects[handle] = value
+        self.rt.ppy_coll_retain(handle)
+        self._owned.append(handle)
+        try:
+            words: list[Any] = [0] * described.words
+            made: list[int] = []
+            try:
+                for name, offset, field in classes.fields[described.qualname]:
+                    try:
+                        item = getattr(value, name)
+                    except AttributeError as exc:
+                        raise Refused from exc
+                    self._place(words, offset, field, item, made)
+            except BaseException:
+                for held in made:
+                    self.rt.ppy_coll_release(held)
+                raise
+            packed = struct.pack("<" + _mask_format(described.floats, described.words), *words)
+            self.rt.ppy_seq_push_many(handle, packed, 1)
+        except BaseException:
+            self.rt.ppy_coll_release(handle)
+            raise
+        return handle
+
+    def _place(self, words: list[Any], offset: int, spec: Spec, item: Any, made: list[int]) -> None:
+        """One field's value into its words of a record; a handle made for it
+        is the record's reference, listed in `made` until the record holds it."""
+        if spec.kind in _SCALARS:
+            _check(spec.kind, item)
+            words[offset] = item
+        elif spec.kind == "str":
+            strings = self._strings([item])
+            made.append(strings[0])
+            words[offset] = strings[0]
+        elif spec.kind == "tuple":
+            if type(item) is not tuple or len(item) != len(spec.parts):
+                raise Refused
+            for index, (kind, part) in enumerate(zip(spec.parts, item, strict=True)):
+                _check(kind, part)
+                words[offset + index] = part
+        elif spec.kind == "record":
+            for index, part in enumerate(self._record_words(item, spec)):
+                words[offset + index] = part
+        else:
+            handle = self._native(item, spec)
+            if handle:
+                made.append(handle)
+            words[offset] = handle
+
+    def _record_words(self, item: Any, spec: Spec) -> list[Any]:
+        """A value class's fields, checked against their kinds."""
+        classes = self.classes
+        described = classes.of(item) if classes is not None else None
+        if described is None or described.qualname != spec.record:
+            raise Refused
+        found = []
+        for name, _offset, kind in described.fields:
+            try:
+                part = getattr(item, name)
+            except AttributeError as exc:
+                raise Refused from exc
+            _check(kind, part)
+            found.append(part)
+        return found
+
     def _fill(self, handle: int, value: Any, spec: Spec) -> None:
         if _FAMILY[spec.kind] == "seq":
             assert spec.value is not None
@@ -340,7 +650,7 @@ class Boundary:
             if made is not None:
                 made.extend(strings)
             return bytes(strings)
-        if spec.collection:
+        if spec.collection or spec.kind == "object":
             words: list[Any] = []
             try:
                 for item in items:
@@ -348,8 +658,11 @@ class Boundary:
             except BaseException:
                 # The references meant for the parent it will never hold.
                 for handle in words:
-                    self.rt.ppy_coll_release(handle)
+                    if handle:
+                        self.rt.ppy_coll_release(handle)
                 raise
+        elif spec.kind == "record":
+            words = [part for item in items for part in self._record_words(item, spec)]
         elif spec.kind == "tuple":
             kinds = spec.parts
             for item in items:
@@ -414,13 +727,35 @@ class Boundary:
         self._owned.append(handle)
         return self._python(handle, spec)
 
+    def _generator(self, value: Any) -> int:
+        """A `random.Random` lent: a handle drawing from its state in place, the
+        state kept to put back if the call falls back (`restore`)."""
+        import random  # pylint: disable=import-outside-toplevel
+
+        if type(value) is not random.Random or not _generator_layout():
+            raise Refused
+        address = id(value) + object.__basicsize__
+        if address not in self._generators:
+            self._generators[address] = ctypes.string_at(address, _STATE_BYTES)
+        return int(self.rt.ppy_random_external(address))
+
+    def restore(self) -> None:
+        """Put each generator an argument lent back as it was: the call fell
+        back, and Python draws the same numbers again."""
+        for address, state in self._generators.items():
+            ctypes.memmove(address, state, _STATE_BYTES)
+
     def sync(self, arguments: list[tuple[Any, Spec]]) -> None:
         """Copy each argument's native contents back into the caller's objects."""
         for value, spec in arguments:
+            if spec.kind == _GENERATOR:
+                continue  # drawn from in place
             handle = self._handles[id(value)][0]
             self._python(handle, spec, rewrite=True)
 
     def _python(self, handle: int, spec: Spec, rewrite: bool = False) -> Any:
+        if spec.kind == "object":
+            return self._instance(handle, rewrite)
         known = self._objects.get(handle)
         if known is not None and (not rewrite or handle in self._synced):
             return known
@@ -428,6 +763,62 @@ class Boundary:
         made = known if known is not None else spec.python()()
         self._objects[handle] = made
         _replace(made, spec, self._read(handle, spec, rewrite))
+        return made
+
+    def _instance(self, handle: int, rewrite: bool) -> Any:
+        """The Python object of a native one: the one it came from, its fields
+        set again when `rewrite`, or a new instance of its class, made without
+        running `__init__` (native code ran it), its fields set."""
+        if not handle:
+            return None
+        known = self._objects.get(handle)
+        if known is not None and (not rewrite or handle in self._synced):
+            return known
+        self._synced.add(handle)
+        classes = self.classes
+        assert classes is not None
+        tag = ctypes.c_int64.from_address(handle + 8 * _TAG).value
+        described = classes.by_tag.get(tag)
+        python = classes.python(described.qualname) if described is not None else None
+        if described is None or python is None:
+            raise RuntimeError("native code returned an object of a class it did not describe")
+        made = known if known is not None else object.__new__(python)
+        self._objects[handle] = made
+        buffer = (ctypes.c_int64 * described.words)()
+        self.rt.ppy_coll_copy_out(handle, None, buffer)
+        words = struct.unpack_from("<" + _mask_format(described.floats, described.words), buffer)
+        for name, offset, field in classes.fields[described.qualname]:
+            object.__setattr__(made, name, self._field_value(words, offset, field, rewrite))
+        return made
+
+    def _field_value(self, words: tuple[Any, ...], offset: int, spec: Spec, rewrite: bool) -> Any:
+        if spec.kind == "bool":
+            return words[offset] != 0
+        if spec.kind in _SCALARS:
+            return words[offset]
+        if spec.kind == "str":
+            return self._texts((words[offset],))[0]
+        if spec.kind == "tuple":
+            parts = words[offset : offset + len(spec.parts)]
+            return tuple(
+                part != 0 if kind == "bool" else part
+                for kind, part in zip(spec.parts, parts, strict=True)
+            )
+        if spec.kind == "record":
+            return self._record(spec, words[offset : offset + len(spec.parts)])
+        return self._python(words[offset], spec, rewrite) if words[offset] else None
+
+    def _record(self, spec: Spec, words: Any) -> Any:
+        """A value class's instance from its fields' words."""
+        classes = self.classes
+        assert classes is not None
+        python = classes.python(spec.record)
+        described = classes.by_name.get(spec.record)
+        if python is None or described is None:
+            raise RuntimeError("native code returned a value of a class it did not describe")
+        made = object.__new__(python)
+        for (name, _offset, kind), part in zip(described.fields, words, strict=True):
+            object.__setattr__(made, name, part != 0 if kind == "bool" else part)
         return made
 
     def _read(self, handle: int, spec: Spec, rewrite: bool) -> list[Any]:
@@ -450,6 +841,14 @@ class Boundary:
         words = struct.unpack_from(f"<{_format(spec) * count}", buffer)
         if spec.collection:
             return [self._python(word, spec, rewrite) for word in words]
+        if spec.kind == "object":
+            return [self._instance(word, rewrite) for word in words]
+        if spec.kind == "record":
+            width = len(spec.parts)
+            return [
+                self._record(spec, words[start : start + width])
+                for start in range(0, len(words), width)
+            ]
         if spec.kind == "str":
             return self._texts(words)
         if spec.kind == "tuple":
@@ -472,6 +871,28 @@ class Boundary:
         for handle in self._owned:
             self.rt.ppy_coll_release(handle)
         self._owned.clear()
+
+
+_LAYOUT: list[bool] = []
+
+
+def _generator_layout() -> bool:
+    """Whether a `random.Random` keeps its index and state words right after
+    its object header, as `random._inst` does (`binding._random_state_address`):
+    asked once, of a generator made for it."""
+    if not _LAYOUT:
+        import random  # pylint: disable=import-outside-toplevel
+
+        found = False
+        if sys.implementation.name == "cpython":
+            probe = random.Random(20261002)
+            _version, words, _gauss = probe.getstate()
+            address = id(probe) + object.__basicsize__
+            index = ctypes.c_int32.from_address(address).value
+            state = (ctypes.c_uint32 * 624).from_address(address + 4)
+            found = index == words[-1] and tuple(state) == tuple(words[:-1])
+        _LAYOUT.append(found)
+    return _LAYOUT[0]
 
 
 #: The one Python type a word of each scalar kind is stored as.

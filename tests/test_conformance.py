@@ -863,7 +863,7 @@ def test_16_6_a_gil_free_region_scales_across_threads(project: Path):
 
 
 @requires_llvm
-def test_16_6_a_body_with_io_is_not_lowered_at_all(project: Path):
+def test_16_6_a_body_that_prints_keeps_the_gil_and_holds_its_output(project: Path):
     from ppy_compiler.backend.llvm import _collect
     from ppy_compiler.driver.pipeline import analyze_paths, open_project
 
@@ -882,8 +882,10 @@ def test_16_6_a_body_with_io_is_not_lowered_at_all(project: Path):
     )
     bundle = analyze_paths(open_project(path), [path], backend="llvm")
     module = _collect(bundle)["talks"]
-    assert "talks.announce" not in module.functions
-    assert "IO" in module.rejected["talks.announce"]
+    signature = module.functions["talks.announce"].signature
+    assert signature.effects
+    assert not signature.releases_gil
+    assert "output is held" in module.effects["talks.announce"]
 
 
 # --------------------------------------------------------------------------

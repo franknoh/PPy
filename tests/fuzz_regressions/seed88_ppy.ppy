@@ -1,0 +1,182 @@
+# fuzz: path=ppy seed=88 (stdout differs)
+# fuzz: unannotated
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+class Failed(ValueError):
+    def __init__(self, code: int, where: str) -> None:
+        super().__init__(f"{where}: {code}")
+        self.code: int = code
+        self.where: str = where
+
+
+@dataclass(order=True)
+class Tag:
+    rank: int
+    label: str
+
+
+def countdown(n: int) -> Iterator[int]:
+    while n > 0:
+        yield n
+        n -= 2
+
+
+def pairs(n: int) -> Iterator[int]:
+    yield from countdown(n)
+
+
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+
+
+def fn1(a2):
+    h8 = Heap[int]()
+    h8.push((0 - -6))
+    n9: int = 0
+    while h8:
+        n9 = n9 * 5 + h8.pop()
+    return (n9 * ((6 - n9) >> (abs(-11) % 42)))
+
+
+def fn10(a11, a12, a13):
+    f14: float = float((4 << (abs(a12) % 37)))
+    assert ((a12 * a12) > (7 + a12)) or True, 'MiXeD'
+    n19: int = a12
+    return min(n19, (n19 - n19))
+
+
+def fn20(a21):
+    a21 -= a21
+    h36: Callable[[int], int] = lambda v: v * 3 + 1
+    n35: int = 0
+    for x37 in filter(lambda v: v % 2 == 0, range(3)):
+        n35 += h36(x37)
+    return (' spaced out ' != 'a'.swapcase())
+
+
+def fn38(a39, a40, a41):
+    xs49: list[int] = [x * 2 - 1 for x in range(2) if x != 2]
+    xs49.append((a41 if ((a41 * -11) == a41) else a41))
+    xs49.insert(-1, (a41 * a41))
+    xs49.sort(reverse=True)
+    xs49.append(-2)
+    n48: int = sorted(xs49)[0] * 3 + len(xs49)
+    return ((a40 - a40) == (0.5 + 3.0))
+
+
+def fn50(a51, a52, a53):
+    h54 = Heap[int]()
+    h54.push((-4 + 1))
+    h54.push(abs(-1))
+    h54.push((1 - 11))
+    h54.push((-12 >> (6 % 31)))
+    n55: int = 0
+    while h54:
+        n55 = n55 * 5 + h54.pop()
+    n56: int = (((n55 >> (n55 % 6)) + (-1 * 9223372036854775807)) + ((n55 % (4611686018427387903 if 4611686018427387903 != 0 else 3)) % ((n55 & 8) if (n55 & 8) != 0 else -7)))
+    n55 *= (n56 | n55)
+    b57: bool = ((a52 - 7.25) > a52)
+    for i58 in range(0):
+        s59: str = a51
+        n60: int = i58
+    return str(a52).replace('Hello', 'MiXeD')
+
+
+def fn64(a65, a66, a67):
+    if a67:
+        return a67
+    c68 = Counter(-3)
+    n69: int = c68.bump(-8)
+    n69 += c68.bump((2 - -10))
+    n70: int = n69
+    b71: bool = a67
+    return (a66 <= ('ab' if (n69 == (n69 - n70)) else a66))
+
+
+def main() -> None:
+    print(fn1(1e-300))
+    print(fn10(1e-300, 5, True))
+    print(fn10(1e-300, -11, True))
+    print(fn10(-2.5, 3037000499, True))
+    print(fn20(11))
+    print(fn38(True, 1e-300, -9))
+    print(fn38(True, float("inf"), -1))
+    print(fn50('', -2.5, False))
+    print(fn64(1e-300, 'a', True))
+    print(fn64(1e308, ' spaced out ', False))
+
+
+main()
+if __name__ == "__main__":
+    import sys
+
+    here = sys.modules[__name__]
+    try:
+        print(getattr(here, 'fn1')(True))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn10')(3, 2.5, False))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn20')(-3))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn38')(False, 3, -3))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn50')(4, 'x', 0))
+    except Exception as e:
+        print(type(e).__name__)
+    try:
+        print(getattr(here, 'fn64')(True, b'ab', 0))
+    except Exception as e:
+        print(type(e).__name__)

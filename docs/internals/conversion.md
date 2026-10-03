@@ -51,6 +51,35 @@ being computed, and is not treated as an answer.
 4. **Empty containers.** `out = []` gets its element type from what is
    appended, and the annotation is written at the assignment.
 
+### Inference without conversion
+
+`ppy run --no-strict` (and `ppy check`, `ppy explain` without strict mode)
+infers parameter types too, but with a separate pass
+(`analysis/call_inference.py`) that writes nothing to the source. Its
+rules are narrower than the converter's, because nothing reviews its
+result and native code runs on it:
+
+- it takes one type per parameter: `int` with `float` joins to `float`, an
+  object type with `None` to `X | None`, and any other union leaves the
+  parameter unknown, where the converter would write the union;
+- a default value counts as a call, and a parameter no call types takes
+  what its module's doctests pass as literals;
+- methods that override one another take their evidence together;
+- a function used as a value, a decorated one, one called with `*args` or
+  `**kwargs`, a nested function, and a dunder other than `__init__` are
+  left alone;
+- an inferred type that makes the checker report an error the analysis
+  without it did not is taken back, first for the functions involved, then
+  for the module, and at last for everything.
+
+Each native entry checks the exact type of every argument when Python calls
+it, so a caller with other types runs the Python body. The Python backend
+and the bodies `ppy run` falls back to are optimized from the analysis
+before inference, since nothing guards them. `ppy convert` and `ppy
+migrate` do not use this pass, and their output does not depend on it.
+[Types from call sites](../guide/subset.md#types-from-call-sites) has the
+user-facing rules.
+
 ### When a type does not settle
 
 A parameter that still has no stable type is reported (`E1304`), never

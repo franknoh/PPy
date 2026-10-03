@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import array
 import ctypes
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -25,7 +26,17 @@ from .abi import (
     NativeSignature,
 )
 
-__all__ = ["NativeBinding", "adopt", "bind", "observation_wanted", "value_class_types"]
+__all__ = [
+    "NativeBinding",
+    "adopt",
+    "as_method",
+    "bind",
+    "bind_globals",
+    "keyed",
+    "observation_wanted",
+    "python_of",
+    "value_class_types",
+]
 
 _I64_LOW = -(1 << 63)
 _I64_HIGH = (1 << 63) - 1
@@ -83,12 +94,18 @@ def observation_wanted(specializer: object, policy: object, info: object) -> boo
     )
 
 
-def value_class_types(signature: NativeSignature, fallback: Callable[..., object]) -> tuple | None:
+def value_class_types(
+    signature: NativeSignature, fallback: Callable[..., object], *, globals_read: bool = False
+) -> tuple | None:
     """The runtime classes a generated wrapper guards value parameters on.
 
     Resolved from the defining module, so a class the wrapper cannot see means
-    no fast entry rather than a wrong one.
+    no fast entry rather than a wrong one. A function passed module globals
+    has one only where the caller reads them for it (`bind_globals`).
     """
+    if signature.reads_globals and not globals_read:
+        # The Python-level binding reads the globals; a C wrapper would not.
+        return None
     namespace = getattr(fallback, "__globals__", None)
     found = []
     for parameter in signature.parameters:
@@ -106,12 +123,47 @@ def value_class_types(signature: NativeSignature, fallback: Callable[..., object
 #: The C entry points that stand in a module's namespace themselves. No Python
 #: frame is on their call path, so there is nothing to hang `__ppy_native__` on;
 #: they are known by identity and kept here, as their modules keep them.
-_ADOPTED: dict[int, tuple[object, NativeSignature]] = {}
+_ADOPTED: dict[int, tuple[object, NativeSignature, object]] = {}
 
 
-def remember(entry: Callable[..., object], signature: NativeSignature) -> None:
-    """Record that `entry`, a generated C entry point, runs `signature` natively."""
-    _ADOPTED[id(entry)] = (entry, signature)
+def remember(
+    entry: Callable[..., object], signature: NativeSignature, fallback: object = None
+) -> None:
+    """Record that `entry`, a generated C entry point, runs `signature` natively,
+    standing for the Python function `fallback`."""
+    _ADOPTED[id(entry)] = (entry, signature, fallback)
+
+
+def python_of(function: object) -> object:
+    """The Python function a native entry point stands for, whose source a tool
+    like `ppy.grad` reads; `function` itself where it is one."""
+    found = getattr(function, "__ppy_fallback__", None)
+    if found is not None:
+        return found
+    known = _ADOPTED.get(id(function))
+    if known is not None and known[0] is function and known[2] is not None:
+        return known[2]
+    return function
+
+
+def as_method(entry: Callable[..., object], fallback: object, key: str) -> Callable[..., object]:
+    """A generated C entry point that stands in a class body for a plain method,
+    made an instance method: a builtin function does not bind, so `obj.f(x)`
+    would not pass `obj`. A static method's entry is left as it is."""
+    import types  # pylint: disable=import-outside-toplevel
+
+    if "." not in key or not isinstance(fallback, types.FunctionType):
+        return entry
+    made = _INSTANCE_METHOD(entry)
+    known = _ADOPTED.get(id(entry))
+    if known is not None and known[0] is entry:
+        remember(made, known[1], known[2])
+    return made  # type: ignore[no-any-return]
+
+
+_INSTANCE_METHOD = ctypes.pythonapi.PyInstanceMethod_New
+_INSTANCE_METHOD.restype = ctypes.py_object
+_INSTANCE_METHOD.argtypes = (ctypes.py_object,)
 
 
 def signature_of(function: object) -> NativeSignature | None:
@@ -123,6 +175,10 @@ def signature_of(function: object) -> NativeSignature | None:
     known = _ADOPTED.get(id(function))
     if known is not None and known[0] is function:
         return known[1]
+    # A method bound to its instance: the entry point is its function.
+    inner = getattr(function, "__func__", None)
+    if inner is not None and inner is not function:
+        return signature_of(inner)
     return None
 
 
@@ -138,7 +194,7 @@ def adopt(
     Nothing stands between the caller and the C entry point, so per-call
     statistics are not collected on this path.
     """
-    remember(entry, signature)
+    remember(entry, signature, fallback)
     return NativeBinding(
         signature=signature, wrapper=entry, fallback=fallback, fast_entry=entry, owner=owner
     )
@@ -184,8 +240,166 @@ def bind(
     fast_entry: Callable[..., object] | None = None,
     owner: object | None = None,
     register: Callable[[int, tuple], bool] | None = None,
+    globals_read: bool = False,
 ) -> NativeBinding:
     """Build the Python-callable wrapper for one native function.
+
+    A function that draws random numbers draws from `random`'s own generator:
+    its state is saved before the call and put back before a fallback, so
+    the Python rerun draws what the native call drew.
+    """
+    if not signature.draws:
+        return _bind(
+            signature,
+            address,
+            fallback,
+            specializer=specializer,
+            policy=policy,
+            info=info,
+            fast_entry=fast_entry,
+            owner=owner,
+            register=register,
+            globals_read=globals_read,
+        )
+    generator = _shared_generator(owner)
+    if generator is None:
+        # Native draws would not be Python's: the Python definition runs.
+        return NativeBinding(
+            signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
+        )
+    binding = _bind(
+        signature,
+        address,
+        generator.restoring(fallback),
+        specializer=specializer,
+        policy=policy,
+        info=info,
+        fast_entry=fast_entry,
+        owner=owner,
+        register=register,
+        globals_read=globals_read,
+    )
+    if binding.wrapper is not binding.fallback:
+        saved = generator.saving(binding.wrapper)
+        _dress(saved, signature, fallback)
+        saved.__ppy_native__ = signature  # type: ignore[attr-defined]
+        saved.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
+        binding.wrapper = saved
+    binding.fallback = fallback
+    return binding
+
+
+#: `RandomObject`'s state after the object header: `int index`, then 624 words.
+_STATE_BYTES = 4 + 624 * 4
+
+
+class _SharedGenerator:
+    """`random._inst`'s Mersenne Twister, which native code draws from in place."""
+
+    def __init__(self, address: int, reseeded: Callable[[], int]) -> None:
+        import threading  # pylint: disable=import-outside-toplevel
+
+        self.address = address
+        self.reseeded = reseeded
+        self.saved = threading.local()
+
+    def _stack(self) -> list[bytes]:
+        stack = getattr(self.saved, "stack", None)
+        if stack is None:
+            stack = self.saved.stack = []
+        return stack
+
+    def saving(self, wrapper: Callable[..., object]) -> Callable[..., object]:
+        def saved(*args: object, **keywords: object) -> object:
+            stack = self._stack()
+            stack.append(ctypes.string_at(self.address, _STATE_BYTES))
+            try:
+                return wrapper(*args, **keywords)
+            finally:
+                stack.pop()
+                if self.reseeded():
+                    # `random.seed` forgets a pending `gauss` value too.
+                    import random  # pylint: disable=import-outside-toplevel
+
+                    random._inst.gauss_next = None  # type: ignore[attr-defined]
+
+        return saved
+
+    def restoring(self, fallback: Callable[..., object]) -> Callable[..., object]:
+        def restored(*args: object, **keywords: object) -> object:
+            stack = self._stack()
+            if stack:
+                ctypes.memmove(self.address, stack[-1], _STATE_BYTES)
+                self.reseeded()
+            return fallback(*args, **keywords)
+
+        restored.__wrapped__ = fallback  # type: ignore[attr-defined]
+        return restored
+
+
+_generators: dict[int, _SharedGenerator | None] = {}
+
+
+def _shared_generator(owner: object) -> _SharedGenerator | None:
+    """The runtime whose native code draws, bound to `random._inst`'s state:
+    the library's own where it carries the runtime, else the one `ppy run`
+    compiles. None where CPython's layout is not the one expected."""
+    library = (
+        owner if isinstance(owner, ctypes.CDLL) and hasattr(owner, "ppy_random_bind") else None
+    )
+    if library is None:
+        from . import collection_boundary  # pylint: disable=import-outside-toplevel
+
+        library = collection_boundary.runtime(None)
+        if library is None:
+            return None
+    key = id(library)
+    if key in _generators:
+        return _generators[key]
+    found = None
+    address = _random_state_address()
+    if address is not None:
+        library.ppy_random_bind.argtypes = (ctypes.c_int64,)
+        library.ppy_random_bind.restype = None
+        library.ppy_random_reseeded.argtypes = ()
+        library.ppy_random_reseeded.restype = ctypes.c_int64
+        library.ppy_random_bind(address)
+        found = _SharedGenerator(address, library.ppy_random_reseeded)
+    _generators[key] = found
+    return found
+
+
+def _random_state_address() -> int | None:
+    """Where `random._inst` keeps its index and state words, checked against
+    `getstate()` so a build laid out otherwise never has its memory written."""
+    import random  # pylint: disable=import-outside-toplevel
+
+    if sys.implementation.name != "cpython":
+        return None
+    inst = random._inst  # type: ignore[attr-defined]
+    _version, words, _gauss = inst.getstate()
+    address = id(inst) + object.__basicsize__
+    index = ctypes.c_int32.from_address(address).value
+    state = (ctypes.c_uint32 * 624).from_address(address + 4)
+    if index != words[-1] or tuple(state) != tuple(words[:-1]):
+        return None
+    return address
+
+
+def _bind(
+    signature: NativeSignature,
+    address: int,
+    fallback: Callable[..., object],
+    *,
+    specializer: object | None = None,
+    policy: object | None = None,
+    info: object | None = None,
+    fast_entry: Callable[..., object] | None = None,
+    owner: object | None = None,
+    register: Callable[[int, tuple], bool] | None = None,
+    globals_read: bool = False,
+) -> NativeBinding:
+    """`bind`, below the layer that saves and restores `random`'s state.
 
     `ctypes.CFUNCTYPE` releases the GIL around the foreign call, which is what
     a native region touching no Python objects is allowed to do (spec 16.6).
@@ -200,6 +414,27 @@ def bind(
         return NativeBinding(
             signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
         )
+    if signature.reads_globals and not globals_read:
+        bound = _bind_globals(signature, address, fallback, owner)
+        assert bound is not None
+        return bound
+    effects = None
+    if signature.effects:
+        from .effects import effects_for, register_namespace
+
+        effects = effects_for(owner)
+        if effects is None:
+            # No runtime to print through: the function is its Python definition.
+            return NativeBinding(
+                signature=signature,
+                wrapper=fallback,
+                fallback=fallback,
+                fast_entry=None,
+                owner=owner,
+            )
+        register_namespace(signature.qualname, _namespace(fallback))
+        # The generated wrapper knows nothing of held output.
+        fast_entry = None
     argument_types: list[type] = []
     for parameter in signature.parameters:
         if parameter.is_buffer:
@@ -229,9 +464,9 @@ def bind(
     if signature.crosses_collections and not (
         text_only and not any(p.is_handle for p in signature.parameters)
     ):
-        return _bind_collections(signature, native, result_types, fallback, owner)
+        return _bind_collections(signature, native, result_types, fallback, owner, effects)
 
-    namespace = getattr(fallback, "__globals__", None)
+    namespace = _namespace(fallback)
     expanders = [
         _expander_for(p, (lambda: namespace) if namespace is not None else None)
         for p in signature.parameters
@@ -267,15 +502,17 @@ def bind(
         owner=owner,
     )
 
+    arity = len(signature.parameters)
     if fast_entry is not None:
         # The generated wrapper does the parsing, the guards, the specialization
         # choice, the call, and the boxing in C; `NotImplemented` is its signal
         # that a guard failed. While the function is still learning which
         # argument shapes repeat, Python watches alongside.
         def fast_wrapper(*args: object, **keywords: object) -> object:
-            if keywords:
-                # Python binds keywords; the native code takes its arguments in order.
-                return fallback(*args, **keywords)
+            if keywords or len(args) != arity:
+                # Python binds keywords and defaults; the native code takes
+                # its arguments in order.
+                return _keyword_call(fallback, fast_wrapper, arity, args, keywords)
             if binding.observing:
                 _watch(binding, signature, args, policy, specializer, info, register)
             result = fast_entry(*args)
@@ -293,7 +530,7 @@ def bind(
 
     def wrapper(*args: object, **keywords: object) -> object:
         if keywords or len(args) != len(expanders):
-            return fallback(*args, **keywords)
+            return _keyword_call(fallback, wrapper, len(expanders), args, keywords)
         atoms: list[object] = []
         # `borrowed` keeps each unboxed buffer alive for the duration of the call.
         borrowed: list[object] = []
@@ -314,6 +551,20 @@ def bind(
 
         slots = [result_type() for result_type in result_types]
         target = entry or native
+        if effects is not None:
+            outer = effects.enter()
+            status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
+            settled = _settled(effects, status, outer, signature, owner, target)
+            if isinstance(settled, BaseException):
+                raise settled
+            if not settled:
+                binding.fallbacks += 1
+                return fallback(*args)
+            binding.calls += 1
+            try:
+                return _answer(slots)
+            finally:
+                effects.commit()
         status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
             if status == STATUS_RAISED:
@@ -327,6 +578,13 @@ def bind(
             return fallback(*args)
         binding.calls += 1
         binding.specialized_calls += int(entry is not None)
+        return _answer(slots)
+
+    nothing = signature.returns_none
+
+    def _answer(slots: list) -> object:  # type: ignore[type-arg]
+        if nothing:
+            return None
         if text_result:
             return _text_result(slots[0].value, slots[1].value)
         if returns_tuple:
@@ -340,6 +598,178 @@ def bind(
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
     return binding
+
+
+#: Each Python function's signature, as `_keyword_call` binds by it; None
+#: where the native entry cannot take what it binds.
+_SIGNATURES: dict[int, tuple[object, Any]] = {}
+
+
+def _binder(fallback: Callable[..., object], count: int) -> Any:
+    """The `inspect.Signature` a call to `fallback` binds by, where its
+    parameters are the native entry's `count` ones in order: no `*args`, no
+    `**kwargs`. None otherwise."""
+    found = _SIGNATURES.get(id(fallback))
+    if found is not None and found[0] is fallback:
+        return found[1]
+    import inspect  # pylint: disable=import-outside-toplevel
+
+    try:
+        signature = inspect.signature(fallback)
+    except (TypeError, ValueError):
+        signature = None
+    if signature is not None:
+        kinds = [p.kind for p in signature.parameters.values()]
+        variadic = (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        if len(kinds) != count or any(kind in variadic for kind in kinds):
+            signature = None
+    _SIGNATURES[id(fallback)] = (fallback, signature)
+    return signature
+
+
+def _keyword_call(
+    fallback: Callable[..., object],
+    entry: Callable[..., object],
+    count: int,
+    args: tuple,
+    keywords: dict[str, object],
+) -> object:
+    """A call Python spelled with keywords, or with defaults left out: bound
+    as Python binds it, then made in order through the native entry. A call
+    that does not bind is the Python function's, which raises CPython's
+    `TypeError` for it."""
+    signature = _binder(fallback, count)
+    if signature is None:
+        return fallback(*args, **keywords)
+    try:
+        bound = signature.bind(*args, **keywords)
+    except TypeError:
+        return fallback(*args, **keywords)
+    bound.apply_defaults()
+    return entry(*bound.arguments.values())
+
+
+def keyed(
+    fallback: Callable[..., object], entry: Callable[..., object], count: int
+) -> Callable[..., object]:
+    """What a generated C entry point calls for a call spelled with keywords or
+    with defaults left out: `_keyword_call`, which binds it as Python does
+    and calls `entry` in order."""
+
+    def call(*args: object, **keywords: object) -> object:
+        return _keyword_call(fallback, entry, count, args, keywords)
+
+    return call
+
+
+def _namespace(function: object) -> dict | None:
+    """The globals a Python function reads: its module's, or, for the one
+    `_bind_globals` makes, those of the function it stands for. The wrapper
+    that restores `random`'s state before a fallback is looked through."""
+    found = getattr(function, "__ppy_globals__", None)
+    if found is not None:
+        return found  # type: ignore[no-any-return]
+    wrapped = getattr(function, "__wrapped__", None)
+    if wrapped is not None:
+        return _namespace(wrapped)
+    return getattr(function, "__globals__", None)
+
+
+def bind_globals(  # type: ignore[no-untyped-def]
+    signature: NativeSignature,
+    address: int,
+    fallback: Callable[..., object],
+    owner,
+    entry_for: Callable[[Callable[..., object]], Callable[..., object] | None],
+) -> NativeBinding | None:
+    """`_bind_globals` over a generated C entry point: `entry_for(spelled)` binds
+    the entry, which takes the globals after Python's arguments, with
+    `spelled` as its fallback. None where it binds none."""
+    return _bind_globals(signature, address, fallback, owner, entry_for)
+
+
+def _bind_globals(  # type: ignore[no-untyped-def]
+    signature: NativeSignature,
+    address: int,
+    fallback: Callable[..., object],
+    owner,
+    entry_for: Callable[[Callable[..., object]], Callable[..., object] | None] | None = None,
+) -> NativeBinding | None:
+    """A function passed the settled module globals it reads (`NativeParam.
+    source`). Python's caller spells the other arguments; the wrapper reads
+    each global from its module at the call and passes it after them, where
+    the native entry takes it. A global the module no longer holds, or holds
+    as something the function does not take, runs the Python body.
+    """
+    count = sum(1 for p in signature.parameters if not p.source)
+    own = signature.qualname.rpartition(".")[0]
+    namespace = _namespace(fallback)
+    places: list[tuple[str, str]] = []
+    for parameter in signature.parameters[count:]:
+        module, _, name = parameter.source.rpartition(":")
+        places.append((module, name))
+
+    def spelled(*args: object, **keywords: object) -> object:
+        # The Python function takes the arguments Python spelled; the globals
+        # the native entry takes after them are left off.
+        return fallback(*args[:count], **keywords)
+
+    spelled.__ppy_globals__ = namespace  # type: ignore[attr-defined]
+    if entry_for is not None:
+        entry = entry_for(spelled)
+        if entry is None:
+            return None
+        remember(entry, signature)
+        inner = NativeBinding(
+            signature=signature, wrapper=entry, fallback=spelled, fast_entry=entry, owner=owner
+        )
+    else:
+        inner = _bind(signature, address, spelled, owner=owner, globals_read=True)
+    if inner.wrapper is inner.fallback:
+        # No native entry here after all: the Python function is the function.
+        inner.wrapper = inner.fallback = fallback
+        return inner
+    native = inner.wrapper
+
+    def read(module: str, name: str) -> object:
+        if module == own and namespace is not None:
+            return namespace[name]
+        return sys.modules[module].__dict__[name]
+
+    def wrapper(*args: object, **keywords: object) -> object:
+        if keywords or len(args) != count:
+            return _keyword_call(fallback, wrapper, count, args, keywords)
+        try:
+            values = [read(module, name) for module, name in places]
+        except KeyError:
+            inner.fallbacks += 1
+            return fallback(*args)
+        return native(*args, *values)
+
+    _dress(wrapper, signature, fallback)
+    wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
+    wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
+    inner.wrapper = wrapper
+    inner.fallback = fallback
+    return inner
+
+
+def _settled(effects, status, outer, signature, owner, target, let_go=None) -> bool | BaseException:  # type: ignore[no-untyped-def]
+    """Whether a call with effects answered: what it printed is written out once
+    its result is read (`Effects.commit`); where it fell back, dropped. What it
+    raised after an effect it cannot take back comes back, for the caller to raise.
+    `let_go` sweeps what a raising call left; a crossing passes one that waits
+    until it has let go of its own handles."""
+    if status >= STATUS_SANITIZER_BASE:
+        effects.abandon(outer)
+        kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
+        return SanitizerFailure(f"sanitizer: a {kind} check failed in `{signature.qualname}`")
+    return effects.leave(  # type: ignore[no-any-return]
+        status,
+        outer,
+        signature.qualname,
+        let_go if let_go is not None else lambda: _let_go_of_raised(owner, target),
+    )
 
 
 def _dress(wrapper, signature, fallback) -> None:  # type: ignore[no-untyped-def]
@@ -366,7 +796,7 @@ _LIBC.free.restype = None
 
 
 def _bind_collections(  # type: ignore[no-untyped-def]
-    signature: NativeSignature, native, result_types: list, fallback, owner
+    signature: NativeSignature, native, result_types: list, fallback, owner, effects=None
 ) -> NativeBinding:
     """The boundary of a function a collection crosses: each argument copied into
     native memory, the result copied out, and a written argument copied back.
@@ -383,15 +813,33 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     rt = crossing.runtime(library)
     if rt is None:
         return unbound
-    specs = [crossing.parse(p.element) if p.is_handle else None for p in signature.parameters]
+    described = {c.qualname: c for c in signature.classes}
+    classes = crossing.Classes(signature.classes, _class_finder(fallback)) if described else None
+    specs = [
+        crossing.parse(p.element + ("?" if p.nullable else ""), described) if p.is_handle else None
+        for p in signature.parameters
+    ]
     parameters = signature.parameters
     if any(p.is_handle and spec is None for p, spec in zip(parameters, specs, strict=True)):
         return unbound
     nothing = signature.returned == crossing.RETURNS_NOTHING
-    returned = crossing.parse(signature.returned) if signature.returned and not nothing else None
-    if signature.returned and not nothing and returned is None:
+    returned = (
+        crossing.parse(signature.returned, described)
+        if signature.returned and not nothing
+        else None
+    )
+    if (
+        signature.returned
+        and not nothing
+        and (returned is None or returned.kind == "random.Random")
+    ):
         return unbound
-    expanders = [None if p.is_handle else _expander_for(p, None) for p in signature.parameters]
+    # A value class among the arguments is found in the function's module, as
+    # `_bind` finds it: without the namespace, every call would run the
+    # Python body.
+    namespace = _namespace(fallback)
+    find = (lambda: namespace) if namespace is not None else None
+    expanders = [None if p.is_handle else _expander_for(p, find) for p in signature.parameters]
     written = [p.is_handle and p.written for p in signature.parameters]
     binding = NativeBinding(
         signature=signature, wrapper=lambda *a: None, fallback=fallback, owner=owner
@@ -399,22 +847,32 @@ def _bind_collections(  # type: ignore[no-untyped-def]
 
     def wrapper(*args: object, **keywords: object) -> object:
         if keywords or len(args) != len(expanders):
-            return fallback(*args, **keywords)
-        boundary = crossing.Boundary(rt)
+            return _keyword_call(fallback, wrapper, len(expanders), args, keywords)
+        boundary = crossing.Boundary(rt, classes)
+        raised: list[bool] = []
         try:
-            answered, answer = _cross(boundary, args)
+            if effects is not None:
+                answered, answer = _cross_with_effects(boundary, args, raised)
+            else:
+                answered, answer = _cross(boundary, args, raised)
         finally:
             # Every handle the crossing made is let go of before any Python
             # runs: a fallback that calls native code again must not find
             # them on the thread's list, which a failed call's sweep frees.
             boundary.close()
+            if raised:
+                # And only then is what the raising call left swept: the sweep
+                # frees every handle on the list, the crossing's own included.
+                _let_go_of_raised(owner, native)
         if answered:
             binding.calls += 1
             return answer
+        # A generator an argument lent is put back as it was before Python reruns.
+        boundary.restore()
         binding.fallbacks += 1
         return fallback(*args)
 
-    def _cross(boundary, args: tuple) -> tuple[bool, object]:  # type: ignore[no-untyped-def]
+    def _cross(boundary, args: tuple, raised: list) -> tuple[bool, object]:  # type: ignore[no-untyped-def,type-arg]
         """The native call and its conversions: whether it answered, and what."""
         atoms: list[object] = []
         borrowed: list[object] = []
@@ -431,13 +889,45 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
             if status == STATUS_RAISED:
-                _let_go_of_raised(owner, native)
+                raised.append(True)
             if status >= STATUS_SANITIZER_BASE:
                 kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
                 raise SanitizerFailure(
                     f"sanitizer: a {kind} check failed in `{signature.qualname}`"
                 )
             return False, None
+        return True, _read(boundary, args, slots)
+
+    def _cross_with_effects(boundary, args: tuple, raised: list) -> tuple[bool, object]:  # type: ignore[no-untyped-def,type-arg]
+        """As `_cross`, for a function with effects (`ppy_runtime/effects.py`)."""
+        atoms: list[object] = []
+        borrowed: list[object] = []
+        try:
+            for expand, spec, value in zip(expanders, specs, args, strict=True):
+                if spec is not None:
+                    atoms.append(boundary.argument(value, spec))
+                else:
+                    assert expand is not None
+                    expand(value, atoms, borrowed)
+        except (GuardFailed, crossing.Refused):
+            return False, None
+        slots = [result_type() for result_type in result_types]
+        outer = effects.enter()
+        status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
+        settled = _settled(
+            effects, status, outer, signature, owner, native, lambda: raised.append(True)
+        )
+        if isinstance(settled, BaseException):
+            raise settled
+        if not settled:
+            return False, None
+        try:
+            return True, _read(boundary, args, slots)
+        finally:
+            effects.commit()
+
+    def _read(boundary, args: tuple, slots: list) -> object:  # type: ignore[no-untyped-def,type-arg]
+        """What an answered call wrote back and gave back."""
         boundary.sync(
             [
                 (value, spec)
@@ -446,23 +936,39 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             ]
         )
         if returned is not None:
-            return True, boundary.result(slots[0].value, returned)
+            return boundary.result(slots[0].value, returned)
         if nothing or not slots:
-            return True, None
+            return None
         if signature.returns == (TEXT,):
-            return True, _text_result(slots[0].value, slots[1].value)
+            return _text_result(slots[0].value, slots[1].value)
         if len(slots) > 1:
-            return True, tuple(
+            return tuple(
                 _result_for(atom)(slot.value)
                 for atom, slot in zip(signature.returns, slots, strict=True)
             )
-        return True, _result_for(signature.returns[0])(slots[0].value)
+        return _result_for(signature.returns[0])(slots[0].value)
 
     _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
     return binding
+
+
+def _class_finder(fallback: Callable[..., object]) -> Callable[[object], object]:
+    """How the boundary finds a described class: in the function's own module's
+    namespace, where the program defines it, else in its module."""
+    namespace = _namespace(fallback)
+
+    def find(described):  # type: ignore[no-untyped-def]
+        if namespace is not None:
+            found = namespace.get(described.name)
+            if isinstance(found, type) and found.__qualname__ == described.name:
+                return found
+        module = sys.modules.get(described.module)
+        return getattr(module, described.name, None) if module is not None else None
+
+    return find
 
 
 def _expander_for(
@@ -522,8 +1028,12 @@ def _expander_for(
         code = _ELEMENT_CODES[parameter.element]
         pointer_type = ctypes.POINTER(_ELEMENT_CTYPES[parameter.element])
 
+        exact_floats = parameter.exact and parameter.element in {"float", "f64", "f32"}
+
         def expand_buffer(value: object, atoms: list, borrowed: list) -> None:
             if type(value) is not list:
+                raise GuardFailed
+            if exact_floats and not all(type(item) is float for item in value):
                 raise GuardFailed
             try:
                 buffer = array.array(code, value)  # type: ignore[arg-type]
@@ -537,7 +1047,10 @@ def _expander_for(
         return expand_buffer
 
     if parameter.is_object:
-        field_guards = [(attr, _scalar_guard(_abi_of(scalar))) for attr, scalar in parameter.fields]
+        field_guards = [
+            (attr, _scalar_guard(_abi_of(scalar), parameter.exact))
+            for attr, scalar in parameter.fields
+        ]
         short_name = parameter.class_name.rpartition(".")[2]
         resolved: list[type | None] = [None]
 
@@ -566,7 +1079,7 @@ def _expander_for(
         return expand_object
 
     if parameter.is_tuple:
-        element_guards = [_scalar_guard(atom) for atom in parameter.abi]
+        element_guards = [_scalar_guard(atom, parameter.exact) for atom in parameter.abi]
 
         def expand_tuple(value: object, atoms: list, borrowed: list) -> None:
             if type(value) is not tuple or len(value) != len(element_guards):
@@ -580,9 +1093,8 @@ def _expander_for(
     if abi == "i64":
 
         def expand_int(value: object, atoms: list, borrowed: list) -> None:
-            if type(value) is bool:
-                atoms.append(int(value))
-                return
+            # A `bool` stays a `bool` in Python where native code would make it
+            # 1 or 0; the compiled wrapper refuses it too.
             if type(value) is not int or not _I64_LOW <= value <= _I64_HIGH:
                 raise GuardFailed
             atoms.append(value)
@@ -590,12 +1102,13 @@ def _expander_for(
         return expand_int
 
     if abi == "double":
+        exact = parameter.exact
 
         def expand_float(value: object, atoms: list, borrowed: list) -> None:
             if type(value) is float:
                 atoms.append(value)
                 return
-            if type(value) is int and _I64_LOW <= value <= _I64_HIGH:
+            if not exact and type(value) is int and -_EXACT_INT <= value <= _EXACT_INT:
                 atoms.append(float(value))
                 return
             raise GuardFailed
@@ -618,13 +1131,16 @@ def _result_for(abi: str) -> Callable[[object], object]:
     return int  # type: ignore[arg-type]
 
 
-def _scalar_guard(abi: str) -> Callable[[object], object]:
-    """Guard and convert one scalar, raising `GuardFailed` when it does not fit."""
+#: The largest int a double holds exactly, and every int below it.
+_EXACT_INT = 1 << 53
+
+
+def _scalar_guard(abi: str, exact: bool = False) -> Callable[[object], object]:
+    """Guard and convert one scalar, raising `GuardFailed` when it does not fit;
+    an `exact` float takes only a `float`."""
     if abi == "i64":
 
         def as_int(value: object) -> object:
-            if type(value) is bool:
-                return int(value)
             if type(value) is not int or not _I64_LOW <= value <= _I64_HIGH:
                 raise GuardFailed
             return value
@@ -635,7 +1151,7 @@ def _scalar_guard(abi: str) -> Callable[[object], object]:
         def as_float(value: object) -> object:
             if type(value) is float:
                 return value
-            if type(value) is int and _I64_LOW <= value <= _I64_HIGH:
+            if not exact and type(value) is int and -_EXACT_INT <= value <= _EXACT_INT:
                 return float(value)
             raise GuardFailed
 

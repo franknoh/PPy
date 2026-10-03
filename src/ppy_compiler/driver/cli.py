@@ -528,6 +528,30 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     reporter = _reporter(options)
+    try:
+        return _dispatch(parser, options, reporter)
+    except ModuleNotFoundError as error:
+        # A command that needs native code, in an install without the LLVM
+        # extra: one clear error, not an import traceback from deep inside.
+        if not (error.name or "").startswith("llvmlite"):
+            raise
+        from ..diagnostics import Diagnostic, Severity
+        from .commands import INSTALL_LLVM
+
+        reporter.emit(
+            Diagnostic(
+                "E1801",
+                Severity.ERROR,
+                f"`ppy {options.command}` needs the LLVM backend, and llvmlite is not installed",
+                help=f"install the LLVM extra: {INSTALL_LLVM}",
+            )
+        )
+        return 2
+
+
+def _dispatch(parser: argparse.ArgumentParser, options: argparse.Namespace, reporter) -> int:  # type: ignore[no-untyped-def]
+    from . import commands
+
     match options.command:
         case "convert":
             return commands.convert(options, reporter)

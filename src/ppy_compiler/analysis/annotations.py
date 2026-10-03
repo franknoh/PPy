@@ -76,6 +76,7 @@ _BARE_GENERIC = {
 
 _ABSTRACT = {
     "typing.Sequence": "Sequence",
+    "typing.MutableSequence": "MutableSequence",
     "typing.Iterable": "Iterable",
     "typing.Iterator": "Iterator",
     "typing.Mapping": "Mapping",
@@ -88,6 +89,7 @@ _ABSTRACT = {
     "collections.abc.Coroutine": "Coroutine",
     "collections.abc.AsyncIterator": "AsyncIterator",
     "collections.abc.Sequence": "Sequence",
+    "collections.abc.MutableSequence": "MutableSequence",
     "collections.abc.Iterable": "Iterable",
     "collections.abc.Iterator": "Iterator",
     "collections.abc.Mapping": "Mapping",
@@ -200,6 +202,10 @@ class AnnotationResolver:
         self._expanding: set[str] = set()
         #: The type parameters of the signature being resolved, by name.
         self.type_params: dict[str, T.TypeVar_] = {}
+        #: The module's `T = TypeVar("T")` declarations, by name.
+        self.type_var_decls: dict[str, ast.Call] = {}
+        #: What `typing.Self` stands for: the class whose method or field this is.
+        self.self_type: T.Type | None = None
 
     def resolve(self, expr: ast.expr | None) -> Resolved:
         if expr is None:
@@ -244,6 +250,17 @@ class AnnotationResolver:
     def _named(self, expr: ast.expr) -> Resolved:
         if isinstance(expr, ast.Name) and expr.id in self.type_params:
             return Resolved(self.type_params[expr.id])
+        if isinstance(expr, ast.Name) and expr.id in self.type_var_decls:
+            # A module `TypeVar` no class or function here takes as its own
+            # parameter: any type it may be, which is its bound if it has one.
+            call = self.type_var_decls[expr.id]
+            bound = next((k.value for k in call.keywords if k.arg == "bound"), None)
+            constraints = call.args[1:]
+            if bound is not None:
+                return self._resolve(bound)
+            if constraints:
+                return Resolved(T.union(*[self._resolve(c).type for c in constraints]))
+            return Resolved(T.ANY)
         alias = self._alias(expr)
         if alias is not None:
             return alias
@@ -260,6 +277,11 @@ class AnnotationResolver:
             return Resolved(_SIMPLE[qualname])
         if qualname == "typing.Any":
             return Resolved(T.ANY)
+        if qualname in {"typing.Self", "typing_extensions.Self"}:
+            if self.self_type is not None:
+                return Resolved(self.self_type)
+            self._error("E1301", "`Self` is only meaningful inside a class", expr)
+            return Resolved(T.UNKNOWN)
         if qualname == "ppy.Dynamic":
             return Resolved(T.DYNAMIC)
         if qualname == "ppy.Tensor":
@@ -641,8 +663,27 @@ class AnnotationResolver:
         )
 
     def _error(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
+        """An annotation the analysis cannot read: an error under strict mode.
+
+        Under `--no-strict` it is `W2010` instead. CPython never refuses a
+        program over an annotation it cannot type -- it evaluates one at most,
+        and raises its own error if the name is missing then -- so the
+        annotated value is taken as `Any` and the code that depends on it
+        stays on the Python path, as any other unknown does.
+        """
+        if self.strict:
+            self.diagnostics.add(
+                Diagnostic(code, Severity.ERROR, message, span_of(self.path, node), help=help)
+            )
+            return
         self.diagnostics.add(
-            Diagnostic(code, Severity.ERROR, message, span_of(self.path, node), help=help)
+            Diagnostic(
+                "W2010",
+                Severity.WARNING,
+                f"{message} ({code} under strict mode)",
+                span_of(self.path, node),
+                help=help,
+            )
         )
 
 

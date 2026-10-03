@@ -19,7 +19,7 @@ from pathlib import Path
 
 from ...cache import digest
 from .lowering import NativeSignature
-from .wrapper import WrapperModule, generate
+from .wrapper import WrapperModule, generate, wrapped_in_c
 
 __all__ = ["BuiltWrappers", "build_wrappers", "wrapper_toolchain"]
 
@@ -35,25 +35,68 @@ class BuiltWrappers:
     def ok(self) -> bool:
         return self.module is not None
 
-    def bind(self, qualname: str, address: int, types: tuple, fallback=None) -> object | None:  # type: ignore[no-untyped-def]
+    def bind(  # type: ignore[no-untyped-def]
+        self,
+        qualname: str,
+        address: int,
+        types: tuple,
+        fallback=None,
+        resolve=None,
+        arity: int = 0,
+    ) -> object | None:
         """Point one wrapper at its native code, and hand back the fast entry.
 
         With `fallback`, the wrapper holds the Python implementation itself and
         invokes it from C when a guard refuses the call; without one it returns
-        `NotImplemented` and the caller must watch for it.
+        `NotImplemented` and the caller must watch for it. `resolve` finds the
+        Python classes of the objects that cross (`collection_boundary.resolver`).
+        With `arity`, the entry's parameter count, a call with keywords or
+        defaults left out is bound in Python and made through the entry.
         """
         index = self.entries.get(qualname)
         if self.module is None or index is None:
             return None
         try:
-            named = getattr(self.module, f"bind_{index}")(address, types, fallback)
+            given = (
+                (address, types, fallback)
+                if resolve is None
+                else (address, types, fallback, resolve)
+            )
+            named = getattr(self.module, f"bind_{index}")(*given)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
-        if named is not None:
-            return named
-        # A wrapper module built before the entry points carried their names
-        # still answers to the index.
-        return getattr(self.module, qualname, None) or getattr(self.module, f"call_{index}", None)
+        found = named
+        if found is None:
+            # A wrapper module built before the entry points carried their names
+            # still answers to the index.
+            found = getattr(self.module, qualname, None) or getattr(
+                self.module, f"call_{index}", None
+            )
+        keyed_set = getattr(self.module, f"keyed_{index}", None)
+        if found is not None and fallback is not None and arity and keyed_set is not None:
+            from ppy_runtime.binding import keyed  # pylint: disable=import-outside-toplevel
+
+            # Keywords and defaults bound as Python binds them, then the entry.
+            keyed_set(keyed(fallback, found, arity))
+        return found
+
+    def attach_runtime(self, library=None) -> bool:  # type: ignore[no-untyped-def]
+        """Point the wrappers that copy containers at the collections runtime."""
+        if self.module is None:
+            return False
+        from ppy_runtime.collection_boundary import (
+            attach,  # pylint: disable=import-outside-toplevel
+        )
+
+        return attach(self.module, library)
+
+    def attach_effects(self, library=None) -> bool:  # type: ignore[no-untyped-def]
+        """Point the wrappers of functions with effects at the held output."""
+        if self.module is None:
+            return False
+        from ppy_runtime.effects import attach  # pylint: disable=import-outside-toplevel
+
+        return attach(self.module, library)
 
     def registrar(self, qualname: str):  # type: ignore[no-untyped-def]
         """A callable that hands one specialization to the generated wrapper."""
@@ -138,8 +181,9 @@ def build_wrappers(
     project finds it, rather than to `cache_directory`."""
     # A coroutine hands back a future the Python side wraps; no C wrapper for it.
     signatures = {name: s for name, s in signatures.items() if not s.future}
-    # A collection crosses through the Python-level binding, which copies it.
-    crossing = {name for name, s in signatures.items() if s.crosses_collections}
+    # A collection the generated wrapper cannot copy crosses through the
+    # Python-level binding, and so does a global the binding reads.
+    crossing = {name for name, s in signatures.items() if not wrapped_in_c(s)}
     signatures = {name: s for name, s in signatures.items() if name not in crossing}
     if not signatures:
         # Every function here crosses through the Python-level binding: there

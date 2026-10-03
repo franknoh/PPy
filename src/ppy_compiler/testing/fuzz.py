@@ -29,6 +29,7 @@ import ast
 import contextlib
 import os
 import random
+import re
 import shutil
 import signal
 import subprocess
@@ -42,16 +43,20 @@ __all__ = [
     "ALL_PATHS",
     "OVERFLOW_64",
     "TIMED_OUT",
+    "UNANNOTATED_MARK",
     "Mismatch",
     "Result",
     "compare",
     "generate_program",
     "minimize",
+    "printed_twice",
     "run_program",
 ]
 
 #: Every path a program can take, the reference first.
 ALL_PATHS = ("python", "ppy", "run", "standalone", "c", "cpp")
+#: The paths a program with module state runs on (`generate_program(state=True)`).
+STATE_PATHS = ("python", "ppy", "run")
 
 #: What native code says where CPython would compute an integer no word holds.
 OVERFLOW_64 = "OverflowError: the result does not fit in a 64-bit integer"
@@ -125,6 +130,89 @@ def pairs(n: int) -> Iterator[int]:
     yield from countdown(n)
 
 
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    for value in it:
+        if most <= 0:
+            break
+        total = total * 5 + value
+        most -= 1
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+        for name in self.names:
+            if name not in seen:
+                seen.append(name)
+                yield name + str(len(seen))
+
+
+"""
+
+#: What a program that calls the standard library adds: a cached function,
+#: whose recursion goes through its cache.
+_STDLIB_PRELUDE = """\
+@functools.lru_cache(maxsize=None)
+def _cached(n: int) -> int:
+    if n < 2:
+        return n
+    return (_cached(n - 1) + _cached(n - 2)) % 1000003
+
+
+"""
+
+#: What a program with module state adds: objects Python makes and native
+#: code walks. `ppy run` passes both across its boundary; a standalone build
+#: has no Python to hold them, so those programs run on the paths that do.
+_STATE_PRELUDE = """\
+class Link:
+    def __init__(self, value: int, label: str) -> None:
+        self.value: int = value
+        self.label: str = label
+        self.next: Link | None = None
+
+
+def chain(n: int) -> Link:
+    head = Link(n, "0")
+    for i in range(1, n):
+        made = Link(n - i, str(i))
+        made.next = head
+        head = made
+    return head
+
+
+def values(head: Link | None) -> list[int]:
+    out: list[int] = []
+    while head is not None:
+        out.append(head.value)
+        head = head.next
+    return out
+
+
+"""
+
+#: What a program with boundary writes adds: an object class whose instances
+#: cross by copy, and the directive that asks for the crossing.
+_BOUNDARY_PRELUDE = """\
+import ppy
+
+
+class Box:
+    def __init__(self, value: int) -> None:
+        self.value: int = value
+        self.items: list[int] = []
+        self.peer: Box | None = None
+
+
 """
 
 _BIG = (2**62, -(2**62), 2**63 - 1, -(2**63), 3037000499, 4611686018427387903)
@@ -159,9 +247,43 @@ class _Scope:
 
 
 class _Generator:
-    def __init__(self, seed: int) -> None:
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        seed: int,
+        prints: bool = False,
+        state: bool = False,
+        stdlib: bool = False,
+        calls: bool = False,
+        unannotated: bool = False,
+        boundary: bool = False,
+    ) -> None:
         self.rng = random.Random(seed)
+        #: Whether functions take defaults and keyword-only parameters, and
+        #: `main` calls them by keyword and leaves defaults out, drawn from a
+        #: sequence of their own so the rest of the program stays the same.
+        self.calls = calls
+        self.call_rng = random.Random(seed ^ 0xCA11)
+        #: Per function: its parameters, their kinds, their defaults, and
+        #: where the keyword-only ones start.
+        self.signatures: dict[str, tuple[list[str], list[str], dict[str, str], int]] = {}
+        #: Functions without annotations, whose types `--no-strict` infers
+        #: from the calls `main` makes; Python then calls them with others.
+        self.unannotated = unannotated
+        self.foreign = random.Random(seed ^ 0xA77)
         self.fresh = 0
+        self.seed = seed
+        #: Whether functions print too, between checks that may fall back.
+        self.prints = prints
+        #: Also draw seeded random numbers and call `math`, `heapq`, and `bisect`.
+        self.stdlib = stdlib
+        #: Whether the program also has module state and objects crossing
+        #: `ppy run`'s boundary, drawn from a sequence of their own.
+        self.with_state = state
+        self.state = random.Random(seed ^ 0x5EED)
+        #: Whether the program also writes through containers and objects
+        #: Python passes, shared and nested, drawn from a sequence of their own.
+        self.with_boundary = boundary
+        self.crossing = random.Random(seed ^ 0xB0DE)
 
     def name(self, prefix: str) -> str:
         self.fresh += 1
@@ -179,6 +301,8 @@ class _Generator:
 
     def int_expr(self, scope: _Scope, depth: int = 0) -> str:
         rng = self.rng
+        if self.stdlib and depth < 2 and self.chance(0.15):
+            return self.stdlib_int(scope, depth + 1)
         if depth > 2 or self.chance(0.3):
             if scope.ints and self.chance(0.65):
                 return rng.choice(scope.ints)
@@ -208,12 +332,21 @@ class _Generator:
             return f"{rng.choice(('min', 'max'))}({left}, {self.int_expr(scope, depth + 1)})"
         if roll < 0.91:
             return f"len({self.str_expr(scope, depth + 1)})"
-        if roll < 0.95:
+        if roll < 0.93:
             return f"int({self.float_expr(scope, depth + 1)})"
+        if roll < 0.95:
+            # A small exponent, and one past a word now and then.
+            exponent = rng.choice(("0", "1", "2", "3", "7", "40", "63", "64"))
+            if self.chance(0.5):
+                modulus = rng.choice(("7", "1000000007", "-5", "1"))
+                return f"pow({left}, {exponent}, {modulus})"
+            return f"({left} ** {exponent})"
         return f"({left} if {self.bool_expr(scope, depth + 1)} else {self.int_expr(scope, 3)})"
 
     def float_expr(self, scope: _Scope, depth: int = 0) -> str:
         rng = self.rng
+        if self.stdlib and depth < 2 and self.chance(0.15):
+            return self.stdlib_float(scope, depth + 1)
         if depth > 2 or self.chance(0.3):
             if scope.floats and self.chance(0.6):
                 return rng.choice(scope.floats)
@@ -238,6 +371,183 @@ class _Generator:
             return f"float({self.int_expr(scope, depth + 1)})"
         return f"{rng.choice(('min', 'max'))}({left}, {self.float_expr(scope, depth + 1)})"
 
+    def small(self, scope: _Scope, depth: int, top: int) -> str:
+        """A nonnegative int below `top`, from an expression."""
+        return f"(abs({self.int_expr(scope, depth + 1)}) % {top})"
+
+    # A list display holds one item at least: `[]` says nothing of what it
+    # holds, which a native build needs told.
+    def int_list(self, scope: _Scope, depth: int) -> str:
+        items = ", ".join(self.int_expr(scope, 3) for _ in range(self.rng.randint(1, 5)))
+        return f"[{items}]"
+
+    def float_list(self, scope: _Scope, depth: int) -> str:
+        items = ", ".join(self.float_expr(scope, 3) for _ in range(self.rng.randint(1, 5)))
+        return f"[{items}]"
+
+    def stdlib_int(self, scope: _Scope, depth: int) -> str:
+        rng = self.rng
+        roll = rng.random()
+        if roll < 0.15:
+            low = self.int_expr(scope, depth + 1)
+            return f"random.randint({low}, {low} + {self.small(scope, depth, 50)})"
+        if roll < 0.25:
+            return f"random.randrange({self.int_expr(scope, depth + 1)}, {rng.randint(-5, 60)})"
+        if roll < 0.32:
+            return f"random.getrandbits({self.small(scope, depth, 64)})"
+        if roll < 0.4:
+            return f"random.choice({self.int_list(scope, depth)})"
+        if roll < 0.48:
+            return f"sum(random.sample({self.int_list(scope, depth)}, {rng.randint(0, 3)}))"
+        if roll < 0.56:
+            return f"math.gcd({self.int_expr(scope, depth + 1)}, {self.int_expr(scope, depth + 1)})"
+        if roll < 0.62:
+            return f"math.lcm({self.small(scope, depth, 1000)}, {self.small(scope, depth, 1000)})"
+        if roll < 0.7:
+            return f"math.comb({self.small(scope, depth, 40)}, {self.small(scope, depth, 40)})"
+        if roll < 0.76:
+            return f"math.factorial({self.small(scope, depth, 22)})"
+        if roll < 0.82:
+            return f"math.isqrt({self.int_expr(scope, depth + 1)})"
+        if roll < 0.86:
+            return (
+                f"bisect.bisect_left(sorted({self.int_list(scope, depth)}), {self.int_literal()})"
+            )
+        if roll < 0.88:
+            return f"len(list(itertools.combinations(range({self.small(scope, depth, 8)}), 2)))"
+        return self.library_int(scope, depth)
+
+    def library_int(self, scope: _Scope, depth: int) -> str:
+        """`collections`, `functools`, `operator`, and a `random.Random` of its own."""
+        rng = self.rng
+        roll = rng.random()
+        items = self.int_list(scope, depth)
+        if roll < 0.12:
+            start = self.int_expr(scope, depth + 1)
+            return (
+                f"functools.reduce(operator.{rng.choice(('add', 'sub', 'xor'))}, {items}, {start})"
+            )
+        if roll < 0.2:
+            return f"functools.reduce({rng.choice(('max', 'min'))}, {items})"
+        if roll < 0.3:
+            return f"collections.Counter({items})[{self.int_expr(scope, depth + 1)}]"
+        if roll < 0.38:
+            return f"collections.Counter({items}).most_common(1)[0][{rng.randint(0, 1)}]"
+        if roll < 0.46:
+            return f"collections.Counter({items}).total()"
+        if roll < 0.56:
+            low = self.int_expr(scope, depth + 1)
+            return (
+                f"random.Random({self.seed}).randint({low}, {low} + {self.small(scope, depth, 30)})"
+            )
+        if roll < 0.64:
+            return (
+                f"random.Random({self.int_expr(scope, depth + 1)}).randrange({rng.randint(1, 90)})"
+            )
+        if roll < 0.74:
+            return f"_cached({self.small(scope, depth, 60)})"
+        if roll < 0.84:
+            return f"collections.deque({items})[{rng.randint(-1, 0)}]"
+        if roll < 0.92:
+            return f"max({items}, key=operator.neg)"
+        return f"sorted({items}, key=functools.cmp_to_key(lambda a, b: b - a))[0]"
+
+    def stdlib_float(self, scope: _Scope, depth: int) -> str:
+        rng = self.rng
+        roll = rng.random()
+        if roll < 0.2:
+            return "random.random()"
+        if roll < 0.35:
+            left = self.float_expr(scope, depth + 1)
+            return f"random.uniform({left}, {self.float_expr(scope, depth + 1)})"
+        if roll < 0.45:
+            return f"random.gauss({self.float_expr(scope, depth + 1)}, 1.0)"
+        if roll < 0.55:
+            return f"random.expovariate({rng.choice(('0.5', '2.0', '1.0'))})"
+        if roll < 0.65:
+            return f"math.fsum({self.float_list(scope, depth)})"
+        if roll < 0.75:
+            left = self.float_expr(scope, depth + 1)
+            return f"math.hypot({left}, {self.float_expr(scope, depth + 1)})"
+        if roll < 0.85:
+            name = rng.choice(("atan", "tanh", "erf", "cbrt", "asinh", "log1p", "exp2"))
+            return f"math.{name}({self.float_expr(scope, depth + 1)})"
+        left = self.float_expr(scope, depth + 1)
+        return f"math.copysign({left}, {self.float_expr(scope, depth + 1)})"
+
+    def stdlib_statements(self, w: _Writer, scope: _Scope) -> None:
+        rng = self.rng
+        heap = self.name("h")
+        w.put(f"{heap}: list[int] = {self.int_list(scope, 2)}")
+        w.put(f"heapq.heapify({heap})")
+        for _ in range(rng.randint(1, 4)):
+            w.put(f"heapq.heappush({heap}, {self.int_expr(scope, 2)})")
+        if self.chance(0.5):
+            w.put(f"random.shuffle({heap})")
+            w.put(f"heapq.heapify({heap})")
+        total = self.name("n")
+        w.put(f"{total}: int = heapq.heappop({heap}) + len({heap})")
+        w.put(f"bisect.insort({heap}, {self.int_expr(scope, 2)})")
+        w.put(f"{total} += sum({heap}) + {heap}[0]")
+        scope.ints.append(total)
+        if self.chance(0.6):
+            self.library_statements(w, scope, total)
+        if self.chance(0.4):
+            self.drawn_text(w, scope)
+
+    def drawn_text(self, w: _Writer, scope: _Scope) -> None:
+        """Strings a `random.Random` of its own draws from a list of strings
+        the function made, concatenated: each is the list's, not the draw's."""
+        rng = self.rng
+        parts, drawn, text = self.name("parts"), self.name("r"), self.name("t")
+        width, count = rng.randint(1, 4), rng.randint(1, 6)
+        w.put(f"{parts}: list[str] = [str(x) * {width} for x in range({count})]")
+        w.put(f"{drawn} = random.Random({self.int_expr(scope, 2)})")
+        w.put(f'{text}: str = ""')
+        w.put(f"for _ in range({rng.randint(1, 5)}):")
+        w.put(f"    {text} += {drawn}.choice({parts})")
+        if self.chance(0.5):
+            w.put(f"{parts}.append({drawn}.choice({parts}) + {text})")
+            w.put(f"{text} += {parts}[-1]")
+        scope.strs.append(text)
+
+    def library_statements(self, w: _Writer, scope: _Scope, total: str) -> None:
+        """A `defaultdict`, a `Counter`, an `OrderedDict`, and a `deque` filled
+        and read, and shown, whose text CPython's `repr` decides."""
+        rng = self.rng
+        table = self.name("d")
+        factory = rng.choice(("int", "lambda: -1"))
+        w.put(f"{table}: collections.defaultdict[int, int] = collections.defaultdict({factory})")
+        for _ in range(rng.randint(1, 4)):
+            w.put(f"{table}[{self.small(scope, 2, 6)}] += {self.int_expr(scope, 2)}")
+        w.put(f"{total} += {table}[{self.small(scope, 2, 8)}] + len({table})")
+        counts = self.name("c")
+        w.put(f"{counts} = collections.Counter({self.int_list(scope, 2)})")
+        w.put(f"{counts}.update({self.int_list(scope, 2)})")
+        if self.chance(0.5):
+            w.put(f"{counts}.subtract({self.int_list(scope, 2)})")
+        ordered = self.name("od")
+        w.put(f"{ordered}: collections.OrderedDict[int, int] = collections.OrderedDict()")
+        moved = self.name("k")
+        w.put(f"{moved}: int = {self.small(scope, 2, 5)}")
+        w.put(f"{ordered}[{moved}] = {self.int_expr(scope, 2)}")
+        for _ in range(rng.randint(1, 4)):
+            w.put(f"{ordered}[{self.small(scope, 2, 5)}] = {self.int_expr(scope, 2)}")
+        w.put(f"{ordered}.move_to_end({moved}, last={rng.choice(('True', 'False'))})")
+        queue = self.name("q")
+        w.put(f"{queue} = collections.deque({self.int_list(scope, 2)})")
+        w.put(f"{queue}.rotate({rng.randint(-3, 3)})")
+        w.put(f"{queue}.appendleft({self.int_expr(scope, 2)})")
+        if factory == "int":
+            shown = self.name("s")
+            w.put(
+                f"{shown}: str = str({table}) + str({counts}) + str({counts}.most_common(2))"
+                f" + str({ordered}) + str({queue})"
+            )
+            scope.strs.append(shown)
+        else:
+            w.put(f"{total} += sum({counts}.values()) + sum({ordered}.values()) + {queue}[0]")
+
     def bool_expr(self, scope: _Scope, depth: int = 0) -> str:
         rng = self.rng
         if scope.bools and self.chance(0.2):
@@ -250,8 +560,22 @@ class _Generator:
             return f"({self.float_expr(scope, 2)} {compare} {self.float_expr(scope, 2)})"
         if roll < 0.75:
             return f"({self.str_expr(scope, 2)} {compare} {self.str_expr(scope, 2)})"
-        if roll < 0.85:
+        if roll < 0.8:
             return f"({self.str_expr(scope, 2)} in {self.str_expr(scope, 2)})"
+        if roll < 0.84:
+            items = ", ".join(self.int_expr(scope, 2) for _ in range(rng.randint(1, 4)))
+            test = rng.choice(("in", "not in"))
+            container = rng.choice((f"({items},)", f"{{{items}}}"))
+            if self.chance(0.4):
+                step = rng.choice(("1", "3", "-2", self.int_expr(scope, 2) + " % 5 + 1"))
+                container = f"range({self.int_expr(scope, 2)}, {self.int_expr(scope, 2)}, {step})"
+            return f"({self.int_expr(scope, 2)} {test} {container})"
+        if roll < 0.87:
+            ops = [rng.choice(("<", "<=", ">", ">=", "==", "!=")) for _ in range(rng.randint(2, 3))]
+            spelled = self.int_expr(scope, 2)
+            for op in ops:
+                spelled += f" {op} {self.int_expr(scope, 2)}"
+            return f"({spelled})"
         joiner = rng.choice(("and", "or"))
         left = self.bool_expr(scope, depth + 1)
         return f"({left} {joiner} not {self.bool_expr(scope, depth + 1)})"
@@ -296,6 +620,12 @@ class _Generator:
 
     def statement(self, w: _Writer, scope: _Scope, budget: int, ret: str) -> None:
         rng = self.rng
+        if self.stdlib and self.chance(0.08):
+            self.stdlib_statements(w, scope)
+            return
+        if self.prints and self.chance(0.15):
+            self.print_statement(w, scope)
+            return
         roll = rng.random()
         if roll < 0.14:
             name = self.name("n")
@@ -375,7 +705,10 @@ class _Generator:
         elif roll < 0.96:
             self.generator_statement(w, scope)
         elif roll < 0.975:
-            self.lifted_statement(w, scope)
+            if self.chance(0.5):
+                self.lifted_statement(w, scope)
+            else:
+                self.expression_statement(w, scope)
         elif roll < 0.985:
             # An assert that holds more often than not, so programs run on.
             holds = self.chance(0.7)
@@ -389,6 +722,29 @@ class _Generator:
             self.statement(w, scope.copy(), 0, ret)
             w.depth -= 1
             scope.ints.append(count)
+
+    def print_statement(self, w: _Writer, scope: _Scope) -> None:
+        """A print between two checks: one before it that may fall back, and one
+        after it that may too, often past 64 bits. The line is tagged, so a line
+        printed twice is plain to see."""
+        rng = self.rng
+        before = self.name("n")
+        w.put(f"{before}: int = {self.int_expr(scope, 1)}")
+        scope.ints.append(before)
+        tag = f"<{self.name('p')}>"
+        kind = rng.choice(("int", "float", "str", "bool"))
+        options = ""
+        if self.chance(0.3):
+            options += f", sep={rng.choice(('', '|', ', '))!r}"
+        if self.chance(0.2):
+            options += f", end={rng.choice(('', ';', '!\n'))!r}"
+        if self.chance(0.15):
+            options += ", flush=True"
+        w.put(f"print({self.value(kind, scope)}, {tag!r}{options})")
+        after = self.name("n")
+        big = rng.choice(_BIG)
+        w.put(f"{after}: int = {before} * {big} + {self.int_expr(scope, 2)}")
+        scope.ints.append(after)
 
     def block(self, w: _Writer, scope: _Scope, budget: int, ret: str) -> None:
         w.depth += 1
@@ -487,6 +843,74 @@ class _Generator:
             item = self.name("x")
             w.put(f"for {item} in sorted({source}):")
             w.put(f"    {name} = {name} * 7 + {item}")
+        scope.ints.append(name)
+
+    def expression_statement(self, w: _Writer, scope: _Scope) -> None:
+        """What 0.6.0 took native: `isinstance`, loops over ranges with a
+        step, strings, and tuples under `enumerate`, `zip`, and `reversed`,
+        chained assignment, `e.args`, and generators held, passed on, and
+        made by `__iter__`."""
+        rng = self.rng
+        roll = rng.random()
+        name = self.name("n")
+        if roll < 0.12:
+            subject = rng.choice([*scope.ints, *scope.floats, *scope.strs, *scope.bools, "None"])
+            classes = rng.choice(("int", "float", "(int, float)", "str", "bool", "(str, list)"))
+            w.put(f"{name}: int = 1 if isinstance({subject}, {classes}) else 0")
+        elif roll < 0.3:
+            step = rng.choice(("1", "2", "-1", "-3", f"({self.int_expr(scope, 2)} % 4 or 1)"))
+            source = rng.choice(
+                (
+                    f"range({self.int_expr(scope, 2)} % 9, {self.int_expr(scope, 2)} % 9, {step})",
+                    f"reversed(range({self.int_expr(scope, 2)} % 7))",
+                    f"({self.int_expr(scope, 2)}, {self.int_expr(scope, 2)}, 5)",
+                )
+            )
+            wrapped = rng.choice(("plain", "enumerate", "zip"))
+            w.put(f"{name}: int = 0")
+            if wrapped == "plain":
+                w.put(f"for x in {source}:")
+                w.put(f"    {name} = {name} * 3 + x")
+            elif wrapped == "enumerate":
+                w.put(f"for i, x in enumerate({source}, {rng.randint(0, 2)}):")
+                w.put(f"    {name} = {name} * 3 + i * x")
+            else:
+                w.put(f"for x, c in zip({source}, {self.str_expr(scope, 2)}):")
+                w.put(f"    {name} = {name} * 3 + x + ord(c)")
+        elif roll < 0.42:
+            other = self.name("n")
+            w.put(f"{name} = {other} = {self.int_expr(scope, 2)}")
+            w.put(f"{other} += 1")
+            scope.ints.append(other)
+        elif roll < 0.55:
+            w.put(f"{name}: int = 0")
+            w.put("try:")
+            w.put(f"    if {self.bool_expr(scope, 2)}:")
+            w.put(f"        raise ValueError({self.str_expr(scope, 2)})")
+            w.put("    raise KeyError()")
+            w.put("except ValueError as e:")
+            w.put(f"    {name} = len(str(e.args)) * 10 + len(e.args)")
+            w.put("except KeyError as e:")
+            w.put(f"    {name} = len(e.args) - 1")
+        elif roll < 0.8:
+            count = f"({self.int_expr(scope, 2)} % 9)"
+            it = self.name("it")
+            w.put(f"{it} = countdown({count})")
+            w.put(f"{name}: int = 0")
+            w.put(f"for k in range({rng.randint(0, 3)}):")
+            w.put(f"    {name} += next({it}, -1) * (k + 2)")
+            w.put(f"{name} += drain({it}, {rng.randint(0, 4)})")
+            w.put(f"{name} += drain(pairs({count}), {rng.randint(0, 4)})")
+        else:
+            ring = self.name("r")
+            w.put(f"{ring} = Ring({rng.randint(0, 3)})")
+            for _ in range(rng.randint(0, 4)):
+                w.put(f"{ring}.add({self.str_expr(scope, 2)})")
+            w.put(f"{name}: int = 0")
+            w.put(f"for word in {ring}:")
+            w.put(f"    {name} = {name} * 7 + len(word)")
+            w.put(f"    if {name} > {rng.randint(5, 60)}:")
+            w.put("        break")
         scope.ints.append(name)
 
     def lifted_statement(self, w: _Writer, scope: _Scope) -> None:
@@ -691,6 +1115,13 @@ class _Generator:
             if self.chance(0.3):
                 key = self.int_expr(scope, 2) if keyed == "int" else self.str_expr(scope, 2)
                 w.put(f"{d}.pop({key}, 0)")
+            if self.chance(0.2):
+                # `None` on a miss: no number holds that natively.
+                key = self.int_expr(scope, 2) if keyed == "int" else self.str_expr(scope, 2)
+                found, got = self.name("v"), self.name("n")
+                w.put(f"{found} = {d}.get({key})")
+                w.put(f"{got}: int = -1 if {found} is None else {found}")
+                scope.ints.append(got)
             if self.chance(0.2) and keyed == "int":
                 w.put(f"{d} = {{k: v * 2 for k, v in {d}.items() if v != 0}}")
             w.put(f"{total}: int = len({d}) * 100")
@@ -813,7 +1244,12 @@ class _Generator:
         ret = rng.choice(("int", "int", "float", "str", "bool"))
         params = [self.name("a") for _ in kinds]
         signature = ", ".join(f"{p}: {k}" for p, k in zip(params, kinds, strict=True))
-        w.put(f"def {name}({signature}) -> {ret}:")
+        if self.calls:
+            signature = self.call_signature(name, params, kinds)
+        if self.unannotated:
+            w.put(f"def {name}({_unannotated(signature)}):")
+        else:
+            w.put(f"def {name}({signature}) -> {ret}:")
         w.depth += 1
         scope = _Scope()
         for param, kind in zip(params, kinds, strict=True):
@@ -827,6 +1263,58 @@ class _Generator:
         w.put("")
         w.put("")
         return kinds, ret
+
+    def call_signature(self, name: str, params: list[str], kinds: list[str]) -> str:
+        """Parameters with constant defaults on the last few, and the last ones
+        keyword-only now and then."""
+        rng = self.call_rng
+        defaulted = rng.randint(0, len(params))
+        defaults = {
+            p: self.constant(k)
+            for p, k in list(zip(params, kinds, strict=True))[len(params) - defaulted :]
+        }
+        keyword_only = rng.randint(1, len(params)) if rng.random() < 0.3 else len(params)
+        self.signatures[name] = (params, kinds, defaults, keyword_only)
+        parts = []
+        for index, (param, kind) in enumerate(zip(params, kinds, strict=True)):
+            if index == keyword_only:
+                parts.append("*")
+            default = defaults.get(param)
+            parts.append(f"{param}: {kind}" + (f" = {default}" if default is not None else ""))
+        return ", ".join(parts)
+
+    def constant(self, kind: str) -> str:
+        """A literal of `kind`, as a default may be."""
+        rng = self.call_rng
+        if kind == "int":
+            return str(rng.randint(-9, 9))
+        if kind == "float":
+            return rng.choice(_FLOATS)
+        if kind == "str":
+            return repr(rng.choice(_WORDS))
+        return rng.choice(("True", "False"))
+
+    def call(self, name: str, kinds: list[str]) -> str:
+        """A call of `name`: by position, or with keywords and defaults left out."""
+        found = self.signatures.get(name)
+        if found is None:
+            return f"{name}({', '.join(self.argument(k) for k in kinds)})"
+        params, kinds, defaults, keyword_only = found
+        rng = self.call_rng
+        positional: list[str] = []
+        named: list[str] = []
+        by_name = False
+        for index, (param, kind) in enumerate(zip(params, kinds, strict=True)):
+            if param in defaults and rng.random() < 0.4:
+                by_name = True  # left out: whatever follows is named
+                continue
+            if index >= keyword_only or by_name or rng.random() < 0.3:
+                by_name = True
+                named.append(f"{param}={self.argument(kind)}")
+            else:
+                positional.append(self.argument(kind))
+        rng.shuffle(named)
+        return f"{name}({', '.join([*positional, *named])})"
 
     def argument(self, kind: str) -> str:
         rng = self.rng
@@ -842,29 +1330,334 @@ class _Generator:
             return repr(rng.choice(_WORDS))
         return rng.choice(("True", "False"))
 
+    # -- module state and objects ----------------------------------------------
+
+    def state_globals(self, w: _Writer) -> None:
+        """Module globals bound once and never rebound (settled), which native
+        code is passed at the call: a list and a dict it reads and writes, a
+        number and a string made by a call, so none is a folded constant."""
+        rng = self.state
+        w.put(
+            f"G_TABLE: list[int] = [k * {rng.randint(1, 9)} - {rng.randint(0, 5)} "
+            f"for k in range({rng.randint(3, 9)})]"
+        )
+        w.put("G_SEEN: dict[int, int] = {}")
+        w.put(f'G_SCALE = int("{rng.randint(-3, 7)}")')
+        w.put(f"G_WORD = str({rng.randint(0, 99)}) + {rng.choice(_WORDS)!r}")
+        w.put("")
+        w.put("")
+
+    def state_function(self, w: _Writer, name: str, callee: str | None) -> None:
+        """A function over the settled globals: reads them, writes the list and
+        the dict, and, when `callee` is given, calls another that does, which
+        passes the globals on."""
+        rng = self.state
+        w.put(f"def {name}(a: int, b: int) -> int:")
+        w.depth += 1
+        scope = _Scope(ints=["a", "b", "total"])
+        w.put(f"total = {'0' if callee is None else f'{callee}(b, a)'}")
+        w.put(f"for i in range(b % {rng.randint(2, 7)} + 1):")
+        w.depth += 1
+        inner = scope.copy()
+        inner.ints.append("i")
+        w.put("total += G_TABLE[(a + i) % len(G_TABLE)] * G_SCALE")
+        if rng.random() < 0.7:
+            w.put(f"G_SEEN[(a * i + {rng.randint(0, 9)}) % 11] = {self.int_expr(inner, 1)}")
+        if rng.random() < 0.5:
+            w.put(f"if len(G_TABLE) < 30 and {self.bool_expr(inner, 2)}:")
+            w.put(f"    G_TABLE.append({self.int_expr(inner, 1)})")
+        if rng.random() < 0.4:
+            w.put(f"total += G_SEEN.get(i, {rng.randint(-2, 2)})")
+        w.depth -= 1
+        w.put(f"return total + len(G_WORD) + len(G_SEEN) + {self.int_expr(scope, 1)}")
+        w.depth -= 1
+        w.put("")
+        w.put("")
+
+    def object_function(self, w: _Writer, name: str) -> None:
+        """A function that walks linked objects Python made, writing their
+        fields: the objects cross whole, and the writes come back."""
+        rng = self.state
+        w.put(f"def {name}(head: Link, k: int) -> int:")
+        w.depth += 1
+        w.put("total = 0")
+        w.put("node: Link | None = head")
+        w.put("while node is not None:")
+        w.depth += 1
+        scope = _Scope(ints=["k", "total", "node.value"], strs=["node.label"])
+        w.put(f"node.value = ({self.int_expr(scope, 1)}) % {rng.randint(50, 999)}")
+        if rng.random() < 0.5:
+            w.put(f"node.label = {self.str_expr(scope, 2)}")
+        w.put("total += node.value + len(node.label)")
+        if rng.random() < 0.3:
+            w.put("if node.next is None and k > 0:")
+            w.put('    node.next = Link(k, "new")')
+            w.put("    k = 0")
+        w.put("node = node.next")
+        w.depth -= 1
+        w.put("return total")
+        w.depth -= 1
+        w.put("")
+        w.put("")
+
     def program(self) -> str:
         w = _Writer()
+        if self.unannotated:
+            w.lines.append(UNANNOTATED_MARK)
+        if self.stdlib:
+            w.lines.extend(["import bisect", "import heapq", "import itertools", "import random"])
+            w.lines.extend(["import functools", "import operator"])
+            w.lines.append("import collections")
         w.lines.extend(_PRELUDE.splitlines())
+        if self.stdlib:
+            w.lines.extend(_STDLIB_PRELUDE.splitlines())
+        if self.with_state:
+            w.lines.extend(_STATE_PRELUDE.splitlines())
+            self.state_globals(w)
+        if self.with_boundary:
+            w.lines.extend(_BOUNDARY_PRELUDE.splitlines())
         calls: list[str] = []
+        foreign: list[tuple[str, str]] = []
         for _ in range(self.rng.randint(3, 6)):
             name = self.name("fn")
             kinds, _ret = self.function(w, name)
-            calls.extend(
-                f"{name}({', '.join(self.argument(k) for k in kinds)})"
-                for _ in range(self.rng.randint(1, 3))
-            )
+            calls.extend(self.call(name, kinds) for _ in range(self.rng.randint(1, 3)))
+            if self.unannotated:
+                foreign.append(self.foreign_call(name, kinds))
+        after = self.state_part(w) if self.with_state else []
+        if self.with_boundary:
+            after.extend(self.boundary_part(w))
         w.put("def main() -> None:")
+        if self.stdlib:
+            w.put(f"    random.seed({self.seed})")
         for call in calls:
             w.put(f"    print({call})")
+        for line in after:
+            w.put(f"    {line}")
         w.put("")
         w.put("")
         w.put("main()")
+        if foreign:
+            # Python calls each function by a name the analysis cannot follow,
+            # with other types: the native entry must refuse them and run the
+            # Python body, which prints what CPython prints.
+            w.put('if __name__ == "__main__":')
+            w.put("    import sys")
+            w.put("")
+            w.put("    here = sys.modules[__name__]")
+            for call in foreign:
+                w.put("    try:")
+                w.put(f"        print(getattr(here, {call[0]!r})({call[1]}))")
+                w.put("    except Exception as e:")
+                w.put("        print(type(e).__name__)")
         return "\n".join(w.lines) + "\n"
 
+    def foreign_call(self, name: str, kinds: list[str]) -> tuple[str, str]:
+        """A call of `name` with arguments of other types than `main` passes."""
+        rng = self.foreign
+        others = {
+            "int": ("True", "2.5", "'7'", "-3"),
+            "float": ("3", "True", "'x'", "-0.5"),
+            "str": ("4", "b'ab'", "'ok'"),
+            "bool": ("1", "0", "'y'", "False"),
+        }
+        return name, ", ".join(rng.choice(others[k]) for k in kinds)
 
-def generate_program(seed: int) -> str:
-    """The program for `seed`: identical on every machine and every run."""
-    return _Generator(seed).program()
+    def state_part(self, w: _Writer) -> list[str]:
+        """The functions over module state and objects, and what `main` does with them."""
+        after: list[str] = []
+        first = self.name("st")
+        self.state_function(w, first, None)
+        second = self.name("st")
+        self.state_function(w, second, first)
+        for _ in range(self.state.randint(1, 3)):
+            a, b = self.state.randint(-5, 9), self.state.randint(0, 9)
+            after.append(f"print({self.state.choice((first, second))}({a}, {b}))")
+        after.append("print(G_TABLE, sorted(G_SEEN.items()))")
+        walker = self.name("walk")
+        self.object_function(w, walker)
+        after.append(f"h = chain({self.state.randint(1, 6)})")
+        after.extend(
+            f"print({walker}(h, {self.state.randint(-3, 9)}), values(h), h.label)"
+            for _ in range(self.state.randint(1, 2))
+        )
+        return after
+
+    # -- writes across the boundary ----------------------------------------------
+
+    def boundary_function(self, w: _Writer, name: str) -> None:
+        """A function Python calls natively with containers and objects it
+        writes through: a list of lists, a dict of lists, a set, and objects in
+        a list, each of which the generated wrapper copies in and back."""
+        rng = self.crossing
+        w.put("@ppy.native")
+        w.put(
+            f"def {name}(g: list[list[int]], d: dict[int, list[int]], s: set[int], "
+            "boxes: list[Box], k: int) -> int:"
+        )
+        w.depth += 1
+        w.put("total = 0")
+        modulus = rng.randint(7, 97)
+        menu = [
+            f"row[j] = (row[j] * {rng.randint(1, 5)} + k + i) % {modulus}",
+            "total += row[j] * (i + 1)",
+            (
+                f"if len(row) < 8 and (row[j] + k) % {rng.randint(2, 4)} == 0:\n"
+                f"    row.append((k + j) % {modulus})"
+            ),
+            f"if len(row) > 1 and row[j] > {rng.randint(10, 60)}:\n    row.pop()\n    break",
+            "s.add((row[j] + k) % 13)",
+            f"if row[j] % {rng.randint(2, 5)} == 1:\n    s.discard(row[j] % 13)",
+            (
+                "d.setdefault((row[j] + i) % 5, []).append(k)\nif len(d[(row[j] + i) % 5]) > 6:\n"
+                "    d[(row[j] + i) % 5].pop(0)"
+            ),
+        ]
+        w.put("for i in range(len(g)):")
+        w.depth += 1
+        w.put("row = g[i]")
+        w.put("for j in range(len(row)):")
+        w.depth += 1
+        for statement in rng.sample(menu, rng.randint(2, 5)):
+            for line in statement.split("\n"):
+                w.put(line)
+        w.depth -= 2
+        tails = [
+            "g.reverse()",
+            "if len(g) > 0:\n    g[0].sort()",
+            "if len(g) < 5 and len(g) > 0:\n    g.append(g[len(g) - 1])",
+            "if len(g) < 5:\n    g.append([k % 7, k % 3])",
+            "if len(g) > 2:\n    g.pop(0)",
+            "for key in d:\n    if len(d[key]) < 6:\n        d[key].append(len(d[key]) + k)",
+            "if k in d:\n    d[k].reverse()",
+            (
+                f"for b in boxes:\n    b.value = (b.value * {rng.randint(2, 5)} + k) % {modulus}\n"
+                "    if len(b.items) < 6:\n        b.items.append(b.value)"
+            ),
+            "if len(boxes) > 0 and boxes[0].peer is not None:\n    boxes[0].peer.value += k",
+            "if len(boxes) < 4:\n    boxes.append(Box(k))",
+            "if len(boxes) > 1:\n    boxes[1].peer = boxes[0]",
+        ]
+        for statement in rng.sample(tails, rng.randint(2, 5)):
+            for line in statement.split("\n"):
+                w.put(line)
+        w.put("return total + len(s) + len(d) + len(boxes)")
+        w.depth -= 1
+        w.put("")
+        w.put("")
+
+    def lent_function(self, w: _Writer, name: str) -> None:
+        """A function Python calls natively with a list it only reads, lent
+        for the call, that a nested function or a lambda reads too."""
+        rng = self.crossing
+        w.put("@ppy.native")
+        w.put(f"def {name}(xs: list[int], k: int) -> int:")
+        if rng.random() < 0.5:
+            w.put("    def at(i: int) -> int:")
+            w.put(f"        return xs[i] * {rng.randint(1, 5)} + k")
+        else:
+            w.put(f"    at: Callable[[int], int] = lambda i: xs[i] - k * {rng.randint(1, 5)}")
+        w.put("    total = len(xs)")
+        w.put("    for i in range(len(xs)):")
+        w.put("        total = total * 3 + at(i)")
+        w.put("    return total")
+        w.put("")
+        w.put("")
+
+    def boundary_part(self, w: _Writer) -> list[str]:
+        """The functions with boundary writes, and what `main` does with them:
+        arguments that share rows, a row both in the list and in the dict, the
+        same object twice, and objects that point at each other."""
+        rng = self.crossing
+        name = self.name("bw")
+        self.boundary_function(w, name)
+        lent = self.name("lent")
+        self.lent_function(w, lent)
+        after = [
+            f"row = [{', '.join(str(rng.randint(0, 9)) for _ in range(rng.randint(1, 4)))}]",
+            rng.choice(("g = [row, [4, 5], row]", "g = [row] * 3", "g = [[1, 2], row, []]")),
+            rng.choice(("d = {1: row, 2: [7]}", "d = {0: g[0], 3: []}", "d = {}")),
+            f"s = {{{', '.join(str(rng.randint(0, 12)) for _ in range(rng.randint(1, 4)))}}}",
+            "b1 = Box(1)",
+            "b2 = Box(2)",
+            "b1.peer = b2",
+            rng.choice(("b2.peer = b1", "b2.peer = b2", "b2.peer = None")),
+            rng.choice(("boxes = [b1, b2, b1]", "boxes = [b2]", "boxes = []")),
+        ]
+        after.append(f"print({lent}(row, {rng.randint(-3, 9)}), {lent}([], 1), row)")
+        for _ in range(rng.randint(1, 3)):
+            after.append(f"print({name}(g, d, s, boxes, {rng.randint(-3, 9)}))")
+            after.append(
+                "print(g, sorted(d.items()), sorted(s), [b.value for b in boxes], "
+                "b1.items, b2.items, row in g, len(g) > 1 and g[0] is g[len(g) - 1])"
+            )
+        return after
+
+
+#: The first line of a program whose functions have no annotations; it runs
+#: without strict mode.
+UNANNOTATED_MARK = "# fuzz: unannotated"
+
+
+def _unannotated(signature: str) -> str:
+    """A parameter list with its annotations taken out, defaults kept."""
+    tree = ast.parse(f"def f({signature}): pass")
+    function = tree.body[0]
+    assert isinstance(function, ast.FunctionDef)
+    for argument in (*function.args.posonlyargs, *function.args.args, *function.args.kwonlyargs):
+        argument.annotation = None
+    return ast.unparse(function.args)
+
+
+def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    seed: int,
+    prints: bool = False,
+    state: bool = False,
+    stdlib: bool = False,
+    calls: bool = False,
+    unannotated: bool = False,
+    *,
+    boundary: bool = False,
+) -> str:
+    """The program for `seed`: identical on every machine and every run. With
+    `prints`, functions print between checks that may fall back. With `state`,
+    it also reads and writes module globals and walks objects Python made,
+    which only the paths with a Python boundary run (`STATE_PATHS`). With
+    `stdlib`, functions also draw seeded random numbers and call `math`,
+    `heapq`, `bisect`, `itertools`, `functools`, `operator`, and
+    `collections`' containers, and a `random.Random` of their own. With
+    `calls`, functions take defaults and keyword-only parameters, and `main`
+    calls them by keyword and leaves defaults out. With `unannotated`, the
+    functions have no annotations and the program runs without strict mode,
+    which infers their types from `main`'s calls; Python then calls each
+    with arguments of other types, which the native entry must hand to the
+    Python body. With `boundary`, a function Python calls natively writes
+    through lists of lists, a dict of lists, a set, and objects that share
+    rows and point at each other (`STATE_PATHS` too)."""
+    return _Generator(seed, prints, state, stdlib, calls, unannotated, boundary).program()
+
+
+def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
+    """Every path on which a tagged line (`print_statement`) shows up more often
+    than under CPython: output a fallback printed a second time."""
+    expected = results["python"]
+    tags = re.compile(r"<p\d+>")
+
+    def counts(text: str) -> dict[str, int]:
+        found: dict[str, int] = {}
+        for tag in tags.findall(text):
+            found[tag] = found.get(tag, 0) + 1
+        return found
+
+    wanted = counts(expected.stdout)
+    found: list[Mismatch] = []
+    for path, result in results.items():
+        if path == "python":
+            continue
+        extra = {t: n for t, n in counts(result.stdout).items() if n > wanted.get(t, 0)}
+        if extra:
+            found.append(Mismatch(path, f"printed twice: {sorted(extra)}", expected, result))
+    return found
 
 
 # -- running ----------------------------------------------------------------
@@ -971,7 +1764,8 @@ def run_program(
     compilers = _compilers()
     with tempfile.TemporaryDirectory(prefix="ppy-fuzz-") as scratch:
         root = Path(scratch)
-        (root / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+        strict = "false" if source.startswith(UNANNOTATED_MARK) else "true"
+        (root / "pyproject.toml").write_text(f"[tool.ppy]\nstrict = {strict}\n", encoding="utf-8")
         (root / "prog.ppy").write_text(source, encoding="utf-8")
         for path in paths:
             results[path] = _run_path(path, root, python, env, compilers, timeout)
@@ -1042,8 +1836,8 @@ def _overflow_allowed(expected: Result, found: Result) -> bool:
     word, having printed what CPython printed up to there."""
     if found.status != 1 or found.last_error != OVERFLOW_64:
         return False
-    printed = found.stdout.splitlines()
-    return expected.stdout.splitlines()[: len(printed)] == printed
+    # Up to the character: a print with `end=""` leaves a line open.
+    return expected.stdout.startswith(found.stdout)
 
 
 def compare(results: dict[str, Result]) -> list[Mismatch]:
@@ -1068,6 +1862,10 @@ def compare(results: dict[str, Result]) -> list[Mismatch]:
             found.append(Mismatch(path, "stdout differs", expected, result))
         elif (result.status == 0) != (expected.status == 0):
             found.append(Mismatch(path, "exit status differs", expected, result))
+        elif expected.status < 0 and result.status == expected.status:
+            # Both killed by the same signal (the memory cap, say): neither
+            # wrote a last line of its own to compare.
+            continue
         elif expected.status != 0 and result.last_error != expected.last_error:
             found.append(Mismatch(path, "the error differs", expected, result))
     return found

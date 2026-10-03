@@ -29,7 +29,7 @@ requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not
 def test_an_effect_list_is_one_category_per_effect_in_plain_words():
     found = categorize("has effects that must run on CPython: IO, ReadGlobal")
     assert [category for category, _, _ in found] == [
-        "does I/O (`print`, `input`, files)",
+        "does I/O natively out of reach (sockets, `os`, binary files)",
         "reads a module global that can change",
     ]
     assert all(page.endswith("/guide/effects/") for _, _, page in found)
@@ -53,12 +53,18 @@ def test_an_unknown_reason_keeps_its_words_without_the_names():
 
 
 def test_opaque_operator_reasons_name_the_code_they_come_from():
-    assert categorize("chained comparison has no native lowering")[0][0].startswith(
+    assert categorize("a chained comparison's operand is a name or a number here")[0][0].startswith(
         "a chained comparison"
     )
-    assert (
-        categorize("integer operator has no native lowering")[0][0] == "`**` between two integers"
+    assert categorize("integer operator has no native lowering")[0][0].startswith(
+        "an integer operator"
     )
+    assert categorize("`isinstance` of a `int` depends on the value")[0][0].startswith(
+        "`isinstance`"
+    )
+    assert categorize("a generator holds a buffer or a vector, which its frame cannot")[0][
+        2
+    ].endswith("/guide/exceptions-and-generators/")
 
 
 def test_what_keeps_a_closure_in_python_has_a_hint_and_the_closures_page():
@@ -114,6 +120,11 @@ PROJECT = {
 
         def roll(n: int) -> int:
             return sum(random.randint(1, 6) for _ in range(n))
+
+
+        def reseed(text: str) -> float:
+            random.seed(text)
+            return random.random()
     """,
     "broken.ppy": "def oops(:\n    pass\n",
 }
@@ -147,10 +158,12 @@ def test_the_summary_places_every_function_and_says_why(tmp_path: Path):
     tiers = {f["qualname"].rpartition(".")[2]: f["tier"] for f in report["functions"]}
     assert tiers["total"] == "native"
     assert tiers["shout"] in {"python", "internal"}
-    assert tiers["roll"] == "python"
+    # Drawing random numbers is native since 0.6.0: CPython's generator. A
+    # string seed is still Python's.
+    assert tiers["roll"] != "python"
+    assert tiers["reseed"] == "python"
     categories = {b["category"] for b in report["blockers"]}
     assert "does I/O (`print`, `input`, files)" in categories or tiers["shout"] == "internal"
-    assert "draws random numbers" in categories
     assert any("broken.ppy" in path for path in report["failed"])
     counted = sum(t["functions"] for t in report["totals"].values())
     assert counted == len(report["functions"])
@@ -226,8 +239,10 @@ def test_an_empty_display_takes_the_type_of_what_fills_it(write, codes):
 
 @requires_llvm
 def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path):
-    """A closure lowers with the function it is defined in, so it has no entry
-    of its own; its statements count once, under itself."""
+    """A closure lowers with the function it is defined in; its statements count
+    once, under itself. One that shares nothing with a function that stays in
+    Python has a native entry of its own; one that shares a variable stays
+    with it."""
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
     (tmp_path / "nest.ppy").write_text(
         textwrap.dedent(
@@ -242,11 +257,16 @@ def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path
                 return total
 
 
-            def shown(n: int) -> None:
-                def show(x: int) -> None:
-                    print(x)
+            def shown(n: int, **options: int) -> None:
+                k = options.get("k", 1)
 
-                show(n)
+                def show(x: int) -> None:
+                    print(x * k)
+
+                def plain(x: int) -> int:
+                    return x + 1
+
+                show(plain(n))
             """
         ).lstrip("\n"),
         encoding="utf-8",
@@ -255,7 +275,9 @@ def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path
     assert done.returncode == 0, done.stderr
     functions = {f["qualname"].rpartition(".")[2]: f for f in json.loads(done.stdout)["functions"]}
     assert functions["times"]["tier"] in {"native", "internal"}
+    assert functions["shown"]["tier"] == "python"
+    assert functions["plain"]["tier"] in {"native", "internal"}
     assert functions["show"]["tier"] == "python"
-    assert functions["show"]["reason"] == "the function around it stays in Python"
+    assert "shares `k` with the function around it" in functions["show"]["reason"]
     assert functions["scaled"]["statements"] == 5
     assert functions["times"]["statements"] == 1

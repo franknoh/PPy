@@ -104,6 +104,7 @@ def lower_module_via_ir(
                 exposed=entry.exposed,
                 exposure_reason=entry.exposure_reason,
                 boundary=entry.boundary,
+                withheld=entry.withheld,
             )
             for name, entry in lowered.functions.items()
             if entry.signature.native is not None
@@ -113,6 +114,7 @@ def lower_module_via_ir(
         libraries=tuple(str(lib) for lib in libraries),  # type: ignore[union-attr]
         exports=exports,
         remarks=(*lowered.remarks, *ctx.remarks),
+        effects=dict(lowered.effects),
     )
 
 

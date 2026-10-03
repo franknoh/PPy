@@ -79,7 +79,9 @@ def _run_conversion(
                 report.add_rewrites(path, fixes)
 
     # A project conversion analyzes the whole module and call graph at once.
-    bundle = analyze_paths(project, sources, backend="python", overlays=rewritten or None)
+    bundle = analyze_paths(
+        project, sources, backend="python", overlays=rewritten or None, infer_calls=False
+    )
     observed = refine_with_call_sites(bundle, bundle.diagnostics)
 
     # A plan built over broken analysis writes broken contracts; an error

@@ -21,8 +21,8 @@ ppy run train.ppy
 # device: cpu
 # native prep: False
 # aten region: False
-prep      66.7 ms   checksum=-21282.454900
-train    142.6 ms   loss 1.0250 -> 1.0019
+prep      67.7 ms   checksum=-21282.454900
+train    255.5 ms   loss 1.0250 -> 1.0019
 ```
 
 **`ppy run train.ppy`**
@@ -31,8 +31,8 @@ train    142.6 ms   loss 1.0250 -> 1.0019
 # device: cpu
 # native prep: True
 # aten region: True
-prep       1.1 ms   checksum=-21282.454900
-train    320.7 ms   loss 1.0250 -> 1.0019
+prep       0.9 ms   checksum=-21282.454900
+train    892.3 ms   loss 1.0250 -> 1.0019
 ```
 
 <!-- outputs:end -->

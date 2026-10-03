@@ -40,6 +40,9 @@ GROUPS = [
             "48_strings",
             "49_inheritance",
             "50_errors_and_generators",
+            "51_clinic",
+            "53_caches_and_counters",
+            "54_objects_and_grids",
         ],
     ),
     ("Accelerators", ["38_cuda", "44_tile", "39_xla", "45_multi_gpu_jax"]),
@@ -62,7 +65,14 @@ GROUPS = [
     ),
     (
         "Conversion and projects",
-        ["20_inventory", "23_inference", "24_interop", "26_project", "30_migrate"],
+        [
+            "20_inventory",
+            "23_inference",
+            "24_interop",
+            "26_project",
+            "30_migrate",
+            "52_unannotated",
+        ],
     ),
 ]
 FOLDERS = [folder for _, folders in GROUPS for folder in folders]

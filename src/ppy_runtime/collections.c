@@ -15,6 +15,9 @@
      [20] collector: state
      [21] the elements' or keys' `__lt__`, compiled   [22] the keys' `__hash__`
      [23] the keys' `__eq__`                         [24] which key words are objects
+     [25] a map's own reference: a `defaultdict`'s factory, a closure; in a
+          sequence, 1 where its one word is a cached function's table
+          (not in a string's header, whose bytes start at word 25)
 
    An element or a value is `value words` eight-byte words: an int64_t or a
    double each (a set bit in the float mask), or a collection handle (a set
@@ -150,6 +153,10 @@ void ppy_coll_untrack(int64_t *header) {
 void ppy_coll_free(int8_t *handle) {
     int64_t *header = (int64_t *)handle;
     ppy_coll_untrack(header);
+    if (header[12] == 0 && header[25] == 1) {
+        /* A nested cached function's table (`ppy_memo_instance`). */
+        ppy_memo_free(ppy_memo_of(handle));
+    }
     if (header[12] == 2) {
         free((void *)(intptr_t)header[4]);
         free((void *)(intptr_t)header[7]);
@@ -158,7 +165,9 @@ void ppy_coll_free(int8_t *handle) {
         /* A string's bytes may sit in its header's own block (strings.c). */
         free((void *)(intptr_t)header[2]);
     }
-    free((void *)(intptr_t)header[14]);
+    if (header[14] != (int64_t)(intptr_t)(header + 26)) {
+        free((void *)(intptr_t)header[14]);
+    }
     free(header);
 }
 
@@ -354,7 +363,13 @@ void ppy_coll_release(int8_t *handle) {
             }
         }
     }
+    ppy_coll_release(ppy_coll_extra(header));
     ppy_coll_free(handle);
+}
+
+/* What word 25 of a map's header holds: a `defaultdict`'s factory, or null. */
+int8_t *ppy_coll_extra(const int64_t *header) {
+    return header[12] == 2 ? (int8_t *)(intptr_t)header[25] : NULL;
 }
 
 /* The collector: trial deletion over this thread's holders, as CPython's
@@ -389,6 +404,10 @@ int64_t ppy_coll_collect(void) {
                 }
             }
         }
+        int64_t *extra = (int64_t *)ppy_coll_extra(h);
+        if (extra != NULL && extra[20] == 1) {
+            extra[19]--;
+        }
     }
     int64_t top = 0;
     for (int64_t *h = ppy_coll_seen(heap[0]); h != NULL; h = ppy_coll_seen(h[17])) {
@@ -409,6 +428,11 @@ int64_t ppy_coll_collect(void) {
                     stack[top++] = child;
                 }
             }
+        }
+        int64_t *extra = (int64_t *)ppy_coll_extra(h);
+        if (extra != NULL && extra[20] == 1) {
+            extra[20] = 2;
+            stack[top++] = extra;
         }
     }
     int64_t garbage = 0;
@@ -439,6 +463,15 @@ int64_t ppy_coll_collect(void) {
                 } else {
                     ppy_coll_release((int8_t *)child);
                 }
+            }
+        }
+        int64_t *extra = (int64_t *)ppy_coll_extra(h);
+        if (extra != NULL) {
+            h[25] = 0;
+            if (extra[20] == 3) {
+                extra[11]--;
+            } else {
+                ppy_coll_release((int8_t *)extra);
             }
         }
     }
@@ -501,14 +534,18 @@ int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t float
         ppy_coll_track(text);
         return (int8_t *)text;
     }
-    int64_t *header = (int64_t *)calloc(25, sizeof(int64_t));
+    /* The scratch words sit in the header's own block, just after it.
+       `keys` carries which key words are strings above bit 32 (a copy
+       passes header word 13 whole): the count is the low half. */
+    int64_t key_words = keys & 0xFFFFFFFF;
+    int64_t spare = 2 * (words > key_words ? (words > 0 ? words : 1) : key_words);
+    int64_t *header = (int64_t *)calloc((size_t)(26 + spare), sizeof(int64_t));
     int64_t room = capacity > 0 ? capacity : 1;
     int64_t *records = (int64_t *)calloc((size_t)(room * (stride > 0 ? stride : 1)), 8);
-    int64_t spare = 2 * (words > keys ? (words > 0 ? words : 1) : keys);
-    int64_t *scratch = (int64_t *)calloc((size_t)spare, 8);
-    if (header == NULL || records == NULL || scratch == NULL) {
+    if (header == NULL || records == NULL) {
         ppy_coll_fail();
     }
+    int64_t *scratch = header + 26;
     header[1] = room;
     header[2] = (int64_t)(intptr_t)records;
     header[8] = words;
@@ -562,6 +599,21 @@ int8_t *ppy_seq_new(int64_t count, int64_t words, int64_t floats, int64_t handle
 int8_t *ppy_seq_at(int8_t *handle, int64_t index) {
     int64_t *header = (int64_t *)handle;
     return (int8_t *)ppy_coll_record(handle, (header[3] + index) % header[1]);
+}
+
+/* A generator's frame: one record of `words` words, whose first is the resume
+   function's address and whose second is its state; `handles` names the words
+   that hold a reference, which freeing the frame lets go of. */
+int8_t *ppy_gen_new(int64_t words, int64_t handles, int64_t resume) {
+    int8_t *made = ppy_seq_new(1, words, 0, handles);
+    int64_t *record = (int64_t *)ppy_seq_at(made, 0);
+    record[0] = resume;
+    record[1] = 0;
+    return made;
+}
+
+int8_t *ppy_gen_frame(int8_t *generator) {
+    return ppy_seq_at(generator, 0);
 }
 
 int8_t *ppy_seq_push_back(int8_t *handle) {
@@ -1666,6 +1718,10 @@ int8_t *ppy_coll_copy(int8_t *handle) {
     int64_t count = header[12] == 0 ? header[0] : header[1];
     int64_t keys = header[13] & 0xFFFFFFFF;
     ppy_coll_inherit(made, handle);
+    if (ppy_coll_extra(header) != NULL) {
+        copy[25] = header[25];
+        ppy_coll_retain(ppy_coll_extra(header));
+    }
     for (int64_t i = 0; (header[10] != 0 || ppy_coll_held_keys(handle) != 0) && i < count; i++) {
         int64_t *value = ppy_coll_live(made, i);
         if (value != NULL) {
@@ -2228,10 +2284,52 @@ int64_t ppy_set_relation(int8_t *a, int8_t *b, int64_t op) {
 
 /* -- the Python boundary: whole collections in one call --------------------------- */
 
+/* Room for `total` records in one allocation, so that filling a collection
+   from Python's does not double its way there: a sequence is laid out from
+   its first element again, a map keeps its entries and is indexed anew. */
+void ppy_coll_reserve(int8_t *handle, int64_t total) {
+    int64_t *header = (int64_t *)handle;
+    if (total <= header[1] || (header[12] != 0 && header[12] != 2)) {
+        return;
+    }
+    int64_t capacity = header[1] > 0 ? header[1] : 1;
+    while (capacity < total) {
+        capacity *= 2;
+    }
+    int64_t stride = header[15] > 0 ? header[15] : 1;
+    int64_t *old = (int64_t *)(intptr_t)header[2];
+    int64_t *room = (int64_t *)calloc((size_t)(capacity * stride), 8);
+    if (room == NULL) {
+        ppy_coll_fail();
+    }
+    if (header[12] == 0) {
+        for (int64_t i = 0; i < header[0]; i++) {
+            memcpy(room + i * stride, old + ((header[3] + i) % header[1]) * stride,
+                   (size_t)(stride * 8));
+        }
+        header[3] = 0;
+    } else {
+        memcpy(room, old, (size_t)(header[3] * stride * 8));
+    }
+    free(old);
+    header[1] = capacity;
+    header[2] = (int64_t)(intptr_t)room;
+    if (header[12] == 2) {
+        ppy_map_reindex(handle, capacity * 2);
+    }
+}
+
 /* `count` elements, `words` each, appended to a sequence from `values`. */
 void ppy_seq_push_many(int8_t *handle, const int8_t *values, int64_t count) {
     int64_t *header = (int64_t *)handle;
     int64_t words = header[8];
+    ppy_coll_reserve(handle, header[0] + count);
+    if (header[15] == words && header[3] + header[0] + count <= header[1]) {
+        /* The records after the last one are free and in a row. */
+        memcpy(ppy_coll_record(handle, header[3] + header[0]), values, (size_t)(count * words * 8));
+        header[0] += count;
+        return;
+    }
     for (int64_t i = 0; i < count; i++) {
         memcpy(ppy_seq_push_back(handle), values + i * words * 8, (size_t)(words * 8));
     }
@@ -2243,6 +2341,34 @@ void ppy_coll_put_many(int8_t *handle, const int8_t *keys, const int8_t *values,
     int64_t *header = (int64_t *)handle;
     int64_t key_words = header[13] & 0xFFFFFFFF;
     int64_t words = header[8];
+    if (header[12] == 2 && ppy_pyset_table(handle) == NULL && header[0] == 0) {
+        /* An empty map filled from a Python dict or set: the keys are all
+           different, so each goes in without a look for itself first. */
+        ppy_coll_reserve(handle, header[3] + count);
+        int64_t stride = header[15];
+        int64_t alive = key_words + words;
+        int64_t *index = (int64_t *)(intptr_t)header[4];
+        int64_t mask = header[5] - 1;
+        for (int64_t i = 0; i < count; i++) {
+            int64_t e = header[3]++;
+            int64_t *record = ppy_coll_record(handle, e);
+            memset(record, 0, (size_t)(stride * 8));
+            memcpy(record, keys + i * key_words * 8, (size_t)(key_words * 8));
+            ppy_coll_hold_key(handle, record, 1);
+            record[alive] = 1;
+            if (words > 0) {
+                memcpy(record + key_words, values + i * words * 8, (size_t)(words * 8));
+            }
+            int64_t at = ppy_map_hash(handle, record, mask);
+            while (index[at] >= 0) {
+                at = (at + 1) & mask;
+            }
+            index[at] = e;
+            header[0]++;
+            header[6]++;
+        }
+        return;
+    }
     for (int64_t i = 0; i < count; i++) {
         int64_t entry = ppy_coll_put_key(handle, keys + i * key_words * 8);
         if (words > 0) {
@@ -2261,6 +2387,14 @@ void ppy_coll_copy_out(int8_t *handle, int8_t *keys, int8_t *values) {
     int64_t words = header[8];
     int64_t family = header[12];
     int64_t n = 0;
+    if (family == 0 && header[15] == words) {
+        /* A sequence's records are in a row, from its first, once around. */
+        int64_t first = header[0] < header[1] - header[3] ? header[0] : header[1] - header[3];
+        memcpy(values, ppy_coll_record(handle, header[3]), (size_t)(first * words * 8));
+        memcpy(values + first * words * 8, ppy_coll_record(handle, 0),
+               (size_t)((header[0] - first) * words * 8));
+        return;
+    }
     for (int64_t at = ppy_coll_step(handle, -1); at >= 0; at = ppy_coll_step(handle, at), n++) {
         if (family <= 1) {
             memcpy(values + n * words * 8, ppy_coll_at(handle, at), (size_t)(words * 8));

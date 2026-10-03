@@ -13,6 +13,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from ...analysis.native_stdlib import MATH_NATIVE, OPERATOR_FUNCTIONS, STRING_CONSTANTS
+from ...analysis.native_stdlib import MODELS as NATIVE_MODELS
 from ...diagnostics import Diagnostic, Severity
 from ...driver.ir_pipeline import value_class_layouts
 from ..c.runtime import program_main, support_source
@@ -22,6 +24,28 @@ from .link import ToolchainError, _compiler, emit_object
 from .lowering import LoweringResult, called_back_only, eligible
 
 __all__ = ["build_standalone", "standalone_ir"]
+
+#: Standard-library modules whose calls the runtime has natively.
+_NATIVE_MODULES = frozenset(
+    {"random", "heapq", "bisect", "itertools", "string", "collections", "functools", "operator"}
+)
+
+#: What `from functools import ...` and `from operator import ...` may name.
+_LIBRARY_NAMES = {
+    "functools": frozenset({"cache", "lru_cache", "reduce", "partial", "cmp_to_key"}),
+    "operator": OPERATOR_FUNCTIONS | {"itemgetter", "attrgetter"},
+}
+
+#: What `from collections import ...` may name in a standalone module.
+_COLLECTIONS = frozenset({"deque", "defaultdict", "Counter", "OrderedDict"})
+
+#: What `from math import ...` may name in a standalone module.
+_MATH_NAMES = (
+    MATH_NATIVE
+    | {"pi", "e", "tau", "inf", "nan"}
+    | {"sqrt", "sin", "cos", "tan", "exp", "log", "log2", "log10", "pow"}
+    | {"floor", "ceil", "trunc", "isnan", "isinf", "isfinite"}
+)
 
 
 def _fail(reporter, message: str, help_text: str | None = None) -> int:  # type: ignore[no-untyped-def]
@@ -433,6 +457,23 @@ def _module_shape(
                 and listed in (["gc"], ["math"])
                 and not statement.names[0].asname
             ):
+                continue
+            # `random`, `heapq`, `bisect`, `itertools`, and `string` are native; a
+            # call that does not lower is refused with its function too.
+            if isinstance(statement, ast.Import) and all(
+                alias.name in _NATIVE_MODULES for alias in statement.names
+            ):
+                continue
+            if names in _NATIVE_MODULES and all(
+                f"{names}.{name}" in NATIVE_MODELS or f"{names}.{name}" in STRING_CONSTANTS
+                for name in listed
+            ):
+                continue
+            if names == "math" and all(name in _MATH_NAMES for name in listed):
+                continue
+            if names == "collections" and set(listed) <= _COLLECTIONS:
+                continue
+            if names in _LIBRARY_NAMES and set(listed) <= _LIBRARY_NAMES[names]:
                 continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))
