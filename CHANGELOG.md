@@ -2,6 +2,82 @@
 
 ## 0.7.0 — unreleased
 
+INTRO_PLACEHOLDER
+
+### Objects written in place
+
+- Fields without annotations take their type from every store in the
+  project (`node.left = Node(k)` makes `left` a `Node | None`) and from what
+  is appended or stored into a field that starts empty. Linked lists, trees,
+  and graphs written without annotations run natively, and their methods
+  edit them in place.
+- Writes through a local that holds a field (`node = self.root;
+  node.left = x`) and through an object a call returns
+  (`tail(head).next = Node(k)`) run natively, and come back to the caller's
+  objects with their identity kept, new nodes included.
+- Tuple assignment into fields (`a.left, a.right = a.right, a.left`) and
+  conditional expressions that pick between objects lower natively.
+- A class that only satisfies a Protocol, without naming it as a base, is no
+  longer kept in Python.
+- Fixed: a native method that wrote through a local holding a field
+  (`node = self.head; node.value += 1`) lost the write under `ppy run`.
+- `scripts/fuzz.py --structures` fuzzes in-place edits of linked structures
+  with unannotated fields.
+
+### Reading containers in place
+
+- Python calls of native functions that only read their lists, dicts, and
+  sets no longer copy them. Lists are laid out in one block per call,
+  strings in them are borrowed, and dicts are indexed only when looked up.
+  Rows and strings a function hands back are the caller's own objects.
+- A call that writes through a list copies back only the containers its
+  written parameters reach, and of a list of numbers only the elements it
+  changed.
+- Native code reads list elements and lengths without calling into the
+  runtime.
+- A function that draws from `random` is called through the generated
+  wrapper: about 60 ns a call instead of 1.6 µs.
+- The cost model counts what native code pays to read each element, so a
+  function that does one operation per string, row, or lookup stays in
+  Python, and a `None`-returning function that reads a container gets a
+  boundary where it does enough work.
+
+### More shapes native
+
+- A function whose every path returns or raises no longer stays in Python;
+  one that does fall off the end returns `None` through Python.
+- Lists: `if not xs`, `xs == []`, `a, b, c = xs`, returning or slicing a
+  list parameter, `a, b = [..], [..]`, and swapping two lists.
+- Module-level string constants, `*args` of ints or floats, and `os.path`,
+  `timeit`, and `__file__` under `ppy run`.
+- A nested function in a function that stays in Python goes native when it
+  only reads, or writes into, the variables it shares.
+- A method with one implementation may read settled module globals natively.
+- `v = d.get(k)` with no default lowers natively for a dict of numbers:
+  `v is None`, `if v:`, `print(v)`, and `v` once a test shows it holds a
+  number.
+- A function declared `-> float` that returns an `int` stays in Python,
+  since CPython returns the `int`.
+- Fixed: a global rebound under `global` could be read as its first value
+  in the Python backend.
+- Fixed: unpacking a list of numbers held natively bound the names as
+  strings.
+
+### More types without annotations
+
+- Without strict mode, more parameters take types: from `argparse` options
+  with `type=`, from `int` and `float` calls (a `float`), through
+  signature-keeping decorators (`functools.wraps` wrappers, `lru_cache`,
+  pytest marks and `parametrize` cases), from operators on instances
+  (`__add__`, `__lt__`, `__getitem__`, ...), from defaults such as a module
+  constant, from more doctest shapes, and, with no other evidence, from
+  `range(n)` or string methods in the body.
+- A parameter declared as a bare `list` takes the element type its calls
+  agree on.
+- Fixed: an `int` on one call and a `float` on another left the parameter
+  unknown instead of making it a `float`.
+- `scripts/fuzz.py --inference` fuzzes the new evidence.
+
 ## 0.6.0 — 2026-10-03
 
 More ordinary Python runs natively under `ppy run`: functions that print,
