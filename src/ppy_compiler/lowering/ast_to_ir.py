@@ -106,7 +106,7 @@ from .exceptions import ExceptionLowering, OwnedTemporaries, uses_exceptions
 from .expressions import ExpressionLowering
 from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
-from .intness import ModuleIntness, gives_int
+from .intness import ModuleIntness, gives_bool, gives_int
 from .memo import cached_decorator, define_cached
 from .stdlib import StdlibLowering
 from .strings import StringLowering
@@ -734,13 +734,20 @@ class Frontend:
             kinds.append(described)
         return kinds
 
-    def exact_params(self, qualname: str) -> frozenset[str]:
-        """The float parameters of a function of this module whose int-ness shows."""
+    def _module_intness(self) -> ModuleIntness:
         found = self.__dict__.get("_intness")
         if found is None:
             found = ModuleIntness(self.analysis.functions, self.analysis.node_types)
             self.__dict__["_intness"] = found
-        return found.exact(qualname)
+        return found
+
+    def exact_params(self, qualname: str) -> frozenset[str]:
+        """The float parameters of a function of this module whose int-ness shows."""
+        return self._module_intness().exact(qualname)
+
+    def bool_exact_params(self, qualname: str) -> frozenset[str]:
+        """The int parameters of a function of this module whose bool-ness shows."""
+        return self._module_intness().bool_exact(qualname)
 
     def _exact_signature(self, info: FunctionInfo, native: NativeSignature) -> NativeSignature:
         exact = self.exact_params(info.qualname)
@@ -4616,10 +4623,15 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         arguments: list[Value] = []
         exact = self.frontend.exact_params(qualname)
+        bool_exact = self.frontend.bool_exact_params(qualname)
         for argument, parameter in zip(spelled, signature.parameters, strict=True):
             if parameter.name in exact and gives_int(self._type_of(argument)):
                 raise Unsupported(
                     f"`{qualname}` shows whether `{parameter.name}` is an int, and is given one"
+                )
+            if parameter.name in bool_exact and gives_bool(self._type_of(argument)):
+                raise Unsupported(
+                    f"`{qualname}` shows whether `{parameter.name}` is a bool, and is given one"
                 )
             if isinstance(parameter, IRParameter) and parameter.native is None:
                 arguments.append(self._coerce_type(self._expr(argument), parameter.type))

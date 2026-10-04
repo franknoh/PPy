@@ -14,6 +14,14 @@ flow-insensitively (a name is tainted if any assignment taints it), and
 names the parameters that reach one of those places. The boundary then
 takes only a real `float` for them: an `int` keeps the call in Python.
 Every other `float` parameter still takes an `int`, converted.
+
+`bool_exact_params` does the same for `int` parameters and a `bool`: Python
+keeps `f(True)` of `def f(n: int)` a `bool`, which prints `True` and is an
+instance of `bool`, where native code holds `1`. The boundary already takes
+only a real `int` for an `int` parameter, so the parameters it names only
+keep a native caller that passes a `bool` from compiling the call. A
+parameter neither names is an exact `int` in the body, which is how
+`isinstance(n, bool)` of one is decided natively.
 """
 
 from __future__ import annotations
@@ -46,6 +54,33 @@ def _carries_float(t: T.Type) -> bool:
         return any(_carries_float(arg) for arg in t.args)
     if isinstance(t, T.Union_):
         return any(_carries_float(member) for member in t.members)
+    return False
+
+
+def _carries_int(t: T.Type) -> bool:
+    t = T.strip_literal(t)
+    if t == T.INT:
+        return True
+    if isinstance(t, T.Tuple_):
+        return any(_carries_int(item) for item in t.items)
+    if isinstance(t, T.Instance):
+        return any(_carries_int(arg) for arg in t.args)
+    if isinstance(t, T.Union_):
+        return any(_carries_int(member) for member in t.members)
+    return False
+
+
+def gives_bool(t: T.Type) -> bool:
+    """Whether a value of type `t` may hold a bool where an int is taken."""
+    t = T.strip_literal(t)
+    if t == T.BOOL:
+        return True
+    if isinstance(t, T.Tuple_):
+        return any(gives_bool(item) for item in t.items)
+    if isinstance(t, T.Instance):
+        return any(gives_bool(arg) for arg in t.args)
+    if isinstance(t, T.Union_):
+        return any(gives_bool(member) for member in t.members)
     return False
 
 
@@ -99,8 +134,12 @@ class _Taint:
         start: set[str],
         callee: Callable[[ast.Call], tuple[list[str], frozenset[str]] | None],
         ambient: _Taint | None = None,
+        boolean: bool = False,
     ) -> None:
         self.callee = callee
+        #: Following a `bool` held as an `int` rather than an `int` held as a
+        #: `float`: arithmetic makes it an `int` again.
+        self.boolean = boolean
         #: Every float parameter followed at once: what may be an int at all.
         self.ambient = ambient
         self.function = function
@@ -128,6 +167,17 @@ class _Taint:
                 return node.id in self.tainted
             case ast.Constant():
                 return False
+            case ast.BinOp() if self.boolean:
+                left, right = self.carries(node.left), self.carries(node.right)
+                if isinstance(node.op, ast.Mod) and _is_text(self.type_of(node.left)):
+                    self.shown = self.shown or right  # `"%s" % x` formats it
+                    return False
+                # `True & True` is a `bool`; `True + 1` and `-True` are `int`s.
+                bitwise = isinstance(node.op, (ast.BitAnd, ast.BitOr, ast.BitXor))
+                return bitwise and (left or right)
+            case ast.UnaryOp() if self.boolean:
+                self.visit(node.operand)
+                return False
             case ast.BinOp():
                 left, right = self.carries(node.left), self.carries(node.right)
                 division = isinstance(node.op, (ast.Div, ast.FloorDiv, ast.Mod))
@@ -152,8 +202,12 @@ class _Taint:
                 self.visit(node.test)
                 return self.any_of([node.body, node.orelse])
             case ast.Compare():
-                for part in (node.left, *node.comparators):
-                    self.visit(part)
+                parts = [self.carries(part) for part in (node.left, *node.comparators)]
+                if self.boolean and any(parts):
+                    # `n is True` tells `True` from `1`.
+                    self.shown = self.shown or any(
+                        isinstance(op, (ast.Is, ast.IsNot)) for op in node.ops
+                    )
                 return False
             case ast.Tuple() | ast.List() | ast.Set():
                 return self.any_of(node.elts)
@@ -168,6 +222,8 @@ class _Taint:
                 return self.carries(node.value)
             case ast.Attribute():
                 if self.carries(node.value):
+                    if self.boolean and T.strip_literal(self.type_of(node.value)) == T.INT:
+                        return False  # `n.real` of `True` is `1`
                     # `x.real`, `x.is_integer()`, `p.x` of a tainted tuple or object.
                     if _is_float(self.type_of(node.value)):
                         self.shown = True
@@ -242,6 +298,8 @@ class _Taint:
             root = _root(func.value)
             if isinstance(func.value, ast.Name) and func.value.id in {"math", "cmath"}:
                 return False
+            if receiver and self.boolean and T.strip_literal(self.type_of(func.value)) == T.INT:
+                return False  # `n.bit_length()` of `True` is `1`
             if receiver and _is_float(self.type_of(func.value)):
                 self.shown = True  # `x.is_integer()`, `x.hex()`
                 return False
@@ -390,11 +448,19 @@ class ModuleIntness:
         self.functions = functions
         self.types = types
         self._exact: dict[str, frozenset[str]] | None = None
+        self._bool_exact: dict[str, frozenset[str]] | None = None
 
     def exact(self, qualname: str) -> frozenset[str]:
+        """The `float` parameters that show whether they were given an `int`."""
         if self._exact is None:
             self._exact = self._solve()
         return self._exact.get(qualname, frozenset())
+
+    def bool_exact(self, qualname: str) -> frozenset[str]:
+        """The `int` parameters that show whether they were given a `bool`."""
+        if self._bool_exact is None:
+            self._bool_exact = self._solve(boolean=True)
+        return self._bool_exact.get(qualname, frozenset())
 
     def _params(self, qualname: str) -> list[str] | None:
         analysis = self.functions.get(qualname)
@@ -405,7 +471,7 @@ class ModuleIntness:
             return None
         return [p.name for p in info.params]
 
-    def _solve(self) -> dict[str, frozenset[str]]:
+    def _solve(self, boolean: bool = False) -> dict[str, frozenset[str]]:
         exact: dict[str, frozenset[str]] = {q: frozenset() for q in self.functions}
 
         def callee(call: ast.Call) -> tuple[list[str], frozenset[str]] | None:
@@ -426,13 +492,16 @@ class ModuleIntness:
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
                 params = {p.name: p.type for p in info.params}
-                carrying = {name for name, t in params.items() if _carries_float(t)}
-                ambient = _Taint(node, self.types, set(params), carrying, callee)
+                carries = _carries_int if boolean else _carries_float
+                carrying = {name for name, t in params.items() if carries(t)}
+                ambient = _Taint(node, self.types, set(params), carrying, callee, boolean=boolean)
                 ambient.run(to_fixpoint=True)
                 found = frozenset(
                     name
                     for name in carrying
-                    if _Taint(node, self.types, set(params), {name}, callee, ambient).run()
+                    if _Taint(
+                        node, self.types, set(params), {name}, callee, ambient, boolean
+                    ).run()
                 )
                 if found != exact[qualname]:
                     exact[qualname] = found | exact[qualname]
