@@ -1917,7 +1917,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._chained_assign(node)
             return
         target = node.targets[0]
-        if self._assign_choice(target, node):
+        if self._assign_choice(target, node) or self._unpack_into_places(target, node):
             return
         if isinstance(target, ast.Name) and self._make_collection(
             target.id, node.value, self._type_of(target)
