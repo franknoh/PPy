@@ -4644,6 +4644,14 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 none = isinstance(argument, ast.Constant) and argument.value is None
                 kind = self._reference_of(argument)
                 if not none and (kind is None or not self._accepts(parameter, kind)):
+                    source = _source_of(parameter)
+                    if source and source != VARIADIC:
+                        # A global passed on, by a name the program never spells.
+                        raise Unsupported(
+                            f"`{qualname}` takes module global "
+                            f"`{source.rpartition(':')[2]}` as a `{parameter.element}`, "
+                            "which this function does not hold it as"
+                        )
                     shown = kind.spelled if kind is not None else ast.unparse(argument)
                     raise Unsupported(
                         f"`{qualname}` expects a `{parameter.element}`, not `{shown}`"

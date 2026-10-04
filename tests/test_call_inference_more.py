@@ -882,3 +882,76 @@ print(chain.value, chain.next.value)
 @requires_cc
 def test_a_local_bound_to_none_then_an_object_goes_native(tmp_path: Path):
     _agrees(tmp_path, NONE_FIRST, ["reverse", "build"])
+
+
+#: Settled module globals read by a method a native function calls, by a
+#: nested function, and by a nested function whose enclosing one stays in
+#: Python (its entry reads the global from the module).
+GLOBALS_READ = """
+PRIMES: list[int] = [2, 3, 5, 7, 11, 13]
+
+
+class Counter:
+    def __init__(self) -> None:
+        self.hits = 0
+
+    def count(self, n: int) -> int:
+        total = 0
+        for i in range(n):
+            for p in PRIMES:
+                if i % p == 0:
+                    total += 1
+        self.hits += total
+        return total
+
+
+def outer(n: int) -> int:
+    def inner(k: int) -> int:
+        t = 0
+        for i in range(k):
+            for p in PRIMES:
+                t += i % p
+        return t
+
+    return inner(n) + inner(n // 2)
+
+
+def kept(n: int) -> int:
+    import sys  # stays in Python
+
+    def inner(k: int) -> int:
+        t = 0
+        for p in PRIMES:
+            t += k % p
+        return t
+
+    return inner(n) + len(sys.argv)
+
+
+def main() -> None:
+    c = Counter()
+    print(c.count(1000), outer(100), c.hits)
+
+
+main()
+print(kept(50))
+PRIMES.append(17)
+print(outer(40), kept(51))
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_settled_globals_reach_methods_and_nested_functions(tmp_path: Path):
+    _agrees(
+        tmp_path,
+        GLOBALS_READ,
+        ["main", "outer", "Counter.count", "outer.<locals>.inner", "kept.<locals>.inner"],
+    )
+
+
+def test_a_reason_never_names_an_implicit_global():
+    from ppy_compiler.backend.llvm.lowering import Unsupported
+
+    reason = str(Unsupported("`m.f` expects a `list[int]`, not `__global_m_PRIMES`"))
+    assert "__global_" not in reason and "a module global passed on" in reason
