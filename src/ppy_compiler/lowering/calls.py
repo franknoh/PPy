@@ -21,7 +21,7 @@ from __future__ import annotations
 import ast
 
 from ..analysis import types as T
-from ..analysis.closures import free_names, own_names
+from ..analysis.closures import cell_captures, free_names, own_names
 from ..analysis.symbols import FunctionInfo, ParamInfo
 from ..backend.llvm.lowering import Unsupported
 
@@ -245,6 +245,10 @@ def nested_entry_refusal(info: FunctionInfo, enclosing: dict[str, FunctionInfo])
                     "function around it"
                 )
             shared.discard(info.name)
+        if first:
+            # What it only reads of the function around it is handed to its
+            # entry, as each cell holds it when the call starts.
+            shared -= cell_captures(node, outer.node)
         if shared:
             names = ", ".join(f"`{n}`" for n in sorted(shared))
             return f"shares {names} with the function around it, so it runs where that one does"

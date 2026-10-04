@@ -732,6 +732,15 @@ def _bind_globals(  # type: ignore[no-untyped-def]
     native = inner.wrapper
 
     def read(module: str, name: str) -> object:
+        if module.endswith(".<locals>"):
+            # A variable of the function the Python function was defined in:
+            # what its cell holds now. An empty cell raises `ValueError`, and
+            # the Python body raises CPython's `NameError` for it.
+            code = getattr(fallback, "__code__", None)
+            cells = getattr(fallback, "__closure__", None) or ()
+            if code is None or name not in code.co_freevars:
+                raise KeyError(name)
+            return cells[code.co_freevars.index(name)].cell_contents
         if module == own and namespace is not None:
             return namespace[name]
         return sys.modules[module].__dict__[name]
@@ -741,7 +750,7 @@ def _bind_globals(  # type: ignore[no-untyped-def]
             return _keyword_call(fallback, wrapper, count, args, keywords)
         try:
             values = [read(module, name) for module, name in places]
-        except KeyError:
+        except (KeyError, ValueError):
             inner.fallbacks += 1
             return fallback(*args)
         return native(*args, *values)

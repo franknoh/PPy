@@ -94,6 +94,7 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
+from ..analysis.closures import cell_captures
 from .calls import CallBinding, nested_entry_refusal
 from .closures import ClosureLowering
 from .collections import HANDLE, Held, Kind, Shape, crossing_classes, records_of
@@ -487,6 +488,8 @@ class Frontend:
                 # shares nothing with the functions around it, on its own too,
                 # for Python to call when the function around it is Python's.
                 refused = nested_entry_refusal(info, enclosing)
+                if refused is None and not self._passes_globals(info, analysis):
+                    refused = self._cells_refusal(info, enclosing)
                 if refused is not None:
                     lowered.rejected[qualname] = refused
                     continue
@@ -1024,6 +1027,20 @@ class Frontend:
 
     def _drop(self, qualname: str) -> None:
         self.declared[qualname][0].body.blocks.clear()
+
+    def _cells_refusal(self, info: FunctionInfo, enclosing: dict[str, FunctionInfo]) -> str | None:
+        """Why a nested function that reads variables of the function around it
+        has no entry here: only `ppy run`'s boundary hands it their cells."""
+        outer = enclosing.get(info.enclosing or "")
+        if outer is None or not isinstance(info.node, ast.FunctionDef):
+            return None
+        if not isinstance(outer.node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return None
+        cells = cell_captures(info.node, outer.node) - {info.name}
+        if not cells:
+            return None
+        names = ", ".join(f"`{n}`" for n in sorted(cells))
+        return f"shares {names} with the function around it, so it runs where that one does"
 
     def _passes_globals(self, info: FunctionInfo, analysis: FunctionAnalysis) -> bool:
         """Whether the settled globals `info` reads are passed to it as
