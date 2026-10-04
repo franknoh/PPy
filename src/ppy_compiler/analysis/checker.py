@@ -1334,7 +1334,24 @@ class _Checker:
         for name, info in self.symbols.functions.items():
             env.set(name, Binding(info.signature()))
         for name, declared in self.symbols.globals.items():
-            env.set(name, Binding(declared, self.symbols.global_facts.get(name, Facts())))
+            facts = self.symbols.global_facts.get(name, Facts())
+            if (
+                name not in self.symbols.constant_globals
+                and name not in self.symbols.settled_globals
+                and name not in self.symbols.pattern_globals
+            ):
+                # A global bound more than once (`COUNTER += 1` under `global`,
+                # a second module-level binding): what its first binding gave
+                # says nothing of what a call finds in it.
+                facts = facts.with_(
+                    int_range=None,
+                    length=None,
+                    constant=None,
+                    has_constant=False,
+                    exact_class=None,
+                    non_null=False,
+                )
+            env.set(name, Binding(declared, facts))
 
     def _imported_name_type(self, module: str, origin: str, depth: int = 0) -> T.Type:
         qualname = f"{module}.{origin}"
