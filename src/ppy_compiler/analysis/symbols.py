@@ -227,6 +227,9 @@ class ClassInfo:
     #: in `__init__`. What the program stores elsewhere does not widen them.
     annotated_fields: set[str] = field(default_factory=set)
     class_vars: set[str] = field(default_factory=set)
+    #: Per inferred field, what was stored into it and where (`file:line`):
+    #: the evidence `infer_fields` joined, which `ppy explain` shows.
+    field_evidence: dict[str, list[tuple[T.Type, str]]] = field(default_factory=dict)
     #: Fields with a default, which construction may leave out.
     field_defaults: set[str] = field(default_factory=set)
     #: Fields construction must pass by keyword: `kw_only=True` on the class,

@@ -1029,3 +1029,18 @@ def test_a_doctest_operand_made_by_a_constructor_is_evidence(tmp_path: Path):
 @requires_cc
 def test_max_and_min_of_objects_go_native(tmp_path: Path):
     _agrees(tmp_path, ORDERED, ["walk", "pick"])
+
+
+def test_explain_lists_a_class_s_fields_and_their_evidence(tmp_path: Path):
+    _write(tmp_path, NONE_FIRST)
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.Node")
+    assert explained.returncode == 0, explained.stderr
+    lines = explained.stdout.splitlines()
+    assert "class: Node" in lines and "qualname: prog.Node" in lines
+    assert "  next: NoneType | prog.Node, from what the program stores into it:" in lines
+    assert "    NoneType at prog.py:4 in `__init__`" in lines
+    assert "    NoneType | prog.Node at prog.py:14 in `reverse`" not in lines  # not a method
+    assert any(line.startswith("    prog.Node at prog.py:") for line in lines), lines
+    assert "  value: int, from what the program stores into it:" in lines
+    annotated = _run(tmp_path, "-m", "ppy_compiler", "explain", "Node")
+    assert annotated.stdout == explained.stdout
