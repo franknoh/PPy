@@ -173,7 +173,14 @@ The subset includes what a loop is normally made of:
   (`int`, `float`, `bool`, `str`, `list`, `dict`, `set`, `tuple`,
   `type(None)`) fold to a constant where the checker's type of `x` decides
   the answer. An `int` may be a `bool` and a `float` may be an `int`, so
-  `isinstance(n, bool)` of an `n: int` stays in Python. Object classes are
+  `isinstance(n, bool)` of an `n: int` local stays in Python. A parameter of
+  a module-level function that is only called by name and never rebound in
+  its body is the exception: Python's calls reach it only with a real `int`
+  (the boundary refuses a `bool`), and a native call that passes a `bool` to
+  an `int` parameter whose body shows the difference (prints it, formats
+  it, asks its class, returns it) stays in Python, so `isinstance(n, bool)`
+  of that parameter is `False` natively. A `float` parameter that shows
+  whether it is an `int` is likewise always a `float`. Object classes are
   tested by the class tag the instance carries.
 - A chained comparison, `0 <= i < n`, is its comparisons joined by `and`,
   each operand evaluated once and the ones after a false comparison not at

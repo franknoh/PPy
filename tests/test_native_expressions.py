@@ -845,6 +845,61 @@ def test_an_int_given_for_a_float_stays_an_int_where_it_would_show(tmp_path: Pat
     assert intness.exact("prog.length") == frozenset()
 
 
+BOOL_EXACT = """
+from collections.abc import Callable
+
+
+def shows(n: int) -> int:
+    print(n)
+    return n + 1
+
+
+def asks(n: int) -> int:
+    return 1 if isinstance(n, bool) else 0
+
+
+def counts(n: int, m: int) -> int:
+    return (n + 1) * -m + n.bit_length()
+
+
+def passes(n: int) -> int:
+    return shows(n)
+
+
+def taken(n: int) -> int:
+    return 1 if isinstance(n, bool) else 0
+
+
+def main() -> None:
+    f: Callable[[int], int] = taken
+    print(f(True), shows(True), asks(1), counts(True, False), passes(2))
+
+
+main()
+"""
+
+
+def test_int_parameters_that_show_a_bool(tmp_path: Path):
+    """`print(n)` and `isinstance(n, bool)` show whether an `int` parameter
+    was given a `bool`; arithmetic does not. Only a function called by name
+    has every native caller checked."""
+    (tmp_path / "prog.ppy").write_text(BOOL_EXACT, encoding="utf-8")
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+    from ppy_compiler.lowering.intness import ModuleIntness
+
+    path = tmp_path / "prog.ppy"
+    bundle = analyze_paths(open_project(path), [path], backend="llvm")
+    module = bundle.analysis.modules["prog"]
+    intness = ModuleIntness(module.functions, module.node_types, module.symbols.module.tree)
+    assert intness.bool_exact("prog.shows") == {"n"}
+    assert intness.bool_exact("prog.asks") == {"n"}
+    assert intness.bool_exact("prog.passes") == {"n"}
+    assert intness.bool_exact("prog.counts") == frozenset()
+    assert intness.exact("prog.shows") == frozenset()
+    assert intness.called_directly("asks")
+    assert not intness.called_directly("taken")
+
+
 def test_the_python_binding_refuses_an_int_for_an_exact_float_and_a_bool_for_an_int():
     from ppy_runtime.abi import NativeParam
     from ppy_runtime.binding import GuardFailed, _expander_for

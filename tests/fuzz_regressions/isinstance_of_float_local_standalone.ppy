@@ -1,0 +1,18 @@
+# fuzz: path=standalone seed=5037 (`isinstance(f, float)` of a local only ever given a float kept a standalone build from building)
+def fn36(a37: bool, a38: str, a39: float = 3.0) -> str:
+    t40 = ((-5 * -7), (1e308 * a39))
+    n41, f42 = t40
+    s43: str = str(n41)
+    n44: int = 1 if isinstance(f42, float) else 0
+    k = 0.0
+    k += len(a38)
+    n45: int = 1 if isinstance(k, int) else 0
+    return f"{(('ab' * 2) * 2):>6}|{(-10 - (n44 - n45))}"
+
+
+def main() -> None:
+    print(fn36(a37=False, a38='ab', a39=1e-300))
+    print(fn36(True, 'xyz'))
+
+
+main()

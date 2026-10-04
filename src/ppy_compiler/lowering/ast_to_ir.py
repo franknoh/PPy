@@ -737,9 +737,17 @@ class Frontend:
     def _module_intness(self) -> ModuleIntness:
         found = self.__dict__.get("_intness")
         if found is None:
-            found = ModuleIntness(self.analysis.functions, self.analysis.node_types)
+            found = ModuleIntness(
+                self.analysis.functions,
+                self.analysis.node_types,
+                self.analysis.symbols.module.tree,
+            )
             self.__dict__["_intness"] = found
         return found
+
+    def called_directly(self, name: str) -> bool:
+        """Whether a module-level function is only ever called by name."""
+        return self._module_intness().called_directly(name)
 
     def exact_params(self, qualname: str) -> frozenset[str]:
         """The float parameters of a function of this module whose int-ness shows."""

@@ -444,11 +444,47 @@ class ModuleIntness:
     over the calls between them: a function that passes a parameter to one
     whose parameter shows shows it too."""
 
-    def __init__(self, functions: dict[str, object], types: dict[int, T.Type]) -> None:
+    def __init__(
+        self,
+        functions: dict[str, object],
+        types: dict[int, T.Type],
+        tree: ast.Module | None = None,
+    ) -> None:
         self.functions = functions
         self.types = types
+        self.tree = tree
         self._exact: dict[str, frozenset[str]] | None = None
         self._bool_exact: dict[str, frozenset[str]] | None = None
+        self._direct: frozenset[str] | None = None
+
+    def called_directly(self, name: str) -> bool:
+        """Whether a module-level function of this name is only ever called by
+        name: never decorated, rebound, or taken as a value, so every native
+        call of it passes its arguments where `_call_arguments` sees them."""
+        if self._direct is None:
+            self._direct = self._direct_functions()
+        return name in self._direct
+
+    def _direct_functions(self) -> frozenset[str]:
+        if self.tree is None:
+            return frozenset()
+        defined: dict[str, int] = {}
+        for statement in self.tree.body:
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                plain = not statement.decorator_list
+                defined[statement.name] = defined.get(statement.name, 0) + (1 if plain else 2)
+        direct = {name for name, count in defined.items() if count == 1}
+        called = {
+            id(node.func) for node in ast.walk(self.tree) if isinstance(node, ast.Call)
+        }
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Name) and node.id in direct:
+                if not isinstance(node.ctx, ast.Load) or id(node) not in called:
+                    direct.discard(node.id)
+            elif isinstance(node, (ast.Global, ast.Nonlocal, ast.alias)):
+                names = node.names if not isinstance(node, ast.alias) else [node.asname]
+                direct.difference_update(n for n in names if n)
+        return frozenset(direct)
 
     def exact(self, qualname: str) -> frozenset[str]:
         """The `float` parameters that show whether they were given an `int`."""
@@ -508,3 +544,138 @@ class ModuleIntness:
                     changed = True
             if not changed:
                 return exact
+
+
+#: Operators whose result is a `float` when either operand is one.
+_FLOATING = (ast.Add, ast.Sub, ast.Mult, ast.FloorDiv, ast.Mod)
+
+
+def real_float_locals(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    params: Iterable[str],
+    exact: frozenset[str],
+) -> frozenset[str]:
+    """The names of a function that only ever hold a real `float`: every
+    binding is a float literal, `float(...)`, a division, or arithmetic with a
+    real float on one side -- `t = (2, 1e308 * x); n, f = t` makes `f` one.
+    `exact` are the parameters that are real floats on entry; any other
+    parameter, a name bound by a loop, a `with`, a handler, a comprehension, a
+    nested scope, or a `global`, is not one."""
+    params = set(params)
+    #: name -> the values bound to it; None where one is not followed.
+    bound: dict[str, list[ast.expr | None]] = {}
+    augmented: set[int] = set()
+
+    def bind(target: ast.expr, value: ast.expr | None) -> None:
+        if isinstance(target, ast.Name):
+            bound.setdefault(target.id, []).append(value)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            items: list[ast.expr | None]
+            if isinstance(value, ast.Tuple) and len(value.elts) == len(target.elts):
+                items = list(value.elts)
+            elif isinstance(value, ast.Name):
+                items = [
+                    ast.Subscript(value, ast.Constant(i), ast.Load())
+                    for i in range(len(target.elts))
+                ]
+            else:
+                items = [None] * len(target.elts)
+            for element, item in zip(target.elts, items, strict=True):
+                if isinstance(element, ast.Starred):
+                    bind(element.value, None)
+                else:
+                    bind(element, item)
+
+    for node in ast.walk(function):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                bind(target, node.value)
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            bind(node.target, node.value)
+        elif isinstance(node, ast.AugAssign):
+            augmented.add(id(node.target))
+            if not isinstance(node.op, _FLOATING + (ast.Div,)):
+                bind(node.target, None)
+        elif isinstance(node, ast.NamedExpr):
+            bind(node.target, node.value)
+    handled = {
+        id(n)
+        for node in ast.walk(function)
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr))
+        for t in ([*node.targets] if isinstance(node, ast.Assign) else [node.target])
+        for n in ast.walk(t)
+    }
+    for node in ast.walk(function):
+        if node is not function and isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+        ):
+            # A nested scope's names may be this one's through `nonlocal`.
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Name):
+                    bound.setdefault(inner.id, []).append(None)
+        elif isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+            if id(node) not in handled and id(node) not in augmented:
+                bound.setdefault(node.id, []).append(None)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            for name in node.names:
+                bound.setdefault(name, []).append(None)
+        elif isinstance(node, ast.comprehension):
+            for inner in ast.walk(node.target):
+                if isinstance(inner, ast.Name):
+                    bound.setdefault(inner.id, []).append(None)
+
+    real = {name for name in bound if name not in params} | set(exact)
+
+    def is_real(node: ast.expr | None) -> bool:
+        match node:
+            case ast.Constant():
+                return type(node.value) is float
+            case ast.Name():
+                return node.id in real
+            case ast.BinOp():
+                if isinstance(node.op, ast.Div):
+                    return is_real(node.left) or is_real(node.right)
+                if isinstance(node.op, _FLOATING):
+                    return is_real(node.left) or is_real(node.right)
+                return False
+            case ast.UnaryOp():
+                return isinstance(node.op, (ast.USub, ast.UAdd)) and is_real(node.operand)
+            case ast.IfExp():
+                return is_real(node.body) and is_real(node.orelse)
+            case ast.Call():
+                return (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "float"
+                    and len(node.args) == 1
+                    and not node.keywords
+                    and "float" not in bound
+                )
+            case ast.Subscript():
+                # `t[i]` of a name only ever bound to tuple literals.
+                if not (
+                    isinstance(node.value, ast.Name)
+                    and isinstance(node.slice, ast.Constant)
+                    and type(node.slice.value) is int
+                    and node.value.id not in params
+                ):
+                    return False
+                index = node.slice.value
+                literals = bound.get(node.value.id, [None])
+                return all(
+                    isinstance(literal, ast.Tuple)
+                    and -len(literal.elts) <= index < len(literal.elts)
+                    and not isinstance(literal.elts[index], ast.Starred)
+                    and is_real(literal.elts[index])
+                    for literal in literals
+                )
+        return False
+
+    while True:
+        kept = {
+            name
+            for name in real
+            if all(is_real(value) for value in bound.get(name, [] if name in exact else [None]))
+        }
+        if kept == real:
+            return frozenset(real)
+        real = kept
