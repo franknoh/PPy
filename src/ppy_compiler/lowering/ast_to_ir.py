@@ -33,6 +33,7 @@ from ..analysis.lexical import LexicalBindings
 from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo, ParamInfo, derivative_spec, fold_flags
 from ..backend.llvm.lowering import (
+    VARIADIC,
     _ALLOCATIONS,
     _MATH_INTRINSICS,
     _MAX_TUPLE_WIDTH,
@@ -47,6 +48,7 @@ from ..backend.llvm.lowering import (
     eligible,
     should_lower_native,
     with_implicit_globals,
+    with_variadic,
     writes,
     written_params,
 )
@@ -511,6 +513,8 @@ class Frontend:
                 )
                 continue
             passes_globals = self._passes_globals(info, analysis)
+            # `*args` of numbers is a list its native entry takes.
+            info = with_variadic(info)  # noqa: PLW2901
             # The settled globals it reads are parameters of its native entry.
             info = with_implicit_globals(info, analysis) if passes_globals else info  # noqa: PLW2901
             try:
@@ -631,6 +635,7 @@ class Frontend:
     def signature(
         self, info: FunctionInfo, analysis: FunctionAnalysis | None = None
     ) -> IRSignature:
+        info = with_variadic(info)
         parameters = []
         written = written_params(analysis)
         for parameter in info.params:
@@ -4552,7 +4557,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             held = {p.global_of: p.name for p in self.info.params if p.global_of}
             passed = []
             for source in sources:
-                if not source:
+                if not source or source == VARIADIC:
+                    # `*args` is spelled, packed into its list, with the rest.
                     continue
                 if source not in held:
                     raise Unsupported(
