@@ -419,8 +419,10 @@ class _Analyzer:
         reached from it (`self.find(key)`), and a write through the result
         then lands in the caller's object."""
         found: set[str] = {EXTERNAL}
-        given = [argument.value if isinstance(argument, ast.Starred) else argument
-                 for argument in node.args]
+        given = [
+            argument.value if isinstance(argument, ast.Starred) else argument
+            for argument in node.args
+        ]
         given.extend(keyword.value for keyword in node.keywords)
         if isinstance(node.func, ast.Attribute):
             given.append(node.func.value)

@@ -277,9 +277,7 @@ def _run(tmp_path: Path, *args: str) -> list[str]:
 @pytest.mark.parametrize(
     ("source", "strict"), [(TREES, False), (ALIASES, True)], ids=["trees", "aliases"]
 )
-def test_structure_edits_come_back_as_cpython_makes_them(
-    tmp_path: Path, source: str, strict: bool
-):
+def test_structure_edits_come_back_as_cpython_makes_them(tmp_path: Path, source: str, strict: bool):
     """Every line is CPython's, identities included, and the methods that
     relink the structure ran natively (the last line: CPython says False)."""
     _project(tmp_path, source, strict)
@@ -551,8 +549,18 @@ def test_swapped_links_are_freed_once(tmp_path: Path, unsafe: bool):
     flags = ["--unsafe"] if unsafe else []
     env = {k: v for k, v in os.environ.items() if k != "PPY_LOWERING"}
     done = subprocess.run(
-        [sys.executable, "-m", "ppy_compiler", "emit", "c", "--standalone", *flags, "prog.ppy"]
-        + ["-o", "prog.c"],
+        [
+            sys.executable,
+            "-m",
+            "ppy_compiler",
+            "emit",
+            "c",
+            "--standalone",
+            *flags,
+            "prog.ppy",
+            "-o",
+            "prog.c",
+        ],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -562,8 +570,17 @@ def test_swapped_links_are_freed_once(tmp_path: Path, unsafe: bool):
     assert done.returncode == 0, done.stderr
     binary = tmp_path / "prog"
     subprocess.run(
-        [compiler, "-std=c11", "-g", "-O1", "-fsanitize=address,undefined"]
-        + [str(tmp_path / "prog.c"), "-lm", "-o", str(binary)],
+        [
+            compiler,
+            "-std=c11",
+            "-g",
+            "-O1",
+            "-fsanitize=address,undefined",
+            str(tmp_path / "prog.c"),
+            "-lm",
+            "-o",
+            str(binary),
+        ],
         check=True,
     )
     ran = subprocess.run(
@@ -576,6 +593,11 @@ def test_swapped_links_are_freed_once(tmp_path: Path, unsafe: bool):
     )
     assert ran.returncode == 0, ran.stderr
     expected = subprocess.run(
-        [sys.executable, "prog.ppy"], cwd=tmp_path, input="9\n", capture_output=True, text=True
+        [sys.executable, "prog.ppy"],
+        cwd=tmp_path,
+        input="9\n",
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert ran.stdout.strip() == expected.stdout.strip()

@@ -42,8 +42,8 @@ from pathlib import Path
 __all__ = [
     "ALL_PATHS",
     "OVERFLOW_64",
-    "TIMED_OUT",
     "STRUCTURES_MARK",
+    "TIMED_OUT",
     "UNANNOTATED_MARK",
     "Mismatch",
     "Result",
@@ -1663,7 +1663,6 @@ class _Generator:
             )
         return after
 
-
     # -- linked structures edited in place ---------------------------------------
 
     def tree_class(self, w: _Writer) -> list[str]:
@@ -1898,7 +1897,9 @@ class _Generator:
             method = rng.choice(tree)
             argument = rng.choice(keys) if method.startswith("rotate") else rng.randint(-3, 9)
             after.append(f"print(t.{method}({argument}), sshape(t.root), t.size, slinked(t))")
-        after.append("print(first is t.root, first.parent is None, t.find(" + str(keys[0]) + ") is not None)")
+        after.append(
+            "print(first is t.root, first.parent is None, t.find(" + str(keys[0]) + ") is not None)"
+        )
         after.append("d = DList()")
         after.extend(f"d.push({rng.randint(-9, 9)})" for _ in range(rng.randint(0, 6)))
         after.append("ends = (d.head, d.tail)")

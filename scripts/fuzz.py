@@ -86,9 +86,7 @@ def _save(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     structures: bool = False,
 ) -> Path:
     REGRESSIONS.mkdir(parents=True, exist_ok=True)
-    domain = (
-        "_state" if state else "_boundary" if boundary else "_structures" if structures else ""
-    )
+    domain = "_state" if state else "_boundary" if boundary else "_structures" if structures else ""
     target = REGRESSIONS / f"seed{seed}{domain}_{path}.ppy"
     target.write_text(f"# fuzz: path={path} seed={seed} ({reason})\n{source}", encoding="utf-8")
     return target

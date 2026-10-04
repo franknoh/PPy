@@ -345,7 +345,7 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
             if owner is not None and _never_inside(symbols.classes[owner].fields[node.attr]):
                 note(owner, node.attr, filled)
 
-    for module_name, analysis in modules.items():
+    for analysis in modules.values():
         module_symbols = getattr(analysis, "symbols", None)
         if module_symbols is None:
             continue
@@ -380,12 +380,21 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
                 # `self.queue.append(item)`, `self.adj[u].append(v)`.
                 receiver = T.strip_literal(analysis.type_of(func.value))
                 element = analysis.type_of(node.args[-1])
-                if isinstance(receiver, T.Instance) and receiver.name == "list" and func.attr in {
-                    "append",
-                    "insert",
-                }:
+                if (
+                    isinstance(receiver, T.Instance)
+                    and receiver.name == "list"
+                    and func.attr
+                    in {
+                        "append",
+                        "insert",
+                    }
+                ):
                     lift(func.value, T.instance("list", element))
-                elif isinstance(receiver, T.Instance) and receiver.name == "set" and func.attr == "add":
+                elif (
+                    isinstance(receiver, T.Instance)
+                    and receiver.name == "set"
+                    and func.attr == "add"
+                ):
                     lift(func.value, T.instance("set", element))
             elif len(node.args) == 2 and _spelled(func) in _HEAP_PUSHES:
                 # `heapq.heappush(self.heap, (priority, item))`.
