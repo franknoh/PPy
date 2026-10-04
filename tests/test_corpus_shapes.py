@@ -260,7 +260,7 @@ PROGRAMS = {
             "shift",
             "holes",
             "stacks",
-        ],  # fmt: skip
+        ],
     ),
     "variadic": (VARIADIC, ["total", "positive", "caller"]),
 }
