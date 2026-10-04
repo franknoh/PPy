@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import math
 import re
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from dataclasses import replace as dataclass_replace
@@ -1622,6 +1623,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
         } - stored
         self._bind_constant_tables(node)
+        self._bind_constant_strings(node)
         self._body(node.body)
         self._check_cells()
         if self._open():
@@ -1967,11 +1969,54 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 raise Unsupported("a match is bound to a name")
             self._assign_match(target.id, spec)
             return
+        if self._unpack_buffer(target, node.value):
+            return
         values = self._tuple_expr(node.value)
         if values is not None:
             self._store_tuple(target, values)
             return
         self._store(target, self._expr(node.value))
+
+    def _unpack_buffer(self, target: ast.expr, value: ast.expr) -> bool:
+        """`a, b, c = xs` of a list a buffer holds: its length checked as
+        CPython checks it, then each item into its name."""
+        if not (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, ast.Name)
+            and value.id in self.buffers
+            and target.elts
+            and all(isinstance(e, ast.Name) for e in target.elts)
+        ):
+            return False
+        count = len(target.elts)
+        buffer = self.buffers[value.id]
+        length = core.cast(self.b, core.buffer_len(self.b, buffer), I64)
+        expected = core.const(self.b, count, I64)
+        self._guard(
+            core.cmp(self.b, "ge", length, expected),
+            "bounds",
+            "not enough values to unpack",
+            raises=f"ValueError: not enough values to unpack (expected {count}, got {{0}})",
+            values=(length,),
+        )
+        # CPython 3.14 says how many there were; 3.13 does not.
+        got = ", got {0}" if sys.version_info >= (3, 14) else ""
+        self._guard(
+            core.cmp(self.b, "le", length, expected),
+            "bounds",
+            "too many values to unpack",
+            raises=f"ValueError: too many values to unpack (expected {count}{got})",
+            values=(length,),
+        )
+        items = [
+            self._coerce(
+                core.buffer_load(self.b, buffer, core.const(self.b, i, I64)),
+                _read_as(_kind(buffer.type.element)),  # type: ignore[union-attr]
+            )
+            for i in range(count)
+        ]
+        self._store_tuple(target, items)
+        return True
 
     def _standalone_buffer(self, name: str, value: ast.expr) -> bool:
         """`xs = ppy.buffer[int](n)`: a zeroed allocation from the C support.
@@ -2828,6 +2873,28 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             core.store(self._entry_builder(), packed, slot)
             self.tuples[name] = slot
 
+    def _bind_constant_strings(self, node: ast.FunctionDef) -> None:
+        """Each module-level string the body reads (`LETTERS = "ABC..."`), bound
+        once to a borrowed local that holds the literal: the runtime keeps every
+        literal for good, and a name bound once to a literal never changes."""
+        symbols = getattr(self.frontend.analysis, "symbols", None)
+        if symbols is None or getattr(self, "device", False):
+            return
+        own = own_names(node)
+        read = {
+            inner.id
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Load)
+        }
+        for name in sorted(read - own - set(self.collections) - set(self.slots)):
+            text = symbols.constant_globals.get(name)
+            if not isinstance(text, str):
+                continue
+            kind = self._reference_of_type(T.STR)
+            if kind is None:
+                return
+            self._bind(name, kind, self._string_literal(text), False)
+
     def _module_constant(self, name: str) -> Value | None:
         symbols = getattr(self.frontend.analysis, "symbols", None)
         if symbols is None:
@@ -2868,6 +2935,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             return self._truth_of(node.operand, empty=True)
         if isinstance(node.op, ast.Not):
             absent = self._string_truth(node.operand, empty=True)
+            if absent is None:
+                absent = self._buffer_truth(node.operand, empty=True)
             if absent is None:
                 absent = self._object_truth(node.operand, empty=True)
             if absent is not None:
@@ -2992,6 +3061,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         equal = self._collection_equality(node)
         if equal is not None:
             return equal
+        empty = self._buffer_empty_compare(node)
+        if empty is not None:
+            return empty
         operator = node.ops[0]
         container = node.comparators[0]
         if isinstance(operator, (ast.In, ast.NotIn)) and self._is_collection(container):
@@ -5276,6 +5348,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         text = self._string_truth(node)
         if text is not None:
             return text
+        held = self._buffer_truth(node)
+        if held is not None:
+            return held
         present = self._object_truth(node)
         if present is not None:
             return present
@@ -5283,6 +5358,26 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             # A condition asks only for truth, whatever the operands are.
             return self._boolop_truth(node)
         return self._truth(self._expr(node))
+
+    def _buffer_empty_compare(self, node: ast.Compare) -> Value | None:
+        """`xs == []` and `xs != []` of a list a buffer holds: its length against 0."""
+        operator = node.ops[0]
+        if not isinstance(operator, (ast.Eq, ast.NotEq)):
+            return None
+        left, right = node.left, node.comparators[0]
+        if isinstance(left, ast.List) and not left.elts:
+            left, right = right, left
+        if not (isinstance(right, ast.List) and not right.elts):
+            return None
+        return self._buffer_truth(left, empty=isinstance(operator, ast.Eq))
+
+    def _buffer_truth(self, node: ast.expr, *, empty: bool = False) -> Value | None:
+        """`if xs:` of a list a buffer holds: whether it holds anything (with
+        `empty`, whether it holds nothing), as CPython's `len(xs) != 0`."""
+        if not (isinstance(node, ast.Name) and node.id in self.buffers):
+            return None
+        length = core.cast(self.b, core.buffer_len(self.b, self.buffers[node.id]), I64)
+        return core.cmp(self.b, "eq" if empty else "ne", length, core.const(self.b, 0, I64))
 
     def _truth(self, value: Value) -> Value:
         if value.type == BOOL:

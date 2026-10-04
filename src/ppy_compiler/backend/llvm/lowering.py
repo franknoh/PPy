@@ -277,10 +277,31 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
         node = analysis.info.node
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             return frozenset()
-        return frozenset(p.name for p in analysis.info.params) & shared_with_closures(node)
+        return frozenset(p.name for p in analysis.info.params) & (
+            shared_with_closures(node) | used_whole(node)
+        )
     return frozenset(p.name for p in analysis.info.params) | {
         implicit_parameter_name(analysis, held) for held in analysis.implicit_globals
     }
+
+
+def used_whole(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """The names the body uses as a list rather than through its items: one it
+    returns, slices, or concatenates. A buffer is a copy of the words, with no
+    list to hand back or take a part of; a handle is the list itself."""
+    found: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Return) and isinstance(child.value, ast.Name):
+            found.add(child.value.id)
+        elif (
+            isinstance(child, ast.Subscript)
+            and isinstance(child.slice, ast.Slice)
+            and isinstance(child.value, ast.Name)
+        ):
+            found.add(child.value.id)
+        elif isinstance(child, ast.BinOp) and isinstance(child.op, (ast.Add, ast.Mult)):
+            found.update(side.id for side in (child.left, child.right) if isinstance(side, ast.Name))
+    return found
 
 
 def writes(analysis: FunctionAnalysis) -> set[str]:
