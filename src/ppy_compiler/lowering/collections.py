@@ -2645,15 +2645,23 @@ def _ordered(node: ast.ClassDef) -> bool:
     return False
 
 
+def _reading(b: Builder, handle: Value, t: IRType) -> Value:
+    """`handle` as a pointer to its header's words, for reading them: marked
+    `ppy.reads`, a use that takes no reference (`exceptions._takes`)."""
+    header = core.cast(b, handle, _pointer(handle, t))
+    header.owner.attributes["ppy.reads"] = True  # type: ignore[union-attr]
+    return header
+
+
 def _header_word(b: Builder, handle: Value, word: int, t: IRType = I64) -> Value:
     """Word `word` of a handle's header (`collections.c`), loaded as `t`."""
-    header = core.cast(b, handle, _pointer(handle, t))
+    header = _reading(b, handle, t)
     return core.load(b, core.ptr_offset(b, header, core.const(b, word, I64)))
 
 
 def _inline_length(b: Builder, handle: Value) -> Value:
     """`ppy_coll_len`: the header's first word, read in place."""
-    return core.load(b, core.cast(b, handle, _pointer(handle, I64)))
+    return core.load(b, _reading(b, handle, I64))
 
 
 def _inline_seq_at(b: Builder, handle: Value, index: Value) -> Value:
