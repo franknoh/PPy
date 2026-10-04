@@ -253,7 +253,20 @@ typedef struct {
     Py_ssize_t by_obj0[PX_INLINE * 2], by_handle0[PX_INLINE * 2];
     int8_t *owned0[PX_INLINE * 2];
     int8_t *made0[PX_INLINE * 4];
+    /* Objects whose fields are still to be set, while `px_out` sets an
+       object's (`px_deferred`). */
+    struct px_pending *pending;
+    Py_ssize_t pending_count, pending_room;
+    int draining;
 } ppy_cross;
+
+/* An object made or found for a handle, its fields not yet set. */
+typedef struct px_pending {
+    PyObject *made;
+    px_class *c;
+    int8_t *handle;
+    int fresh, rewrite;
+} px_pending;
 
 static void px_begin(ppy_cross *x, px_classes *classes, int readonly) {
     x->classes = classes;
@@ -276,6 +289,10 @@ static void px_begin(ppy_cross *x, px_classes *classes, int readonly) {
     x->owned = x->owned0;
     x->owned_count = 0;
     x->owned_room = PX_INLINE * 2;
+    x->pending = NULL;
+    x->pending_count = 0;
+    x->pending_room = 0;
+    x->draining = 0;
 }
 
 static void px_settle(ppy_cross *x);
@@ -1663,6 +1680,51 @@ static int px_rewrite_object(ppy_cross *x, PyObject *made, px_class *c, int8_t *
     return 0;
 }
 
+/* An object's fields set later, by the `px_out` setting the fields of the
+   object that reaches it: a linked list a million nodes long is then not a
+   million C frames deep. Making an instance (`object.__new__`) and setting
+   its attributes run no code of the program, so the order the objects are
+   filled in cannot be seen. Holds a reference to `made`. */
+static int px_defer(ppy_cross *x, PyObject *made, px_class *c, int8_t *handle, int fresh,
+                    int rewrite) {
+    if (x->pending_count == x->pending_room) {
+        Py_ssize_t room = x->pending_room > 0 ? x->pending_room * 2 : 64;
+        px_pending *grown =
+            (px_pending *)PyMem_Realloc(x->pending, (size_t)room * sizeof(px_pending));
+        if (grown == NULL) {
+            return -1;
+        }
+        x->pending = grown;
+        x->pending_room = room;
+    }
+    px_pending *p = &x->pending[x->pending_count++];
+    p->made = Py_NewRef(made);
+    p->c = c;
+    p->handle = handle;
+    p->fresh = fresh;
+    p->rewrite = rewrite;
+    return 0;
+}
+
+/* Set the fields of `made`, and of every object that sets deferred. */
+static int px_deferred(ppy_cross *x, PyObject *made, px_class *c, int8_t *handle, int fresh,
+                       int rewrite) {
+    x->draining = 1;
+    int done = px_rewrite_object(x, made, c, handle, fresh, rewrite);
+    while (x->pending_count > 0) {
+        px_pending p = x->pending[--x->pending_count];
+        if (done == 0) {
+            done = px_rewrite_object(x, p.made, p.c, p.handle, p.fresh, p.rewrite);
+        }
+        Py_DECREF(p.made);
+    }
+    x->draining = 0;
+    PyMem_Free(x->pending);
+    x->pending = NULL;
+    x->pending_room = 0;
+    return done;
+}
+
 /* The Python object of a handle, a new reference: the one it came from, its
    contents set again when `rewrite`, or a new container or instance. */
 static PyObject *px_out(ppy_cross *x, int8_t *handle, const ppy_xs *s, int rewrite) {
@@ -1712,7 +1774,14 @@ static PyObject *px_out(ppy_cross *x, int8_t *handle, const ppy_xs *s, int rewri
         x->entries[at].synced = 1;
     }
     if (c != NULL) {
-        if (px_rewrite_object(x, made, c, handle, fresh, rewrite) < 0) {
+        if (x->draining) {
+            if (px_defer(x, made, c, handle, fresh, rewrite) < 0) {
+                Py_DECREF(made);
+                return PyErr_NoMemory();
+            }
+            return made;
+        }
+        if (px_deferred(x, made, c, handle, fresh, rewrite) < 0) {
             Py_DECREF(made);
             return NULL;
         }
