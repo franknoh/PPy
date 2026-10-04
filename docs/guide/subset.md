@@ -173,7 +173,12 @@ Strict mode does not infer: an unannotated parameter is still `E1201`.
 [An unannotated module](../howto/52_unannotated.md) is a worked example:
 seven functions with no annotations, each typed from its calls and
 defaults, and the boundary running the Python body for an argument that
-does not fit.
+does not fit. [Options and doctests](../howto/56_options_and_doctests.md)
+types a script from its `argparse` options, operators on a class, an
+`lru_cache` function, and a constant default.
+[Linked structures](../howto/55_linked_structures.md) shows the fields of
+unannotated classes typed from the stores into them
+([Classes](classes.md#fields-without-annotations)).
 
 ## Accepted forms of ordinary Python
 

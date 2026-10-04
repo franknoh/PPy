@@ -28,7 +28,7 @@ Python side (remarked as `R3004`). The rest costs more:
 | a value class | 1 more per field |
 | output held while the call runs (a `print`) | a loop: one line written through Python costs more than CPython's `print`, many cost much less |
 | a module global the function reads | 6 more: a Python frame reads it for the wrapper |
-| a call that draws from `random` | 4: the wrapper saves its state (2.5 KB) and puts it back where the call falls back |
+| a call that draws from `random` | 4: the wrapper saves its state (2.5 KB) and puts it back where the call falls back; 16 where the function also reads module globals, since the Python-level binding saves the state then |
 
 A straight-line function that calls itself, as `power(b, e - 1)` does,
 stays off the boundary: how deep it goes is the argument's to decide, and
@@ -349,13 +349,14 @@ Read it from the top down:
 - A generic function is not a blocker: it has no entry point of its own and
   is compiled for each native caller that names its types. Most of `sorts`
   is generic sorts that nothing calls natively.
-- A nested function that shares no variable with the functions around it
-  is counted on its own, since it has an entry of its own
+- A nested function that shares no variable with the functions around it,
+  or only reads variables nothing rebinds while it runs, is counted on its
+  own, since it has an entry of its own
   ([Functions as values](closures.md#a-nested-function-in-a-python-function)).
-  One that shares a variable lowers with the function around it: it counts
-  as native and called from native code when that function is native, and
-  otherwise says that the function around it stays in Python, which is the
-  reason to fix.
+  One that rebinds a shared variable lowers with the function around it: it
+  counts as native and called from native code when that function is
+  native, and otherwise says that the function around it stays in Python,
+  which is the reason to fix.
 - Each reason says what to do and links the page that explains it. The
   first places it occurs are listed with their line.
 
