@@ -4676,7 +4676,7 @@ Python side (remarked as <code>R3004</code>). The rest costs more:</p>
 </tr>
 <tr>
 <td>a call that draws from <code>random</code></td>
-<td>16: the Python-level binding saves its state</td>
+<td>4: the wrapper saves its state (2.5 KB) and puts it back where the call falls back</td>
 </tr>
 </tbody>
 </table>
@@ -4684,19 +4684,23 @@ Python side (remarked as <code>R3004</code>). The rest costs more:</p>
 stays off the boundary: how deep it goes is the argument's to decide, and
 CPython raises <code>RecursionError</code> where native code has no limit to stop at.</p>
 <p>A function that returns nothing gets the boundary where it loops over what
-it is given, or fills a container the caller passed. A function that only
+it is given, or reads or fills a container the caller passed, and the work
+pays for it as for any other function. A function that only
 checks its arguments and raises stays a native caller's, and so does a
 <code>main()</code> that takes nothing: it runs once, and what it calls goes native on
 its own terms.</p>
-<p>A container or an object is copied whole on each call, so the body has to
-do work in proportion to it (<a href="../containers/#between-functions">Lists, dicts, and sets</a>).</p>
+<p>A container or an object crosses whole on each call, read in place where
+the call writes through none of its parameters and copied otherwise, so the
+body has to do work in proportion to it
+(<a href="../containers/#between-functions">Lists, dicts, and sets</a>).</p>
 <p><code>ppy explain module.name</code> (or <code>FILE.ppy:LINE</code>) reports the decision and,
 when the answer is no, the first blocking construct.</p>
 <h3 id="what-a-call-costs">What a call costs<a class="headerlink" href="#what-a-call-costs" title="Permanent link">&para;</a></h3>
 <p><code>examples/bench_boundary.py</code> calls each shape below many times from a
 Python loop and prints the time per call. The <code>ppy run</code> column is the
 program as <code>ppy run</code> runs it; the CPython column is the same program under
-<code>python</code>. The median of three runs, in nanoseconds:</p>
+<code>python</code> (<code>python examples/bench_boundary.py --python</code> prints both). The
+median of three runs, in nanoseconds:</p>
 <table>
 <thead>
 <tr>
@@ -4708,69 +4712,116 @@ program as <code>ppy run</code> runs it; the CPython column is the same program 
 <tbody>
 <tr>
 <td><code>x + y</code> of two ints, kept in Python by the cost model</td>
-<td style="text-align: right;">29</td>
-<td style="text-align: right;">30</td>
+<td style="text-align: right;">31</td>
+<td style="text-align: right;">32</td>
 </tr>
 <tr>
 <td><code>x + y</code> of two ints, <code>@ppy.native</code></td>
-<td style="text-align: right;">29</td>
-<td style="text-align: right;">30</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">31</td>
 </tr>
 <tr>
 <td>the same, <code>y</code> passed by keyword</td>
-<td style="text-align: right;">38</td>
-<td style="text-align: right;">34</td>
-</tr>
-<tr>
-<td>the same, <code>y</code> left to its default</td>
-<td style="text-align: right;">32</td>
-<td style="text-align: right;">32</td>
-</tr>
-<tr>
-<td>a loop of 100 additions</td>
-<td style="text-align: right;">65</td>
-<td style="text-align: right;">886</td>
-</tr>
-<tr>
-<td><code>sum</code> of a borrowed buffer of 100 ints</td>
-<td style="text-align: right;">67</td>
-<td style="text-align: right;">254</td>
-</tr>
-<tr>
-<td>a guard that fails, so the Python body runs</td>
-<td style="text-align: right;">82</td>
+<td style="text-align: right;">40</td>
 <td style="text-align: right;">36</td>
 </tr>
 <tr>
-<td>a <code>list[int]</code> of 100 written in place, <code>@ppy.native</code></td>
-<td style="text-align: right;">1,496</td>
-<td style="text-align: right;">2,538</td>
+<td>the same, <code>y</code> left to its default</td>
+<td style="text-align: right;">33</td>
+<td style="text-align: right;">34</td>
 </tr>
 <tr>
-<td>a <code>dict[int, int]</code> of 100 read, <code>@ppy.native</code></td>
-<td style="text-align: right;">2,109</td>
-<td style="text-align: right;">1,742</td>
+<td>a loop of 100 additions</td>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">991</td>
+</tr>
+<tr>
+<td><code>sum</code> of a borrowed buffer of 100 ints</td>
+<td style="text-align: right;">74</td>
+<td style="text-align: right;">296</td>
+</tr>
+<tr>
+<td>a guard that fails, so the Python body runs</td>
+<td style="text-align: right;">103</td>
+<td style="text-align: right;">39</td>
+</tr>
+<tr>
+<td>a <code>list[int]</code> of 100 written in place, <code>@ppy.native</code></td>
+<td style="text-align: right;">1,182</td>
+<td style="text-align: right;">2,729</td>
+</tr>
+<tr>
+<td>a <code>dict[int, int]</code> of 100 walked, <code>@ppy.native</code></td>
+<td style="text-align: right;">1,386</td>
+<td style="text-align: right;">1,893</td>
 </tr>
 <tr>
 <td>a chain of 10 objects walked, <code>@ppy.native</code></td>
-<td style="text-align: right;">831</td>
-<td style="text-align: right;">141</td>
+<td style="text-align: right;">837</td>
+<td style="text-align: right;">153</td>
 </tr>
 <tr>
 <td>a function returning <code>None</code> that fills a list of 100</td>
-<td style="text-align: right;">553</td>
-<td style="text-align: right;">553</td>
+<td style="text-align: right;">342</td>
+<td style="text-align: right;">656</td>
+</tr>
+<tr>
+<td>a <code>list[int]</code> of 100 summed</td>
+<td style="text-align: right;">243</td>
+<td style="text-align: right;">946</td>
+</tr>
+<tr>
+<td>a <code>list[list[int]]</code> of 10 by 10 summed, <code>@ppy.native</code></td>
+<td style="text-align: right;">535</td>
+<td style="text-align: right;">1,057</td>
+</tr>
+<tr>
+<td>the lengths of a <code>list[str]</code> of 100 summed, <code>@ppy.native</code></td>
+<td style="text-align: right;">1,910</td>
+<td style="text-align: right;">1,330</td>
+</tr>
+<tr>
+<td>100 lookups in a <code>set[int]</code>, <code>@ppy.native</code></td>
+<td style="text-align: right;">2,816</td>
+<td style="text-align: right;">1,121</td>
+</tr>
+<tr>
+<td>100 lookups of <code>list[str]</code> keys in a <code>dict[str, int]</code>, <code>@ppy.native</code></td>
+<td style="text-align: right;">9,941</td>
+<td style="text-align: right;">1,605</td>
+</tr>
+<tr>
+<td>the trues of a <code>list[bool]</code> of 100 counted</td>
+<td style="text-align: right;">205</td>
+<td style="text-align: right;">696</td>
+</tr>
+<tr>
+<td>one element of a <code>list[int]</code> of 100 written, <code>@ppy.native</code></td>
+<td style="text-align: right;">260</td>
+<td style="text-align: right;">41</td>
+</tr>
+<tr>
+<td>a function returning <code>None</code> that reads 100 and writes one</td>
+<td style="text-align: right;">491</td>
+<td style="text-align: right;">1,902</td>
+</tr>
+<tr>
+<td>a <code>random.randint</code> and an addition</td>
+<td style="text-align: right;">57</td>
+<td style="text-align: right;">133</td>
 </tr>
 </tbody>
 </table>
 <p>The <code>@ppy.native</code> <code>x + y</code> row is the wrapper alone: parsing the arguments,
 the exact type checks, and boxing the result. A failed guard costs the
-wrapper plus a Python call. The written list copies 100 ints in and back
-and still wins, because the body does a multiplication and a remainder per
-element; filling a list of 100 costs the same both ways, since copying it
-back takes what the native loop saves. The dict and object rows are
-the shapes the cost model keeps off the boundary: one addition per entry or
-per object does not pay for copying it, and without <code>@ppy.native</code> Python
+wrapper plus a Python call. The rows that read a container and write none
+read it in place: the list of lists is laid out in the call's arena, the
+strings are borrowed, the dict is walked without being hashed. The written
+list copies 100 ints in and sets back only those that changed. What is left
+in the slower rows is native code's own: holding each string, hashing each
+key it looks up. Those are the shapes the cost model keeps off the
+boundary, as the CPython column says it should: one operation per string,
+per lookup, or per object does not pay, and without <code>@ppy.native</code> Python
 runs their Python bodies. Measured on Python 3.14 on an Intel Core Ultra 9
 386H under WSL2.</p>
 <h2 id="byte-wide-buffers">Byte-wide buffers<a class="headerlink" href="#byte-wide-buffers" title="Permanent link">&para;</a></h2>

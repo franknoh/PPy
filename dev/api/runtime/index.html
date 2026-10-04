@@ -4096,6 +4096,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.attach_random" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;attach_random
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_runtime.binding.keyed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5491,6 +5502,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_runtime.binding.attach_random" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;attach_random
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_runtime.binding.keyed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6710,6 +6732,27 @@ statistics are not collected on this path.</p>
 <p>A function that draws random numbers draws from <code>random</code>'s own generator:
 its state is saved before the call and put back before a fallback, so
 the Python rerun draws what the native call drew.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_runtime.binding.attach_random" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">attach_random</span><span class="p">(</span><span class="n">wrappers</span><span class="p">,</span> <span class="n">owner</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#ppy_runtime.binding.attach_random" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Hand a generated wrapper module <code>random._inst</code>'s state and the runtime's
+<code>ppy_random_reseeded</code>, for the wrappers of functions that draw to save and
+put back the state in C (<code>wrapper._DRAWS</code>); whether it took them. Asked
+once per module.</p>
 
 
     </div>
