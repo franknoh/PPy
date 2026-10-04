@@ -3489,6 +3489,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                     return core.cast(self.b, length, I64)
                 return self._buffer_reduction(argument.id, target)
         if target in {"min", "max"} and len(node.args) >= 2:
+            chosen = self._object_extremum(target, node)
+            if chosen is not None:
+                return chosen
             return self._extremum(target, node)
         if target in {"abs", "float", "int", "bool"}:
             return self._builtin_call(target, node)
@@ -4844,6 +4847,57 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         ).result
         length = core.const(self.b, len(value.encode("utf-8")), I64)
         core.call_extern(self.b, "ppy_rt_print_str", (pointer, length), ())
+
+    def _object_extremum(self, target: str, node: ast.Call) -> Value | None:
+        """`max(a, b)` and `min(a, b, c)` of objects whose class orders them:
+        as CPython runs it, the first is the best so far, and each later one
+        replaces it where `later > best` (`later < best` for `min`) is true,
+        by the class's `__gt__`, or the best one's reflected `__lt__`. An owned
+        handle. None where an argument is not an object."""
+        shapes = [self._object_of(argument) for argument in node.args]
+        if not any(shapes):
+            return None
+        if not all(shapes) or node.keywords:
+            raise Unsupported(f"`{target}` of objects and other values has no native lowering")
+        lexical = self.frontend.analysis.symbols.lexical
+        if not isinstance(lexical, LexicalBindings) or lexical.targets_at(node.func) != {
+            f"builtins.{target}"
+        }:
+            return None
+        if not all(isinstance(argument, ast.Name) for argument in node.args):
+            # A name reads the same before and after a comparison runs.
+            raise Unsupported(
+                f"`{target}` of objects is lowered where each one is a name: bind the "
+                "others to names first"
+            )
+        shape = shapes[0]
+        assert shape is not None
+        if any(other != shape for other in shapes[1:]):
+            raise Unsupported(f"`{target}` of objects of different classes has no native lowering")
+        # The best so far, held as a local no program can name.
+        held = f"{target}.best:{node.lineno}:{node.col_offset}"
+        best = ast.copy_location(ast.Name(id=held, ctx=ast.Load()), node)
+        first, owned = self._handle(node.args[0])
+        self._bind(held, shape, first, owned)
+        operator = ast.Gt if target == "max" else ast.Lt
+        for candidate in node.args[1:]:
+            compare = ast.copy_location(
+                ast.Compare(left=candidate, ops=[operator()], comparators=[best]), node
+            )
+            found = self._object_compare(compare)
+            if found is None:
+                raise Unsupported(f"`{target}` of objects whose class does not order them")
+            take = self._block(f"{target}.take")
+            after = self._block(f"{target}.next")
+            core.cond_br(self.b, self._truth(found), Successor(take), Successor(after))
+            self.b.at_end(take)
+            handle, owned = self._handle(candidate)
+            self._bind(held, shape, handle, owned)
+            core.br(self.b, Successor(after))
+            self.b.at_end(after)
+        chosen, _owned = self._handle(best)
+        self._retain(chosen)
+        return chosen
 
     def _extremum(self, target: str, node: ast.Call) -> Value:
         values = [self._expr(argument) for argument in node.args]

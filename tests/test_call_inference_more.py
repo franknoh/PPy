@@ -955,3 +955,77 @@ def test_a_reason_never_names_an_implicit_global():
 
     reason = str(Unsupported("`m.f` expects a `list[int]`, not `__global_m_PRIMES`"))
     assert "__global_" not in reason and "a module global passed on" in reason
+
+
+#: `max(a, b)` and `min(a, b, c)` of objects ordered by `__lt__` or `__gt__`:
+#: the first of equals wins, as in CPython, and the uses type `other`. A
+#: doctest operator whose operand is a constructor call types it too.
+ORDERED = """
+class Vector:
+    \"\"\"
+    >>> a = Vector(1, 2)
+    >>> a < Vector(2, 2)
+    True
+    \"\"\"
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __lt__(self, other):
+        return self.norm() < other.norm()
+
+    def norm(self):
+        return self.x * self.x + self.y * self.y
+
+
+class Ranked:
+    def __init__(self, value, tag):
+        self.value = value
+        self.tag = tag
+
+    def __gt__(self, other):
+        return self.value > other.value
+
+    def __lt__(self, other):
+        return self.value < other.value
+
+
+def walk(steps, seed):
+    farthest = Vector(0, 0)
+    nearest = Vector(100, 100)
+    state = seed
+    for _ in range(steps):
+        state = (state * 1103515245 + 12345) % 2147483648
+        here = Vector(state % 7 - 3, state // 7 % 7 - 3)
+        farthest = max(farthest, here)
+        nearest = min(here, nearest)
+    return farthest.norm() * 1000 + nearest.norm()
+
+
+def pick(n):
+    total = 0
+    for i in range(n):
+        a = Ranked(i % 3, 1)
+        b = Ranked(i % 2, 2)
+        c = Ranked((i * 7) % 4, 3)
+        hi = max(a, b)
+        lo = min(a, b, c)
+        top = max(c, a, b)
+        total += hi.tag * 100 + lo.tag * 10 + top.tag + hi.value
+    return total
+
+
+print(walk(500, 7), pick(60))
+"""
+
+
+def test_a_doctest_operand_made_by_a_constructor_is_evidence(tmp_path: Path):
+    path = _write(tmp_path, ORDERED.split("class Ranked", maxsplit=1)[0])
+    assert _params(path, "prog.Vector.__lt__") == {"other": "prog.Vector"}
+
+
+@requires_llvm
+@requires_cc
+def test_max_and_min_of_objects_go_native(tmp_path: Path):
+    _agrees(tmp_path, ORDERED, ["walk", "pick"])

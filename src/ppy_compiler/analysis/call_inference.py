@@ -194,7 +194,9 @@ class CallSiteInference:
         self.candidates = self._candidates()
         #: Families whose inference made the checker report an error.
         self.retracted: set[str] = set()
-        self._doctests: list[tuple[str, ast.Call, _Target, dict[str, T.Type]]] | None = None
+        self._doctests: list[tuple[str, ast.Call, _Target, dict[str, T.Type], object]] | None = (
+            None
+        )
         self._parametrized: dict[tuple[str, int], _Evidence] | None = None
         self._argparse: dict[int, T.Type] | None = None
         self._constants: dict[str, dict[str, T.Type]] | None = None
@@ -427,6 +429,14 @@ class CallSiteInference:
                             slot.add(observed, f"{site}:{receiver.lineno}")
 
         stored: set[int] = set()
+        # A module that binds `max` or `min` itself calls its own.
+        shadowed = {
+            n.id
+            for n in module.module.nodes
+            if isinstance(n, ast.Name) and not isinstance(n.ctx, ast.Load)
+        } | {
+            n.name for n in module.module.nodes if isinstance(n, (ast.FunctionDef, ast.ClassDef))
+        } | set(getattr(module, "imports", {}))
         for node in module.module.nodes:
             if isinstance(node, ast.BinOp) and type(node.op) in _BINARY:
                 forward, reflected = _BINARY[type(node.op)]
@@ -456,6 +466,25 @@ class CallSiteInference:
                         for name in fallback:
                             reach(left, name, [right])
                     left = right
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"max", "min"}
+                and node.func.id not in shadowed
+                and len(node.args) >= 2
+                and not node.keywords
+                and not any(isinstance(a, ast.Starred) for a in node.args)
+            ):
+                # `max(a, b)` asks `b > a`: `b.__gt__(a)`, or `a.__lt__(b)`;
+                # `min(a, b)` asks `b < a`. Any earlier one may be the best.
+                forward, reflected = ("__gt__", "__lt__") if node.func.id == "max" else (
+                    "__lt__",
+                    "__gt__",
+                )
+                for at, later in enumerate(node.args[1:], start=1):
+                    for best in node.args[:at]:
+                        reach(later, forward, [best])
+                        reach(best, reflected, [later])
             elif isinstance(node, ast.Subscript) and not isinstance(node.ctx, ast.Store):
                 key: ast.expr | None = None if isinstance(node.slice, ast.Slice) else node.slice
                 name = "__getitem__" if isinstance(node.ctx, ast.Load) else "__delitem__"
@@ -601,7 +630,7 @@ class CallSiteInference:
         doctest passes is the type the function is meant for."""
         if self._doctests is None:
             self._doctests = list(_doctest_calls(self.symbols))
-        for site, node, target, scope in self._doctests:
+        for site, node, target, scope, module in self._doctests:
             for member in self._members(target.qualname):
                 info = self.symbols.functions[member]
                 for bound in bind_call(
@@ -613,6 +642,11 @@ class CallSiteInference:
                     if (member, bound.index) in reached:
                         continue
                     observed = _literal_type(bound.value, scope)
+                    if observed is None:
+                        # `a < Vector(2, 2)`: an object the example makes, or
+                        # one it bound a name to.
+                        made = _doctest_receiver(self.symbols, module, bound.value, scope)
+                        observed = made if isinstance(made, T.Instance) else None
                     if observed is None:
                         continue
                     evidence.setdefault((member, bound.index), _Evidence()).add(
@@ -1445,9 +1479,9 @@ def _doctest_calls(symbols):  # type: ignore[no-untyped-def]
                             if isinstance(node, ast.Call):
                                 target = _doctest_target(symbols, module, node, inner)
                                 if target is not None:
-                                    yield site, node, target, dict(inner)
+                                    yield site, node, target, dict(inner), module
                             for call, target in _doctest_operators(symbols, module, node, inner):
-                                yield site, call, target, dict(inner)
+                                yield site, call, target, dict(inner), module
                     _bind_doctest_names(symbols, module, statement, scope)
 
 
