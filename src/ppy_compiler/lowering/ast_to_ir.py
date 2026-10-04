@@ -1877,12 +1877,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             values = self._tuple_expr(node.value)
             if values is None or len(values) != len(expected.items):
                 raise Unsupported("the returned tuple does not match the declared shape")
-            if self._tuple_may_give_int(node.value, expected.items):
-                # `return 3, x / 2` for `-> tuple[float, float]`: as for one `float`.
-                raise Unsupported(
-                    "a function declared `-> float` returns a value that may be an `int`, "
-                    "which CPython keeps an `int`"
-                )
+            if isinstance(node.value, ast.Tuple) and any(
+                t == F64 and gives_int(self._type_of(element))
+                for element, t in zip(node.value.elts, expected.items, strict=False)
+            ):
+                raise Unsupported("returns an `int` where `float` is declared, which CPython keeps")
             items = [
                 self._coerce_type(item, t) for item, t in zip(values, expected.items, strict=True)
             ]
@@ -1898,47 +1897,17 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._release_collections()
             core.ret(self.b, handle)
             return
-        if expected == F64 and not self._gives_float(node.value):
-            # `return 0` from a function declared `-> float`: CPython hands back
-            # the `int`, which a native `float` result would make `0.0`.
-            raise Unsupported(
-                "a function declared `-> float` returns a value that may be an `int`, "
-                "which CPython keeps an `int`"
-            )
-        returned = self._coerce_type(self._expr(node.value), expected)
+        value = self._expr(node.value)
+        if expected == F64 and not self.bindings and gives_int(self._type_of(node.value)):
+            # `-> float` takes an int, and CPython hands that int back:
+            # `return total` with an int total is `16`, not `16.0`. In an
+            # instance of a generic the checker's type of `A + B` is the
+            # first operand's, which says nothing of the value: not asked.
+            raise Unsupported("returns an `int` where `float` is declared, which CPython keeps")
+        returned = self._coerce_type(value, expected)
         self._leave_for_return()
         self._release_collections()
         core.ret(self.b, returned)
-
-    def _gives_float(self, node: ast.expr) -> bool:
-        """Whether `node` is a `float` whatever runs: the checker types it
-        `float`, and not as a stand-in for an `int` that may be given."""
-        given = T.strip_literal(self._type_of(node))
-        if given == T.FLOAT:
-            return True
-        # A `float` parameter given an `int` stays one in CPython; the boundary
-        # takes only a `float` for it where the result shows it
-        # (`exact_params`), so a parameter read here is a `float`.
-        return given == T.UNKNOWN and self._expr_is_float_literal(node)
-
-    def _tuple_may_give_int(self, node: ast.expr, items: tuple[IRType, ...]) -> bool:
-        """Whether a returned tuple may hold an `int` where an item is declared `float`."""
-        if isinstance(node, ast.Tuple):
-            return any(
-                t == F64 and not self._gives_float(element)
-                for element, t in zip(node.elts, items, strict=False)
-            )
-        given = T.strip_literal(self._type_of(node))
-        if not isinstance(given, T.Tuple_) or given.homogeneous:
-            return F64 in items
-        return any(
-            t == F64 and T.strip_literal(item) != T.FLOAT
-            for item, t in zip(given.items, items, strict=False)
-        )
-
-    @staticmethod
-    def _expr_is_float_literal(node: ast.expr) -> bool:
-        return isinstance(node, ast.Constant) and isinstance(node.value, float)
 
     def _return_default(self) -> None:
         if self.b.block is not None and id(self.b.block) in self._dead:
