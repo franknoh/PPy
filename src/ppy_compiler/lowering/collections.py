@@ -2794,6 +2794,6 @@ def crossing_classes(
                 floats=floats,
                 handles=handles | (leaves << 32),
                 tag=class_tag(sub.qualname),
-                bases=tuple(entry for entry in sub.mro if entry in by_name),
+                bases=tuple(entry for entry in sub.mro if entry in {c.qualname for c in chain}),
             )
     return tuple(found[name] for name in sorted(found))

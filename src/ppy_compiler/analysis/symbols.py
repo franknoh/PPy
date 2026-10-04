@@ -223,6 +223,9 @@ class ClassInfo:
     #: Fields the class body annotated. Inference fills the others in and
     #: may widen them; these say what their author said.
     declared_fields: set[str] = field(default_factory=set)
+    #: Fields annotated anywhere: in the class body, or as `self.x: T = ...`
+    #: in `__init__`. What the program stores elsewhere does not widen them.
+    annotated_fields: set[str] = field(default_factory=set)
     class_vars: set[str] = field(default_factory=set)
     #: Fields with a default, which construction may leave out.
     field_defaults: set[str] = field(default_factory=set)
@@ -611,7 +614,7 @@ class ProjectSymbols:
         #: attribute read.
         self.method_cache: dict[tuple[T.Type, str], T.Type | None] = {}
         self.alias_cache: dict[
-            tuple[int, frozenset[str], frozenset[str], frozenset[str]], object
+            tuple[int, frozenset[str], frozenset[str], frozenset[str], frozenset[str]], object
         ] = {}
         #: Whether every function already carries a summary from an earlier
         #: `analyze`, so the next one can start confirming instead of seeding.
@@ -1136,6 +1139,7 @@ class ProjectSymbols:
                 resolved = annotations.resolve(child.annotation)
                 info.fields[name] = resolved.type
                 info.declared_fields.add(name)
+                info.annotated_fields.add(name)
                 if info.is_dataclass:
                     if _has_default(child.value):
                         info.field_defaults.add(name)
@@ -1184,6 +1188,7 @@ class ProjectSymbols:
                 resolved = annotations.resolve(node.annotation)
                 info.fields.setdefault(attr, resolved.type)
                 info.field_facts.setdefault(attr, resolved.facts)
+                info.annotated_fields.add(attr)
 
     def _resolve_function(
         self,

@@ -1110,10 +1110,12 @@ class _Checker:
         # through it lands in the module's object as a parameter's does.
         settled = _settled_names(info, self.symbols.settled_globals)
         fresh = self._fresh_calls()
-        cached = self.project.alias_cache.get((id(info.node), immutable, settled, fresh))
+        made = self._constructor_calls()
+        key = (id(info.node), immutable, settled, fresh, made)
+        cached = self.project.alias_cache.get(key)
         if cached is None:
-            cached = analyze_aliases(info.node, immutable, settled, fresh)
-            self.project.alias_cache[(id(info.node), immutable, settled, fresh)] = cached
+            cached = analyze_aliases(info.node, immutable, settled, fresh, made)
+            self.project.alias_cache[key] = cached
         self._aliases = cached  # type: ignore[assignment]
         if info.dynamic:
             self._dynamic_depth += 1
@@ -1614,7 +1616,9 @@ class _Checker:
                 value = Binding(returned, value.facts)
             self._returns.append(value)
             self._provisional_returns.append(self._is_provisional(node.value, value, env))
-            if isinstance(node.value, ast.Name):
+            if isinstance(node.value, ast.Name) and not T.is_immutable(value.type):
+                # A number or a string returned is no object of anyone's,
+                # whatever the call that made it was given.
                 self._returned_names.update(self._roots(node.value, node.value.id))
             self._mark_escape(node.value, env)
             info = self._current
@@ -3048,6 +3052,19 @@ class _Checker:
                     if name.startswith(f"{canonical}.")
                 )
         return frozenset(spelled)
+
+    def _constructor_calls(self) -> frozenset[str]:
+        """The project's classes, spelled as this module calls them: each call
+        of one makes a new object."""
+        cached = getattr(self, "_constructors", None)
+        if cached is not None:
+            return cached  # type: ignore[no-any-return]
+        spelled = {info.name for info in self.symbols.classes.values()}
+        for local, binding in self.symbols.imports.items():
+            if binding.canonical in self.project.classes:
+                spelled.add(local)
+        self._constructors = frozenset(spelled)
+        return self._constructors
 
     def _reduce_call(self, node: ast.Call, env: Env) -> Binding | None:
         """`functools.reduce(f, xs[, initial])`: `f` typed as a function of the
@@ -7115,6 +7132,9 @@ class _Checker:
 
     def _mark_escape(self, node: ast.expr, env: Env, *, retains: bool = True) -> None:
         if isinstance(node, ast.Name) and node.id in env:
+            binding = env.get(node.id)
+            if binding is not None and T.is_immutable(binding.type):
+                return
             roots = self._roots(node, node.id)
             self._escaping.update(roots - {EXTERNAL})
             if retains:
@@ -7275,6 +7295,16 @@ class _Checker:
                 return
             if self._aliases.only_local(roots):
                 self._local_writes.update(roots)
+                return
+        if isinstance(root, ast.Call) and self._aliases is not None and self._is_reference(root):
+            # `tail(head).value = 0`: an object a call handed back, which is
+            # one the call was given or reached from one.
+            params = self._aliases.param_roots(self._aliases.roots_of(root))
+            if params:
+                self._mutated.update(params)
+                for name in sorted(params):
+                    self._blockers.append(f"mutates parameter `{name}`")
+                self._external_writes = True
                 return
         # The target is an expression, so which object it reached is unknown.
         self._foreign_writes = True
