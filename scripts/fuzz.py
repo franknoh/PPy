@@ -9,6 +9,8 @@
     uv run python scripts/fuzz.py --replay           # every saved regression
     uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
     uv run python scripts/fuzz.py --boundary --count 25  # writes through shared containers
+    uv run python scripts/fuzz.py --structures --count 25  # linked structures edited in place
+    uv run python scripts/fuzz.py --shapes --count 25  # shapes the corpus kept in Python
 
 Each seed is a program from `ppy_compiler.testing.fuzz.generate_program`. It
 runs under CPython (the reference) and each path asked for, one at a time,
@@ -22,6 +24,13 @@ made, and runs on the paths with a Python boundary (CPython, `ppy`, and
 `ppy run`). With `--boundary`, a function Python calls natively writes
 through containers and objects Python made, shared and nested, which the
 generated wrapper copies in and back; those run on the same paths.
+With `--structures`, classes whose fields have no annotations (a search
+tree with parent links, a doubly linked list) are relinked in place by
+methods Python calls natively, on the same paths and without strict mode.
+With `--shapes`, each program also has the shapes the corpus kept in
+Python (returns on every side, list parameters, string constants, tuple
+assignments, `*args`), on every path; with `--state` too, a function that
+falls off its end and a nested function handed its cells.
 With `--unannotated`, the functions have no annotations, run
 without strict mode, and are called from Python with arguments of other
 types than the ones their types were inferred from, on the paths with a
@@ -79,10 +88,11 @@ def _save(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     source: str,
     state: bool = False,
     boundary: bool = False,
+    structures: bool = False,
     shapes: bool = False,
 ) -> Path:
     REGRESSIONS.mkdir(parents=True, exist_ok=True)
-    domain = "_state" if state else "_boundary" if boundary else ""
+    domain = "_state" if state else "_boundary" if boundary else "_structures" if structures else ""
     domain += "_shapes" if shapes else ""
     target = REGRESSIONS / f"seed{seed}{domain}_{path}.ppy"
     target.write_text(f"# fuzz: path={path} seed={seed} ({reason})\n{source}", encoding="utf-8")
@@ -100,13 +110,22 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     calls: bool = False,
     unannotated: bool = False,
     boundary: bool = False,
+    structures: bool = False,
     shapes: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
     for current in range(seed, seed + count):
         source = generate_program(
-            current, prints, state, stdlib, calls, unannotated, boundary=boundary, shapes=shapes
+            current,
+            prints,
+            state,
+            stdlib,
+            calls,
+            unannotated,
+            boundary=boundary,
+            structures=structures,
+            shapes=shapes,
         )
         results = run_program(source, paths, timeout=60.0)
         mismatches = printed_twice(results) + compare(results)
@@ -125,7 +144,9 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         reduced = source
         if shrink and first.reason != "did not build":
             reduced = minimize(source, _still_fails(first.path, first.reason), attempts=60)
-        saved = _save(current, first.path, first.reason, reduced, state, boundary, shapes)
+        saved = _save(
+            current, first.path, first.reason, reduced, state, boundary, structures, shapes
+        )
         print(f"      saved {saved.relative_to(REGRESSIONS.parent.parent)}", flush=True)
     elapsed = time.monotonic() - started
     print(f"{count - failures}/{count} programs agree on {', '.join(paths)} ({elapsed:.0f}s)")
@@ -156,6 +177,11 @@ def main(argv: list[str] | None = None) -> int:
         "--boundary",
         action="store_true",
         help="write through shared containers and objects Python passes (paths with Python)",
+    )
+    parser.add_argument(
+        "--structures",
+        action="store_true",
+        help="edit linked structures with unannotated fields in place (paths with Python)",
     )
     parser.add_argument(
         "--shapes",
@@ -195,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
             options.calls,
             options.unannotated,
             boundary=options.boundary,
+            structures=options.structures,
             shapes=options.shapes,
         )
         print(shown, end="")
@@ -203,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         return replay()
     # A program with module state, one Python calls by name, or one that
     # writes through what Python passes runs where there is a Python boundary.
-    python_only = options.state or options.unannotated or options.boundary
+    python_only = options.state or options.unannotated or options.boundary or options.structures
     paths = options.paths or ",".join(STATE_PATHS if python_only else ALL_PATHS)
     return fuzz(
         options.seed,
@@ -216,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
         options.calls,
         options.unannotated,
         options.boundary,
+        options.structures,
         options.shapes,
     )
 

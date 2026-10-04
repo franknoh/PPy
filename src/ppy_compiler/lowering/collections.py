@@ -1801,6 +1801,25 @@ class CollectionLowering:
 
     # -- handles in expressions ---------------------------------------------
 
+    def _reference_choice(self, node: ast.IfExp) -> Value:
+        """`node.left if key < node.key else node.right` of objects or
+        collections: only the side the test picks is evaluated, and each side
+        hands over a reference of its own, joined by a block argument."""
+        condition = self._test(node.test)  # type: ignore[attr-defined]
+        then_block = self._block("ref.then")  # type: ignore[attr-defined]
+        else_block = self._block("ref.else")  # type: ignore[attr-defined]
+        done = self._block("ref.join")  # type: ignore[attr-defined]
+        result = done.add_argument(HANDLE, "chosen")
+        core.cond_br(self.b, condition, Successor(then_block), Successor(else_block))
+        for block, side in ((then_block, node.body), (else_block, node.orelse)):
+            self.b.at_end(block)  # type: ignore[attr-defined]
+            handle, owned = self._handle(side)
+            if not owned:
+                self._retain(handle)  # type: ignore[attr-defined]
+            core.br(self.b, Successor(done, [handle]))
+        self.b.at_end(done)  # type: ignore[attr-defined]
+        return result
+
     def _handle(self, node: ast.expr) -> tuple[Value, bool]:
         """A collection-valued expression: its handle, and whether it is owned.
 
@@ -1857,6 +1876,8 @@ class CollectionLowering:
             return self._expr(node), True  # type: ignore[attr-defined]
         if isinstance(node, ast.Subscript):
             return self._element_handle(node)
+        if isinstance(node, ast.IfExp) and self._reference_of(node) is not None:
+            return self._reference_choice(node), True
         if isinstance(node, (ast.BinOp, ast.UnaryOp, ast.IfExp)):
             return self._expr(node), True  # type: ignore[attr-defined]
         if isinstance(node, ast.Call):
@@ -2804,6 +2825,6 @@ def crossing_classes(
                 floats=floats,
                 handles=handles | (leaves << 32),
                 tag=class_tag(sub.qualname),
-                bases=tuple(entry for entry in sub.mro if entry in by_name),
+                bases=tuple(entry for entry in sub.mro if entry in {c.qualname for c in chain}),
             )
     return tuple(found[name] for name in sorted(found))
