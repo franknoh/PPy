@@ -79,10 +79,10 @@ native, but Python calls the Python body (why its boundary is not used):
 as native and called from Python, and the rest as native code they call.
 
 - **A list of lists written in place.** `advance(grid, 40)` copies the
-  128 rows into native memory, runs, and copies each row back into the
-  same Python list. `grid` is still the caller's object, and so is each
-  row, so `sum(map(sum, grid))` in `main` counts what native code left
-  there. A row that a call did not change keeps its elements as they were.
+  128 rows into native memory, runs, and then sets back into each row only
+  the cells whose value changed. `grid` is still the caller's object, and
+  so is each row, so `sum(map(sum, grid))` in `main` counts what native
+  code left there. A cell the call did not change keeps its object.
 - **An object made natively.** The `Census` that `advance` returns was
   made by native code. It comes back as a new `Census` instance with its
   fields set; `__init__` does not run a second time.

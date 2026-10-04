@@ -263,8 +263,9 @@ places runs any code, and the rest are names, constants, or attributes.
 Python evaluates a default once, when the `def` runs, so the compiler puts a
 default into the call only where it is a constant: a number, a string,
 `None`, or a tuple of those. A call that leaves out a parameter whose
-default is anything else (`xs: list[int] = []`), a call with `*args` or
-`**kwargs`, and a method call bound by keyword where a subclass overrides
+default is anything else (`xs: list[int] = []`), a call that spreads
+`*args` (other than a list passed whole to a `*args` parameter, as in
+[Types that lower](#types-that-lower)) or `**kwargs`, and a method call bound by keyword where a subclass overrides
 the method stay in Python.
 
 When Python calls a native function with keywords or with defaults left

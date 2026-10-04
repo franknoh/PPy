@@ -45,8 +45,11 @@ def grow(count: int) -> list[int]:
 All four functions lower to native code: plain lists, dicts, and sets are
 native (see [Lists, dicts, and sets](../../docs/guide/containers.md)).
 Python calls `histogram` and `grow` natively. It calls `distinct` and
-`flatten` on their Python bodies: each makes one pass over what it is
-given, which costs what copying it in would. `main` stays in Python,
+`flatten` on their Python bodies: neither writes through its parameter, so
+the boundary would read the list in place rather than copy it, but each
+does one operation per string or per row (`seen.add(value)` hashes a
+string, `out.extend(row)` copies a row), and holding each string or row
+natively costs about what the native loop saves. `main` stays in Python,
 because `sorted(...items())` sorts `(key, count)` tuples, which native code
 does not order. All of them are strict and typed, and all but `main` are
 pure.
