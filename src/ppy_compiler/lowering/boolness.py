@@ -197,11 +197,12 @@ class _Finder:
         return None
 
     def assigned(self, target: ast.expr, value: ast.expr) -> bool:
-        if isinstance(target, (ast.Tuple, ast.List)) and isinstance(value, (ast.Tuple, ast.List)):
-            if len(target.elts) == len(value.elts):
-                return any(
-                    self.assigned(t, v) for t, v in zip(target.elts, value.elts, strict=True)
-                )
+        if (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, (ast.Tuple, ast.List))
+            and len(target.elts) == len(value.elts)
+        ):
+            return any(self.assigned(t, v) for t, v in zip(target.elts, value.elts, strict=True))
         if isinstance(target, (ast.Tuple, ast.List)):
             whole = self.type_of(value)
             return any(
@@ -270,13 +271,17 @@ class _Finder:
             return []
         pairs: list[tuple[ast.expr, T.Type]] = []
         positional = [p for p in params if p.kind in {"positional_or_keyword", "positional_only"}]
-        for argument, param in zip(call.args, positional, strict=False):
-            if not isinstance(argument, ast.Starred):
-                pairs.append((argument, param.type))
+        pairs.extend(
+            (argument, param.type)
+            for argument, param in zip(call.args, positional, strict=False)
+            if not isinstance(argument, ast.Starred)
+        )
         named = {p.name: p.type for p in params}
-        for keyword in call.keywords:
-            if keyword.arg is not None and keyword.arg in named:
-                pairs.append((keyword.value, named[keyword.arg]))
+        pairs.extend(
+            (keyword.value, named[keyword.arg])
+            for keyword in call.keywords
+            if keyword.arg is not None and keyword.arg in named
+        )
         return pairs
 
     def user(self, called: T.Type, func: ast.expr) -> bool:

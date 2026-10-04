@@ -1608,10 +1608,10 @@ class _Generator:
             w.put("    return total + n")
             w.put("")
             w.put("")
-            for _ in range(rng.randint(1, 2)):
-                lines.append(
-                    f"print({name}({rng.choice(('True', 'False'))}, {rng.randint(-5, 5)}))"
-                )
+            lines.extend(
+                f"print({name}({rng.choice(('True', 'False'))}, {rng.randint(-5, 5)}))"
+                for _ in range(rng.randint(1, 2))
+            )
         value = rng.randint(-5, 5)
         lines.append(f"print({returned}({value}), isinstance({returned}({value}), bool))")
         lines.append(f"print({shown}(True), {box}(False))")

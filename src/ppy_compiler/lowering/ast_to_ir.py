@@ -96,6 +96,7 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
+from .boolness import hidden_bool
 from .calls import CallBinding, nested_entry_refusal
 from .closures import ClosureLowering
 from .collections import HANDLE, Held, Kind, Shape, crossing_classes, records_of
@@ -106,7 +107,6 @@ from .exceptions import ExceptionLowering, OwnedTemporaries, uses_exceptions
 from .expressions import ExpressionLowering
 from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
-from .boolness import hidden_bool
 from .intness import ModuleIntness, gives_bool, gives_int
 from .memo import cached_decorator, define_cached
 from .stdlib import StdlibLowering
@@ -1484,8 +1484,9 @@ class Frontend:
                     if self._broken(name, own, memo):
                         del self.module.functions[name]
                 return
-            for qualname, callee in blocked.items():
+            for qualname, blocking in blocked.items():
                 # Through a helper, name the function it reaches that has no body.
+                callee = blocking
                 seen: set[str] = set()
                 while callee not in seen and callee in self.module.functions:
                     seen.add(callee)
