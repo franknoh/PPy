@@ -433,6 +433,12 @@ def first_square(n: int) -> int:
             return i
 
 
+def zero_or(x: float) -> float:
+    if x < 0:
+        return 0
+    return x * 2.0
+
+
 def tally(xs: list[int]) -> int:
     total = 0
     for x in xs:
@@ -442,6 +448,7 @@ def tally(xs: list[int]) -> int:
 
 
 print(half(10), half(7), first_square(10), first_square(0), tally([2, 4, 6, 7]))
+print(zero_or(-1.0), zero_or(1.5))
 try:
     half(-3)
 except ValueError as error:
@@ -461,6 +468,9 @@ def test_a_function_that_falls_off_its_end_returns_none_through_python(tmp_path:
     result cannot hold: the native call falls back there, and Python runs it."""
     _agrees(tmp_path, _expected(tmp_path, FALLS_OFF))
     _native(tmp_path, ["half", "first_square", "tally"])
+    # `return 0` from a `-> float` function is CPython's `int`: it stays in Python.
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.zero_or")
+    assert "may be an `int`" in explained.stdout, explained.stdout
 
 
 @requires_standalone

@@ -1880,7 +1880,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             case ast.Expr(value=ast.Constant()):
                 return
             case ast.Expr(value=ast.Call() | ast.Await()):
-                if self._print_optional(node):
+                if isinstance(node, ast.Expr) and self._print_optional(node):
                     return
                 if isinstance(node.value, ast.Call) and self._plugin_spec(node.value) is not None:
                     self._plugin_call(node.value)
@@ -1929,10 +1929,32 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._release_collections()
             core.ret(self.b, handle)
             return
+        if expected == F64 and not self._gives_float(node.value):
+            # `return 0` from a function declared `-> float`: CPython hands back
+            # the `int`, which a native `float` result would make `0.0`.
+            raise Unsupported(
+                "a function declared `-> float` returns a value that may be an `int`, "
+                "which CPython keeps an `int`"
+            )
         returned = self._coerce_type(self._expr(node.value), expected)
         self._leave_for_return()
         self._release_collections()
         core.ret(self.b, returned)
+
+    def _gives_float(self, node: ast.expr) -> bool:
+        """Whether `node` is a `float` whatever runs: the checker types it
+        `float`, and not as a stand-in for an `int` that may be given."""
+        given = T.strip_literal(self._type_of(node))
+        if given == T.FLOAT:
+            return True
+        # A `float` parameter given an `int` stays one in CPython; the boundary
+        # takes only a `float` for it where the result shows it
+        # (`exact_params`), so a parameter read here is a `float`.
+        return given == T.UNKNOWN and self._expr_is_float_literal(node)
+
+    @staticmethod
+    def _expr_is_float_literal(node: ast.expr) -> bool:
+        return isinstance(node, ast.Constant) and isinstance(node.value, float)
 
     def _return_default(self) -> None:
         if self.b.block is not None and (
@@ -5672,14 +5694,15 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             )
             self.frontend.analysis.node_types[id(printed)] = T.NONE
             self.__dict__.setdefault("_made_nodes", []).append(printed)
-            made = ast.copy_location(ast.Expr(printed), node)
+            made = ast.Expr(printed)
+            ast.copy_location(made, node)
             self.__dict__.setdefault("_made_nodes", []).append(made)
             self._statement(made)
             return True
         kind = self.optionals[name.id][2]
         held = self._typed(ast.Name(name.id, ast.Load()), _KIND_TYPES[kind], name)
         absent = self._typed(ast.Constant("None"), T.STR, name)
-        sides = []
+        sides: list[list[ast.stmt]] = []
         for replacement in (absent, held):
             args = [*call.args[:index], replacement, *call.args[index + 1 :]]
             printed = ast.copy_location(
@@ -5687,13 +5710,16 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             )
             self.frontend.analysis.node_types[id(printed)] = T.NONE
             self.__dict__.setdefault("_made_nodes", []).append(printed)
-            sides.append([ast.copy_location(ast.Expr(printed), node)])
+            side = ast.Expr(printed)
+            ast.copy_location(side, node)
+            sides.append([side])
         test = self._typed(
             ast.Compare(left=name, ops=[ast.Is()], comparators=[ast.Constant(None)]),
             T.BOOL,
             name,
         )
-        choice = ast.copy_location(ast.If(test, sides[0], sides[1]), node)
+        choice = ast.If(test, sides[0], sides[1])
+        ast.copy_location(choice, node)
         self.__dict__.setdefault("_made_nodes", []).append(choice)
         self._if(choice)
         return True
