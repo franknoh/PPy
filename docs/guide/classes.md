@@ -373,7 +373,7 @@ def bump(head: Node | None) -> None:
 Called from Python, `bump(a)` runs natively and leaves each node's `value`
 one higher. `bump(None)` is native too, since the parameter allows `None`.
 
-The copy costs time in proportion to what crosses, about 100 ns an object
+The copy costs time in proportion to what crosses, about 80 ns an object
 in and as much back after a write, where CPython reads a field in a few
 nanoseconds. So Python calls the native body only when the function does
 work in proportion to it, and more than a few operations of it per object:
