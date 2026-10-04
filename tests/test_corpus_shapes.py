@@ -470,7 +470,7 @@ def test_a_function_that_falls_off_its_end_returns_none_through_python(tmp_path:
     _native(tmp_path, ["half", "first_square", "tally"])
     # `return 0` from a `-> float` function is CPython's `int`: it stays in Python.
     explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.zero_or")
-    assert "may be an `int`" in explained.stdout, explained.stdout
+    assert "returns an `int` where `float` is declared" in explained.stdout, explained.stdout
 
 
 @requires_standalone

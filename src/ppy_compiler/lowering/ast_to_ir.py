@@ -1914,6 +1914,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             values = self._tuple_expr(node.value)
             if values is None or len(values) != len(expected.items):
                 raise Unsupported("the returned tuple does not match the declared shape")
+            if isinstance(node.value, ast.Tuple) and any(
+                t == F64 and gives_int(self._type_of(element))
+                for element, t in zip(node.value.elts, expected.items, strict=False)
+            ):
+                raise Unsupported("returns an `int` where `float` is declared, which CPython keeps")
             items = [
                 self._coerce_type(item, t) for item, t in zip(values, expected.items, strict=True)
             ]
@@ -1929,32 +1934,14 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._release_collections()
             core.ret(self.b, handle)
             return
-        if expected == F64 and not self._gives_float(node.value):
-            # `return 0` from a function declared `-> float`: CPython hands back
-            # the `int`, which a native `float` result would make `0.0`.
-            raise Unsupported(
-                "a function declared `-> float` returns a value that may be an `int`, "
-                "which CPython keeps an `int`"
-            )
+        if expected == F64 and gives_int(self._type_of(node.value)):
+            # `-> float` takes an int, and CPython hands that int back:
+            # `return total` with an int total is `16`, not `16.0`.
+            raise Unsupported("returns an `int` where `float` is declared, which CPython keeps")
         returned = self._coerce_type(self._expr(node.value), expected)
         self._leave_for_return()
         self._release_collections()
         core.ret(self.b, returned)
-
-    def _gives_float(self, node: ast.expr) -> bool:
-        """Whether `node` is a `float` whatever runs: the checker types it
-        `float`, and not as a stand-in for an `int` that may be given."""
-        given = T.strip_literal(self._type_of(node))
-        if given == T.FLOAT:
-            return True
-        # A `float` parameter given an `int` stays one in CPython; the boundary
-        # takes only a `float` for it where the result shows it
-        # (`exact_params`), so a parameter read here is a `float`.
-        return given == T.UNKNOWN and self._expr_is_float_literal(node)
-
-    @staticmethod
-    def _expr_is_float_literal(node: ast.expr) -> bool:
-        return isinstance(node, ast.Constant) and isinstance(node.value, float)
 
     def _return_default(self) -> None:
         if self.b.block is not None and (
