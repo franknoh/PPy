@@ -303,7 +303,7 @@ def test_signature_keeping_decorators_are_inferred(tmp_path: Path):
 @requires_llvm
 @requires_cc
 def test_decorated_programs_agree(tmp_path: Path):
-    source = DECORATED.replace("import pytest\n", "").split("CASES =")[0]
+    source = DECORATED.replace("import pytest\n", "").split("CASES =", maxsplit=1)[0]
     source += "\nprint(tri(5), ways(20))\n"
     _agrees(tmp_path, source, ["tri"])
 

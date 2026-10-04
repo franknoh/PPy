@@ -195,7 +195,6 @@ class CallSiteInference:
         #: Families whose inference made the checker report an error.
         self.retracted: set[str] = set()
         self._doctests: list[tuple[str, ast.Call, _Target, dict[str, T.Type]]] | None = None
-        self._doctest_operators: list[tuple[str, str, T.Type, T.Type | None]] | None = None
         self._parametrized: dict[tuple[str, int], _Evidence] | None = None
         self._argparse: dict[int, T.Type] | None = None
         self._constants: dict[str, dict[str, T.Type]] | None = None
