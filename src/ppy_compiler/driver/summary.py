@@ -72,6 +72,13 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/native-lowering/",
     ),
     _shape(
+        r"decorated by `[^`]+`, which hands back an object the compiler does not know",
+        "a decorator nobody vouches for",
+        "calls go to what the decorator returned, in Python; register the decorator's "
+        "semantics with a plugin, or keep the hot loop in an undecorated function",
+        "guide/subset/",
+    ),
+    _shape(
         r"calls `([^`]+)` with unknown effects|`([^`]+)` has no native lowering",
         "a call to `{0}`",
         "a library or builtin with no native form keeps its caller in Python; call it outside "

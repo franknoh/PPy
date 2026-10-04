@@ -146,6 +146,13 @@ A decorator is looked through when it keeps the function's parameters:
 `@staticmethod`, `@classmethod`, `@functools.cache`, `@functools.lru_cache`,
 `@abc.abstractmethod`, a pytest mark, and a project decorator whose wrapper
 is made with `functools.wraps(fn)` and only calls `fn(*args, **kwargs)`.
+Looking through a decorator gives the parameters their types and nothing
+else. Under `--no-strict` a function with a decorator nobody vouches for
+stays in Python, and every call by its name, from Python or from native
+code, goes to the object the decorator returned, so a wrapper that prints,
+doubles the result, or caches runs just as it does on CPython. Such a call
+counts as one with unknown effects: it is never inlined, folded, or moved
+out of a loop.
 
 Nothing is inferred for a function the program uses as a value (`key=f`,
 `map(f, xs)`, `g = obj.method`), one with another decorator, one called with

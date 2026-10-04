@@ -6,6 +6,7 @@ import ast
 from dataclasses import dataclass, field
 
 from ..analysis.checker import ModuleAnalysis, ProjectAnalysis
+from ..analysis.decorators import reaches_body
 from ..analysis.symbols import FunctionInfo, ModuleSymbols
 from ..diagnostics import Diagnostic, Severity, Span
 from .annotate import annotate
@@ -259,6 +260,9 @@ class Optimizer:
             if analysis is None or not analysis.verified_pure:
                 continue
             if info.is_generator or info.is_async:
+                continue
+            if not reaches_body(info.decorators):
+                # The name holds what a decorator made of the function.
                 continue
             candidates[name] = (info, live.get(name, info.node))
         return candidates

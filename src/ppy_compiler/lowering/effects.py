@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from ..analysis import types as T
 from ..analysis.closures import own_names
 from ..analysis.effects import Effect
+from ..analysis.decorators import reaches_body
 from ..analysis.lexical import LexicalBindings
 from ..analysis.stdlib import lookup as stdlib_lookup
 from ..backend.llvm.lowering import Unsupported
@@ -678,7 +679,10 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         if isinstance(func, ast.Name):
             info = symbols.functions.get(func.id)
             if info is not None:
-                return self._returns_exactly(info.node, returned)
+                # A wrapper the decorator made gives what it likes.
+                return reaches_body(info.decorators) and self._returns_exactly(
+                    info.node, returned
+                )
             binding = symbols.imports.get(func.id)
             if binding is not None:
                 # `from timeit import timeit`: a modelled standard-library
