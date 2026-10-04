@@ -1006,14 +1006,17 @@ def should_lower_native(
 #: made natively on the way in and decoded on the way out, about four
 #: operations each; a value class's field is an attribute read. Module
 #: globals the function reads are read by a Python frame in front of the
-#: wrapper. A function that draws random numbers is bound by the Python-level
-#: binding, which saves `random`'s state through `ctypes`. Output a native
+#: wrapper. A function that draws random numbers has `random`'s state (2.5 KB)
+#: saved by the wrapper, about two operations; one that also reads module
+#: globals is bound by the Python-level binding, which saves it through
+#: `ctypes`. Output a native
 #: call holds is written out through Python when the call ends, which costs
 #: more than CPython's `print` for one line and much less for many: only a
 #: loop that prints pays for it.
 _CROSSING_BASE = 2
 _CROSSING_TEXT = 4
 _CROSSING_GLOBALS = 6
+_CROSSING_DRAWS = 4
 _CROSSING_SLOW = 16
 _CROSSING_HELD = 40
 
@@ -1026,7 +1029,7 @@ def _crossing_cost(
 ) -> int:
     """How much straight-line work pays for a call through the boundary."""
     if Effect.RANDOM in analysis.effects:
-        return _CROSSING_SLOW
+        return _CROSSING_SLOW if analysis.implicit_globals else _CROSSING_DRAWS
     if any(effect in analysis.effects for effect in _NEEDS_GIL):
         return _CROSSING_HELD
     cost = _CROSSING_BASE + (_CROSSING_GLOBALS if analysis.implicit_globals else 0)
