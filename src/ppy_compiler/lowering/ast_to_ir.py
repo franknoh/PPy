@@ -1934,11 +1934,14 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._release_collections()
             core.ret(self.b, handle)
             return
-        if expected == F64 and gives_int(self._type_of(node.value)):
+        value = self._expr(node.value)
+        if expected == F64 and not self.bindings and gives_int(self._type_of(node.value)):
             # `-> float` takes an int, and CPython hands that int back:
-            # `return total` with an int total is `16`, not `16.0`.
+            # `return total` with an int total is `16`, not `16.0`. In an
+            # instance of a generic the checker's type of `A + B` is the
+            # first operand's, which says nothing of the value: not asked.
             raise Unsupported("returns an `int` where `float` is declared, which CPython keeps")
-        returned = self._coerce_type(self._expr(node.value), expected)
+        returned = self._coerce_type(value, expected)
         self._leave_for_return()
         self._release_collections()
         core.ret(self.b, returned)
