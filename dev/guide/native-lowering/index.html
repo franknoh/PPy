@@ -4856,7 +4856,8 @@ The types are:</p>
 <p>A parameter has to be annotated, or under <code>--no-strict</code> inferred from the
 calls the project makes (<a href="../subset/#types-from-call-sites">Types from call sites</a>).
 <code>list[Any]</code>, a bare <code>list</code>, and NumPy arrays have no native form, and a
-function that takes one runs as Python. Under <code>--no-strict</code>, a local written
+function that takes one runs as Python. Under <code>--no-strict</code>, a parameter
+declared as a bare <code>list</code> takes the element type its calls agree on, and a local written
 <code>out: list = []</code> (or <code>dict</code>, <code>set</code> with an empty display) is typed as
 <code>out = []</code> would be, by what the function puts in it.</p>
 <p>A <code>*args: int</code> or <code>*args: float</code>, with no keyword-only parameters or
