@@ -164,6 +164,7 @@ nav:
           - howto/51_clinic.md
           - howto/53_caches_and_counters.md
           - howto/54_objects_and_grids.md
+          - howto/55_linked_structures.md
       - Accelerators:
           - howto/38_cuda.md
           - howto/44_tile.md
@@ -189,6 +190,7 @@ nav:
           - howto/26_project.md
           - howto/30_migrate.md
           - howto/52_unannotated.md
+          - howto/56_options_and_doctests.md
   - Reference:
       - reference/index.md
       - Command line: cli.md

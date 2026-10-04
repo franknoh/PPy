@@ -106,6 +106,11 @@ in place. A native function and Python code can take turns drawing, and the
 sequence is the one CPython would give. When a native call falls back to
 Python after it drew (an integer grew past 64 bits, say), the generator is put
 back as it was before the call, so the Python rerun draws the same numbers.
+The generated wrapper saves the generator's 2.5 KB of state with one copy
+before such a call, so a call that draws costs about what any other call
+does ([What a call costs](native-lowering.md#what-a-call-costs)). A function
+that also reads module globals is bound by the Python-level binding, which
+saves the state through `ctypes` and costs about 1.6 µs a call.
 `gauss` keeps a value back between calls in a Python attribute, which is why
 it stays in Python under `ppy run`.
 

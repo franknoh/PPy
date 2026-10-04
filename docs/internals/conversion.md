@@ -61,19 +61,49 @@ result and native code runs on it:
 
 - it takes one type per parameter: `int` with `float` joins to `float`, an
   object type with `None` to `X | None`, and any other union leaves the
-  parameter unknown, where the converter would write the union;
-- a default value counts as a call, and a parameter no call types takes
-  what its module's doctests pass as literals;
+  parameter unknown, where the converter would write the union. A function
+  is not compiled once per type its calls pass;
+- a default value counts as a call (a literal, a module constant written as
+  one, or `int(...)`, `float(...)`, `str(...)`, `bool(...)`, `len(...)`),
+  and a parameter no call types takes what its module's doctests and
+  `pytest.mark.parametrize` cases pass as literals;
+- a value whose type the program states counts as a typed argument:
+  `int(input())`, and `args.k` of an `argparse` parser whose
+  `add_argument` gives it a type and a value whether or not the option is
+  given;
+- an operator on an instance is a call site of its dunder (`a + b` of
+  `type(a).__add__` and `type(b).__radd__`, `a[k]` of `__getitem__`, and so
+  on); comparison methods are typed only as taking their own class;
+- a parameter declared with an open element type (`list`, `dict[str,
+  Any]`) is refined to the element type every call agrees on, and goes back
+  to its declaration on retraction;
+- a parameter with no evidence at all takes the one builtin its body's use
+  admits: `range(n)` an `int`, string methods only a `str`;
 - methods that override one another take their evidence together;
-- a function used as a value, a decorated one, one called with `*args` or
-  `**kwargs`, a nested function, and a dunder other than `__init__` are
+- a decorator that keeps the parameters (`staticmethod`, `classmethod`,
+  `functools.cache`, `functools.lru_cache`, `abc.abstractmethod`,
+  `typing.final`, a pytest mark, or a project decorator whose one wrapper is
+  `@functools.wraps(fn)` over `(*args, **kwargs)` and only calls
+  `fn(*args, **kwargs)`) is looked through; a function used as a value, one
+  with another decorator, one called with `*args` or `**kwargs`, a nested
+  function, and a dunder other than `__init__` and the operator methods are
   left alone;
 - an inferred type that makes the checker report an error the analysis
   without it did not is taken back, first for the functions involved, then
   for the module, and at last for everything.
 
+Unannotated fields are typed in the same analysis (`infer_fields` in
+`analysis/inference.py`): every assignment to the field anywhere in the
+project, not only the class's own `self.x = ...`, and, for a field that
+starts as an empty container, what is appended, added, pushed, or stored
+into it. A value the checker cannot type is no evidence, a field annotated
+anywhere keeps its annotation, and a union of a class with its subclasses
+collapses to the base. The fields are seeded before parameter inference
+runs, so taking a parameter's type back restores them.
+
 Each native entry checks the exact type of every argument when Python calls
-it, so a caller with other types runs the Python body. The Python backend
+it, so a caller with other types runs the Python body. An object's fields
+are checked the same way when it crosses. The Python backend
 and the bodies `ppy run` falls back to are optimized from the analysis
 before inference, since nothing guards them. `ppy convert` and `ppy
 migrate` do not use this pass, and their output does not depend on it.

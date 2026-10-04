@@ -94,8 +94,9 @@ to a native build in about ten minutes.
   compile to native code, reference counted with cycles collected, and
   give the same answers as CPython.
 - **Existing Python as it is.** Without strict mode, `ppy run` types
-  unannotated parameters from the project's calls, defaults, and doctests,
-  and runs what the analysis cannot follow on CPython
+  unannotated parameters from the project's calls, defaults, doctests,
+  `argparse` options, and operators, types unannotated fields from what the
+  program stores into them, and runs what the analysis cannot follow on CPython
   ([Types from call sites](guide/subset.md#types-from-call-sites)).
 - **Eight library plugins.** NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.

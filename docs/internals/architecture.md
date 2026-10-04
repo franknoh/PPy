@@ -164,16 +164,34 @@ The same wrapper carries what used to need Python frames:
 
 - Lists, dicts, sets, and objects of the project's classes cross in C
   (`backend/llvm/crossing.c`), from type tables emitted for each signature.
-  Each argument is copied into a runtime handle, an object reached twice
-  becomes one handle, and after a call that writes through a parameter
-  every container and object that came in is copied back into the
-  caller's object. An element that did not change keeps its Python object.
+  An object reached twice becomes one handle.
+  - A call that writes through no parameter and takes no objects reads its
+    containers in place: its lists, inner lists included, are laid out in
+    an arena the call owns (`px_chunk`, kept between calls) and marked
+    immortal for the call; a string is the Python string's own UTF-8,
+    borrowed; a dict or set is filled without hashing and indexed at its
+    first lookup. A row or string handed back is the caller's object. When
+    the call answers, `px_settle` counts the call's references, and
+    anything still held past the call (a string a cached callee kept) is
+    copied into memory of its own.
+  - A call that writes copies each argument into a runtime handle. Every
+    entry records whether a written parameter brought it in, and only those
+    are copied back into the caller's objects. Of a list of numbers only
+    the elements whose words changed are set again; an element that did not
+    change keeps its Python object.
+- A function that draws from `random` saves the generator's state in the
+  wrapper with one `memcpy` and puts it back only where Python runs the call
+  again (`binding.attach_random` hands the wrapper the state's address once
+  per module).
 - A function that prints, reads input, or calls into Python enters and
   leaves its call, commits held output, and drops it on a fallback in C
   (`wrapper_effects.c`); it calls back into Python only for a raise after a
   barrier or a write that failed.
 - A function that reads settled module globals keeps a Python frame that
-  reads them, which then calls the C entry.
+  reads them, which then calls the C entry (`binding._bind_globals`). The
+  same frame reads a nested function's shared variables from the
+  `__closure__` of the function object it was called through, and packs
+  the positions a `*args` parameter takes into one list.
 - A call with keywords, or with defaults left out, is bound in C: the
   wrapper matches `kwnames` against the Python function's parameter names
   (read from its code object when the wrapper is bound) and fills what is

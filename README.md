@@ -54,7 +54,7 @@ uv add "ppy-lang[llvm]"        # or: pip install "ppy-lang[llvm]"
 uv run ppy doctor              # reports what it found
 ```
 
-Pin an exact version before 1.0 (`ppy-lang[llvm]==0.6.0`). A minor release
+Pin an exact version before 1.0 (`ppy-lang[llvm]==0.7.0`). A minor release
 may change the language, and the [changelog](CHANGELOG.md) says what
 changed.
 
@@ -223,8 +223,10 @@ keeps running as Python next to it.
 
 Existing Python can also run as it is. With `strict = false` in
 `[tool.ppy]` (or `--no-strict`), `ppy run` types unannotated parameters
-from the calls the project makes, their default values, and their
-doctests, compiles what that types, and runs the rest on CPython. Code the
+from the calls the project makes (`argparse` options and operators on
+instances included), their default values, and their doctests, types
+unannotated fields from every store into them, compiles what that types,
+and runs the rest on CPython. Code the
 analysis cannot follow (`eval`, a star import, an import that fails) is a
 `W2010` warning, not an error, and runs as CPython runs it. Of 400
 TheAlgorithms/Python scripts run both ways, 387 print the same under

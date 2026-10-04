@@ -1,0 +1,111 @@
+import argparse
+import functools
+import time
+
+EPSILON = 1e-9
+
+
+class Vector:
+    """
+    >>> a = Vector(1, 2)
+    >>> (a + Vector(3, 4)).norm(), (a * 3).norm(), a < Vector(2, 2)
+    (52, 45, True)
+    """
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other):
+        return Vector(self.x + other.x, self.y + other.y)
+
+    def __mul__(self, factor):
+        return Vector(self.x * factor, self.y * factor)
+
+    def __lt__(self, other):
+        return self.norm() < other.norm()
+
+    def norm(self):
+        return self.x * self.x + self.y * self.y
+
+
+def sieve(limit):
+    """
+    >>> sieve(20)
+    [2, 3, 5, 7, 11, 13, 17, 19]
+    """
+    marks = [True] * (limit + 1)
+    marks[0] = marks[1] = False
+    for n in range(2, int(limit**0.5) + 1):
+        if marks[n]:
+            for multiple in range(n * n, limit + 1, n):
+                marks[multiple] = False
+    return [n for n in range(limit + 1) if marks[n]]
+
+
+@functools.lru_cache(maxsize=None)
+def partitions(total, largest):
+    """
+    >>> for n in [1, 5, 10]:
+    ...     print(partitions(n, n))
+    1
+    7
+    42
+    """
+    if total == 0:
+        return 1
+    if total < 0 or largest == 0:
+        return 0
+    return partitions(total - largest, largest) + partitions(total, largest - 1)
+
+
+def walk(steps, seed):
+    position = Vector(0, 0)
+    farthest = Vector(0, 0)
+    state = seed
+    for _ in range(steps):
+        state = (state * 1103515245 + 12345) % 2147483648
+        step = Vector(state % 3 - 1, state // 3 % 3 - 1)
+        position = position + step * (1 + state % 2)
+        if farthest < position:
+            farthest = position
+    return farthest.norm()
+
+
+def mean_gap(primes, tolerance=EPSILON):
+    if len(primes) < 2:
+        return 0.0
+    total = 0.0
+    for i in range(1, len(primes)):
+        total += primes[i] - primes[i - 1]
+    result = total / (len(primes) - 1)
+    return 0.0 if result < tolerance else result
+
+
+def main():
+    parser = argparse.ArgumentParser(description="number puzzles")
+    parser.add_argument("--limit", type=int, default=5_000_000)
+    parser.add_argument("--terms", type=int, default=400)
+    parser.add_argument("--steps", type=int, default=2_000_000)
+    parser.add_argument("--seed", type=int, default=7)
+    args = parser.parse_args()
+    start = time.perf_counter()
+    primes = sieve(args.limit)
+    print(f"# sieve: {time.perf_counter() - start:.3f} s")
+    print("primes below", args.limit, ":", len(primes), "the last", primes[-1])
+    start = time.perf_counter()
+    gap = mean_gap(primes)
+    print(f"# mean_gap: {time.perf_counter() - start:.3f} s")
+    print("mean gap:", round(gap, 4))
+    start = time.perf_counter()
+    count = partitions(args.terms, args.terms)
+    print(f"# partitions: {time.perf_counter() - start:.3f} s")
+    print("partitions of", args.terms, ":", count)
+    start = time.perf_counter()
+    farthest = walk(args.steps, args.seed)
+    print(f"# walk: {time.perf_counter() - start:.3f} s")
+    print("farthest squared distance:", farthest)
+
+
+if __name__ == "__main__":
+    main()
