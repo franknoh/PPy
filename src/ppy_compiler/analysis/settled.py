@@ -102,7 +102,7 @@ def _cells(
         typed = outer.locals.get(name, params.get(name))
         if typed is None:
             return None
-        written = not _immutable(typed) and not _only_read(node, name)
+        written = not _immutable(typed) and not (_flat(typed) and _only_read(node, name))
         found[(scope, name)] = ImplicitGlobal(scope, name, typed, written)
     return found
 
@@ -125,6 +125,19 @@ def _immutable(t: T.Type) -> bool:
     if isinstance(base, T.Tuple_):
         return all(_immutable(item) for item in base.items)
     return False
+
+
+def _flat(t: T.Type) -> bool:
+    """A container of values no one can change in place (`list[int]`,
+    `dict[str, float]`): reading one of its items hands out nothing a write
+    could reach."""
+    base = T.strip_literal(t)
+    return (
+        isinstance(base, T.Instance)
+        and base.name in {"list", "dict", "set", "frozenset"}
+        and bool(base.args)
+        and all(_immutable(arg) for arg in base.args)
+    )
 
 
 def _only_read(node: ast.AST, name: str) -> bool:

@@ -527,6 +527,21 @@ def filled(n: int) -> list[int]:
     return seen[:5]
 
 
+def grid_of(n: int) -> list[list[int]]:
+    grid = [[0] * 3 for _ in range(3)]
+
+    def fill(k: int) -> int:
+        t = 0
+        for i in range(len(grid)):
+            for j in range(len(grid[i])):
+                grid[i][j] = grid[i][j] + i * j * k + 1
+                t += grid[i][j]
+        return t
+
+    print(fill(n), fill(n + 1), len(sys.argv) * 0)
+    return grid
+
+
 def late() -> int:
     def use(m: int) -> int:
         t = 0
@@ -542,7 +557,7 @@ def late() -> int:
     return use(50) + len(sys.argv) * 0
 
 
-print(outer(1000, 3), outer(10, 1), filled(100), late())
+print(outer(1000, 3), outer(10, 1), filled(100), grid_of(2), late())
 """
 
 
@@ -552,10 +567,18 @@ def test_a_nested_function_is_handed_the_cells_it_shares(tmp_path: Path):
     """The function around each nested one stays in Python (it reads
     `sys.argv`); the nested one goes native, and Python hands it each variable
     it shares as the cell holds it at the call: a rebinding between calls is
-    seen, a list it writes is written back, and an empty cell is Python's
-    `NameError`."""
+    seen, a list it writes is written back, a list of lists written through
+    an item too, and an empty cell is Python's `NameError`."""
     _agrees(tmp_path, _expected(tmp_path, CELLS))
-    _native(tmp_path, ["outer.<locals>.work", "filled.<locals>.sweep", "late.<locals>.use"])
+    _native(
+        tmp_path,
+        [
+            "outer.<locals>.work",
+            "filled.<locals>.sweep",
+            "grid_of.<locals>.fill",
+            "late.<locals>.use",
+        ],
+    )
 
 
 LIBRARY = """
