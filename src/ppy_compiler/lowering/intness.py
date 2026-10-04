@@ -544,20 +544,34 @@ class ModuleIntness:
 
 #: Operators whose result is a `float` when either operand is one.
 _FLOATING = (ast.Add, ast.Sub, ast.Mult, ast.FloorDiv, ast.Mod)
+#: Operators whose result is an `int` (never a `bool`) when both operands are
+#: an `int` or a `bool`.
+_INTEGRAL = (ast.Add, ast.Sub, ast.Mult, ast.FloorDiv, ast.Mod, ast.LShift, ast.RShift)
 
 
-def real_float_locals(
+def _integral(t: T.Type) -> bool:
+    return T.strip_literal(t) in (T.INT, T.BOOL)
+
+
+def exact_locals(
     function: ast.FunctionDef | ast.AsyncFunctionDef,
     params: Iterable[str],
     exact: frozenset[str],
+    kind: str,
+    type_of: Callable[[ast.expr], T.Type],
 ) -> frozenset[str]:
-    """The names of a function that only ever hold a real `float`: every
-    binding is a float literal, `float(...)`, a division, or arithmetic with a
-    real float on one side -- `t = (2, 1e308 * x); n, f = t` makes `f` one.
-    `exact` are the parameters that are real floats on entry; any other
+    """The names of a function that only ever hold a real `float` (`kind`
+    "float") or a real `int` and never a `bool` (`kind` "int").
+
+    A real float is bound from a float literal, `float(...)`, or arithmetic
+    with a real float on one side -- `t = (2, 1e308 * x); n, f = t` makes `f`
+    one. A real int is bound from an int literal, `len(...)`, `int(...)`, or
+    arithmetic other than `&`, `|`, `^` on two values the checker typed `int`
+    or `bool`. `exact` are the parameters that are real on entry; any other
     parameter, a name bound by a loop, a `with`, a handler, a comprehension, a
     nested scope, or a `global`, is not one."""
     params = set(params)
+    floating = kind == "float"
     #: name -> the values bound to it; None where one is not followed.
     bound: dict[str, list[ast.expr | None]] = {}
     augmented: set[int] = set()
@@ -590,7 +604,12 @@ def real_float_locals(
             bind(node.target, node.value)
         elif isinstance(node, ast.AugAssign):
             augmented.add(id(node.target))
-            if not isinstance(node.op, (*_FLOATING, ast.Div)):
+            keeps = (
+                isinstance(node.op, (*_FLOATING, ast.Div))
+                if floating
+                else isinstance(node.op, _INTEGRAL) and _integral(type_of(node.value))
+            )
+            if not keeps:
                 bind(node.target, None)
         elif isinstance(node, ast.NamedExpr):
             bind(node.target, node.value)
@@ -625,26 +644,35 @@ def real_float_locals(
     def is_real(node: ast.expr | None) -> bool:
         match node:
             case ast.Constant():
-                return type(node.value) is float
+                return type(node.value) is (float if floating else int)
             case ast.Name():
                 return node.id in real
-            case ast.BinOp():
-                if isinstance(node.op, ast.Div):
-                    return is_real(node.left) or is_real(node.right)
-                if isinstance(node.op, _FLOATING):
+            case ast.BinOp() if floating:
+                if isinstance(node.op, (*_FLOATING, ast.Div)):
                     return is_real(node.left) or is_real(node.right)
                 return False
-            case ast.UnaryOp():
+            case ast.BinOp():
+                return (
+                    isinstance(node.op, _INTEGRAL)
+                    and _integral(type_of(node.left))
+                    and _integral(type_of(node.right))
+                )
+            case ast.UnaryOp() if floating:
                 return isinstance(node.op, (ast.USub, ast.UAdd)) and is_real(node.operand)
+            case ast.UnaryOp():
+                return isinstance(node.op, (ast.USub, ast.UAdd, ast.Invert)) and _integral(
+                    type_of(node.operand)
+                )
             case ast.IfExp():
                 return is_real(node.body) and is_real(node.orelse)
             case ast.Call():
+                makers = {"float"} if floating else {"int", "len"}
                 return (
                     isinstance(node.func, ast.Name)
-                    and node.func.id == "float"
+                    and node.func.id in makers
+                    and node.func.id not in bound
                     and len(node.args) == 1
                     and not node.keywords
-                    and "float" not in bound
                 )
             case ast.Subscript():
                 # `t[i]` of a name only ever bound to tuple literals.

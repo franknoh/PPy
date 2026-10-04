@@ -17,7 +17,7 @@ from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
 from .collections import HANDLE, Shape
 from .exceptions import ARGS_NONE, ARGS_ONE_TEXT
-from .intness import gives_bool, gives_int, real_float_locals
+from .intness import exact_locals, gives_bool, gives_int
 
 #: The builtin classes `isinstance` is asked of, by the name a program spells.
 _BUILTIN_CLASSES = frozenset(
@@ -395,8 +395,10 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
                 exact = self._exact_parameter(subject.id)
                 if exact is not None:
                     possible &= {exact}
-                elif subject.id in self._real_floats():
-                    possible &= {"float"}
+                else:
+                    local = self._exact_local(subject.id)
+                    if local is not None:
+                        possible &= {local}
             if wanted is not None and possible is not None:
                 answers = {
                     any(name in T.BUILTIN_MRO.get(runtime, (runtime,)) for name in wanted)
@@ -419,21 +421,23 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
                 return self._is_none_or(node, [n for n in wanted if n != "NoneType"])
         return super()._is_instance(node)  # type: ignore[misc]
 
-    def _real_floats(self) -> frozenset[str]:
-        """The names of this function that only ever hold a real `float`."""
+    def _exact_local(self, name: str) -> str | None:
+        """`int` or `float` for a name of this function that only ever holds a
+        real one of that class (`lowering.intness.exact_locals`)."""
         info = self.info  # type: ignore[attr-defined]
-        cache = self.__dict__.setdefault("_real_float_names", {})
+        cache = self.__dict__.setdefault("_exact_local_names", {})
         found = cache.get(info.qualname)
         if found is None:
             node = info.node
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                found = frozenset()
-            else:
+            found = {}
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 params = [p.name for p in info.params]
-                exact = frozenset(n for n in params if self._exact_parameter(n) == "float")
-                found = real_float_locals(node, params, exact)
+                for kind in ("int", "float"):
+                    exact = frozenset(n for n in params if self._exact_parameter(n) == kind)
+                    for local in exact_locals(node, params, exact, kind, self._type_of):  # type: ignore[attr-defined]
+                        found[local] = kind
             cache[info.qualname] = found
-        return found
+        return found.get(name)
 
     def _exact_parameter(self, name: str) -> str | None:
         """The one class a parameter of a module-level function only ever called

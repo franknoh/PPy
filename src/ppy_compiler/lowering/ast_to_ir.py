@@ -3097,6 +3097,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 promoted = self._coerce(operand, "int")
                 return self._checked_binary(self._int_constant(0), promoted, "sub")
             case ast.UAdd():
+                if operand.type == BOOL:
+                    return self._coerce(operand, "int")  # `+True` is `1`
                 return operand
             case ast.Invert():
                 promoted = self._coerce(operand, "int")
@@ -5153,6 +5155,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if dispatched is not None:
             return dispatched
         kind = self._unify(_kind(left.type), _kind(right.type))
+        if kind == "bool" and op not in _BITWISE:
+            kind = "int"  # `True + True` is `2`; only `&`, `|`, `^` keep a `bool`
         left, right = self._coerce(left, kind), self._coerce(right, kind)
         if kind == "float":
             if op in _ARITHMETIC:
