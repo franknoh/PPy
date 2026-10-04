@@ -28,16 +28,16 @@ from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
-from ..analysis.closures import own_names
+from ..analysis.closures import cell_captures, own_names
 from ..analysis.lexical import LexicalBindings
 from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo, ParamInfo, derivative_spec, fold_flags
 from ..backend.llvm.lowering import (
-    VARIADIC,
     _ALLOCATIONS,
     _MATH_INTRINSICS,
     _MAX_TUPLE_WIDTH,
     _NARROW,
+    VARIADIC,
     ClassLayouts,
     Unsupported,
     _declared_bounds,
@@ -96,7 +96,6 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
-from ..analysis.closures import cell_captures
 from .calls import CallBinding, nested_entry_refusal
 from .closures import ClosureLowering
 from .collections import HANDLE, Held, Kind, Shape, crossing_classes, records_of

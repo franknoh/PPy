@@ -293,16 +293,16 @@ def used_whole(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     list to hand back or take a part of; a handle is the list itself."""
     found: set[str] = set()
     for child in ast.walk(node):
-        if isinstance(child, ast.Return) and isinstance(child.value, ast.Name):
-            found.add(child.value.id)
-        elif (
+        if (isinstance(child, ast.Return) and isinstance(child.value, ast.Name)) or (
             isinstance(child, ast.Subscript)
             and isinstance(child.slice, ast.Slice)
             and isinstance(child.value, ast.Name)
         ):
             found.add(child.value.id)
         elif isinstance(child, ast.BinOp) and isinstance(child.op, (ast.Add, ast.Mult)):
-            found.update(side.id for side in (child.left, child.right) if isinstance(side, ast.Name))
+            found.update(
+                side.id for side in (child.left, child.right) if isinstance(side, ast.Name)
+            )
     return found
 
 
