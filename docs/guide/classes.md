@@ -207,6 +207,7 @@ An object class's operator methods lower as calls:
 | `-a`, `+a`, `~a` | `__neg__`, `__pos__`, `__invert__` |
 | `a == b`, `a != b` | `__eq__`, `__ne__` (or `not __eq__`); a dataclass compares its fields; any other class compares identity |
 | `a < b`, `a <= b`, `a > b`, `a >= b` | `__lt__`, ..., or the reflected method of the right operand; `@dataclass(order=True)` compares its fields as tuples |
+| `max(a, b, ...)`, `min(a, b, ...)` of names of one class | `later > best` (`later < best` for `min`) for each later argument, as above; the first of equals wins |
 | `str(a)`, `repr(a)`, `print(a)`, `f"{a}"`, `f"{a!r}"` | `__str__`, `__repr__`, or a dataclass's generated `__repr__`, `Point(x=1, y=2.5)` |
 | `obj[key]`, `obj[key] = value` | `__getitem__`, `__setitem__` |
 | `x in obj` | `__contains__` |
@@ -420,8 +421,9 @@ on CPython.
   depends on CPython's version.
 - A dataclass with subclasses keeps its generated methods in Python, since
   they read the instance's own class.
-- `sorted`, `min`, and `max` of `order=True` dataclass objects stay in
-  Python; comparing two of them is native.
+- `sorted`, and `min` and `max` of a collection, of `order=True` dataclass
+  objects stay in Python; comparing two of them is native, and so is
+  `max(a, b)` of them.
 - A class with neither `__str__`, `__repr__`, nor a generated one prints its
   address, which only Python has. A value class with its own `__repr__` or
   `__str__` is shown by Python.

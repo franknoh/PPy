@@ -238,11 +238,13 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
         if (
             analysis is not None
             and analysis.implicit_globals
+            and all(not held.module.endswith(".<locals>") for held in analysis.implicit_globals)
             and qualname in self.frontend.declared  # type: ignore[attr-defined]
             and _only_called(self.info.node, node.name)  # type: ignore[attr-defined]
         ):
             # Only ever called, by its entry, which is passed the module's
-            # globals it reads as this function was: no value to make.
+            # globals it reads as this function was (and no cells, which
+            # only a closure value carries): no value to make.
             return
         typed = T.Callable_(tuple(T.Param(p.name, p.type) for p in info.params), info.ret)
         if not is_plain_callable(typed):
