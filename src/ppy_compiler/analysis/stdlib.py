@@ -732,6 +732,19 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "os.path.dirname": _fn("os.path.dirname", T.STR, _ALLOC),
     "os.path.abspath": _fn("os.path.abspath", T.STR, _IO),
     "os.path.splitext": _fn("os.path.splitext", T.Tuple_((T.STR, T.STR)), _ALLOC),
+    "os.path.split": _fn("os.path.split", T.Tuple_((T.STR, T.STR)), _ALLOC),
+    "os.path.normpath": _fn("os.path.normpath", T.STR, _ALLOC),
+    "os.path.realpath": _fn("os.path.realpath", T.STR, _IO),
+    "os.path.relpath": _fn("os.path.relpath", T.STR, _IO),
+    "os.path.expanduser": _fn("os.path.expanduser", T.STR, _IO),
+    "os.path.isfile": _fn("os.path.isfile", T.BOOL, _IO),
+    "os.path.isdir": _fn("os.path.isdir", T.BOOL, _IO),
+    "os.path.getsize": _fn("os.path.getsize", T.INT, _IO | EffectSet.of(raises=("OSError",))),
+    # The statement it times is source text, which may do anything.
+    "timeit.timeit": _fn("timeit.timeit", T.FLOAT, EffectSet.of(Effect.EXTERNAL_UNKNOWN)),
+    "timeit.repeat": _fn(
+        "timeit.repeat", T.list_of(T.FLOAT), EffectSet.of(Effect.EXTERNAL_UNKNOWN)
+    ),
     "sys.exit": _fn("sys.exit", T.NEVER, EffectSet.of(raises=("SystemExit",))),
     "sys.getsizeof": _fn("sys.getsizeof", T.INT),
     "sys.getrecursionlimit": _fn("sys.getrecursionlimit", T.INT),
@@ -788,6 +801,7 @@ MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
     "math.tau": (T.FLOAT, Facts()),
     "math.inf": (T.FLOAT, Facts()),
     "math.nan": (T.FLOAT, Facts()),
+    "os.path": (T.Module_("os.path"), Facts()),
     "sys.argv": (T.list_of(T.STR), Facts()),
     "sys.path": (T.list_of(T.STR), Facts()),
     "sys.modules": (T.dict_of(T.STR, T.OBJECT), Facts()),

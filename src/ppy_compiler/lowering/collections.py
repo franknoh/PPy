@@ -1806,6 +1806,10 @@ class CollectionLowering:
             return self._rt("ppy_coll_none", (), HANDLE), True
         if isinstance(node, ast.Name):
             held = self.collections.get(node.id)
+            if held is None and node.id == "__file__":
+                found = self._module_file()  # type: ignore[attr-defined]
+                if found is not None:
+                    return found, True
             if held is None:
                 raise Unsupported(f"`{node.id}` is not a native collection")
             return core.load(self.b, held.slot), False
