@@ -5441,7 +5441,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         return self._truth(self._expr(node))
 
     def _buffer_empty_compare(self, node: ast.Compare) -> Value | None:
-        """`xs == []` and `xs != []` of a list a buffer holds: its length against 0."""
+        """`xs == []` and `xs != []` of a list, lent as a buffer or held by
+        handle: its length against 0."""
         operator = node.ops[0]
         if not isinstance(operator, (ast.Eq, ast.NotEq)):
             return None
@@ -5450,7 +5451,12 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             left, right = right, left
         if not (isinstance(right, ast.List) and not right.elts):
             return None
-        return self._buffer_truth(left, empty=isinstance(operator, ast.Eq))
+        empty = isinstance(operator, ast.Eq)
+        kind = self._kind_of(left)
+        if kind is not None and kind.name == "List":
+            # A list held by handle: equal to `[]` exactly when it is empty.
+            return self._truth_of(left, empty=empty)
+        return self._buffer_truth(left, empty=empty)
 
     def _buffer_truth(self, node: ast.expr, *, empty: bool = False) -> Value | None:
         """`if xs:` of a list a buffer holds: whether it holds anything (with

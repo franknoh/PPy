@@ -73,10 +73,17 @@ def _still_fails(path: str, reason: str):  # type: ignore[no-untyped-def]
 
 
 def _save(  # pylint: disable=too-many-arguments,too-many-positional-arguments
-    seed: int, path: str, reason: str, source: str, state: bool = False, boundary: bool = False
+    seed: int,
+    path: str,
+    reason: str,
+    source: str,
+    state: bool = False,
+    boundary: bool = False,
+    shapes: bool = False,
 ) -> Path:
     REGRESSIONS.mkdir(parents=True, exist_ok=True)
     domain = "_state" if state else "_boundary" if boundary else ""
+    domain += "_shapes" if shapes else ""
     target = REGRESSIONS / f"seed{seed}{domain}_{path}.ppy"
     target.write_text(f"# fuzz: path={path} seed={seed} ({reason})\n{source}", encoding="utf-8")
     return target
@@ -93,12 +100,13 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     calls: bool = False,
     unannotated: bool = False,
     boundary: bool = False,
+    shapes: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
     for current in range(seed, seed + count):
         source = generate_program(
-            current, prints, state, stdlib, calls, unannotated, boundary=boundary
+            current, prints, state, stdlib, calls, unannotated, boundary=boundary, shapes=shapes
         )
         results = run_program(source, paths, timeout=60.0)
         mismatches = printed_twice(results) + compare(results)
@@ -117,7 +125,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         reduced = source
         if shrink and first.reason != "did not build":
             reduced = minimize(source, _still_fails(first.path, first.reason), attempts=60)
-        saved = _save(current, first.path, first.reason, reduced, state, boundary)
+        saved = _save(current, first.path, first.reason, reduced, state, boundary, shapes)
         print(f"      saved {saved.relative_to(REGRESSIONS.parent.parent)}", flush=True)
     elapsed = time.monotonic() - started
     print(f"{count - failures}/{count} programs agree on {', '.join(paths)} ({elapsed:.0f}s)")
@@ -148,6 +156,12 @@ def main(argv: list[str] | None = None) -> int:
         "--boundary",
         action="store_true",
         help="write through shared containers and objects Python passes (paths with Python)",
+    )
+    parser.add_argument(
+        "--shapes",
+        action="store_true",
+        help="add the shapes the corpus kept in Python: returns on every side, list "
+        "parameters, string constants, tuple assignments, *args (with --state, nested cells)",
     )
     parser.add_argument("--no-minimize", action="store_true")
     parser.add_argument("--replay", action="store_true")
@@ -181,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
             options.calls,
             options.unannotated,
             boundary=options.boundary,
+            shapes=options.shapes,
         )
         print(shown, end="")
         return 0
@@ -201,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         options.calls,
         options.unannotated,
         options.boundary,
+        options.shapes,
     )
 
 

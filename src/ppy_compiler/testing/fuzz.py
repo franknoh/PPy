@@ -256,8 +256,13 @@ class _Generator:
         calls: bool = False,
         unannotated: bool = False,
         boundary: bool = False,
+        shapes: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: Whether the program also has the shapes the corpus kept in Python
+        #: (`shapes_part`), drawn from a sequence of their own.
+        self.with_shapes = shapes
+        self.shaping = random.Random(seed ^ 0x5A9E)
         #: Whether functions take defaults and keyword-only parameters, and
         #: `main` calls them by keyword and leaves defaults out, drawn from a
         #: sequence of their own so the rest of the program stays the same.
@@ -1416,6 +1421,10 @@ class _Generator:
             self.state_globals(w)
         if self.with_boundary:
             w.lines.extend(_BOUNDARY_PRELUDE.splitlines())
+        if self.with_shapes:
+            w.put(f"SHAPE_WORD = {''.join(self.shaping.sample('ABCDEFGHIJKLMNOP', 9))!r}")
+            w.put("")
+            w.put("")
         calls: list[str] = []
         foreign: list[tuple[str, str]] = []
         for _ in range(self.rng.randint(3, 6)):
@@ -1427,6 +1436,8 @@ class _Generator:
         after = self.state_part(w) if self.with_state else []
         if self.with_boundary:
             after.extend(self.boundary_part(w))
+        if self.with_shapes:
+            after.extend(self.shapes_part(w))
         w.put("def main() -> None:")
         if self.stdlib:
             w.put(f"    random.seed({self.seed})")
@@ -1564,6 +1575,137 @@ class _Generator:
         w.put("")
         w.put("")
 
+    def shapes_part(self, w: _Writer) -> list[str]:
+        """Functions in the shapes the corpus kept in Python, and what `main`
+        does with them: an `if`/`elif`/`else` that returns on every side, a
+        list parameter tested, compared with `[]`, unpacked, sliced, and
+        returned, a module string constant, a tuple assignment of lists, and
+        `*args` of ints. With module state (the paths with Python), also a
+        function that falls off its end and a nested function handed cells."""
+        rng = self.shaping
+        signs = self.name("sh")
+        cut = rng.randint(-3, 3)
+        w.put(f"def {signs}(n: int) -> int:")
+        w.put(f"    if n > {cut}:")
+        w.put(f"        return n * {rng.randint(1, 5)}")
+        w.put(f"    elif n < {cut - rng.randint(1, 4)}:")
+        if rng.random() < 0.3:
+            w.put('        raise ValueError("below")')
+        else:
+            w.put(f"        return -n - {rng.randint(0, 3)}")
+        w.put("    else:")
+        w.put(f"        return {rng.randint(-9, 9)}")
+        w.put("")
+        w.put("")
+        listed = self.name("sh")
+        w.put(f"def {listed}(xs: list[int], k: int) -> list[int]:")
+        w.put("    if not xs:")
+        w.put("        return xs")
+        w.put("    if xs == []:")
+        w.put("        return [k]")
+        w.put("    if len(xs) == 3:")
+        w.put("        a, b, c = xs")
+        w.put("        return [c, b, a + k]")
+        w.put(f"    return xs[{rng.randint(0, 2)} : len(xs) - {rng.randint(0, 1)}]")
+        w.put("")
+        w.put("")
+        worded = self.name("sh")
+        w.put(f"def {worded}(text: str, key: int) -> str:")
+        w.put("    out = ''")
+        w.put("    for ch in text:")
+        w.put("        found = SHAPE_WORD.find(ch.upper())")
+        w.put("        out += ch if found == -1 else SHAPE_WORD[(found + key) % len(SHAPE_WORD)]")
+        w.put(f"    return out + SHAPE_WORD[:{rng.randint(0, 5)}]")
+        w.put("")
+        w.put("")
+        paired = self.name("sh")
+        w.put(f"def {paired}(n: int) -> int:")
+        w.put(f"    counts, seen = [0] * (n % 5 + 1), [{rng.randint(0, 9)}] * 2")
+        w.put("    a = [1, 2]")
+        w.put("    b = [3]")
+        w.put("    for _ in range(n % 4):")
+        w.put("        a, b = b, a")
+        w.put("    return sum(counts) + sum(seen) + a[0] * 10 + len(b)")
+        w.put("")
+        w.put("")
+        star = self.name("sh")
+        w.put(f"def {star}(k: int, *xs: int) -> int:")
+        w.put("    t = 0")
+        w.put("    for x in xs:")
+        w.put("        t += x * k")
+        w.put("    return t + len(xs)")
+        w.put("")
+        w.put("")
+        spread = self.name("sh")
+        w.put(f"def {spread}(n: int) -> int:")
+        w.put(f"    return {star}(n) + {star}(n, n + 1) + {star}(2, n, -n, {rng.randint(-5, 5)})")
+        w.put("")
+        w.put("")
+
+        def numbers() -> str:
+            return ", ".join(str(rng.randint(-5, 9)) for _ in range(rng.randint(0, 5)))
+
+        after = []
+        for _ in range(rng.randint(1, 3)):
+            n = rng.randint(-8, 8)
+            after.extend(
+                [
+                    "try:",
+                    f"    print({signs}({n}))",
+                    "except ValueError as e:",
+                    "    print('ValueError', e)",
+                ]
+            )
+        after.append("items: list[int] = []")
+        for _ in range(rng.randint(1, 3)):
+            after.append(f"items = [{numbers()}]")
+            after.append(f"print({listed}(items, {rng.randint(-3, 3)}))")
+        word = repr(rng.choice(("abc", "Hello, World", "pqz", "")))
+        after.append(
+            f"print({worded}({word}, {rng.randint(-4, 9)}), {paired}({rng.randint(0, 9)}))"
+        )
+        after.append(
+            f"print({star}({rng.randint(-3, 3)}, {numbers()}), {spread}({rng.randint(-4, 9)}))"
+        )
+        if self.with_state:
+            after.extend(self.python_shapes(w))
+        return after
+
+    def python_shapes(self, w: _Writer) -> list[str]:
+        """A function that falls off its end, which falls back to Python's
+        `None`, and nested functions handed the cells they share by a function
+        that stays in Python (it reads `sys.argv`)."""
+        rng = self.shaping
+        falls = self.name("sh")
+        w.put(f"def {falls}(n: int) -> int:")
+        w.put(f"    if n % {rng.randint(2, 4)} == 0:")
+        w.put("        return n // 2")
+        w.put("")
+        w.put("")
+        outer = self.name("sh")
+        w.put(f"def {outer}(n: int, k: int) -> int:")
+        w.put("    import sys")
+        w.put(f"    scale = k * {rng.randint(1, 4)}")
+        w.put(f"    seen = [0] * (n % 7 + {rng.randint(1, 5)})")
+        w.put("")
+        w.put("    def sweep(m: int) -> int:")
+        w.put("        t = 0")
+        w.put("        for i in range(len(seen)):")
+        w.put("            seen[i] = seen[i] + i * scale + m")
+        w.put("            t += seen[i]")
+        w.put("        return t")
+        w.put("")
+        w.put("    first = sweep(n)")
+        w.put(f"    scale = {rng.randint(-9, 9)}")
+        w.put("    return first + sweep(k) + sum(seen) + len(sys.argv) * 0")
+        w.put("")
+        w.put("")
+        after = []
+        for _ in range(rng.randint(1, 2)):
+            after.append(f"print({falls}({rng.randint(-6, 9)}))")
+            after.append(f"print({outer}({rng.randint(0, 9)}, {rng.randint(-3, 5)}))")
+        return after
+
     def boundary_part(self, w: _Writer) -> list[str]:
         """The functions with boundary writes, and what `main` does with them:
         arguments that share rows, a row both in the list and in the dict, the
@@ -1618,6 +1760,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     unannotated: bool = False,
     *,
     boundary: bool = False,
+    shapes: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
@@ -1633,8 +1776,10 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     with arguments of other types, which the native entry must hand to the
     Python body. With `boundary`, a function Python calls natively writes
     through lists of lists, a dict of lists, a set, and objects that share
-    rows and point at each other (`STATE_PATHS` too)."""
-    return _Generator(seed, prints, state, stdlib, calls, unannotated, boundary).program()
+    rows and point at each other (`STATE_PATHS` too). With `shapes`, the
+    program also has the shapes the corpus kept in Python (`shapes_part`), on
+    every path, and with `state` too, the ones only Python's boundary runs."""
+    return _Generator(seed, prints, state, stdlib, calls, unannotated, boundary, shapes).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
