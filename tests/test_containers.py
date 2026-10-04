@@ -665,10 +665,11 @@ def test_a_set_of_strings_walked_where_its_order_shows_stays_in_python(tmp_path:
 
 @requires_llvm
 @requires_cc
-def test_get_without_a_default_stays_in_python(tmp_path: Path):
-    """`d.get(k)` is `None` on a miss, which a number has no native form for:
-    the function stays in Python, with a reason, and the rest of the module
-    lowers (it raised `IndexError` in the lowering before)."""
+def test_get_without_a_default_binds_a_number_or_none(tmp_path: Path):
+    """`v = d.get(k)` of a dict of numbers binds `v` as a number or `None`,
+    natively; `d.get(k)` used any other way (`or`, a dict of strings) keeps its
+    function in Python, with a reason, and the rest of the module lowers (it
+    raised `IndexError` in the lowering before)."""
     source = """
     def look(d: dict[int, int], k: int) -> int:
         v = d.get(k)
@@ -701,9 +702,10 @@ def test_get_without_a_default_stays_in_python(tmp_path: Path):
         assert done.returncode == 0, done.stderr
         assert _output(done).strip() == expected, args
     look = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.look")
-    assert "without a default can return `None`" in look.stdout, look.stdout
+    assert "llvm backend: native" in look.stdout, look.stdout
+    named = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.named")
+    assert "llvm backend: boxed" in named.stdout, named.stdout
     total = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.total")
     assert "llvm backend: native" in total.stdout, total.stdout
     summary = _run(tmp_path, "-m", "ppy_compiler", "explain", "--summary")
     assert summary.returncode == 0, summary.stderr
-    assert "without a default can return" in summary.stdout, summary.stdout

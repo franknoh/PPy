@@ -240,9 +240,10 @@ def test_an_empty_display_takes_the_type_of_what_fills_it(write, codes):
 @requires_llvm
 def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path):
     """A closure lowers with the function it is defined in; its statements count
-    once, under itself. One that shares nothing with a function that stays in
-    Python has a native entry of its own; one that shares a variable stays
-    with it."""
+    once, under itself. One defined in a function that stays in Python has a
+    native entry of its own where it shares nothing, or only variables nothing
+    rebinds while it runs, which Python hands it from their cells; one that
+    rebinds a shared variable (`nonlocal`) stays with it."""
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
     (tmp_path / "nest.ppy").write_text(
         textwrap.dedent(
@@ -266,7 +267,14 @@ def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path
                 def plain(x: int) -> int:
                     return x + 1
 
-                show(plain(n))
+                hits = 0
+
+                def count(x: int) -> None:
+                    nonlocal hits
+                    hits += x
+
+                count(n)
+                show(plain(n) + hits)
             """
         ).lstrip("\n"),
         encoding="utf-8",
@@ -277,7 +285,8 @@ def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path
     assert functions["times"]["tier"] in {"native", "internal"}
     assert functions["shown"]["tier"] == "python"
     assert functions["plain"]["tier"] in {"native", "internal"}
-    assert functions["show"]["tier"] == "python"
-    assert "shares `k` with the function around it" in functions["show"]["reason"]
+    assert functions["show"]["tier"] in {"native", "internal"}
+    assert functions["count"]["tier"] == "python"
+    assert "shares `hits` with the function around it" in functions["count"]["reason"]
     assert functions["scaled"]["statements"] == 5
     assert functions["times"]["statements"] == 1

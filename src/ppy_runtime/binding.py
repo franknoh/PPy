@@ -23,6 +23,7 @@ from .abi import (
     STATUS_RAISED,
     STATUS_SANITIZER_BASE,
     TEXT,
+    VARIADIC,
     NativeParam,
     NativeSignature,
 )
@@ -735,10 +736,15 @@ def _bind_globals(  # type: ignore[no-untyped-def]
     for parameter in signature.parameters[count:]:
         module, _, name = parameter.source.rpartition(":")
         places.append((module, name))
+    # `*args`: the positions after the named ones, which the native entry
+    # takes as one list, before any global.
+    variadic = any(p.source == VARIADIC for p in signature.parameters)
 
     def spelled(*args: object, **keywords: object) -> object:
         # The Python function takes the arguments Python spelled; the globals
         # the native entry takes after them are left off.
+        if variadic:
+            return fallback(*args[:count], *args[count], **keywords)  # type: ignore[misc]
         return fallback(*args[:count], **keywords)
 
     spelled.__ppy_globals__ = namespace  # type: ignore[attr-defined]
@@ -759,19 +765,36 @@ def _bind_globals(  # type: ignore[no-untyped-def]
     native = inner.wrapper
 
     def read(module: str, name: str) -> object:
+        if module.endswith(".<locals>"):
+            # A variable of the function the Python function was defined in:
+            # what its cell holds now. An empty cell raises `ValueError`, and
+            # the Python body raises CPython's `NameError` for it.
+            function = fallback
+            while getattr(function, "__wrapped__", None) is not None:
+                function = function.__wrapped__  # type: ignore[attr-defined]
+            code = getattr(function, "__code__", None)
+            cells = getattr(function, "__closure__", None) or ()
+            if code is None or name not in code.co_freevars:
+                raise KeyError(name)
+            return cells[code.co_freevars.index(name)].cell_contents
         if module == own and namespace is not None:
             return namespace[name]
         return sys.modules[module].__dict__[name]
 
     def wrapper(*args: object, **keywords: object) -> object:
-        if keywords or len(args) != count:
+        if variadic and (keywords or len(args) < count):
+            return fallback(*args, **keywords)
+        if not variadic and (keywords or len(args) != count):
             return _keyword_call(fallback, wrapper, count, args, keywords)
         try:
-            values = [read(module, name) for module, name in places]
-        except KeyError:
+            values = [
+                list(args[count:]) if module == "" and name == VARIADIC else read(module, name)
+                for module, name in places
+            ]
+        except (KeyError, ValueError):
             inner.fallbacks += 1
             return fallback(*args)
-        return native(*args, *values)
+        return native(*args[:count], *values)
 
     _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]

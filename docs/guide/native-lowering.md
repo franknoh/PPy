@@ -130,9 +130,29 @@ A parameter has to be annotated, or under `--no-strict` inferred from the
 calls the project makes ([Types from call sites](subset.md#types-from-call-sites)).
 `list[Any]`, a bare `list`, and NumPy arrays have no native form, and a
 function that takes one runs as Python. Under `--no-strict`, a parameter
-declared as a bare `list` takes the element type its calls agree on.
+declared as a bare `list` takes the element type its calls agree on, and a local written
+`out: list = []` (or `dict`, `set` with an empty display) is typed as
+`out = []` would be, by what the function puts in it.
+
+A `*args: int` or `*args: float`, with no keyword-only parameters or
+`**kwargs` after it, is a list of numbers to the native entry. When Python
+calls the function, the boundary packs the positions after the named
+parameters into that list. A native caller packs them the same way, or
+passes a list it was given whole as `f(k, *xs)`. A position that is not of
+the declared type runs the call as Python.
+
+A list parameter the function only reads is lent as a buffer, a copy of its
+numbers. One it returns, slices (`xs[1:]`), or adds to another list is held
+by handle instead, since a buffer is not a list it could hand back.
 
 ## What the body may contain
+
+A function declared to return a value may end in an `if`/`elif`/`else` whose
+every side returns or raises: no path reaches the end, so the end needs no
+value. Where a path does reach the end, CPython returns `None`, which an
+`int` or a `float` result cannot hold, so the native call falls back there
+and Python runs it and returns that `None`. A standalone build has no
+Python to fall back to and refuses such a function.
 
 The subset includes what a loop is normally made of:
 
@@ -169,6 +189,15 @@ The subset includes what a loop is normally made of:
   `ValueError`.
 - `a = b = value` evaluates the value once and binds each name.
   `r, c = (x, y) if flag else (y, x)` makes and unpacks only the chosen side.
+- `holes, seen = [0] * n, []` binds each list in turn, and `a, b = b, a`
+  of two lists takes both before it binds either, as Python does.
+- `a, b, c = xs` of a list checks its length first and raises CPython's
+  `ValueError` (`not enough values to unpack (expected 3, got 2)`) when it
+  differs.
+- `if not xs:` and `xs == []` of a list test its length.
+- A module-level string bound once to a literal, such as `LETTERS =
+  "ABC..."`, is read as that literal: `LETTERS.find(c)`, `LETTERS[:6]`,
+  `c in LETTERS`.
 
 ### Loops
 

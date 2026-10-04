@@ -164,7 +164,9 @@ result is taken back only where it cannot be other than the checked
 type:
 
 - a `str`, a `bool`, or a `float` from a builtin or a standard-library
-  function whose result type is fixed (`input`, `str`, `os.path.exists`);
+  function whose result type is fixed (`input`, `str`, `os.path.exists`,
+  `os.path.dirname`, `timeit.timeit`), called through its module or
+  imported by name (`from timeit import timeit`);
 - a `str`, a `bool`, or a `float` from a function of the module each of
   whose `return` statements gives exactly that type, with no way to fall
   off the end and give `None`. `ppy.assume[T](...)` counts as the program's
@@ -177,6 +179,10 @@ Any other result keeps the caller in Python, and `ppy explain` says
 `TypeError` naming the function. CPython would not raise there, which is
 why the compiler takes such results only where the promise is the
 checker's or the program's own.
+
+`__file__` in a function is read from its module through Python at each
+use, so `os.path.dirname(os.path.realpath(__file__))` lowers under `ppy
+run`.
 
 A function that calls into Python holds the GIL where it does so. It is
 native, but not free-threaded.

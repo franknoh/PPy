@@ -34,6 +34,7 @@ from ppy_runtime._record import replace
 from ppy_runtime.abi import (
     STATUS_FALLBACK,
     STATUS_OK,
+    VARIADIC,
     CrossingClass,
     NativeParam,
     NativeSignature,
@@ -52,6 +53,7 @@ from ...analysis.symbols import FunctionInfo, ParamInfo
 __all__ = [
     "STATUS_FALLBACK",
     "STATUS_OK",
+    "VARIADIC",
     "LoweredFunction",
     "NativeParam",
     "NativeSignature",
@@ -277,10 +279,31 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
         node = analysis.info.node
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             return frozenset()
-        return frozenset(p.name for p in analysis.info.params) & shared_with_closures(node)
+        return frozenset(p.name for p in analysis.info.params) & (
+            shared_with_closures(node) | used_whole(node)
+        )
     return frozenset(p.name for p in analysis.info.params) | {
         implicit_parameter_name(analysis, held) for held in analysis.implicit_globals
     }
+
+
+def used_whole(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """The names the body uses as a list rather than through its items: one it
+    returns, slices, or concatenates. A buffer is a copy of the words, with no
+    list to hand back or take a part of; a handle is the list itself."""
+    found: set[str] = set()
+    for child in ast.walk(node):
+        if (isinstance(child, ast.Return) and isinstance(child.value, ast.Name)) or (
+            isinstance(child, ast.Subscript)
+            and isinstance(child.slice, ast.Slice)
+            and isinstance(child.value, ast.Name)
+        ):
+            found.add(child.value.id)
+        elif isinstance(child, ast.BinOp) and isinstance(child.op, (ast.Add, ast.Mult)):
+            found.update(
+                side.id for side in (child.left, child.right) if isinstance(side, ast.Name)
+            )
+    return found
 
 
 def writes(analysis: FunctionAnalysis) -> set[str]:
@@ -459,8 +482,10 @@ def eligible(
     refuse, one call at a time. `allow_globals` is `ppy run`'s too: the
     settled globals the function reads are parameters of `info` (see
     `with_implicit_globals`), which Python's boundary reads from the module
-    at the call.
+    at the call. A `*args` of numbers is the list it is taken as
+    (`with_variadic`).
     """
+    info = with_variadic(info)
     if analysis.python_only:
         return False, analysis.python_only[0]
     if info.is_generator and info.is_async:
@@ -551,6 +576,41 @@ def with_implicit_globals(info: FunctionInfo, analysis: FunctionAnalysis) -> Fun
         for held in analysis.implicit_globals
     ]
     return dataclasses.replace(info, params=[*info.params, *added])
+
+
+def variadic_element(info: FunctionInfo) -> T.Type | None:
+    """The element type of a `*args: T` native code takes as a list of numbers,
+    or None: one `*args` of ints or floats, with no `**kwargs` and no
+    keyword-only parameters after it."""
+    star = [p for p in info.params if p.kind == "var_positional"]
+    if len(star) != 1 or any(p.kind in {"var_keyword", "keyword_only"} for p in info.params):
+        return None
+    packed = T.strip_literal(star[0].type)
+    if not (isinstance(packed, T.Tuple_) and packed.homogeneous and len(packed.items) == 1):
+        return None
+    element = T.strip_literal(packed.items[0])
+    return element if element in (T.INT, T.FLOAT) else None
+
+
+def with_variadic(info: FunctionInfo) -> FunctionInfo:
+    """`info` with its `*args: T` (see `variadic_element`) as a parameter that
+    takes a list of `T`: what its native entry takes, and the boundary packs."""
+    element = variadic_element(info)
+    if element is None:
+        return info
+    params = [
+        dataclasses.replace(
+            p,
+            type=T.list_of(element),
+            kind="positional_or_keyword",
+            annotated=True,
+            global_of=VARIADIC,
+        )
+        if p.kind == "var_positional"
+        else p
+        for p in info.params
+    ]
+    return dataclasses.replace(info, params=params)
 
 
 def called_back_only(info: FunctionInfo) -> bool:
@@ -1077,6 +1137,7 @@ def _signature(
     layouts: ClassLayouts | None = None,
     analysis: FunctionAnalysis | None = None,
 ) -> NativeSignature:
+    info = with_variadic(info)
     written = writes(analysis) if analysis is not None else set()
     # Held by handle as the function's IR takes them: each one, when it writes
     # through any (see `written_params`).

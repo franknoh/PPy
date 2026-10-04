@@ -94,12 +94,12 @@ def test_unannotated_programs_agree(seed: int):
 
 
 @pytest.mark.parametrize("seed", SEEDS[:1])
-def test_unannotated_programs_with_inference_shapes_agree(seed: int):
+def test_unannotated_programs_with_inference_evidence_agree(seed: int):
     """A `functools.wraps` decorator, operators on a value class, a `list`
     parameter, mixed `int` and `float` calls, `argparse`, and parameters
     typed by their use, each called from Python with other types too."""
     paths = tuple(p for p in _available() if p in STATE_PATHS)
-    source = generate_program(seed, unannotated=True, shapes=True)
+    source = generate_program(seed, unannotated=True, inference=True)
     assert "@functools.wraps(fn)" in source and "def __lt__(self, other):" in source
     mismatches = compare(run_program(source, paths))
     assert not mismatches, [

@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 import contextlib
 import re
+import sys
 from collections.abc import Iterator
 
 from ..analysis import types as T
@@ -1301,22 +1302,39 @@ class StringLowering:
                 slot = core.ptr_offset(b, address, word(index))
                 self._bind(name.id, STR, core.load(b, slot), True)  # type: ignore[attr-defined]
             return True
-        if not self._is_string_list(value):
+        kind = self._kind_of(value)  # type: ignore[attr-defined]
+        if kind is None or kind.name != "List" or kind.value is None:
             return False
+        element = kind.value
+        if element != STR and element.kind not in {"int", "float", "bool"}:
+            return False
+        # `a, b, c = xs` of a list of strings or numbers: its length checked
+        # as CPython checks it, then each item into its name.
         handle, owned = self._handle(value)  # type: ignore[attr-defined]
         length = rt("ppy_coll_len", (handle,))
-        matches = core.cmp(b, "eq", length, word(len(names)))
+        expected = word(len(names))
         self._require(
-            matches,
-            "wrong number of values to unpack",
-            "ValueError: wrong number of values to unpack (expected {0}, got {1})",
-            (word(len(names)), length),
+            core.cmp(b, "ge", length, expected),
+            "not enough values to unpack",
+            f"ValueError: not enough values to unpack (expected {len(names)}, got {{0}})",
+            (length,),
+        )  # type: ignore[attr-defined]
+        # CPython 3.14 says how many there were; 3.13 does not.
+        got = ", got {0}" if sys.version_info >= (3, 14) else ""
+        self._require(
+            core.cmp(b, "le", length, expected),
+            "too many values to unpack",
+            f"ValueError: too many values to unpack (expected {len(names)}{got})",
+            (length,),
         )  # type: ignore[attr-defined]
         items = [
-            self._read(rt("ppy_seq_at", (handle, word(i)), HANDLE), STR)  # type: ignore[attr-defined]
+            self._read(rt("ppy_seq_at", (handle, word(i)), HANDLE), element)  # type: ignore[attr-defined]
             for i in range(len(names))
         ]
         for name, item in zip(names, items, strict=True):
-            self._bind(name.id, STR, item, False)  # type: ignore[attr-defined]
+            if element == STR:
+                self._bind(name.id, STR, item, False)  # type: ignore[attr-defined]
+            else:
+                self._store(name, item)  # type: ignore[attr-defined]
         self._done_with(handle, owned)  # type: ignore[attr-defined]
         return True
