@@ -1486,6 +1486,9 @@ class CollectionLowering:
         # Any call names the runtime, not only one that makes a collection: a
         # function that only reads a collection it was handed links it too.
         self._use_collections()
+        inline = _INLINE.get(symbol)
+        if inline is not None and result is not None:
+            return inline(self.b, *arguments)
         results = (result,) if result is not None else ()
         found = core.call_extern(self.b, symbol, arguments, results)
         if symbol.startswith(_CALLS_BACK) and self._calls_back():
@@ -2619,6 +2622,37 @@ def _ordered(node: ast.ClassDef) -> bool:
                 if keyword.arg == "order" and isinstance(keyword.value, ast.Constant):
                     return keyword.value.value is True
     return False
+
+
+def _header_word(b: Builder, handle: Value, word: int, t: IRType = I64) -> Value:
+    """Word `word` of a handle's header (`collections.c`), loaded as `t`."""
+    header = core.cast(b, handle, _pointer(handle, t))
+    return core.load(b, core.ptr_offset(b, header, core.const(b, word, I64)))
+
+
+def _inline_length(b: Builder, handle: Value) -> Value:
+    """`ppy_coll_len`: the header's first word, read in place."""
+    return core.load(b, core.cast(b, handle, _pointer(handle, I64)))
+
+
+def _inline_seq_at(b: Builder, handle: Value, index: Value) -> Value:
+    """`ppy_seq_at`: the address of record `(first + index) % capacity`, computed
+    in place of a call into the runtime. An index is never past the length,
+    nor the first record past the capacity, so the sum is less than twice the
+    capacity and one subtraction takes the remainder."""
+    first = _header_word(b, handle, 3)
+    capacity = _header_word(b, handle, 1)
+    stride = _header_word(b, handle, 15)
+    records = _header_word(b, handle, 2, PtrType(I64))
+    at = core.add(b, first, index, overflow="wrap")
+    past = core.cmp(b, "ge", at, capacity)
+    wrapped = core.select(b, past, core.sub(b, at, capacity, overflow="wrap"), at)
+    offset = core.mul(b, wrapped, stride, overflow="wrap")
+    return core.cast(b, core.ptr_offset(b, records, offset), _pointer(handle, I8))
+
+
+#: Runtime calls the lowering writes out in place: one load or a few.
+_INLINE = {"ppy_coll_len": _inline_length, "ppy_seq_at": _inline_seq_at}
 
 
 def _pointer(address: Value, pointee: IRType) -> PtrType:

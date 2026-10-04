@@ -189,6 +189,13 @@ typedef struct {
     const ppy_xs *spec;
     int incoming;
     int synced;
+    /* Met while a parameter the call writes through came in: only those are
+       copied back (`px_sync`). */
+    int writable;
+    /* A list of numbers' words as they came in, which tells the ones the
+       call wrote from the ones it left (`px_rewrite_list`); NULL if none. */
+    const int64_t *before;
+    Py_ssize_t before_count;
 } px_entry;
 
 #define PX_INLINE 16
@@ -226,6 +233,10 @@ static px_chunk *px_kept_chunks = NULL;
 typedef struct {
     px_classes *classes;
     int readonly, escaped;
+    /* Whether the parameter coming in is one the call writes through, and
+       whether one such met a container another parameter brought in, which
+       then may be written too: every one is copied back. */
+    int writing, shared;
     px_chunk *chunks;
     /* The arena handles the call made, in the order it made them. */
     int8_t **made;
@@ -248,6 +259,8 @@ static void px_begin(ppy_cross *x, px_classes *classes, int readonly) {
     x->classes = classes;
     x->readonly = readonly;
     x->escaped = 0;
+    x->writing = 1;
+    x->shared = 0;
     x->chunks = NULL;
     x->made = x->made0;
     x->made_count = 0;
@@ -314,7 +327,7 @@ static int px_own(ppy_cross *x, int8_t *handle) {
     return 0;
 }
 
-/* `words` zeroed words from the call's block, or NULL out of memory. */
+/* `words` words from the call's block, as they are, or NULL out of memory. */
 static int64_t *px_alloc(ppy_cross *x, size_t words) {
     px_chunk *c = x->chunks;
     if (c == NULL || c->used + words > c->room) {
@@ -337,7 +350,6 @@ static int64_t *px_alloc(ppy_cross *x, size_t words) {
     }
     int64_t *found = c->words + c->used;
     c->used += words;
-    memset(found, 0, words * 8);
     return found;
 }
 
@@ -363,6 +375,17 @@ static int px_arena_handle(const int8_t *handle) {
     return handle != NULL && ((const int64_t *)handle)[19] == PX_ARENA;
 }
 
+static int px_arena_list_handle(const int8_t *handle) {
+    return px_arena_handle(handle) && ((const int64_t *)handle)[12] == 0;
+}
+
+/* The word of an arena list that holds the list it came from (`px_add`
+   holds the reference). */
+static int64_t *px_source(int8_t *handle) {
+    int64_t *h = (int64_t *)handle;
+    return h + 26 + 2 * (h[8] > 0 ? h[8] : 1);
+}
+
 /* A borrowed string: the bytes of `o`, an exact `str`, held for the call.
    0 done, -1 refused (a lone surrogate has no UTF-8), -2 out of memory. */
 static int px_borrow_text(ppy_cross *x, PyObject *o, int64_t *word) {
@@ -384,6 +407,7 @@ static int px_borrow_text(ppy_cross *x, PyObject *o, int64_t *word) {
         PyErr_NoMemory();
         return -2;
     }
+    memset(h, 0, 25 * 8);
     h[0] = (int64_t)size;
     h[1] = (int64_t)size / 8 + 1;
     h[2] = (int64_t)(intptr_t)data;
@@ -405,12 +429,17 @@ static int px_borrow_text(ppy_cross *x, PyObject *o, int64_t *word) {
 static int8_t *px_arena_list(ppy_cross *x, Py_ssize_t n, int64_t words, int64_t floats,
                              int64_t handles) {
     int64_t w = words > 0 ? words : 1;
-    int64_t *h = px_alloc(x, (size_t)(26 + 2 * w));
+    /* The header, its scratch words, and the list it came from. */
+    int64_t *h = px_alloc(x, (size_t)(26 + 2 * w + 1));
     int64_t room = n > 0 ? (int64_t)n : 1;
     int64_t *records = h != NULL ? px_alloc(x, (size_t)(room * w)) : NULL;
     if (records == NULL || px_made(x, (int8_t *)h) < 0) {
         return NULL;
     }
+    /* The header's words zero; the records are each written as the list is
+       filled, and the scratch words are the runtime's to write first. */
+    memset(h, 0, 26 * 8);
+    records[0] = 0;
     int64_t leaves = (int64_t)((uint64_t)handles >> 32);
     h[0] = (int64_t)n;
     h[1] = room;
@@ -543,7 +572,13 @@ static void px_keep(ppy_cross *x) {
 }
 
 static size_t px_hash(const void *pointer, Py_ssize_t slots) {
-    return (size_t)((((uintptr_t)pointer) >> 4) * 0x9E3779B97F4A7C15ULL) & (size_t)(slots - 1);
+    /* The low bits of a product depend on the low bits alone, which objects
+       of one size share: the high bits are mixed down first. */
+    uint64_t h = (uint64_t)(uintptr_t)pointer;
+    h ^= h >> 33;
+    h *= 0xFF51AFD7ED558CCDULL;
+    h ^= h >> 33;
+    return (size_t)h & (size_t)(slots - 1);
 }
 
 static void px_index(ppy_cross *x, Py_ssize_t at) {
@@ -552,6 +587,10 @@ static void px_index(ppy_cross *x, Py_ssize_t at) {
         i = (i + 1) & (size_t)(x->slots - 1);
     }
     x->by_obj[i] = at + 1;
+    if (px_arena_list_handle(x->entries[at].handle)) {
+        /* Found by the object it holds the address of (`px_out`). */
+        return;
+    }
     i = px_hash(x->entries[at].handle, x->slots);
     while (x->by_handle[i] != 0) {
         i = (i + 1) & (size_t)(x->slots - 1);
@@ -585,10 +624,13 @@ static px_entry *px_by_handle(ppy_cross *x, int8_t *handle) {
 
 /* A container or an object met for the first time: its index, or -1 out of
    memory. */
-static Py_ssize_t px_add(ppy_cross *x, PyObject *obj, int8_t *handle, const ppy_xs *spec,
-                         int incoming) {
-    if (x->count == x->room) {
+/* Room for `need` entries in all: 0, or -1 out of memory. */
+static int px_room(ppy_cross *x, Py_ssize_t need) {
+    if (need > x->room) {
         Py_ssize_t room = x->room * 2;
+        while (room < need) {
+            room *= 2;
+        }
         px_entry *grown = (px_entry *)PyMem_Malloc((size_t)room * sizeof(px_entry));
         if (grown == NULL) {
             return -1;
@@ -600,8 +642,11 @@ static Py_ssize_t px_add(ppy_cross *x, PyObject *obj, int8_t *handle, const ppy_
         x->entries = grown;
         x->room = room;
     }
-    if ((x->count + 1) * 2 > x->slots) {
+    if (need * 2 > x->slots) {
         Py_ssize_t slots = x->slots * 2;
+        while (slots < need * 2) {
+            slots *= 2;
+        }
         Py_ssize_t *by_obj = (Py_ssize_t *)PyMem_Calloc((size_t)slots, sizeof(Py_ssize_t));
         Py_ssize_t *by_handle = (Py_ssize_t *)PyMem_Calloc((size_t)slots, sizeof(Py_ssize_t));
         if (by_obj == NULL || by_handle == NULL) {
@@ -620,6 +665,16 @@ static Py_ssize_t px_add(ppy_cross *x, PyObject *obj, int8_t *handle, const ppy_
             px_index(x, at);
         }
     }
+    return 0;
+}
+
+/* A container or an object met for the first time: its index, or -1 out of
+   memory. */
+static Py_ssize_t px_add(ppy_cross *x, PyObject *obj, int8_t *handle, const ppy_xs *spec,
+                         int incoming) {
+    if (px_room(x, x->count + 1) < 0) {
+        return -1;
+    }
     Py_ssize_t at = x->count++;
     px_entry *e = &x->entries[at];
     Py_INCREF(obj);
@@ -628,8 +683,19 @@ static Py_ssize_t px_add(ppy_cross *x, PyObject *obj, int8_t *handle, const ppy_
     e->spec = spec;
     e->incoming = incoming;
     e->synced = 0;
+    e->writable = x->writing;
+    e->before = NULL;
+    e->before_count = 0;
     px_index(x, at);
     return at;
+}
+
+/* A container met again: one a written parameter reaches that came in with
+   another may be written through it, and so may anything it holds. */
+static void px_met(ppy_cross *x, px_entry *seen) {
+    if (x->writing && !seen->writable) {
+        x->shared = 1;
+    }
 }
 
 /* -- classes ------------------------------------------------------------- */
@@ -845,6 +911,10 @@ static void px_drop(const ppy_xs *s, const int64_t *words, Py_ssize_t count) {
     }
 }
 
+static char kk_of(const ppy_xs *k) {
+    return k->kind == PX_INT ? 'i' : k->kind == PX_FLOAT ? 'f' : 'b';
+}
+
 static int px_fill(ppy_cross *x, int8_t *handle, PyObject *o, const ppy_xs *s) {
     int64_t small[64];
     const ppy_xs *v = s->value;
@@ -878,6 +948,30 @@ static int px_fill(ppy_cross *x, int8_t *handle, PyObject *o, const ppy_xs *s) {
                 if (done != 0) {
                     return done;
                 }
+            }
+            return 0;
+        }
+        if (x->readonly && v->kind >= PX_LIST && v->kind <= PX_SET) {
+            /* No Python code runs while a call that holds no objects is
+               filled: the list cannot change under the walk. */
+            PyObject **items = ((PyListObject *)o)->ob_item;
+            for (Py_ssize_t i = 0; i < n; i++) {
+                int8_t *inner = NULL;
+                int done = px_in(x, items[i], v, &inner);
+                if (done != 0) {
+                    /* The list is refused: what it took so far let go of. */
+                    for (Py_ssize_t j = 0; j < i; j++) {
+                        int8_t *taken = (int8_t *)(intptr_t)records[j];
+                        if (px_arena_handle(taken)) {
+                            ((int64_t *)taken)[11]--;
+                        } else {
+                            ppy_rt.release(taken);
+                        }
+                    }
+                    ((int64_t *)handle)[0] = 0;
+                    return done;
+                }
+                records[i] = (int64_t)(intptr_t)inner;
             }
             return 0;
         }
@@ -922,7 +1016,44 @@ static int px_fill(ppy_cross *x, int8_t *handle, PyObject *o, const ppy_xs *s) {
     int done = 0;
     Py_ssize_t made = 0, keys_made = 0;
     PyObject *key = NULL, *item = NULL;
-    if (s->kind == PX_DICT) {
+    int numbers = (k->kind == PX_INT || k->kind == PX_FLOAT || k->kind == PX_BOOL) &&
+                  (v == NULL || v->kind == PX_INT || v->kind == PX_FLOAT || v->kind == PX_BOOL);
+    if (numbers && s->kind == PX_DICT) {
+        /* Numbers to numbers: checked and copied in one walk. */
+        char kk = k->kind == PX_INT ? 'i' : k->kind == PX_FLOAT ? 'f' : 'b';
+        char vk = v->kind == PX_INT ? 'i' : v->kind == PX_FLOAT ? 'f' : 'b';
+        Py_ssize_t position = 0;
+        while (PyDict_Next(o, &position, &key, &item)) {
+            if (keys_made == n || px_scalar(key, kk, keys + keys_made) != 0 ||
+                px_scalar(item, vk, values + keys_made) != 0) {
+                done = -1;
+                break;
+            }
+            keys_made++;
+        }
+        made = keys_made;
+    } else if (numbers) {
+        /* A set of numbers: its members hash and compare without running
+           Python code, so the walk cannot see the set change. */
+        PyObject *walk = PyObject_GetIter(o);
+        char kk = kk_of(k);
+        if (walk == NULL) {
+            done = -2;
+        }
+        while (done == 0 && (key = PyIter_Next(walk)) != NULL) {
+            int bad = keys_made == n || px_scalar(key, kk, keys + keys_made) != 0;
+            Py_DECREF(key);
+            if (bad) {
+                done = -1;
+                break;
+            }
+            keys_made++;
+        }
+        if (done == 0 && PyErr_Occurred()) {
+            done = -2;
+        }
+        Py_XDECREF(walk);
+    } else if (s->kind == PX_DICT) {
         Py_ssize_t position = 0;
         int watch = px_reads_attributes(v);
         while (PyDict_Next(o, &position, &key, &item)) {
@@ -1020,6 +1151,7 @@ static int px_object_in(ppy_cross *x, PyObject *o, const ppy_xs *s, int8_t **out
     }
     px_entry *seen = px_by_obj(x, o);
     if (seen != NULL) {
+        px_met(x, seen);
         ppy_rt.retain(seen->handle);
         *out = seen->handle;
         return 0;
@@ -1064,6 +1196,7 @@ static int px_in(ppy_cross *x, PyObject *o, const ppy_xs *s, int8_t **out) {
         if (!px_same_spec(seen->spec, s)) {
             return -1;
         }
+        px_met(x, seen);
         ppy_rt.retain(seen->handle);
         *out = seen->handle;
         return 0;
@@ -1080,10 +1213,13 @@ static int px_in(ppy_cross *x, PyObject *o, const ppy_xs *s, int8_t **out) {
     if (x->readonly && s->kind == PX_LIST) {
         /* Laid out in the call's block: nothing to let go of but its elements. */
         int8_t *made = px_arena_list(x, PyList_GET_SIZE(o), words, floats, handles);
-        if (made == NULL || px_add(x, o, made, s, 1) < 0) {
+        if (made == NULL || px_add(x, o, made, s, 1) < 0 ||
+            (v != NULL && v->kind >= PX_LIST && v->kind <= PX_SET &&
+             px_room(x, x->count + PyList_GET_SIZE(o)) < 0)) {
             PyErr_NoMemory();
             return -2;
         }
+        *px_source(made) = (int64_t)(intptr_t)o;
         int done = px_fill(x, made, o, s);
         if (done != 0) {
             return done;
@@ -1099,7 +1235,8 @@ static int px_in(ppy_cross *x, PyObject *o, const ppy_xs *s, int8_t **out) {
     }
     /* The call holds its own reference to every handle it made, so none is
        freed, and its address given to something new, while the call runs. */
-    if (px_add(x, o, handle, s, 1) < 0 || px_own(x, handle) < 0) {
+    Py_ssize_t at = px_add(x, o, handle, s, 1);
+    if (at < 0 || px_own(x, handle) < 0) {
         ppy_rt.release(handle);
         PyErr_NoMemory();
         return -2;
@@ -1109,6 +1246,17 @@ static int px_in(ppy_cross *x, PyObject *o, const ppy_xs *s, int8_t **out) {
     if (done != 0) {
         ppy_rt.release(handle);
         return done;
+    }
+    if (x->writing && s->kind == PX_LIST && PyList_GET_SIZE(o) > 0 &&
+        (v->kind == PX_INT || v->kind == PX_FLOAT || v->kind == PX_BOOL)) {
+        /* The words as they came in: copying back sets only what changed. */
+        size_t n = (size_t)PyList_GET_SIZE(o);
+        int64_t *before = px_alloc(x, n);
+        if (before != NULL) {
+            memcpy(before, (const void *)(intptr_t)((int64_t *)handle)[2], n * 8);
+            x->entries[at].before = before;
+            x->entries[at].before_count = (Py_ssize_t)n;
+        }
     }
     *out = handle;
     return 0;
@@ -1297,7 +1445,28 @@ static PyObject *px_kept(ppy_cross *x, PyObject *old, const int64_t *words, cons
 }
 
 static int px_rewrite_list(ppy_cross *x, PyObject *made, const int64_t *values, Py_ssize_t n,
-                           const ppy_xs *v, int64_t w, int rewrite) {
+                           const ppy_xs *v, int64_t w, int rewrite, const int64_t *before,
+                           Py_ssize_t was) {
+    if (before != NULL && was == n && PyList_GET_SIZE(made) == n &&
+        (v->kind == PX_INT || v->kind == PX_FLOAT || v->kind == PX_BOOL)) {
+        /* The words the call left as they came in leave their elements as
+           they are; the others are set, each in its place. */
+        char kind = v->kind == PX_INT ? 'i' : v->kind == PX_FLOAT ? 'f' : 'b';
+        Py_ssize_t i = 0;
+        while (i < n) {
+            if (values[i] == before[i]) {
+                i++;
+                continue;
+            }
+            PyObject *item = px_scalar_value(values[i], kind);
+            if (item == NULL) {
+                return -1;
+            }
+            PyList_SetItem(made, i, item);
+            i++;
+        }
+        return 0;
+    }
     if (PyList_GET_SIZE(made) == n && (v->kind == PX_INT || v->kind == PX_FLOAT)) {
         char kind = v->kind == PX_INT ? 'i' : 'f';
         for (Py_ssize_t i = 0; i < n; i++) {
@@ -1501,6 +1670,10 @@ static PyObject *px_out(ppy_cross *x, int8_t *handle, const ppy_xs *s, int rewri
         /* A null object handle is `None`. */
         return Py_NewRef(Py_None);
     }
+    if (px_arena_list_handle(handle)) {
+        /* A list read, not written: the list it came from. */
+        return Py_NewRef((PyObject *)(intptr_t)*px_source(handle));
+    }
     px_entry *known = px_by_handle(x, handle);
     if (known != NULL && (!rewrite || known->synced)) {
         Py_INCREF(known->obj);
@@ -1562,7 +1735,9 @@ static PyObject *px_out(ppy_cross *x, int8_t *handle, const ppy_xs *s, int rewri
     ppy_rt.copy_out(handle, (int8_t *)keys, (int8_t *)values);
     int done;
     if (s->kind == PX_LIST) {
-        done = px_rewrite_list(x, made, values, n, v, w, rewrite);
+        const int64_t *before = known != NULL ? known->before : NULL;
+        Py_ssize_t was = before != NULL ? known->before_count : -1;
+        done = px_rewrite_list(x, made, values, n, v, w, rewrite, before, was);
     } else if (s->kind == PX_DICT) {
         done = px_rewrite_dict(x, made, keys, values, n, k, v, kw, w, rewrite);
     } else {
@@ -1579,10 +1754,13 @@ static PyObject *px_out(ppy_cross *x, int8_t *handle, const ppy_xs *s, int rewri
 }
 
 /* After a call that wrote through a parameter: every container and object
-   that came in copied back, the ones the call no longer reaches too. */
+   that came in with such a parameter copied back, the ones the call no
+   longer reaches too; where a written parameter reached what another brought
+   in, every one. */
 static int px_sync(ppy_cross *x) {
     for (Py_ssize_t i = 0; i < x->count; i++) {
-        if (!x->entries[i].incoming || x->entries[i].synced) {
+        if (!x->entries[i].incoming || x->entries[i].synced ||
+            (!x->entries[i].writable && !x->shared)) {
             continue;
         }
         PyObject *done = px_out(x, x->entries[i].handle, x->entries[i].spec, 1);

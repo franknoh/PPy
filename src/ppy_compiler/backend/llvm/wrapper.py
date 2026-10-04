@@ -912,6 +912,8 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
             # does not match its type runs the Python body.
             handle = f"h{position}"
             declarations.append(f"    int8_t *{handle} = NULL;")
+            # Only what a written parameter brings in is copied back.
+            lines.append(f"    ppy_x.writing = {int(parameter.written)};")
             lines.append(
                 f"    if (px_argument(&ppy_x, {source}, &ppy_xs_{index}_{position}, &{handle})"
                 " != 0) PPY_GUARD_FAIL();"
