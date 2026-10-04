@@ -18,6 +18,60 @@ ppy explain --summary trees.ppy
 ```
 
 <!-- outputs:start -->
+## What it prints
+
+**`python  trees.ppy`**
+
+```text
+found, depth of 0, total: (207200, 1, 1249975000)
+# workload: 0.62 s
+reversed in place: 10 5
+```
+
+**`ppy run trees.ppy`**
+
+```text
+found, depth of 0, total: (207200, 1, 1249975000)
+# workload: 0.29 s
+reversed in place: 10 5
+```
+
+**`ppy explain trees.SearchTree.rotate_up`**
+
+```text
+function: rotate_up
+qualname: trees.SearchTree.rotate_up
+semantic type: (trees.SearchTree, trees.Node) -> NoneType
+effects: ReadObject, WriteObject
+purity: impure
+optimization: O2
+python backend: optimized
+llvm backend: native; called from Python, its Python body runs: copying the collections in costs more than the body does with them
+jit: not requested
+parallel: rejected
+reason: the function contains no parallelizable loop
+representation:
+  self: trees.SearchTree -> LLVM aggregate (guarded)
+  node: trees.Node -> LLVM aggregate (guarded)
+  return: NoneType -> void
+inferred (not annotated):
+  node: trees.Node, from 1 call (trees.ppy:80)
+  (the Python boundary checks these at each call, and runs the Python body otherwise)
+  return: NoneType, from the body's return statements
+```
+
+**`ppy explain --summary trees.ppy`**
+
+```text
+12 functions, 94 statements
+  native, called from Python              1 functions (  8%)       16 statements ( 17%)
+  native, called from native code        11 functions ( 92%)       78 statements ( 83%)
+  Python                                  0 functions (  0%)        0 statements (  0%)
+
+native, but Python calls the Python body (why its boundary is not used):
+     11 functions  copying the collections in costs more than the body does with them
+```
+
 <!-- outputs:end -->
 
 ## The program

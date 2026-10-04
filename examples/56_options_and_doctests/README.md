@@ -18,6 +18,97 @@ ppy explain --summary puzzles.ppy
 ```
 
 <!-- outputs:start -->
+## What it prints
+
+**`python  puzzles.ppy`**
+
+```text
+# sieve: 0.241 s
+primes below 5000000 : 348513 the last 4999999
+# mean_gap: 0.010 s
+mean gap: 14.3467
+# partitions: 0.033 s
+partitions of 400 : 6727090051741041926
+# walk: 0.807 s
+farthest squared distance: 7065320
+```
+
+**`ppy run puzzles.ppy`**
+
+```text
+# sieve: 0.129 s
+primes below 5000000 : 348513 the last 4999999
+# mean_gap: 0.001 s
+mean gap: 14.3467
+# partitions: 0.029 s
+partitions of 400 : 6727090051741041926
+# walk: 0.204 s
+farthest squared distance: 7065320
+```
+
+**`ppy run puzzles.ppy --limit 1000 --terms 50 --steps 1000 --seed 3`**
+
+```text
+# sieve: 0.000 s
+primes below 1000 : 168 the last 997
+# mean_gap: 0.000 s
+mean gap: 5.9581
+# partitions: 0.000 s
+partitions of 50 : 204226
+# walk: 0.000 s
+farthest squared distance: 5972
+```
+
+**`ppy explain puzzles.walk`**
+
+<details markdown="1">
+<summary>21 lines</summary>
+
+```text
+function: walk
+qualname: puzzles.walk
+semantic type: (int, int) -> int
+effects: Alloc, MayRaise[TypeError, ValueError, ZeroDivisionError], ReadObject, WriteObject
+purity: impure
+optimization: O2
+python backend: optimized
+llvm backend: native
+python boundary: a generated CPython-ABI wrapper
+jit: not requested
+parallel: rejected
+reason: `farthest` carries a dependency across iterations
+representation:
+  steps: int -> i64 (guarded)
+  seed: int -> i64 (guarded)
+  return: int -> PyLong*
+inferred (not annotated):
+  steps: int, from 1 call (puzzles.ppy:105)
+  seed: int, from 1 call (puzzles.ppy:105)
+  (the Python boundary checks these at each call, and runs the Python body otherwise)
+  return: int, from the body's return statements
+```
+
+</details>
+
+**`ppy explain --summary puzzles.ppy`**
+
+```text
+10 functions, 59 statements
+  native, called from Python              5 functions ( 50%)       27 statements ( 46%)
+  native, called from native code         4 functions ( 40%)       10 statements ( 17%)
+  Python                                  1 functions ( 10%)       22 statements ( 37%)
+
+what keeps functions in Python, by statements kept out (a function can count under more than one):
+       22 statements      1 functions  calls a Python function whose `argparse.ArgumentParser` result native code cannot take back
+      call a function that changes nothing (its result is checked, and falls back), or keep the call out of the hot function
+      see https://ppy.franknoh.dev/latest/guide/native-effects/
+      puzzles.ppy:85 puzzles.main
+
+native, but Python calls the Python body (why its boundary is not used):
+      1 functions  calls itself without a loop; CPython's recursion limit stays in force
+      3 functions  copying the collections in costs more than the body does with them
+```
+
 <!-- outputs:end -->
 
 ## The program
