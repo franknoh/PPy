@@ -21,6 +21,7 @@ import ast
 from collections.abc import Callable
 
 from ..analysis import types as T
+from ..analysis.symbols import ClassInfo
 
 #: Container methods whose argument at this index is kept as an element.
 _STORING = {
@@ -103,7 +104,7 @@ class _Finder:
         type_of: Callable[[ast.expr], T.Type],
         local_type: Callable[[str], T.Type | None],
         returns: T.Type,
-        classes: dict[str, object],
+        classes: dict[str, ClassInfo],
         direct: Callable[[ast.Call], bool],
         module: str,
     ) -> None:
@@ -190,9 +191,8 @@ class _Finder:
                 info = self.classes.get(owner.name) or self.classes.get(
                     owner.name.rpartition(".")[2]
                 )
-                fields = getattr(info, "fields", {})
-                if target.attr in fields:
-                    return fields[target.attr]
+                if info is not None and target.attr in info.fields:
+                    return info.fields[target.attr]
             return self.type_of(target)
         return None
 
@@ -242,15 +242,15 @@ class _Finder:
             info = self.classes.get(called.name) or self.classes.get(called.name.rpartition(".")[2])
             if info is None:
                 return None
-            init = info.methods.get("__init__")  # type: ignore[attr-defined]
+            init = info.methods.get("__init__")
             if init is not None:
                 params = tuple(T.Param(p.name, p.type, p.has_default, p.kind) for p in init.params)
                 params = params[1:]
-            elif info.is_dataclass:  # type: ignore[attr-defined]
+            elif info.is_dataclass:
                 params = tuple(
                     T.Param(name, t)
-                    for name, t in info.fields.items()  # type: ignore[attr-defined]
-                    if name not in info.class_vars  # type: ignore[attr-defined]
+                    for name, t in info.fields.items()
+                    if name not in info.class_vars
                 )
             else:
                 return []
@@ -337,7 +337,7 @@ def hidden_bool(
     returns: T.Type,
     type_of: Callable[[ast.expr], T.Type],
     local_type: Callable[[str], T.Type | None],
-    classes: dict[str, object],
+    classes: dict[str, ClassInfo],
     direct: Callable[[ast.Call], bool],
     module: str,
     params: dict[str, T.Type] | None = None,
