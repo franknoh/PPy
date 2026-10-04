@@ -1898,7 +1898,12 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         core.ret(self.b, returned)
 
     def _return_default(self) -> None:
-        if self.b.block is not None and id(self.b.block) in self._dead:
+        if self.b.block is not None and (
+            id(self.b.block) in self._dead
+            or (self.b.block is not self.entry and not self._has_edge_to(self.b.block))
+        ):
+            # Every way through the body returned or raised before here (an
+            # `if`/`else` whose sides both return): the end is not reached.
             core.unreachable(self.b)
             return
         if self._frame() is not None:
@@ -1910,7 +1915,21 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._release_collections()
             core.ret(self.b)
             return
-        raise Unsupported("control flow can fall off the end without returning a value")
+        if self.frontend.standalone:
+            raise Unsupported("control flow can fall off the end without returning a value")
+        # CPython returns None here, which a native result cannot hold: the
+        # call falls back and Python runs it, returning that None. The effect
+        # check sees the fall back like any guard, so it never follows an
+        # effect that cannot be run again.
+        self._leave_for_return()
+        self._release_collections()
+        core.guard(
+            self.b,
+            core.const(self.b, False, BOOL),
+            "contract",
+            "falls off the end and returns None",
+        )
+        core.unreachable(self.b)
 
     def _assign(self, node: ast.Assign) -> None:
         if len(node.targets) != 1:
@@ -2227,13 +2246,26 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         core.cond_br(self.b, condition, Successor(then_block), Successor(else_block))
         self.b.at_end(then_block)
         self._body(node.body)
-        if self._open():
-            core.br(self.b, Successor(merge))
+        reached = self._branch_on(merge)
         self.b.at_end(else_block)
         self._body(node.orelse)
-        if self._open():
-            core.br(self.b, Successor(merge))
+        reached = self._branch_on(merge) or reached
+        if not reached:
+            # Both sides return or raise: no path reaches what follows the
+            # `if`, so the end of the function after it needs no value.
+            self._dead.add(id(merge))
         self.b.at_end(merge)
+
+    def _branch_on(self, block: Block) -> bool:
+        """Close the current block with a branch to `block`, when a path still
+        reaches it; whether one did. A block no path reaches ends unreachable."""
+        if not self._open():
+            return False
+        if id(self.b.block) in self._dead:
+            core.unreachable(self.b)
+            return False
+        core.br(self.b, Successor(block))
+        return True
 
     def _while(self, node: ast.While) -> None:
         if node.orelse:
