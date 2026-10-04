@@ -688,3 +688,47 @@ def test_emitted_source_of_the_new_inferences_frees_everything_once(
     )
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout.strip() == expected
+
+
+#: A result declared `float` that the body gives as an `int`: CPython hands
+#: back the `int`, so native code must not make it a `float`. Refining
+#: `files: list` to `list[int]` made this function native and showed it
+#: (greedy_methods/optimal_merge_pattern).
+FLOAT_RESULT = """
+\"\"\"
+>>> merge_cost([8, 8, 8, 8, 8]), halves([3, 4])
+(96, (1.5, 3))
+\"\"\"
+
+
+def merge_cost(files: list) -> float:
+    cost = 0
+    while len(files) > 1:
+        temp = 0
+        for _ in range(2):
+            i = files.index(min(files))
+            temp += files[i]
+            files.pop(i)
+        files.append(temp)
+        cost += temp
+    return cost
+
+
+def halves(xs: list[int]) -> tuple[float, float]:
+    return xs[0] / 2, xs[1] - 1
+
+
+if __name__ == "__main__":
+    print(merge_cost([2, 3, 4]), halves([5, 6]))
+    import doctest
+
+    print(doctest.testmod().failed)
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_an_int_returned_for_a_declared_float_stays_an_int(tmp_path: Path):
+    _agrees(tmp_path, FLOAT_RESULT, [])
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.merge_cost")
+    assert "returns an `int` where `float` is declared" in explained.stdout, explained.stdout
