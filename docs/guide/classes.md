@@ -69,6 +69,75 @@ for each instance.
 Reading a field of `None` is Python's `AttributeError`. Under `ppy run` it
 falls back to Python, which raises it; a standalone binary stops.
 
+Fields are assigned as Python assigns them, tuple assignment included:
+`node.left, node.right = node.right, node.left` evaluates both values
+before it stores either. A conditional expression chooses an object as it
+chooses a number, evaluating only the side the test picks:
+`node = node.left if key < node.key else node.right`.
+
+## Fields without annotations
+
+A field the class does not annotate has the type of everything the program
+stores into it. That is the class's own `self.x = ...` in any method, and an
+assignment to the field of an instance anywhere in the project:
+
+```python
+class Node:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+
+
+class Tree:
+    def __init__(self):
+        self.root = None
+
+    def insert(self, key: int) -> None:
+        if self.root is None:
+            self.root = Node(key)
+            return
+        node = self.root
+        while True:
+            if key < node.key:
+                if node.left is None:
+                    node.left = Node(key)
+                    return
+                node = node.left
+            else:
+                if node.right is None:
+                    node.right = Node(key)
+                    return
+                node = node.right
+```
+
+`self.left = None` in `__init__` and `node.left = Node(key)` in
+`Tree.insert` make `Node.left` a `Node | None`, and `Tree.root` is one too.
+Without strict mode, `Node.__init__`'s `key` is an `int` from the calls that
+make nodes ([types from call sites](subset.md#types-from-call-sites)), and
+`insert` lowers like the annotated `Tree` above.
+
+- Values of several classes join. A subclass's instance where the base's is
+  stored gives the base: `Shape | None` for a field set to `None`, a
+  `Shape`, and a `Square`.
+- An empty container a field starts as takes its element type from what is
+  stored into it: `append`, `insert`, `add`, `heapq.heappush`, and
+  `d[key] = value`, also one level in (`self.adj[u].append(v)` for
+  `self.adj = [[] for _ in range(n)]`). `self.queue = []` and
+  `self.queue.append(job)` make a `list` of what `job` is.
+- A value the checker cannot type says nothing. A field stored only from
+  unannotated parameters no call types stays unknown, and the functions that
+  use it stay in Python.
+- A field annotated anywhere (`self.count: int = 0` in `__init__`, or in the
+  class body) keeps its annotation.
+- A store that would add a field the class never sets itself is not
+  counted, so such a field stays Python's.
+
+The type is what the program shows, not a promise about every caller. Code
+outside the project can store anything. When an object crosses into native
+code, its fields are checked against these types, and a field holding
+something else makes Python run the function's body instead.
+
 Methods lower like functions, with `self` as a handle. `len(obj)` calls
 `__len__`, and `if obj:` calls `__bool__` or `__len__` where the class has
 one and otherwise tests that `obj` is not `None`.
@@ -258,8 +327,12 @@ stay what they were.
 
 After the call:
 
-- if the function writes a field, the new values are set on the caller's
-  objects, which stay the same objects;
+- if the function writes a field of any object that crossed, the new values
+  are set on the caller's objects, which stay the same objects. A write
+  through a local that holds a field (`node = self.head`, then
+  `node.value = 0`), or through an object a call hands back
+  (`self.last().value += 1`, `tail(head).next = Node(k)`), counts as a write
+  through the parameter it was reached from;
 - an object the function returns is the caller's own object when it came
   from one;
 - an object native code made becomes a new instance of its class, with its
@@ -335,7 +408,10 @@ on CPython.
 
 - A class with more than one base, a base from another module or a
   library, or a field native code cannot represent (a NumPy array, a
-  `list` with no element type), keeps the functions that use it in Python.
+  `list` with no element type, a number or string that may be `None` such
+  as `label: int | None`), keeps the functions that use it in Python. A
+  Protocol the class only satisfies, without naming it as a base, is not a
+  base.
 - A call through a generic base whose subclass has type parameters the
   base's arguments do not decide stays in Python, as above.
 - A dataclass's generated `==` and order compare fields that are numbers,
