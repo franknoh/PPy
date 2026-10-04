@@ -35,13 +35,16 @@ stays off the boundary: how deep it goes is the argument's to decide, and
 CPython raises `RecursionError` where native code has no limit to stop at.
 
 A function that returns nothing gets the boundary where it loops over what
-it is given, or fills a container the caller passed. A function that only
+it is given, or reads or fills a container the caller passed, and the work
+pays for it as for any other function. A function that only
 checks its arguments and raises stays a native caller's, and so does a
 `main()` that takes nothing: it runs once, and what it calls goes native on
 its own terms.
 
-A container or an object is copied whole on each call, so the body has to
-do work in proportion to it ([Lists, dicts, and sets](containers.md#between-functions)).
+A container or an object crosses whole on each call, read in place where
+the call writes through none of its parameters and copied otherwise, so the
+body has to do work in proportion to it
+([Lists, dicts, and sets](containers.md#between-functions)).
 
 `ppy explain module.name` (or `FILE.ppy:LINE`) reports the decision and,
 when the answer is no, the first blocking construct.

@@ -393,7 +393,61 @@ def _support(signatures, *, managed: bool = True) -> list[str]:  # type: ignore[
         parts.append(_CROSSING.read_text(encoding="utf-8"))
     if managed and any(s.effects for s in found):
         parts.append(_EFFECTS.read_text(encoding="utf-8"))
+    if managed and any(s.draws for s in found):
+        parts.append(_DRAWS)
     return parts
+
+
+#: A function that draws from `random` draws in `random._inst`'s own state,
+#: which the binder hands over (`ppy_random`): the wrapper saves it before the
+#: call and puts it back where the call falls back, so the Python body draws
+#: what native code drew, and forgets `gauss_next` where native code seeded,
+#: as `random.seed` does. `binding._SharedGenerator` does the same in Python.
+_DRAWS = r"""
+#include <string.h>
+#define PPY_DRAW_BYTES (4 + 624 * 4)
+static unsigned char *ppy_draw_state = NULL;
+static int64_t (*ppy_draw_reseeded)(void) = NULL;
+static PyObject *ppy_draw_inst = NULL;
+
+/* `ppy_random(state address, reseeded address, random._inst)`. */
+static PyObject *ppy_random(PyObject *self, PyObject *args) {
+    unsigned long long state, reseeded;
+    PyObject *inst;
+    (void)self;
+    if (!PyArg_ParseTuple(args, "KKO", &state, &reseeded, &inst)) {
+        return NULL;
+    }
+    if (state == 0 || reseeded == 0) {
+        Py_RETURN_FALSE;
+    }
+    Py_INCREF(inst);
+    Py_XDECREF(ppy_draw_inst);
+    ppy_draw_inst = inst;
+    *(void **)(&ppy_draw_reseeded) = (void *)(uintptr_t)reseeded;
+    ppy_draw_state = (unsigned char *)(uintptr_t)state;
+    Py_RETURN_TRUE;
+}
+
+/* The state as the call found it, before Python runs the call again. */
+static void ppy_draw_restore(const unsigned char *saved) {
+    if (ppy_draw_state == NULL) {
+        return;
+    }
+    memcpy(ppy_draw_state, saved, PPY_DRAW_BYTES);
+    ppy_draw_reseeded();
+}
+
+/* After a call that answered: `gauss_next` forgotten where it seeded. */
+static void ppy_draw_settle(void) {
+    if (ppy_draw_state == NULL || !ppy_draw_reseeded()) {
+        return;
+    }
+    if (PyObject_SetAttrString(ppy_draw_inst, "gauss_next", Py_None) < 0) {
+        PyErr_Clear();
+    }
+}
+"""
 
 
 _FOOTER = """
@@ -443,6 +497,8 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
         methods.append('    {"ppy_runtime", ppy_runtime, METH_VARARGS, NULL},')
     if any(s.effects for s in signatures.values()):
         methods.append('    {"ppy_effects", ppy_effects, METH_VARARGS, NULL},')
+    if any(s.draws for s in signatures.values()):
+        methods.append('    {"ppy_random", ppy_random, METH_VARARGS, NULL},')
     for index, (qualname, signature) in enumerate(sorted(signatures.items())):
         entries[qualname] = index
         parts.append(_function(index, signature))
@@ -718,9 +774,7 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         )
         crossed = f'ppy_io_crossed(status, "{qualname}")'
         if crossing:
-            crossed = (
-                f'ppy_closed(ppy_io_crossed(status, "{qualname}"), &ppy_x)'
-            )
+            crossed = f'ppy_closed(ppy_io_crossed(status, "{qualname}"), &ppy_x)'
         failed = (
             f"{end}        if (ppy_crossed) {{\n"
             f"            return {crossed};\n        }}\n"
@@ -733,8 +787,24 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         synced = sync.replace("return NULL;", "return ppy_io_commit_result(NULL);")
         answered = (
             f"{synced}    PyObject *ppy_result = {boxed};\n"
-            f"{end}    ppy_result = ppy_io_commit_result(ppy_result);\n{keep}    return ppy_result;\n"
+            f"{end}    ppy_result = ppy_io_commit_result(ppy_result);\n"
+            f"{keep}    return ppy_result;\n"
         )
+    draws = managed and signature.draws
+    if draws:
+        # `random`'s state as the call found it (`_DRAWS`).
+        declarations = "    unsigned char ppy_drawn[PPY_DRAW_BYTES];\n" + declarations
+        # Without the state's address, the Python-side binding saves it.
+        body = (
+            "    if (ppy_draw_state != NULL) memcpy(ppy_drawn, ppy_draw_state, PPY_DRAW_BYTES);\n"
+            + body
+        )
+        # Put back only where Python runs the call again: not after a barrier.
+        failed = failed.replace(
+            "        return ppy_handoff_as(",
+            "        ppy_draw_restore(ppy_drawn);\n        return ppy_handoff_as(",
+        )
+        answered = "    ppy_draw_settle();\n" + answered
     return f"""
 /* {signature.qualname}: {signature} */
 {structs}

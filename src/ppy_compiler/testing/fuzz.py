@@ -1564,6 +1564,42 @@ class _Generator:
         w.put("")
         w.put("")
 
+    def reader_function(self, w: _Writer, name: str) -> None:
+        """A function Python calls natively with containers it only reads, which
+        the generated wrapper reads in place (its lists in an arena, its strings
+        borrowed), and a row of them it hands back."""
+        rng = self.crossing
+        w.put("@ppy.native")
+        w.put(
+            f"def {name}(g: list[list[int]], words: list[str], d: dict[str, int], "
+            "s: set[int], k: int) -> list[int]:"
+        )
+        w.depth += 1
+        w.put("total = k")
+        w.put("best = g[0] if len(g) > 0 else []")
+        menu = [
+            "for row in g:\n    for x in row:\n        total += x * (k + 1)",
+            (
+                "for row in g:\n"
+                f"    if len(row) > len(best) or sum(row) % {rng.randint(2, 5)} == 1:\n"
+                "        best = row"
+            ),
+            "for w in words:\n    total += len(w)\n    if w in d:\n        total += d[w]",
+            'for w in words:\n    for c in w:\n        if c in "ae\u00e9":\n            total += 1',
+            "for key, v in d.items():\n    total += v * len(key)",
+            "for x in s:\n    total += x % 5",
+            f"for i in range({rng.randint(1, 9)}):\n    if i in s:\n        total += i",
+        ]
+        for statement in rng.sample(menu, rng.randint(2, 5)):
+            for line in statement.split("\n"):
+                w.put(line)
+        w.put("if total % 3 == 0 or len(best) == 0:")
+        w.put("    return [total]")
+        w.put("return best")
+        w.depth -= 1
+        w.put("")
+        w.put("")
+
     def boundary_part(self, w: _Writer) -> list[str]:
         """The functions with boundary writes, and what `main` does with them:
         arguments that share rows, a row both in the list and in the dict, the
@@ -1585,6 +1621,16 @@ class _Generator:
             rng.choice(("boxes = [b1, b2, b1]", "boxes = [b2]", "boxes = []")),
         ]
         after.append(f"print({lent}(row, {rng.randint(-3, 9)}), {lent}([], 1), row)")
+        reader = self.name("rd")
+        self.reader_function(w, reader)
+        after.append(
+            "words = "
+            + rng.choice(('["ab", "é", ""]', '["x", "x", "naïve", "日本"]', "[]", '["bad\\ud800"]'))
+        )
+        after.append(rng.choice(('wd = {"ab": 2, "x": 5}', "wd = {}", 'wd = {"é": -1}')))
+        for _ in range(rng.randint(1, 2)):
+            after.append(f"got = {reader}(g, words, wd, s, {rng.randint(-3, 9)})")
+            after.append("print(got, got is row, any(got is r for r in g))")
         for _ in range(rng.randint(1, 3)):
             after.append(f"print({name}(g, d, s, boxes, {rng.randint(-3, 9)}))")
             after.append(

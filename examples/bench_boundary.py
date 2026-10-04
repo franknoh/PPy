@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 PROGRAM = """import array
+import random
 import time
 from collections.abc import Callable
 
@@ -152,6 +153,11 @@ def tally(xs: list[int], out: list[int]) -> None:
     out[0] = s
 
 
+@ppy.native
+def roll(n: int) -> int:
+    return random.randint(1, 6) + n
+
+
 # Module-level aliases and per-iteration-varying arguments: both defeat the
 # optimizer, which happily folds a small pure call with constant arguments
 # into its answer -- and a folded call measures nothing.
@@ -256,6 +262,10 @@ def drive_tally(i: int) -> None:
     tally(listed, sink)
 
 
+def drive_roll(i: int) -> None:
+    roll(i)
+
+
 def rate(label: str, call: Callable[[int], None], rounds: int) -> None:
     started = time.perf_counter()
     for i in range(rounds):
@@ -284,6 +294,7 @@ def main() -> None:
     rate("list[bool] read, n=100", drive_flags, 50000)
     rate("one element of 100 written", drive_touch, 50000)
     rate("reads 100, writes 1 (None)", drive_tally, 50000)
+    rate("draws from random", drive_roll, 200000)
 
 
 main()
@@ -313,7 +324,7 @@ def main() -> int:
                 check=False,
             )
             ppy_rows = done.stdout.splitlines()
-            for ours, theirs in zip(ppy_rows, python.stdout.splitlines()):
+            for ours, theirs in zip(ppy_rows, python.stdout.splitlines(), strict=False):
                 label = ours[:28]
                 print(f"{label} {ours[28:].split()[0]:>9s} {theirs[28:].split()[0]:>9s}")
         else:
