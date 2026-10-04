@@ -603,9 +603,10 @@ def test_python_calls_container_functions_natively(tmp_path: Path):
     assert counted == {"x": 2, "y": 1, "é": 1} and type(counted) is dict
     assert histogram.calls == 1
     assert native("top").wrapper({"q": 3, "r": 5, "": 4}) == "r"
-    # One pass over a list of strings is cheaper in Python than copying them in.
+    # One pass over a list of strings is cheaper in Python: borrowing each
+    # string is cheap, holding it natively costs what `len` saves.
     once = module.functions["prog.once"]
-    assert not once.exposed and "strings" in once.exposure_reason
+    assert not once.exposed and "copying the collections" in once.exposure_reason
     xs = [1, 2]
     grow = native("grow")
     assert grow.wrapper(xs, 2) is None and xs == [1, 2, 0, 1] and grow.calls == 1

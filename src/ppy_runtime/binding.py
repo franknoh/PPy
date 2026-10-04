@@ -8,6 +8,7 @@ and its machinery is imported only when it is actually used.
 from __future__ import annotations
 
 import array
+import contextlib
 import ctypes
 import sys
 from collections.abc import Callable
@@ -339,6 +340,32 @@ class _SharedGenerator:
 
 
 _generators: dict[int, _SharedGenerator | None] = {}
+
+
+def attach_random(wrappers: object, owner: object = None) -> bool:
+    """Hand a generated wrapper module `random._inst`'s state and the runtime's
+    `ppy_random_reseeded`, for the wrappers of functions that draw to save and
+    put back the state in C (`wrapper._DRAWS`); whether it took them. Asked
+    once per module."""
+    hand = getattr(wrappers, "ppy_random", None)
+    if hand is None:
+        return False
+    attached = getattr(wrappers, "__ppy_random__", None)
+    if attached is not None:
+        return bool(attached)
+    taken = False
+    generator = _shared_generator(owner)
+    if generator is not None:
+        import random  # pylint: disable=import-outside-toplevel
+
+        try:
+            reseeded = ctypes.cast(generator.reseeded, ctypes.c_void_p).value or 0
+            taken = bool(hand(generator.address, reseeded, random._inst))  # type: ignore[attr-defined]
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            taken = False
+    with contextlib.suppress(AttributeError, TypeError):
+        wrappers.__ppy_random__ = taken  # type: ignore[attr-defined]
+    return taken
 
 
 def _shared_generator(owner: object) -> _SharedGenerator | None:

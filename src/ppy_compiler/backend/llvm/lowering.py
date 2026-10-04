@@ -321,8 +321,9 @@ def writes(analysis: FunctionAnalysis) -> set[str]:
     )
 
 
-def _holds_strings(info: FunctionInfo) -> bool:
-    """Whether a parameter or the result is a container with strings in it."""
+def _holds_strings(info: FunctionInfo, params: bool = True) -> bool:
+    """Whether a parameter (unless not `params`) or the result is a container
+    with strings in it."""
 
     def inside(t: T.Type) -> bool:
         base = T.strip_literal(t)
@@ -336,7 +337,7 @@ def _holds_strings(info: FunctionInfo) -> bool:
         base = T.strip_literal(t)
         return isinstance(base, T.Instance) and any(inside(a) for a in base.args)
 
-    return container(info.ret) or any(container(p.type) for p in info.params)
+    return container(info.ret) or (params and any(container(p.type) for p in info.params))
 
 
 def _nested_loop(function: ast.AST) -> bool:
@@ -638,15 +639,16 @@ def _crossing_costs_more(
     """Why copying the function's containers across the boundary would cost more
     than running it natively saves, or None when it pays.
 
-    The boundary copies a container that crosses whole, in and back, on every
-    call. That is work proportional to its size, so the body has to do work
-    proportional to it too: a loop that walks it, or works on it element by
-    element. How much work depends on what an element costs to copy, which
-    `_copy_cost` puts in operations of a Python loop's body: a list of
-    numbers next to nothing, a dict's entry or an inner list a few, an object
-    more. A container of strings costs more still, a native string made for
-    every element, about what one pass of a Python loop spends on it, so it
-    pays only when the body makes more than one pass (a loop in a loop).
+    The boundary copies a container that crosses whole, on every call, and
+    back where the call writes through it. That is work proportional to its
+    size, so the body has to do work proportional to it too: a loop that
+    walks it, or works on it element by element. How much work depends on
+    what an element costs to cross, which `_copy_cost` puts in operations of
+    a Python loop's body. A call that writes through no parameter reads its
+    containers in place of copies (`crossing.c`): a number costs next to
+    nothing, a string or an inner list about one operation, a dict's entry
+    about one. Written, a container costs more: each element is copied back,
+    a string made natively, an inner list or an entry made and let go of.
     """
     crossing = [
         (param.name, native)
@@ -660,32 +662,115 @@ def _crossing_costs_more(
     names = [name for name, _native in crossing]
     if crossing and not _works_through(info.node, names, info.name):
         return "copying the collections in costs more than the body does with them"
+    read_only = _reads_in_place(crossing, classes, filled)
+    # A loop in a loop does many operations per element read in place, which
+    # pays for reading it natively whatever it is.
+    many = read_only and _nested_loop(info.node)
     for name, native in crossing:
-        need = _copy_cost(native, classes, name in filled)
+        if many:
+            break
+        need = _copy_cost(native, classes, name in filled, read_only, _looks_up(info.node, name))
         if need and _loop_work(info.node, name, info.name) < need:
             return "copying the collections in costs more than the body does with them"
-    if _holds_strings(info) and not _nested_loop(info.node):
+    # Strings read in place are borrowed; strings written, or made for the
+    # result, are each a string made and decoded.
+    holds = _holds_strings(info, params=not read_only)
+    if holds and not _nested_loop(info.node):
         return "copying its strings across costs what one pass over them saves"
     return None
 
 
-def _copy_cost(parameter: NativeParam, classes: tuple[CrossingClass, ...], written: bool) -> int:
-    """What copying one element of a crossing parameter costs, in operations of
-    a CPython loop's body (each about what `s += x` costs), in and back.
-    Measured on the generated wrapper (`crossing.c`): a number in a list costs
-    a few nanoseconds; a dict's or a set's entry is hashed and put; a list in
-    a list, and an object, is a handle made, filled, and let go of."""
+def _reads_in_place(
+    crossing: list[tuple[str, NativeParam]],
+    classes: tuple[CrossingClass, ...],
+    filled: frozenset[str],
+) -> bool:
+    """Whether the boundary reads these containers in place rather than copying
+    them (`crossing.c`'s arena): the call writes through none of them, and none
+    holds an object, whose fields `getattr` reads."""
+    if filled & {name for name, _native in crossing}:
+        return False
+    described = {c.qualname: c for c in classes}
+
+    def plain(spec) -> bool:  # type: ignore[no-untyped-def]
+        if spec is None:
+            return True
+        if spec.kind in {"object", "record"}:
+            return False
+        return plain(spec.key) and plain(spec.value)
+
+    return all(plain(crossing_spec(native.element, described)) for _name, native in crossing)
+
+
+def _copy_cost(
+    parameter: NativeParam,
+    classes: tuple[CrossingClass, ...],
+    written: bool,
+    read_only: bool = False,
+    looked_up: bool = True,
+) -> int:
+    """What crossing one element of a parameter costs, in operations of a
+    CPython loop's body (each about what `s += x` costs, 9 ns), in and back.
+    Measured on the generated wrapper (`crossing.c`, `examples/bench_boundary.py`).
+
+    Read in place, a number costs about a nanosecond, a string (its bytes
+    borrowed) or an inner list (laid out in the call's arena) 10 to 20 ns
+    and as much again for native code to hold,
+    and a dict's or a set's entry 10 ns, 40 ns with a string in it; one
+    the body looks keys up in (`looked_up`) is hashed at the first lookup,
+    as much again. Copied for a call that writes, a number in a list is
+    copied back where it changed; a dict's or a set's entry is hashed and
+    put; a list in a list, a string, and an object is a handle made, filled,
+    and let go of."""
     described = {c.qualname: c for c in classes}
     spec = crossing_spec(parameter.element, described)
     if spec is None:
         return 0
     if spec.kind == "object" or (spec.value is not None and spec.value.kind == "object"):
         return 8 if written else 6
+    if read_only:
+        # What reading costs native code counts too: an element that is a
+        # handle (a string, an inner list) is held and let go of, a lookup
+        # hashes; about two operations each, which a body of one or two
+        # operations per element does not repay.
+        inner = [part for part in (spec.key, spec.value) if part is not None]
+        text = any(part.kind == "str" for part in inner)
+        if spec.key is not None:
+            entry = 6 if text else 3
+            return entry + (4 if text else 2) if looked_up else entry
+        if any(part.collection or part.kind == "str" for part in inner):
+            return 4
+        return 0
     if spec.key is not None:
         return 6 if written else 3
     if spec.value is not None and (spec.value.collection or spec.value.kind == "str"):
         return 3 if written else 2
     return 1 if written else 0
+
+
+def _looks_up(function: ast.AST, name: str) -> bool:
+    """Whether the body looks a key up in `name`: `name[k]`, `k in name`, or
+    `name.get(k)`."""
+
+    def named(node: ast.expr) -> bool:
+        return isinstance(node, ast.Name) and node.id == name
+
+    for node in ast.walk(function):
+        if isinstance(node, ast.Subscript) and named(node.value):
+            return True
+        if isinstance(node, ast.Compare) and any(
+            isinstance(op, (ast.In, ast.NotIn)) and named(right)
+            for op, right in zip(node.ops, node.comparators, strict=True)
+        ):
+            return True
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"get", "setdefault", "pop"}
+            and named(node.func.value)
+        ):
+            return True
+    return False
 
 
 #: Work in a loop's body, as `_loop_work` counts it.
@@ -920,12 +1005,28 @@ def should_lower_native(
             _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
         )
     )
-    if _returns_none(info.ret) and not fills and not (info.params and _loops(info.node)):
+    # A list, a dict, or a set handed to it (not a global it reads, not an
+    # object it is a method of).
+    reads = any(
+        not p.global_of
+        and isinstance(base := T.strip_literal(p.type), T.Instance)
+        and base.name in _BUILTIN_CONTAINERS
+        and _crosses(_native_param(p.name, p.type, layouts, p.name in written), classes)
+        for p in info.params
+    )
+    if (
+        _returns_none(info.ret)
+        and not fills
+        and not reads
+        and not (info.params and _loops(info.node))
+    ):
         # A function with no value to hand back is native code's to call -- a
-        # thread's body, a helper, a check that raises -- unless what it does
-        # is fill a collection the caller passed, or loop over what it is
-        # given. A `main()` that takes nothing runs once, and Python runs it:
-        # what it calls goes native on its own terms.
+        # thread's body, a helper, a check that raises (the wrapper and the
+        # raise cost more than CPython's call of a few comparisons) -- unless
+        # what it does is fill a collection the caller passed, read one, or
+        # loop over what it is given; those are judged as any other function.
+        # A `main()` that takes nothing runs once, and Python runs it: what it
+        # calls goes native on its own terms.
         return False, "returns nothing, which has no Python boundary"
     returned = _collection_param("", info.ret, layouts)
     if returned is not None and returned.element != "str" and not _crosses(returned, classes):
@@ -969,14 +1070,17 @@ def should_lower_native(
 #: made natively on the way in and decoded on the way out, about four
 #: operations each; a value class's field is an attribute read. Module
 #: globals the function reads are read by a Python frame in front of the
-#: wrapper. A function that draws random numbers is bound by the Python-level
-#: binding, which saves `random`'s state through `ctypes`. Output a native
+#: wrapper. A function that draws random numbers has `random`'s state (2.5 KB)
+#: saved by the wrapper, about two operations; one that also reads module
+#: globals is bound by the Python-level binding, which saves it through
+#: `ctypes`. Output a native
 #: call holds is written out through Python when the call ends, which costs
 #: more than CPython's `print` for one line and much less for many: only a
 #: loop that prints pays for it.
 _CROSSING_BASE = 2
 _CROSSING_TEXT = 4
 _CROSSING_GLOBALS = 6
+_CROSSING_DRAWS = 4
 _CROSSING_SLOW = 16
 _CROSSING_HELD = 40
 
@@ -989,7 +1093,7 @@ def _crossing_cost(
 ) -> int:
     """How much straight-line work pays for a call through the boundary."""
     if Effect.RANDOM in analysis.effects:
-        return _CROSSING_SLOW
+        return _CROSSING_SLOW if analysis.implicit_globals else _CROSSING_DRAWS
     if any(effect in analysis.effects for effect in _NEEDS_GIL):
         return _CROSSING_HELD
     cost = _CROSSING_BASE + (_CROSSING_GLOBALS if analysis.implicit_globals else 0)

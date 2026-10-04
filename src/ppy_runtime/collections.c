@@ -1155,10 +1155,15 @@ int8_t *ppy_map_new(int64_t keys, int64_t words, int64_t floats, int64_t handles
     return handle;
 }
 
-/* Where `key` sits in the index, or -1. */
+/* Where `key` sits in the index, or -1. A map filled whole from Python's
+   (`ppy_coll_put_many`) has its index made at its first lookup: a walk over
+   it needs none. */
 int64_t ppy_map_slot(int8_t *handle, const int8_t *key) {
     int64_t *header = (int64_t *)handle;
     const int64_t *wanted = (const int64_t *)key;
+    if (header[4] == 0) {
+        ppy_map_reindex(handle, header[5]);
+    }
     int64_t *index = (int64_t *)(intptr_t)header[4];
     int64_t keys = (header[13] & 0xFFFFFFFF);
     int64_t mask = header[5] - 1;
@@ -1702,6 +1707,9 @@ int8_t *ppy_coll_copy(int8_t *handle) {
         copy[w] = header[w];
     }
     if (header[12] == 2) {
+        if (header[4] == 0) {
+            ppy_map_reindex(handle, header[5]);
+        }
         int64_t *index = (int64_t *)malloc((size_t)header[5] * sizeof(int64_t));
         if (index == NULL) {
             ppy_coll_fail();
@@ -2347,26 +2355,25 @@ void ppy_coll_put_many(int8_t *handle, const int8_t *keys, const int8_t *values,
         ppy_coll_reserve(handle, header[3] + count);
         int64_t stride = header[15];
         int64_t alive = key_words + words;
-        int64_t *index = (int64_t *)(intptr_t)header[4];
-        int64_t mask = header[5] - 1;
+        int64_t held = ppy_coll_held_keys(handle);
         for (int64_t i = 0; i < count; i++) {
             int64_t e = header[3]++;
             int64_t *record = ppy_coll_record(handle, e);
             memset(record, 0, (size_t)(stride * 8));
             memcpy(record, keys + i * key_words * 8, (size_t)(key_words * 8));
-            ppy_coll_hold_key(handle, record, 1);
+            if (held != 0) {
+                ppy_coll_hold_key(handle, record, 1);
+            }
             record[alive] = 1;
             if (words > 0) {
                 memcpy(record + key_words, values + i * words * 8, (size_t)(words * 8));
             }
-            int64_t at = ppy_map_hash(handle, record, mask);
-            while (index[at] >= 0) {
-                at = (at + 1) & mask;
-            }
-            index[at] = e;
-            header[0]++;
-            header[6]++;
         }
+        header[0] += count;
+        header[6] += count;
+        /* The index is made at the first lookup (`ppy_map_slot`). */
+        free((void *)(intptr_t)header[4]);
+        header[4] = 0;
         return;
     }
     for (int64_t i = 0; i < count; i++) {

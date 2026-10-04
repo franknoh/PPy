@@ -110,6 +110,11 @@ class PrebuiltBinder(LibraryBinder):
 
             if not attach(self._wrappers, self._library):
                 return None
+        if signature.draws:
+            from .binding import attach_random  # pylint: disable=import-outside-toplevel
+
+            if not attach_random(self._wrappers, self._library):
+                return None
         if signature.effects:
             from .effects import attach as attach_effects  # pylint: disable=import-outside-toplevel
             from .effects import register_function  # pylint: disable=import-outside-toplevel
@@ -150,8 +155,9 @@ class PrebuiltBinder(LibraryBinder):
         if not address:
             return fallback
         # A coroutine's future needs the Python-side wrapping; the C wrapper
-        # would hand back the bare handle. A function that draws needs
-        # `random`'s state saved around it, which the Python side does.
+        # would hand back the bare handle. A function that draws has
+        # `random`'s state saved around it, which the C wrapper does too; one
+        # that reads globals and draws, only the Python side.
         if signature.reads_globals and not (signature.future or signature.draws):
             # Python reads the globals and passes them after its arguments.
             read = bind_globals(
@@ -165,7 +171,7 @@ class PrebuiltBinder(LibraryBinder):
                 return read.wrapper
         entry = (
             None
-            if signature.future or signature.draws or signature.reads_globals
+            if signature.future or signature.reads_globals
             else self._fast_entry(signature, address, fallback)
         )
         if entry is not None:
