@@ -108,6 +108,21 @@ def test_unannotated_programs_with_inference_evidence_agree(seed: int):
     ]
 
 
+@pytest.mark.parametrize("seed", SEEDS[:1])
+def test_unannotated_programs_with_acting_decorators_agree(seed: int):
+    """Project decorators that scale a result, print, count, cache, swap
+    arguments, or hand back another function: every call by the name, from
+    Python and from functions that go native, reaches what they returned."""
+    paths = tuple(p for p in _available() if p in STATE_PATHS)
+    source = generate_program(seed, unannotated=True, decorators=True)
+    assert "seen[n] = fn(n)" in source and "wrapper.calls += 1" in source
+    mismatches = compare(run_program(source, paths))
+    assert not mismatches, [
+        (m.path, m.reason, m.expected.last_error, m.found.last_error, m.found.stderr[-2000:])
+        for m in mismatches
+    ]
+
+
 @pytest.mark.parametrize("seed", SEEDS[:2])
 def test_programs_that_edit_structures_agree(seed: int):
     """Classes with unannotated fields, a tree with parent links and a doubly

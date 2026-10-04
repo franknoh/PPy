@@ -318,8 +318,13 @@ class _Generator:
         structures: bool = False,
         shapes: bool = False,
         inference: bool = False,
+        decorators: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: With `unannotated`, also project decorators that change what a call
+        #: does (`decorators_part`), drawn from a sequence of their own.
+        self.with_decorators = decorators and unannotated
+        self.decorating = random.Random(seed ^ 0xDEC0)
         #: Whether the program also has the shapes the corpus kept in Python
         #: (`shapes_part`), drawn from a sequence of their own.
         self.with_shapes = shapes
@@ -1515,6 +1520,10 @@ class _Generator:
         if self.with_inference:
             inferred, raw = self.inference_part(w)
             after.extend(inferred)
+        if self.with_decorators:
+            decorated, more = self.decorators_part(w)
+            after.extend(decorated)
+            raw.extend(more)
         if self.with_shapes:
             after.extend(self.shapes_part(w))
         w.put("def main() -> None:")
@@ -1546,6 +1555,157 @@ class _Generator:
                 w.put("    except Exception as e:")
                 w.put("        print(type(e).__name__)")
         return "\n".join(w.lines) + "\n"
+
+    def decorators_part(self, w: _Writer) -> tuple[list[str], list[str]]:
+        """Project decorators nobody vouches for, which change what a call by
+        the name does: one scales the result, one prints around the call (with
+        `functools.wraps`), one counts calls on the wrapper, one caches and
+        prints on a miss (a recursive function calls itself through it), one
+        swaps the arguments, one takes arguments of its own, one hands back
+        another function, and one wraps a method. Functions that would go
+        native call them in loops, keep and drop their results. Returns
+        `main`'s lines and expressions Python evaluates after `main`."""
+        rng = self.decorating
+        k = [rng.randint(-3, 7) for _ in range(8)]
+        scale, shout, count, memo, swap, times, swapped_out = (
+            self.name(p) for p in ("scale", "shout", "count", "memo", "swap", "times", "other")
+        )
+        sq, work, fib, diff, cube, gone, user, cls = (
+            self.name(p) for p in ("sq", "work", "fib", "diff", "cube", "gone", "use", "Acc")
+        )
+        w.lines.extend(
+            f"""import functools
+
+
+def {scale}(fn):
+    def wrapper(n):
+        return {k[0]} * fn(n) + {k[1]}
+
+    return wrapper
+
+
+def {shout}(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        print("call", fn.__name__, args)
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def {count}(fn):
+    def wrapper(*args):
+        wrapper.calls += 1
+        return fn(*args)
+
+    wrapper.calls = 0
+    return wrapper
+
+
+def {memo}(fn):
+    seen = {{}}
+
+    def wrapper(n):
+        if n not in seen:
+            print("miss", n)
+            seen[n] = fn(n)
+        return seen[n]
+
+    return wrapper
+
+
+def {swap}(fn):
+    def wrapper(a, b):
+        return fn(b, a)
+
+    return wrapper
+
+
+def {times}(k):
+    def outer(fn):
+        def wrapper(n):
+            return [fn(n) for _ in range(k)]
+
+        return wrapper
+
+    return outer
+
+
+def {swapped_out}(fn):
+    return lambda n: n * {k[2]} - 1
+
+
+@{scale}
+def {sq}(n):
+    return n * n
+
+
+@{shout}
+def {work}(n: int) -> int:
+    t = 0
+    for i in range(n):
+        t += i * {k[3]}
+    return t
+
+
+@{memo}
+def {fib}(n):
+    if n < 2:
+        return n
+    return {fib}(n - 1) + {fib}(n - 2)
+
+
+@{count}
+@{swap}
+def {diff}(a: int, b: int) -> int:
+    return a - b
+
+
+@{times}({rng.randint(1, 3)})
+def {cube}(n):
+    return n * n * n
+
+
+@{swapped_out}
+def {gone}(n):
+    return n + 100
+
+
+class {cls}:
+    def __init__(self):
+        self.total = 0
+
+    @{count}
+    def add(self, n):
+        self.total += n
+        return self.total
+
+
+def {user}(n: int) -> int:
+    total = 0
+    for i in range(n):
+        total += {sq}(i) + {diff}(i, {k[4]}) + {gone}(i)
+        {work}(i % 3)
+    return total + {fib}(n)
+
+""".splitlines()
+        )
+        ints = [rng.randint(0, 9) for _ in range(6)]
+        main = [
+            f"print({sq}({ints[0]}), {sq}({ints[1]}), {gone}({ints[2]}))",
+            f"print({work}({ints[3]}), {diff}({ints[4]}, {ints[5]}), {cube}({ints[0]}))",
+            f"print({fib}({ints[1] + 5}), {fib}({ints[1] + 3}))",
+            f"print({user}({ints[2] + 2}), {diff}.calls)",
+            f"acc = {cls}()",
+            f"print(acc.add({ints[3]}), acc.add({ints[4]}), acc.total, {cls}.add.calls)",
+            f"{work}({ints[5]})",
+        ]
+        later = [
+            f"getattr(here, {sq!r})(2.5)",
+            f"{sq}({ints[5]}), {diff}({ints[0]}, 1), {diff}.calls",
+            f"{work}.__name__, {work}({ints[1]})",
+        ]
+        return main, later
 
     def inference_part(self, w: _Writer) -> tuple[list[str], list[str]]:
         """What inference reads beside plain calls: a function behind a
@@ -2269,6 +2429,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     structures: bool = False,
     shapes: bool = False,
     inference: bool = False,
+    decorators: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
@@ -2293,9 +2454,21 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     with `state` too, the ones only Python's boundary runs. With `inference` (and
     `unannotated`), it also has what inference reads beside plain calls: a
     decorator, operators on a value class, a `list` parameter, mixed `int`
-    and `float` calls, `argparse`, and functions typed by their body."""
+    and `float` calls, `argparse`, and functions typed by their body. With
+    `decorators` (and `unannotated`), it also has project decorators that
+    change what a call does (`decorators_part`)."""
     return _Generator(
-        seed, prints, state, stdlib, calls, unannotated, boundary, structures, shapes, inference
+        seed,
+        prints,
+        state,
+        stdlib,
+        calls,
+        unannotated,
+        boundary,
+        structures,
+        shapes,
+        inference,
+        decorators,
     ).program()
 
 

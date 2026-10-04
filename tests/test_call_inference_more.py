@@ -305,7 +305,92 @@ def test_signature_keeping_decorators_are_inferred(tmp_path: Path):
 def test_decorated_programs_agree(tmp_path: Path):
     source = DECORATED.replace("import pytest\n", "").split("CASES =", maxsplit=1)[0]
     source += "\nprint(tri(5), ways(20))\n"
-    _agrees(tmp_path, source, ["tri"])
+    # Inference types `tri`'s parameter; the name holds `logged`'s wrapper,
+    # which only Python runs.
+    _agrees(tmp_path, source, ["ways"])
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.tri")
+    assert "decorated by `@logged`" in explained.stdout, explained.stdout
+
+
+#: Decorators nobody vouches for that change what a call does: every call by
+#: the name, from Python, from a function that goes native, at module level,
+#: and recursively, reaches the decorator's object.
+ACTING = """
+import functools
+
+
+def doubled(fn):
+    def wrapper(n):
+        return 2 * fn(n)
+
+    return wrapper
+
+
+def logged(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        print("calling", fn.__name__)
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def memo(fn):
+    seen = {}
+
+    def wrapper(n):
+        if n not in seen:
+            print("miss", n)
+            seen[n] = fn(n)
+        return seen[n]
+
+    return wrapper
+
+
+@doubled
+def square(n):
+    return n * n
+
+
+@logged
+def work(n: int) -> int:
+    t = 0
+    for i in range(n):
+        t += i
+    return t
+
+
+@memo
+def fib(n):
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+
+def loop(n: int) -> int:
+    total = 0
+    for i in range(n):
+        total += square(i)
+        work(i)
+    return total
+
+
+def main():
+    print(square(3), work(7), fib(12))
+    print(loop(5))
+
+
+main()
+print(square(4), fib(13))
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_decorators_that_act_run_on_every_call(tmp_path: Path):
+    _agrees(tmp_path, ACTING, [])
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.square")
+    assert "decorated by `@doubled`" in explained.stdout, explained.stdout
 
 
 #: Operators on a class's instances are calls of its dunders.
