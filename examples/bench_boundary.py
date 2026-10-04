@@ -1,8 +1,9 @@
 """Python/native boundary costs, measured one category at a time.
 
 The profitability model (`should_lower_native`) is built on these numbers;
-this script keeps them honest on the machine in front of you. Not a CI
-gate.
+this script keeps them honest on the machine in front of you. With
+`--python` it runs the same program under `python` too and prints both
+columns, `ppy run` first. Not a CI gate.
 """
 
 from __future__ import annotations

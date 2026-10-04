@@ -941,14 +941,14 @@ def should_lower_native(
             _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
         )
     )
+    # A list, a dict, or a set handed to it (not a global it reads, not an
+    # object it is a method of).
     reads = any(
-        native is not None
-        and native.is_handle
-        and native.element != "str"
-        and _crosses(native, classes)
-        for native in (
-            _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
-        )
+        not p.global_of
+        and isinstance(base := T.strip_literal(p.type), T.Instance)
+        and base.name in _BUILTIN_CONTAINERS
+        and _crosses(_native_param(p.name, p.type, layouts, p.name in written), classes)
+        for p in info.params
     )
     if (
         _returns_none(info.ret)
