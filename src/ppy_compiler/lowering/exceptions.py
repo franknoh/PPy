@@ -781,6 +781,12 @@ _LENDS = frozenset({"core.call_extern", "core.call", "core.call_indirect"})
 
 def _takes(user: object, index: int) -> bool:
     """Whether this use of a handle may take the caller's reference to it."""
+    if (
+        isinstance(user, Operation)
+        and user.name == "core.cast"
+        and user.attributes.get("ppy.reads")
+    ):
+        return False  # a header read in place of a runtime call (`collections._reading`)
     if not isinstance(user, Operation) or user.name not in _LENDS:
         return True  # a store, a return, a branch argument, anything unknown
     if user.name == "core.call_extern":
