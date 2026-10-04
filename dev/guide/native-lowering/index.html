@@ -4856,8 +4856,25 @@ The types are:</p>
 <p>A parameter has to be annotated, or under <code>--no-strict</code> inferred from the
 calls the project makes (<a href="../subset/#types-from-call-sites">Types from call sites</a>).
 <code>list[Any]</code>, a bare <code>list</code>, and NumPy arrays have no native form, and a
-function that takes one runs as Python.</p>
+function that takes one runs as Python. Under <code>--no-strict</code>, a local written
+<code>out: list = []</code> (or <code>dict</code>, <code>set</code> with an empty display) is typed as
+<code>out = []</code> would be, by what the function puts in it.</p>
+<p>A <code>*args: int</code> or <code>*args: float</code>, with no keyword-only parameters or
+<code>**kwargs</code> after it, is a list of numbers to the native entry. When Python
+calls the function, the boundary packs the positions after the named
+parameters into that list. A native caller packs them the same way, or
+passes a list it was given whole as <code>f(k, *xs)</code>. A position that is not of
+the declared type runs the call as Python.</p>
+<p>A list parameter the function only reads is lent as a buffer, a copy of its
+numbers. One it returns, slices (<code>xs[1:]</code>), or adds to another list is held
+by handle instead, since a buffer is not a list it could hand back.</p>
 <h2 id="what-the-body-may-contain">What the body may contain<a class="headerlink" href="#what-the-body-may-contain" title="Permanent link">&para;</a></h2>
+<p>A function declared to return a value may end in an <code>if</code>/<code>elif</code>/<code>else</code> whose
+every side returns or raises: no path reaches the end, so the end needs no
+value. Where a path does reach the end, CPython returns <code>None</code>, which an
+<code>int</code> or a <code>float</code> result cannot hold, so the native call falls back there
+and Python runs it and returns that <code>None</code>. A standalone build has no
+Python to fall back to and refuses such a function.</p>
 <p>The subset includes what a loop is normally made of:</p>
 <ul>
 <li><code>break</code> and <code>continue</code> (a <code>continue</code> in a <code>for</code> still advances the counter)</li>
@@ -4892,6 +4909,15 @@ function that takes one runs as Python.</p>
   <code>ValueError</code>.</li>
 <li><code>a = b = value</code> evaluates the value once and binds each name.
   <code>r, c = (x, y) if flag else (y, x)</code> makes and unpacks only the chosen side.</li>
+<li><code>holes, seen = [0] * n, []</code> binds each list in turn, and <code>a, b = b, a</code>
+  of two lists takes both before it binds either, as Python does.</li>
+<li><code>a, b, c = xs</code> of a list checks its length first and raises CPython's
+  <code>ValueError</code> (<code>not enough values to unpack (expected 3, got 2)</code>) when it
+  differs.</li>
+<li><code>if not xs:</code> and <code>xs == []</code> of a list test its length.</li>
+<li>A module-level string bound once to a literal, such as <code>LETTERS =
+  "ABC..."</code>, is read as that literal: <code>LETTERS.find(c)</code>, <code>LETTERS[:6]</code>,
+  <code>c in LETTERS</code>.</li>
 </ul>
 <h3 id="loops">Loops<a class="headerlink" href="#loops" title="Permanent link">&para;</a></h3>
 <p>A <code>for</code> walks:</p>

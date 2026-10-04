@@ -4585,10 +4585,41 @@ runs, once per process, and calls it like any other native function.</p>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">fib</span><span class="p">(</span><span class="n">a</span> <span class="o">%</span> <span class="mi">20</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">)</span>
 </code></pre></div>
 <p><code>solve</code> stays in Python, since a native function takes no <code>**options</code>, but
-<code>fib</code> is native. A nested function may call itself by its own name. One that
-reads or writes a variable of the function around it, uses its own name as
-a value, or has a decorator runs as Python with that function, and <code>ppy
-explain</code> names the shared variables.</p>
+<code>fib</code> is native. A nested function may call itself by its own name.</p>
+<p>A nested function may also use variables of the function around it, as long
+as nothing rebinds them while it runs: it does not assign them, and no
+function nested in the same one declares them <code>nonlocal</code>. Its native entry
+then takes each such variable as one more parameter. Each time Python calls
+the function object a <code>def</code> made, it reads the variable from that object's
+cell, so the call sees the value the variable holds at that moment, as
+CPython does. The function around it is waiting on the call, so the value
+cannot change before the call returns. A list or a dict the nested function
+writes into, such as a <code>visited</code> list in a depth-first search, is passed by
+handle and written back, the same way a module global it writes is.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">outer</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>  <span class="c1"># outer stays in Python</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">scale</span> <span class="o">=</span> <span class="n">k</span> <span class="o">*</span> <span class="mi">2</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">seen</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">n</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">sweep</span><span class="p">(</span><span class="n">m</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">seen</span><span class="p">)):</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>            <span class="n">seen</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="n">i</span> <span class="o">*</span> <span class="n">scale</span> <span class="o">+</span> <span class="n">m</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>            <span class="n">t</span> <span class="o">+=</span> <span class="n">seen</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>        <span class="k">return</span> <span class="n">t</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">first</span> <span class="o">=</span> <span class="n">sweep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">scale</span> <span class="o">=</span> <span class="mi">100</span>  <span class="c1"># the next call reads 100</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="k">return</span> <span class="n">first</span> <span class="o">+</span> <span class="n">sweep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</code></pre></div>
+<p>An empty cell (a variable read before the function around it binds it)
+runs the call as Python, which raises CPython's <code>NameError</code>. Python binds the
+entry again for each function object, since each has its own cells.</p>
+<p>A nested function that rebinds a variable of the function around it
+(<code>nonlocal total; total += x</code>), shares a variable of a function further out,
+uses its own name as a value, or has a decorator runs as Python with that
+function, and <code>ppy explain</code> names the shared variables.</p>
 <p>A call by a plain name inside a function follows Python's scopes: a nested
 function the function around it defines is called before a module function
 of the same name.</p>
