@@ -158,8 +158,12 @@ Python.
   one key. A NaN key, which only its own object finds, falls back. An `int`
   key given to a dict of floats (`d[1]` where `d: dict[float, int]`) stays in
   Python, since CPython keeps and prints the key as it came.
-- `d.get(k)` with no default, which may give `None`, stays in Python; with a
-  default it is native.
+- `v = d.get(k)` with no default, of a dict of numbers, binds `v` as a
+  number or `None`: native code keeps a flag beside the number. `v is None`,
+  `v is not None`, `if v:`, `print(v)`, and `v` as a number once a test has
+  shown it holds one are native; `v += x` raises CPython's `TypeError` where
+  `v` is `None`. A `d.get(k)` used any other way (passed on, returned, a
+  dict of strings) stays in Python. With a default, `get` is native.
 - `sort(key=...)`, `sorted(key=...)`, `min(key=...)`, and `max(key=...)`
   natively take a key giving numbers or tuples of them, and `min` and `max`
   with a key pick among numbers. [Functions as values](closures.md) has the

@@ -12,6 +12,8 @@ keeping whole functions in Python:
 - a tuple assignment of collections (`holes, seen = [0] * n, []`), a swap
   of two lists, and a bare `list` annotation on an empty display;
 - `*args` of numbers, called from Python and from native code;
+- `v = d.get(k)` with no default, a local that is a number or `None`:
+  `v is None`, `if v:`, `v += x` once it holds one, and `print(v)`;
 - a nested function whose enclosing function stays in Python, handed the
   variables it shares as their cells hold them when Python calls it;
 - standard-library calls whose results the checker now knows (`os.path`,
@@ -244,6 +246,48 @@ def main() -> None:
 main()
 """
 
+OPTIONAL = """
+def look(d: dict[int, int], k: int) -> int:
+    v = d.get(k)
+    if v is None:
+        return -1
+    return v
+
+
+def defaulted(d: dict[str, int], key: str) -> int:
+    found = d.get(key)
+    n: int = -1 if found is None else found
+    return n * 2
+
+
+def shown(d: dict[str, float], key: str) -> int:
+    v = d.get(key)
+    t = 0
+    if v:
+        t += 1
+    if not v:
+        t += 10
+    if v is not None:
+        t += 100
+        v += 1.5
+        t += int(v)
+    print("v is", v, "end")
+    v = None
+    print(v)
+    return t
+
+
+def main() -> None:
+    d = {1: 10, 2: 20}
+    print(look(d, 1), look(d, 3))
+    print(defaulted({"a": 3}, "a"), defaulted({"a": 3}, "b"))
+    floats = {"x": 0.0, "y": 2.0}
+    print(shown(floats, "x"), shown(floats, "y"), shown(floats, "z"))
+
+
+main()
+"""
+
 PROGRAMS = {
     "ends": (ENDS, ["sign", "power", "checked"]),
     "lists": (
@@ -263,6 +307,7 @@ PROGRAMS = {
         ],
     ),
     "variadic": (VARIADIC, ["total", "positive", "caller"]),
+    "optional": (OPTIONAL, ["look", "defaulted", "shown"]),
 }
 
 

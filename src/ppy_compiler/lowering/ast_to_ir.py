@@ -28,7 +28,7 @@ from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
-from ..analysis.closures import cell_captures, own_names
+from ..analysis.closures import cell_captures, own_names, shared_with_closures
 from ..analysis.lexical import LexicalBindings
 from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo, ParamInfo, derivative_spec, fold_flags
@@ -99,6 +99,7 @@ from .abi import signature_from_ir
 from .calls import CallBinding, nested_entry_refusal
 from .closures import ClosureLowering
 from .collections import HANDLE, Held, Kind, Shape, crossing_classes, records_of
+from .containers import _ALIASES as _CONTAINER_ALIASES
 from .containers import ContainerLowering
 from .effects import EffectLowering, check_effects, rule_of, wants_exceptions
 from .exceptions import ExceptionLowering, OwnedTemporaries, uses_exceptions
@@ -1584,6 +1585,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         self.objects: dict[str, Value] = {}
         #: Match locals: name -> (found slot, the spans' slots, the pattern).
         self.matches: dict[str, tuple[Value, Value, regex_dialect.Compiled]] = {}
+        #: Locals of type `int | None` (or `float`, `bool`): whether one holds
+        #: a number, and the number, each in a slot of its own.
+        self.optionals: dict[str, tuple[Value, Value, str]] = {}
         #: Collections by local name: what they are, their element, the slot
         #: holding the handle, and whether this function made it (and frees it).
         self.collections: dict[str, Held] = {}
@@ -1645,6 +1649,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         } - stored
         self._bind_constant_tables(node)
         self._bind_constant_strings(node)
+        self._bind_optionals(node)
         self._body(node.body)
         self._check_cells()
         if self._open():
@@ -1806,6 +1811,13 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             case ast.Assign():
                 self._assign(node)
             case ast.AnnAssign():
+                if (
+                    node.value is not None
+                    and isinstance(node.target, ast.Name)
+                    and node.target.id in self.optionals
+                ):
+                    self._assign_optional(node.target.id, node.value)
+                    return
                 if node.value is not None:
                     if isinstance(node.target, ast.Name) and self._make_collection(
                         node.target.id, node.value, self._type_of(node.target)
@@ -1868,6 +1880,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             case ast.Expr(value=ast.Constant()):
                 return
             case ast.Expr(value=ast.Call() | ast.Await()):
+                if self._print_optional(node):
+                    return
                 if isinstance(node.value, ast.Call) and self._plugin_spec(node.value) is not None:
                     self._plugin_call(node.value)
                 elif isinstance(node.value, ast.Call):
@@ -1959,6 +1973,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._chained_assign(node)
             return
         target = node.targets[0]
+        if isinstance(target, ast.Name) and target.id in self.optionals:
+            self._assign_optional(target.id, node.value)
+            return
         if self._assign_choice(target, node):
             return
         if isinstance(target, ast.Name) and self._make_collection(
@@ -2319,13 +2336,21 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             return
         if self._augment_set(node):
             return
-        current = self._load(node.target.id)
+        if node.target.id in self.optionals:
+            current = self._optional_operand(node)
+        else:
+            current = self._load(node.target.id)
         if self.prover is not None and current.type == I64:
             self._term_for_load(current, node.target)
         value = self._expr(node.value)
         self._store(node.target, self._binary(current, value, type(node.op)))
 
     def _store(self, target: ast.expr, value: Value) -> None:
+        if isinstance(target, ast.Name) and target.id in self.optionals:
+            present, slot, kind = self.optionals[target.id]
+            core.store(self.b, core.const(self.b, True, BOOL), present)
+            core.store(self.b, self._coerce(value, kind), slot)
+            return
         if isinstance(target, ast.Attribute):
             raise Unsupported("a flattened value class cannot be written back")
         if isinstance(target, ast.Subscript):
@@ -2805,6 +2830,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 constant = self._stdlib_constant(node)
                 if constant is not None:
                     return constant
+                if node.id in self.optionals:
+                    return self._optional_value(node)
                 loaded = self._load(node.id)
                 if loaded.type == I64:
                     interval = self._induction.get(node.id)
@@ -2992,6 +3019,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if name in self.matches:
             # The match as a truth value: whether there was one.
             return core.load(self.b, self.matches[name][0])
+        if name in self.optionals:
+            raise Unsupported(f"`{name}` may be `None`, which has no native number")
         if name in self.objects:
             raise Unsupported(f"`{name}` is a value class, which has no single scalar value")
         if name in self.tuples:
@@ -3017,6 +3046,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             absent = self._string_truth(node.operand, empty=True)
             if absent is None:
                 absent = self._buffer_truth(node.operand, empty=True)
+            if absent is None:
+                absent = self._optional_truth(node.operand, empty=True)
             if absent is None:
                 absent = self._object_truth(node.operand, empty=True)
             if absent is not None:
@@ -3127,6 +3158,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if len(node.ops) != 1:
             return self._chained(node)
         identity = self._match_identity(node)
+        if identity is not None:
+            return identity
+        identity = self._optional_identity(node)
         if identity is not None:
             return identity
         folded = self._feature_membership(node)
@@ -5430,6 +5464,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if text is not None:
             return text
         held = self._buffer_truth(node)
+        if held is None:
+            held = self._optional_truth(node)
         if held is not None:
             return held
         present = self._object_truth(node)
@@ -5439,6 +5475,236 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             # A condition asks only for truth, whatever the operands are.
             return self._boolop_truth(node)
         return self._truth(self._expr(node))
+
+    # -- `int | None` locals ----------------------------------------------------
+
+    def _bind_optionals(self, node: ast.FunctionDef) -> None:
+        """Each local the checker types `int | None`, `float | None`, or
+        `bool | None`: a flag that says whether it holds a number, and the
+        number, both in the entry block, the flag false (`None`)."""
+        if getattr(self, "device", False):
+            return
+        shared = shared_with_closures(node) | set(getattr(self, "captures", {}))
+        params = {p.name for p in self.info.params}
+        kinds: dict[str, str] = {}
+        pending: list[ast.AST] = list(node.body)
+        while pending:
+            statement = pending.pop()
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue  # its names are its own
+            pending.extend(ast.iter_child_nodes(statement))
+            targets: list[ast.expr] = []
+            if isinstance(statement, ast.Assign):
+                targets = list(statement.targets)
+                value: ast.expr | None = statement.value
+            elif isinstance(statement, ast.AnnAssign):
+                targets, value = [statement.target], statement.value
+            else:
+                continue
+            for target in targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                # What the checker says the binding gives, before any narrowing.
+                found = _optional_kind(self._type_of(target))
+                if found is None and value is not None:
+                    found = _optional_kind(self._type_of(value))
+                if found is not None:
+                    kinds.setdefault(target.id, found)
+        for name, kind in sorted(kinds.items()):
+            if name in params or name in shared:
+                continue
+            if name in self.slots or name in self.collections or name in self.buffers:
+                continue
+            entry = self._entry_builder()
+            present = self._alloca(BOOL, f"{name}.present")
+            slot = self._alloca(_scalar_type(kind), name)
+            core.store(entry, core.const(entry, False, BOOL), present)
+            core.store(entry, self._literal_at(entry, kind), slot)
+            self.optionals[name] = (present, slot, kind)
+
+    @staticmethod
+    def _literal_at(b: Builder, kind: str) -> Value:
+        if kind == "float":
+            return core.const(b, 0.0, F64)
+        if kind == "bool":
+            return core.const(b, False, BOOL)
+        return core.const(b, 0, I64)
+
+    def _assign_optional(self, name: str, value: ast.expr) -> None:
+        """`v = None`, `v = d.get(k)`, `v = w` of another such local, or `v =` a
+        number."""
+        present, slot, kind = self.optionals[name]
+        if isinstance(value, ast.Constant) and value.value is None:
+            core.store(self.b, core.const(self.b, False, BOOL), present)
+            return
+        if isinstance(value, ast.Name) and value.id in self.optionals:
+            other_present, other_slot, other_kind = self.optionals[value.id]
+            core.store(self.b, core.load(self.b, other_present), present)
+            loaded = core.load(self.b, other_slot)
+            core.store(self.b, self._coerce(loaded, kind) if other_kind != kind else loaded, slot)
+            return
+        got = self._optional_get(value)
+        if got is not None:
+            found, number = got
+            core.store(self.b, found, present)
+            core.store(self.b, self._coerce(number, kind), slot)
+            return
+        number = self._expr(value)
+        core.store(self.b, core.const(self.b, True, BOOL), present)
+        core.store(self.b, self._coerce(number, kind), slot)
+
+    def _optional_get(self, node: ast.expr) -> tuple[Value, Value] | None:
+        """`d.get(k)` of a dict of numbers: whether `k` is there, and its value
+        (the first record's, discarded, where it is not)."""
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and len(node.args) == 1
+            and not node.keywords
+            and self._is_collection(node.func.value)
+        ):
+            return None
+        kind, handle, owned = self._receiver(node.func.value)
+        if kind.name in _CONTAINER_ALIASES:
+            kind = Kind(_CONTAINER_ALIASES[kind.name], kind.value, kind.key, kind.flavor)
+        shape = kind.value
+        if kind.key is None or shape is None or shape.kind not in {"int", "float", "bool"}:
+            raise Unsupported("`get` without a default takes a dict of numbers natively")
+        family = kind.family
+        key = self._key(kind, node.args[0])
+        found = self._rt(f"ppy_{family}_find", (handle, key))
+        present = self._found(found)
+        safe = core.select(self.b, present, found, self._word(0))
+        value = self._read(self._rt(f"ppy_{family}_value_at", (handle, safe), HANDLE), shape)
+        keys_done = getattr(self, "_keys_done", None)
+        if keys_done is not None:
+            keys_done()
+        self._done_with(handle, owned)
+        return present, value
+
+    def _optional_value(self, node: ast.Name) -> Value:
+        """The number an `int | None` local holds, where the checker says it
+        holds one (`v` after `if v is not None:`)."""
+        _present, slot, kind = self.optionals[node.id]
+        if T.strip_literal(self._type_of(node)) != _KIND_TYPES[kind]:
+            raise Unsupported(f"`{node.id}` may be `None` here, which has no native number")
+        return core.load(self.b, slot)
+
+    def _optional_operand(self, node: ast.AugAssign) -> Value:
+        """`v += x` of a local that may be `None`: CPython's `TypeError` where it
+        is, and the number it holds otherwise."""
+        assert isinstance(node.target, ast.Name)
+        present, slot, _kind = self.optionals[node.target.id]
+        other = _OPERAND_NAMES.get(T.strip_literal(self._type_of(node.value)), "")
+        symbol = _AUGMENTED.get(type(node.op), "")
+        raises = (
+            f"TypeError: unsupported operand type(s) for {symbol}=: 'NoneType' and '{other}'"
+            if other and symbol
+            else ""
+        )
+        self._guard(core.load(self.b, present), "contract", "an operand is None", raises=raises)
+        return core.load(self.b, slot)
+
+    def _optional_identity(self, node: ast.Compare) -> Value | None:
+        """`v is None` and `v is not None` of such a local: its flag."""
+        op = node.ops[0]
+        if not isinstance(op, (ast.Is, ast.IsNot)):
+            return None
+        left, right = node.left, node.comparators[0]
+        if isinstance(right, ast.Name) and right.id in self.optionals:
+            left, right = right, left
+        if not (isinstance(left, ast.Name) and left.id in self.optionals):
+            return None
+        if not (isinstance(right, ast.Constant) and right.value is None):
+            return None
+        present = core.load(self.b, self.optionals[left.id][0])
+        if isinstance(op, ast.IsNot):
+            return present
+        return core.cmp(self.b, "eq", present, core.const(self.b, False, BOOL))
+
+    def _optional_truth(self, node: ast.expr, *, empty: bool = False) -> Value | None:
+        """`if v:` of such a local: it holds a number, and the number is not zero."""
+        if not (isinstance(node, ast.Name) and node.id in self.optionals):
+            return None
+        present_slot, slot, kind = self.optionals[node.id]
+        present = core.load(self.b, present_slot)
+        nonzero = self._truth(core.load(self.b, slot))
+        truth = core.bitwise(self.b, "and", present, nonzero)
+        if empty:
+            return core.bitwise(self.b, "xor", truth, core.const(self.b, True, BOOL))
+        del kind
+        return truth
+
+    def _print_optional(self, node: ast.Expr) -> bool:
+        """`print(..., v, ...)` of a local that may be `None`: an `if` that
+        prints `None` in its place where it holds none, and the number where
+        it does, which is what `print` writes for each."""
+        call = node.value
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "print"
+            and self._resolves_to_builtin(call.func)
+        ):
+            return False
+        index = next(
+            (
+                i
+                for i, argument in enumerate(call.args)
+                if isinstance(argument, ast.Name)
+                and argument.id in self.optionals
+                and T.strip_literal(self._type_of(argument))
+                != _KIND_TYPES[self.optionals[argument.id][2]]
+            ),
+            None,
+        )
+        if index is None:
+            return False
+        name = call.args[index]
+        assert isinstance(name, ast.Name)
+        if _optional_kind(self._type_of(name)) is None:
+            # `None` for certain here: `print` writes `None`.
+            absent = self._typed(ast.Constant("None"), T.STR, name)
+            args = [*call.args[:index], absent, *call.args[index + 1 :]]
+            printed = ast.copy_location(
+                ast.Call(func=call.func, args=args, keywords=call.keywords), call
+            )
+            self.frontend.analysis.node_types[id(printed)] = T.NONE
+            self.__dict__.setdefault("_made_nodes", []).append(printed)
+            made = ast.copy_location(ast.Expr(printed), node)
+            self.__dict__.setdefault("_made_nodes", []).append(made)
+            self._statement(made)
+            return True
+        kind = self.optionals[name.id][2]
+        held = self._typed(ast.Name(name.id, ast.Load()), _KIND_TYPES[kind], name)
+        absent = self._typed(ast.Constant("None"), T.STR, name)
+        sides = []
+        for replacement in (absent, held):
+            args = [*call.args[:index], replacement, *call.args[index + 1 :]]
+            printed = ast.copy_location(
+                ast.Call(func=call.func, args=args, keywords=call.keywords), call
+            )
+            self.frontend.analysis.node_types[id(printed)] = T.NONE
+            self.__dict__.setdefault("_made_nodes", []).append(printed)
+            sides.append([ast.copy_location(ast.Expr(printed), node)])
+        test = self._typed(
+            ast.Compare(left=name, ops=[ast.Is()], comparators=[ast.Constant(None)]),
+            T.BOOL,
+            name,
+        )
+        choice = ast.copy_location(ast.If(test, sides[0], sides[1]), node)
+        self.__dict__.setdefault("_made_nodes", []).append(choice)
+        self._if(choice)
+        return True
+
+    def _resolves_to_builtin(self, func: ast.Name) -> bool:
+        symbols = self.frontend.analysis.symbols
+        if func.id in symbols.functions or func.id in symbols.imports:
+            return False
+        lexical = symbols.lexical
+        targets = getattr(lexical, "targets_at", None)
+        return targets is None or targets(func) in (set(), {f"builtins.{func.id}"})
 
     def _buffer_empty_compare(self, node: ast.Compare) -> Value | None:
         """`xs == []` and `xs != []` of a list, lent as a buffer or held by
@@ -5473,6 +5739,30 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
 
 
 _SPELLING = {"add": "+", "sub": "-", "mul": "*"}
+#: How CPython names an operand's type in a `TypeError`.
+_OPERAND_NAMES = {T.INT: "int", T.FLOAT: "float", T.BOOL: "bool", T.STR: "str"}
+#: An augmented assignment's operator, as CPython spells it.
+_AUGMENTED = {
+    ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/", ast.FloorDiv: "//",
+    ast.Mod: "%", ast.Pow: "**", ast.LShift: "<<", ast.RShift: ">>",
+    ast.BitAnd: "&", ast.BitOr: "|", ast.BitXor: "^",
+}  # fmt: skip
+#: The checker's type of each kind of number an `int | None` local may hold.
+_KIND_TYPES = {"int": T.INT, "float": T.FLOAT, "bool": T.BOOL}
+
+
+def _optional_kind(t: T.Type) -> str | None:
+    """ "int", "float", or "bool" for `int | None` and the like, else None."""
+    base = T.strip_literal(t)
+    if not (isinstance(base, T.Union_) and T.is_optional(base)):
+        return None
+    present = T.strip_literal(T.remove_none(base))
+    for name, scalar in _KIND_TYPES.items():
+        if present == scalar:
+            return name
+    return None
+
+
 #: Displays and comprehensions: a new container, whatever the checker said.
 _DISPLAYS = (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)
 _NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip", "aio", "tile")

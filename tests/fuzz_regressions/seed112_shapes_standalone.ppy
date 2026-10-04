@@ -1,0 +1,249 @@
+# fuzz: path=standalone seed=112 (did not build)
+import math
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+class Failed(ValueError):
+    def __init__(self, code: int, where: str) -> None:
+        super().__init__(f"{where}: {code}")
+        self.code: int = code
+        self.where: str = where
+
+
+@dataclass(order=True)
+class Tag:
+    rank: int
+    label: str
+
+
+def countdown(n: int) -> Iterator[int]:
+    while n > 0:
+        yield n
+        n -= 2
+
+
+def pairs(n: int) -> Iterator[int]:
+    for i in range(n):
+        if i % 3 == 0:
+            continue
+        yield i * i
+    yield from countdown(n)
+
+
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    for value in it:
+        if most <= 0:
+            break
+        total = total * 5 + value
+        most -= 1
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+        for name in self.names:
+            if name not in seen:
+                seen.append(name)
+                yield name + str(len(seen))
+
+
+SHAPE_WORD = 'MACPFIBKG'
+
+
+def fn1(a2: bool, a3: bool, a4: float) -> str:
+    tm5 = TreeMap[int, int]()
+    tm5[(3037000499 // (2 if 2 != 0 else -3))] = 10
+    tm5[-1] = (4611686018427387904 * 0)
+    n6: int = tm5.min() * 10 + tm5.max() + len(tm5)
+    if (((1 * 1) == -6) and not ((n6 * n6) != (n6 // (n6 if n6 != 0 else -7)))):
+        return str(-2.5)
+    n7: int = -(max(-4, (n6 * n6)))
+    d9: dict[str, int] = {}
+    d9[('123' * 1)] = d9.get(('123' * 1), 0) + (-5 + n7)
+    d9['x-y-z'] = d9.get('x-y-z', 0) + n7
+    v10 = d9.get(('Hello' + ''))
+    n11: int = -1 if v10 is None else v10
+    n8: int = len(d9) * 100
+    for k12, value in d9.items():
+        n8 = n8 * 3 + value
+    b13: bool = ((a4 + 3.0) >= (a4 - a4))
+    return ('a' if (n11 >= n7) else 'x-y-z')
+
+
+def fn14(a15: int, a16: str, a17: int) -> int:
+    m18 = HashMap[int, int]()
+    m18[a17] = m18.get(a17, 0) + len(a16)
+    m18[a15] = m18.get(a15, 0) + a17
+    m18[(-11 // (a15 if a15 != 0 else -3))] = m18.get((-11 // (a15 if a15 != 0 else -3)), 0) + a17
+    m18[(a15 % (a15 if a15 != 0 else 5))] = m18.get((a15 % (a15 if a15 != 0 else 5)), 0) + (-10 >> (a15 % 63))
+    n19: int = len(m18) * 100
+    for key20 in m18:
+        n19 = n19 * 3 + m18[key20]
+    xs22: list[int] = [min(a15, -7), (n19 * a15), (-2 * a17), -1]
+    xs22.sort(reverse=False)
+    xs22.extend([1, -5])
+    xs22.append(a15)
+    n21: int = xs22.pop() + len(xs22)
+    return min(((n19 % (n19 if n19 != 0 else 5)) // (abs(n21) if abs(n21) != 0 else -3)), ((a15 + 12) - (11 - a17)))
+
+
+def fn23(a24: bool, a25: float, a26: int) -> str:
+    t27 = (len(''), float(11))
+    n28, f29 = t27
+    for i30 in range(3):
+        a26 += abs(-2)
+        for i31 in range(2):
+            if ((-11 * n28) >= (0 // (n28 if n28 != 0 else 3))):
+                return (' spaced out ' + 'ab')
+    t32 = ((a26 - 12), (f29 + a25))
+    n33, f34 = t32
+    return 'x-y-z'
+
+
+def fn35(a36: float, a37: str, a38: int) -> bool:
+    m39 = HashMap[str, int]()
+    m39[(a37 + '123')] = m39.get((a37 + '123'), 0) + (a38 * a38)
+    m39[(a37 + 'Hello')] = m39.get((a37 + 'Hello'), 0) + a38
+    n40: int = len(m39) * 100
+    for key41 in m39:
+        n40 = n40 * 3 + m39[key41]
+    h42 = Heap[int]()
+    h42.push((n40 - a38))
+    n43: int = 0
+    while h42:
+        n43 = n43 * 5 + h42.pop()
+    n44: int = (((n40 ^ a38) // ((-1 + a38) if (-1 + a38) != 0 else -7)) ^ ((-8 % (9 if 9 != 0 else -7)) >> ((n43 * 12) % 37)))
+    f45: float = a36
+    return (((-8 + -11) > (-3 // (n40 if n40 != 0 else -3))) or not ((a38 + -7) < (n43 * -1)))
+
+
+def fn46(a47: float) -> int:
+    n48: int = abs(((8 >> (8 % 4)) + 1))
+    n48 //= (4 if 4 != 0 else 3)
+    s49: str = str((-3 if (-1 != abs(-4)) else n48)).capitalize()
+    n48 -= (n48 // (5 if 5 != 0 else -3))
+    n50: int = 0
+    for x in ((n48 if (n48 == n48) else n48), n48, 5):
+        n50 = n50 * 3 + x
+    return len(s49)
+
+
+def fn51(a52: int) -> bool:
+    sa54: set[int] = {(-4611686018427387904 - -5), (a52 >> (a52 % 52)), (a52 * a52)}
+    sb55: set[int] = {x % 5 for x in range(7)}
+    sa54.add(a52)
+    sa54.discard(4)
+    n53: int = len(sa54 - sb55) * 10 + (1 if 1 in sb55 else 0)
+    n53 += sum(sa54) + (max(sb55) if sb55 else 0)
+    n56: int = (5 * ((12 % (3 if 3 != 0 else -3)) - -4))
+    return (a52 < (n56 - n56))
+
+
+def sh57(n: int) -> int:
+    if n > -2:
+        return n * 1
+    elif n < -3:
+        return -n - 0
+    else:
+        return 0
+
+
+def sh58(xs: list[int], k: int) -> list[int]:
+    if not xs:
+        return xs
+    if xs == []:
+        return [k]
+    if len(xs) == 3:
+        a, b, c = xs
+        return [c, b, a + k]
+    return xs[2 : len(xs) - 0]
+
+
+def sh59(text: str, key: int) -> str:
+    out = ''
+    for ch in text:
+        found = SHAPE_WORD.find(ch.upper())
+        out += ch if found == -1 else SHAPE_WORD[(found + key) % len(SHAPE_WORD)]
+    return out + SHAPE_WORD[:4]
+
+
+def sh60(n: int) -> int:
+    counts, seen = [0] * (n % 5 + 1), [6] * 2
+    a = [1, 2]
+    b = [3]
+    for _ in range(n % 4):
+        a, b = b, a
+    return sum(counts) + sum(seen) + a[0] * 10 + len(b)
+
+
+def sh61(k: int, *xs: int) -> int:
+    t = 0
+    for x in xs:
+        t += x * k
+    return t + len(xs)
+
+
+def sh62(n: int) -> int:
+    return sh61(n) + sh61(n, n + 1) + sh61(2, n, -n, 4)
+
+
+def main() -> None:
+    print(fn1(True, True, 1e308))
+    print(fn14(-3, 'two  gaps', -2))
+    print(fn23(False, 1e308, -6))
+    print(fn23(False, -2.5, -4))
+    print(fn35(-0.0, '123', 1))
+    print(fn46(1e308))
+    print(fn51(-9))
+    print(fn51(10))
+    try:
+        print(sh57(4))
+    except ValueError as e:
+        print('ValueError', e)
+    items: list[int] = []
+    items = [4, 0, 8, 5]
+    print(sh58(items, 0))
+    print(sh59('', -3), sh60(6))
+    print(sh61(1, 4, 2, 7), sh62(4))
+
+
+main()
