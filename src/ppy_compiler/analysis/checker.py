@@ -1508,6 +1508,20 @@ class _Checker:
         if node.value is not None and self._bind_type_alias([node.target], node.value, env):
             return
         resolved = self.annotations.resolve(node.annotation)
+        if (
+            isinstance(node.target, ast.Name)
+            and isinstance(node.annotation, ast.Name)
+            and node.annotation.id in {"list", "dict", "set"}
+            and isinstance(node.value, (ast.List, ast.Dict, ast.Set))
+            and not (node.value.keys if isinstance(node.value, ast.Dict) else node.value.elts)
+            and node.target.id not in env
+        ):
+            # `out: list = []`: the bare annotation says only what the empty
+            # display already does, so what the name holds is told, as for
+            # `out = []`, by what the function puts in it. Strict mode has
+            # already refused the bare annotation.
+            self._bind_target(node.target, self._expr(node.value, env), env, source=node.value)
+            return
         declared = Binding(resolved.type, resolved.facts)
         bound_type = resolved.type
         if node.value is not None:

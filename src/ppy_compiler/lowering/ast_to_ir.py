@@ -96,7 +96,7 @@ from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .calls import CallBinding, nested_entry_refusal
 from .closures import ClosureLowering
-from .collections import HANDLE, Held, crossing_classes, records_of
+from .collections import HANDLE, Held, Kind, Shape, crossing_classes, records_of
 from .containers import ContainerLowering
 from .effects import EffectLowering, check_effects, rule_of, wants_exceptions
 from .exceptions import ExceptionLowering, OwnedTemporaries, uses_exceptions
@@ -1946,6 +1946,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             return
         if self._unpack_strings(target, node.value):
             return
+        if self._unpack_references(target, node.value):
+            return
         if isinstance(target, ast.Subscript) and self._is_collection(target.value):
             self._item(target.value, target.slice, node.value)
             return
@@ -1976,6 +1978,63 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._store_tuple(target, values)
             return
         self._store(target, self._expr(node.value))
+
+    def _unpack_references(self, target: ast.expr, value: ast.expr) -> bool:
+        """`holes, seen = [0] * n, []` and `a, b = b, a` of collections, strings,
+        or objects. Python takes every value before it binds a name: where no
+        value reads a name the statement binds, that is each pair in turn;
+        otherwise each value is taken first, with its own reference."""
+        if not (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, ast.Tuple)
+            and len(target.elts) == len(value.elts)
+            and all(isinstance(e, ast.Name) for e in target.elts)
+            and not any(isinstance(e, ast.Starred) for e in value.elts)
+        ):
+            return False
+        names = [e.id for e in target.elts if isinstance(e, ast.Name)]
+        if not any(
+            self._reference_of(item) is not None
+            or isinstance(item, _DISPLAYS)
+            or (isinstance(item, ast.Name) and item.id in self.collections)
+            for item in value.elts
+        ):
+            return False
+        read = {
+            inner.id
+            for item in value.elts
+            for inner in ast.walk(item)
+            if isinstance(inner, ast.Name)
+        }
+        if not read & set(names):
+            for name, item in zip(target.elts, value.elts, strict=True):
+                pair = ast.Assign(targets=[name], value=item)
+                ast.copy_location(pair, value)
+                self._assign(pair)
+            return True
+        kinds: list[Kind | Shape | None] = []
+        for item in value.elts:
+            if isinstance(item, ast.Name):
+                held = self.collections.get(item.id)
+                kinds.append(held.kind if held is not None else None)
+            else:
+                kinds.append(self._reference_of(item))
+        taken: list[Value] = []
+        for item, kind in zip(value.elts, kinds, strict=True):
+            if kind is None:
+                taken.append(self._expr(item))
+                continue
+            handle, owned = self._handle(item)
+            if not owned:
+                self._retain(handle)
+            taken.append(handle)
+        for name, kind, item in zip(target.elts, kinds, taken, strict=True):
+            assert isinstance(name, ast.Name)
+            if kind is None:
+                self._store(name, item)
+            else:
+                self._bind(name.id, kind, item, True)
+        return True
 
     def _unpack_buffer(self, target: ast.expr, value: ast.expr) -> bool:
         """`a, b, c = xs` of a list a buffer holds: its length checked as
@@ -5386,6 +5445,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
 
 
 _SPELLING = {"add": "+", "sub": "-", "mul": "*"}
+#: Displays and comprehensions: a new container, whatever the checker said.
+_DISPLAYS = (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)
 _NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip", "aio", "tile")
 _SHUFFLES = {"shfl": "idx", "shfl_up": "up", "shfl_down": "down", "shfl_xor": "xor"}
 _ANNOTATION_KINDS = {
