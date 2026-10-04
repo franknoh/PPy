@@ -742,8 +742,11 @@ def _bind_globals(  # type: ignore[no-untyped-def]
             # A variable of the function the Python function was defined in:
             # what its cell holds now. An empty cell raises `ValueError`, and
             # the Python body raises CPython's `NameError` for it.
-            code = getattr(fallback, "__code__", None)
-            cells = getattr(fallback, "__closure__", None) or ()
+            function = fallback
+            while getattr(function, "__wrapped__", None) is not None:
+                function = function.__wrapped__  # type: ignore[attr-defined]
+            code = getattr(function, "__code__", None)
+            cells = getattr(function, "__closure__", None) or ()
             if code is None or name not in code.co_freevars:
                 raise KeyError(name)
             return cells[code.co_freevars.index(name)].cell_contents
