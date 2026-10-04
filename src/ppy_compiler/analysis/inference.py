@@ -201,8 +201,13 @@ def modules_with_unannotated_fields(symbols) -> set[str]:  # type: ignore[no-unt
             continue
         for method in info.methods.values():
             for node in method.nodes:
-                if isinstance(node, ast.Assign) and len(node.targets) == 1:
-                    for target, _value in _field_assignments(node.targets[0], node.value):
+                if isinstance(node, ast.Assign):
+                    pairs = [
+                        pair
+                        for each in node.targets
+                        for pair in _field_assignments(each, node.value)
+                    ]
+                    for target, _value in pairs:
                         if (
                             is_self_attribute(target, method) and target.attr not in info.fields  # type: ignore[union-attr]
                         ):
@@ -226,6 +231,7 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
     assignment an error. The join only grows, so inference still settles.
     """
     changed = False
+    outside = _outside_evidence(symbols, modules)
     for info in symbols.classes.values():
         module_analysis = modules.get(info.module)
         if module_analysis is None or not info.methods:
@@ -236,26 +242,256 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
         seen: dict[str, T.Type] = {}
         for method in methods:
             for node in method.nodes:
-                if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                if not isinstance(node, ast.Assign):
                     continue
-                for target, value in _field_assignments(node.targets[0], node.value):
+                # `self.left = self.right = self` assigns each target the value.
+                pairs = [
+                    pair for each in node.targets for pair in _field_assignments(each, node.value)
+                ]
+                for target, value in pairs:
                     if not is_self_attribute(target, method):
                         continue
                     assigned = T.strip_literal(module_analysis.type_of(value))
                     if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
                         continue
                     name = target.attr  # type: ignore[union-attr]
-                    seen[name] = assigned if name not in seen else T.join(seen[name], assigned)
+                    seen[name] = assigned if name not in seen else _merge(seen[name], assigned)
+        for name, assigned in outside.get(info.qualname, {}).items():
+            if name in info.annotated_fields:
+                continue
+            seen[name] = assigned if name not in seen else _merge(seen[name], assigned)
         for name, assigned in seen.items():
             current = info.fields.get(name, T.UNKNOWN)
             if name in info.declared_fields:
                 # A field the class body annotated is what its author said.
                 continue
-            joined = assigned if isinstance(current, T.UnknownType) else T.join(current, assigned)
+            joined = _by_bases(
+                assigned if isinstance(current, T.UnknownType) else _merge(current, assigned)
+            )
             if joined != current:
                 info.fields[name] = joined
                 changed = True
     return changed
+
+
+#: Methods whose argument becomes an element of the container they are
+#: called on, by the argument's position (the last one).
+_STORES = {"append": 1, "add": 1, "appendleft": 1, "insert": 2}
+
+
+def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type: ignore[no-untyped-def]
+    """What the whole program stores into each class's fields, beyond what
+    its own methods assign to `self.x`.
+
+    `node.left = Node(v)` in another method or function is as much a value
+    of `Node.left` as `self.left = None` in `__init__`, and a field set to
+    `None` there and linked later is `Node | None`. An empty container a
+    field starts as (`self.queue = []`) is typed by what is stored into it:
+    `self.queue.append(item)`, `self.index[key] = i`. Only a field the class
+    already has gains evidence here (a store that would add one stays
+    Python's). A value the checker could not type is no evidence, as in
+    `infer_fields`: native code is only handed an object whose fields hold
+    what the class says, which the boundary checks as the object crosses.
+    """
+    found: dict[str, dict[str, T.Type]] = {}
+
+    def owner_of(receiver: T.Type, attr: str) -> str | None:
+        base = T.strip_literal(receiver)
+        if isinstance(base, T.Union_):
+            members = [m for m in base.members if m != T.NONE]
+            if len(members) != 1:
+                return None
+            base = T.strip_literal(members[0])
+        if not isinstance(base, T.Instance):
+            return None
+        for entry in (base.name, *base.mro):
+            info = symbols.classes.get(entry)
+            if info is not None and attr in info.fields and attr not in info.class_vars:
+                return info.qualname
+        return None
+
+    def note(owner: str, attr: str, value: T.Type) -> None:
+        value = T.strip_literal(value)
+        if isinstance(value, (T.UnknownType, T.AnyType, T.NeverType)) or _unknown_inside(value):
+            return
+        fields = found.setdefault(owner, {})
+        fields[attr] = _by_bases(value if attr not in fields else _merge(fields[attr], value))
+
+    analysis = None
+
+    def stored_in(container: ast.expr, key: ast.expr, value: T.Type) -> T.Type | None:
+        """The container `container[key] = value` makes of `container`'s type."""
+        held = T.strip_literal(analysis.type_of(container))  # type: ignore[union-attr]
+        if not isinstance(held, T.Instance):
+            return None
+        if held.name == "dict":
+            return T.instance("dict", T.strip_literal(analysis.type_of(key)), value)  # type: ignore[union-attr]
+        if held.name == "list" and not isinstance(key, ast.Slice):
+            return T.instance("list", value)
+        return None
+
+    def lift(node: ast.expr, filled: T.Type) -> None:
+        """`filled` is what `node` holds: the field it is, or is inside of,
+        holds as much."""
+        while isinstance(node, ast.Subscript):
+            parent = stored_in(node.value, node.slice, filled)
+            if parent is None:
+                return
+            node, filled = node.value, parent
+        if isinstance(node, ast.Attribute):
+            owner = owner_of(analysis.type_of(node.value), node.attr)  # type: ignore[union-attr]
+            # Only a field whose element nothing has told yet learns it here;
+            # one already typed is checked against what is stored.
+            if owner is not None and _never_inside(symbols.classes[owner].fields[node.attr]):
+                note(owner, node.attr, filled)
+
+    for analysis in modules.values():
+        module_symbols = getattr(analysis, "symbols", None)
+        if module_symbols is None:
+            continue
+        for node in module_symbols.module.nodes:
+            if isinstance(node, ast.Assign):
+                pairs = [
+                    pair for each in node.targets for pair in _field_assignments(each, node.value)
+                ]
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                pairs = [(node.target, node.value)]
+            else:
+                pairs = []
+            for target, value in pairs:
+                if isinstance(target, ast.Attribute):
+                    owner = owner_of(analysis.type_of(target.value), target.attr)
+                    if owner is not None:
+                        note(owner, target.attr, analysis.type_of(value))
+                elif isinstance(target, ast.Subscript):
+                    # `self.index[key] = i`, `self.grid[r][c] = 0`: an entry
+                    # of the field's container, or of one inside it.
+                    entry = stored_in(target.value, target.slice, analysis.type_of(value))
+                    if entry is not None:
+                        lift(target.value, entry)
+            if not isinstance(node, ast.Call) or node.keywords:
+                continue
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr in _STORES
+                and len(node.args) == _STORES[func.attr]
+            ):
+                # `self.queue.append(item)`, `self.adj[u].append(v)`.
+                receiver = T.strip_literal(analysis.type_of(func.value))
+                element = analysis.type_of(node.args[-1])
+                if (
+                    isinstance(receiver, T.Instance)
+                    and receiver.name == "list"
+                    and func.attr
+                    in {
+                        "append",
+                        "insert",
+                    }
+                ):
+                    lift(func.value, T.instance("list", element))
+                elif (
+                    isinstance(receiver, T.Instance)
+                    and receiver.name == "set"
+                    and func.attr == "add"
+                ):
+                    lift(func.value, T.instance("set", element))
+            elif len(node.args) == 2 and _spelled(func) in _HEAP_PUSHES:
+                # `heapq.heappush(self.heap, (priority, item))`.
+                receiver = T.strip_literal(analysis.type_of(node.args[0]))
+                if isinstance(receiver, T.Instance) and receiver.name == "list":
+                    lift(node.args[0], T.instance("list", analysis.type_of(node.args[1])))
+    return found
+
+
+#: `heapq.heappush` as a module may spell it: its second argument becomes an
+#: element of its first.
+_HEAP_PUSHES = frozenset({"heapq.heappush", "heappush"})
+
+
+def _spelled(func: ast.expr) -> str:
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        return f"{func.value.id}.{func.attr}"
+    return ""
+
+
+def _by_bases(t: T.Type) -> T.Type:
+    """A union of classes with an instance of a subclass in it as the base
+    class: `Node | Special | None` is `Node | None` where `Special(Node)`."""
+    if not isinstance(t, T.Union_):
+        return t
+    names = {m.name for m in t.members if isinstance(m, T.Instance)}
+    kept = [
+        m
+        for m in t.members
+        if not (isinstance(m, T.Instance) and any(b in names for b in m.mro[1:] if b != m.name))
+    ]
+    return T.union(*kept) if len(kept) != len(t.members) else t
+
+
+def _merge(seen: T.Type, more: T.Type) -> T.Type:
+    """Two values stored into one field, as one type. Where one is the other
+    with parts the checker could not tell (`list[<unknown>]` beside
+    `list[list[int]]`), the told one is the evidence: the untold part says
+    nothing against it, and the boundary checks what crosses."""
+    if _told(seen, more):
+        return seen
+    if _told(more, seen):
+        return more
+    return T.join(seen, more)
+
+
+def _told(known: T.Type, partial: T.Type) -> bool:
+    """Whether `known` is `partial` with its unknown parts told."""
+    known, partial = T.strip_literal(known), T.strip_literal(partial)
+    if isinstance(partial, (T.UnknownType, T.AnyType)):
+        return not _unknown_inside(known)
+    if isinstance(known, T.Instance) and isinstance(partial, T.Instance):
+        return (
+            known.name == partial.name
+            and len(known.args) == len(partial.args)
+            and all(
+                mine == theirs or isinstance(theirs, T.NeverType) or _told(mine, theirs)
+                for mine, theirs in zip(known.args, partial.args, strict=True)
+            )
+            and known != partial
+        )
+    if isinstance(known, T.Tuple_) and isinstance(partial, T.Tuple_):
+        return (
+            known.homogeneous == partial.homogeneous
+            and len(known.items) == len(partial.items)
+            and all(
+                mine == theirs or _told(mine, theirs)
+                for mine, theirs in zip(known.items, partial.items, strict=True)
+            )
+            and known != partial
+        )
+    return False
+
+
+def _never_inside(t: T.Type) -> bool:
+    """An empty container's type: `list[Never]`, `dict[str, list[Never]]`."""
+    t = T.strip_literal(t)
+    if isinstance(t, T.NeverType):
+        return True
+    if isinstance(t, T.Instance):
+        return any(_never_inside(a) for a in t.args)
+    if isinstance(t, T.Union_):
+        return any(_never_inside(m) for m in t.members)
+    return False
+
+
+def _unknown_inside(t: T.Type) -> bool:
+    """An element the checker could not type: `list[<unknown>]` says nothing."""
+    if isinstance(t, (T.UnknownType, T.AnyType)):
+        return True
+    if isinstance(t, T.Instance):
+        return any(_unknown_inside(a) for a in t.args)
+    if isinstance(t, T.Union_):
+        return any(_unknown_inside(m) for m in t.members)
+    return False
 
 
 def _field_assignments(target: ast.expr, value: ast.expr) -> list[tuple[ast.expr, ast.expr]]:
