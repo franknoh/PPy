@@ -177,9 +177,10 @@ Python.
   Python, since CPython keeps and prints the key as it came.
 - `v = d.get(k)` with no default, of a dict of numbers, binds `v` as a
   number or `None`: native code keeps a flag beside the number. `v is None`,
-  `v is not None`, `if v:`, `print(v)`, and `v` as a number once a test has
-  shown it holds one are native; `v += x` raises CPython's `TypeError` where
-  `v` is `None`. A `d.get(k)` used any other way (passed on, returned, a
+  `v is not None`, `if v:`, `print(v)`, `v = None`, and `v` as a number
+  (`v += x` included) once a test has shown it holds one are native. The
+  checker reports `v += x` on a `v` that may still be `None` as `E1302`,
+  with or without strict mode. A `d.get(k)` used any other way (passed on, returned, a
   dict of strings) stays in Python. With a default, `get` is native.
 - `sort(key=...)`, `sorted(key=...)`, `min(key=...)`, and `max(key=...)`
   natively take a key giving numbers or tuples of them, and `min` and `max`
