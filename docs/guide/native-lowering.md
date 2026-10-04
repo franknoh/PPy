@@ -313,29 +313,29 @@ to the first two reasons:
 
 ```text
 175 functions, 1389 statements
-  native, called from Python              2 functions (  1%)       24 statements (  2%)
-  native, called from native code         2 functions (  1%)       18 statements (  1%)
-  Python                                171 functions ( 98%)     1347 statements ( 97%)
+  native, called from Python              7 functions (  4%)       88 statements (  6%)
+  native, called from native code         7 functions (  4%)       74 statements (  5%)
+  Python                                161 functions ( 92%)     1227 statements ( 88%)
   (73 of the Python functions are generic: each native caller compiles its own instance)
 
 what keeps functions in Python, by statements kept out (a function can count under more than one):
-      143 statements     10 functions  writes to a parameter native code copies
-      return the new value, or take a `Buffer`, a list, or a ppy collection
-      see https://ppy.franknoh.dev/latest/guide/native/
-      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
-      sorts/circle_sort.py:50 sorts.circle_sort.circle_sort.<locals>.circle_sort_util
-      sorts/dutch_national_flag_sort.py:33 sorts.dutch_national_flag_sort.dutch_national_flag_sort
-       53 statements     10 functions  a parameter or result with no annotation the checker could infer
+       81 statements      3 functions  a parameter of type `(Any) -> Any | NoneType`
+      take a type native code holds (numbers, str, tuples, lists, dicts, sets, ppy collections, project classes)
+      see https://ppy.franknoh.dev/latest/guide/native-lowering/
+      sorts/power_sort.py:34 sorts.power_sort._find_run
+      sorts/power_sort.py:137 sorts.power_sort._merge
+      sorts/power_sort.py:199 sorts.power_sort.power_sort
+       59 statements     12 functions  a parameter or result with no annotation the checker could infer
       annotate it, or run `ppy convert` to write the inferred annotations
       see https://ppy.franknoh.dev/latest/guide/subset/
       sorts/external_sort.py:13 sorts.external_sort.FileSplitter.__init__
       sorts/external_sort.py:26 sorts.external_sort.FileSplitter.split
       sorts/external_sort.py:48 sorts.external_sort.NWayMerge.select
-  ... 60 more reasons, 70 functions (--limit to see more, --json for all)
+  ... 62 more reasons, 73 functions (--limit to see more, --json for all)
 
 native, but Python calls the Python body (why its boundary is not used):
+      6 functions  copying the collections in costs more than the body does with them
       1 functions  copying its strings across costs what one pass over them saves
-      1 functions  copying the collections in costs more than the body does with them
 ```
 
 Read it from the top down:
