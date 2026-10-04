@@ -845,6 +845,106 @@ def test_an_int_given_for_a_float_stays_an_int_where_it_would_show(tmp_path: Pat
     assert intness.exact("prog.length") == frozenset()
 
 
+BOOL_EXACT = """
+from collections.abc import Callable
+
+
+def shows(n: int) -> int:
+    print(n)
+    return n + 1
+
+
+def asks(n: int) -> int:
+    return 1 if isinstance(n, bool) else 0
+
+
+def counts(n: int, m: int) -> int:
+    return (n + 1) * -m + n.bit_length()
+
+
+def passes(n: int) -> int:
+    return shows(n)
+
+
+def taken(n: int) -> int:
+    return 1 if isinstance(n, bool) else 0
+
+
+def main() -> None:
+    f: Callable[[int], int] = taken
+    print(f(True), shows(True), asks(1), counts(True, False), passes(2))
+
+
+main()
+"""
+
+
+def test_int_parameters_that_show_a_bool(tmp_path: Path):
+    """`print(n)` and `isinstance(n, bool)` show whether an `int` parameter
+    was given a `bool`; arithmetic does not. Only a function called by name
+    has every native caller checked."""
+    (tmp_path / "prog.ppy").write_text(BOOL_EXACT, encoding="utf-8")
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+    from ppy_compiler.lowering.intness import ModuleIntness
+
+    path = tmp_path / "prog.ppy"
+    bundle = analyze_paths(open_project(path), [path], backend="llvm")
+    module = bundle.analysis.modules["prog"]
+    intness = ModuleIntness(module.functions, module.node_types, module.symbols.module.tree)
+    assert intness.bool_exact("prog.shows") == {"n"}
+    assert intness.bool_exact("prog.asks") == {"n"}
+    assert intness.bool_exact("prog.passes") == {"n"}
+    assert intness.bool_exact("prog.counts") == frozenset()
+    assert intness.exact("prog.shows") == frozenset()
+    assert intness.called_directly("asks")
+    assert not intness.called_directly("taken")
+
+
+def test_locals_only_ever_given_a_real_int_or_float():
+    import ast
+
+    from ppy_compiler.analysis import types as T
+    from ppy_compiler.lowering.intness import exact_locals
+
+    source = textwrap.dedent(
+        """
+        def f(x: float, n: int, flag: bool) -> None:
+            t = (2, 1e308 * x)
+            m, g = t
+            h: float = 3
+            k = 0.0
+            k += n
+            r = 0.5
+            for i in range(3):
+                r = r * i
+            a = len("ab") * 10 + n
+            a *= n - 8
+            b = flag & flag
+            c: int = flag
+            d = 0
+            d = d + flag
+        """
+    )
+    function = ast.parse(source).body[0]
+    assert isinstance(function, ast.FunctionDef)
+    typed = {"n": T.INT, "flag": T.BOOL, "a": T.INT, "d": T.INT}
+
+    def type_of(node: ast.expr) -> T.Type:
+        if isinstance(node, ast.Constant):
+            return T.INT if type(node.value) is int else T.FLOAT
+        if isinstance(node, ast.Name):
+            return typed.get(node.id, T.FLOAT)
+        return T.INT if isinstance(node, (ast.Call, ast.BinOp)) else T.UNKNOWN
+
+    params = ["x", "n", "flag"]
+    floats = exact_locals(function, params, frozenset(), "float", type_of)
+    ints = exact_locals(function, params, frozenset({"n"}), "int", type_of)
+    assert {"g", "k", "r"} <= floats  # `0.5 * i` is a float
+    assert not floats & {"h", "i", "x", "m"}
+    assert {"a", "m", "d", "n", "h"} <= ints  # `h` holds the int 3
+    assert not ints & {"b", "c", "flag", "i"}
+
+
 def test_the_python_binding_refuses_an_int_for_an_exact_float_and_a_bool_for_an_int():
     from ppy_runtime.abi import NativeParam
     from ppy_runtime.binding import GuardFailed, _expander_for

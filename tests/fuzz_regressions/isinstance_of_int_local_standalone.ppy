@@ -1,0 +1,24 @@
+# fuzz: path=standalone seed=5005 (`isinstance(n, bool)` of a local only ever given int arithmetic kept a standalone build from building)
+import math
+
+
+def fn19(a20: str, a21: float, a22: str) -> float:
+    n24: int = len(a22) * 10 + 7 + len(a20)
+    f25: float = min(((a21 + n24) + (a21 * 3.0)), math.sqrt(abs((7.25 * 7.25))))
+    if ((-3 << (-12 % 33)) != 0):
+        n24 *= (-8 + n24)
+        n26: int = 1 if isinstance(n24, bool) else 0
+        print(n26 + n24)
+    k = 0
+    for i in range(3):
+        k = k + i
+    print(1 if isinstance(k, int) else 0)
+    return f25
+
+
+def main() -> None:
+    print(fn19('ab', 1e-300, '123'))
+    print(fn19('Hello', -2.5, ''))
+
+
+main()
