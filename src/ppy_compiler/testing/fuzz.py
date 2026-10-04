@@ -42,6 +42,7 @@ from pathlib import Path
 __all__ = [
     "ALL_PATHS",
     "OVERFLOW_64",
+    "STRUCTURES_MARK",
     "TIMED_OUT",
     "UNANNOTATED_MARK",
     "Mismatch",
@@ -215,6 +216,64 @@ class Box:
 
 """
 
+#: What a program with structure edits adds: classes whose fields have no
+#: annotations, typed from what the program stores into them (`None` at
+#: first, then objects), and helpers that read a structure back.
+_STRUCTURES_PRELUDE = """\
+import ppy
+
+
+class SNode:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+        self.parent = None
+
+
+class DNode:
+    def __init__(self, key):
+        self.key = key
+        self.prev = None
+        self.next = None
+
+
+def sshape(n):
+    if n is None:
+        return "."
+    return "(" + sshape(n.left) + str(n.key) + sshape(n.right) + ")"
+
+
+def slinked(t):
+    ok = t.root is None or t.root.parent is None
+    pending = [t.root]
+    while pending:
+        n = pending.pop()
+        if n is None:
+            continue
+        for c in (n.left, n.right):
+            if c is not None:
+                ok = ok and c.parent is n
+                pending.append(c)
+    return ok
+
+
+def dkeys(d):
+    ahead = []
+    n = d.head
+    while n is not None and len(ahead) < 50:
+        ahead.append(n.key)
+        n = n.next
+    back = []
+    n = d.tail
+    while n is not None and len(back) < 50:
+        back.append(n.key)
+        n = n.prev
+    return ahead, back == ahead[::-1]
+
+
+"""
+
 _BIG = (2**62, -(2**62), 2**63 - 1, -(2**63), 3037000499, 4611686018427387903)
 _FLOATS = ("0.5", "-0.0", "1e308", "-2.5", "3.0", "1e-300", "7.25")
 _SPECIAL_FLOATS = ('float("inf")', 'float("-inf")', 'float("nan")')
@@ -256,6 +315,7 @@ class _Generator:
         calls: bool = False,
         unannotated: bool = False,
         boundary: bool = False,
+        structures: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
         #: Whether functions take defaults and keyword-only parameters, and
@@ -284,6 +344,10 @@ class _Generator:
         #: Python passes, shared and nested, drawn from a sequence of their own.
         self.with_boundary = boundary
         self.crossing = random.Random(seed ^ 0xB0DE)
+        #: Whether the program also edits linked structures in place through
+        #: methods Python calls natively, on classes with unannotated fields.
+        self.with_structures = structures
+        self.structure = random.Random(seed ^ 0x57C7)
 
     def name(self, prefix: str) -> str:
         self.fresh += 1
@@ -1402,7 +1466,9 @@ class _Generator:
 
     def program(self) -> str:
         w = _Writer()
-        if self.unannotated:
+        if self.with_structures:
+            w.lines.append(STRUCTURES_MARK)
+        elif self.unannotated:
             w.lines.append(UNANNOTATED_MARK)
         if self.stdlib:
             w.lines.extend(["import bisect", "import heapq", "import itertools", "import random"])
@@ -1416,6 +1482,8 @@ class _Generator:
             self.state_globals(w)
         if self.with_boundary:
             w.lines.extend(_BOUNDARY_PRELUDE.splitlines())
+        if self.with_structures:
+            w.lines.extend(_STRUCTURES_PRELUDE.splitlines())
         calls: list[str] = []
         foreign: list[tuple[str, str]] = []
         for _ in range(self.rng.randint(3, 6)):
@@ -1427,6 +1495,8 @@ class _Generator:
         after = self.state_part(w) if self.with_state else []
         if self.with_boundary:
             after.extend(self.boundary_part(w))
+        if self.with_structures:
+            after.extend(self.structures_part(w))
         w.put("def main() -> None:")
         if self.stdlib:
             w.put(f"    random.seed({self.seed})")
@@ -1639,10 +1709,262 @@ class _Generator:
             )
         return after
 
+    # -- linked structures edited in place ---------------------------------------
+
+    def tree_class(self, w: _Writer) -> list[str]:
+        """A search tree with parent links, its fields unannotated, and methods
+        Python calls natively that relink it: inserts, rotations, mirroring by
+        tuple assignment, unlinking, and a new root grafted on top. Each walks
+        it through a local alias of a field (`node = self.root`). The names
+        of the methods it has, which `main` may call."""
+        rng = self.structure
+        w.put("class STree:")
+        w.depth += 1
+        w.put("def __init__(self):")
+        w.put("    self.root = None")
+        w.put("    self.size = 0")
+        w.put("")
+        w.put("@ppy.native")
+        w.put("def insert(self, key: int) -> None:")
+        w.put("    self.size += 1")
+        w.put("    made = SNode(key)")
+        w.put("    if self.root is None:")
+        w.put("        self.root = made")
+        w.put("        return")
+        w.put("    node = self.root")
+        w.put("    while True:")
+        w.put("        if key < node.key:")
+        w.put("            if node.left is None:")
+        w.put("                node.left = made")
+        w.put("                made.parent = node")
+        w.put("                return")
+        w.put("            node = node.left")
+        w.put("        else:")
+        w.put("            if node.right is None:")
+        w.put("                node.right = made")
+        w.put("                made.parent = node")
+        w.put("                return")
+        w.put("            node = node.right")
+        w.put("")
+        w.put("def find(self, key: int):")
+        w.put("    node = self.root")
+        w.put("    while node is not None and node.key != key:")
+        w.put("        node = node.left if key < node.key else node.right")
+        w.put("    return node")
+        w.put("")
+        methods: list[str] = []
+        for side, other in (("left", "right"), ("right", "left")):
+            if rng.random() < 0.8:
+                methods.append(f"rotate_{side}")
+                w.put("@ppy.native")
+                w.put(f"def rotate_{side}(self, key: int) -> int:")
+                w.put("    x = self.find(key)")
+                w.put(f"    if x is None or x.{other} is None:")
+                w.put("        return 0")
+                w.put(f"    y = x.{other}")
+                w.put(f"    x.{other} = y.{side}")
+                w.put(f"    if y.{side} is not None:")
+                w.put(f"        y.{side}.parent = x")
+                w.put("    y.parent = x.parent")
+                w.put("    if x.parent is None:")
+                w.put("        self.root = y")
+                w.put("    elif x is x.parent.left:")
+                w.put("        x.parent.left = y")
+                w.put("    else:")
+                w.put("        x.parent.right = y")
+                w.put(f"    y.{side} = x")
+                w.put("    x.parent = y")
+                w.put("    return 1")
+                w.put("")
+        if rng.random() < 0.6:
+            methods.append("mirror")
+            w.put("@ppy.native")
+            w.put("def mirror(self, k: int) -> int:")
+            w.put("    count = 0")
+            w.put("    pending = [self.root]")
+            w.put("    while len(pending) > 0:")
+            w.put("        node = pending.pop()")
+            w.put("        if node is None:")
+            w.put("            continue")
+            w.put("        node.left, node.right = node.right, node.left")
+            if rng.random() < 0.5:
+                w.put(f"        node.key = node.key * {rng.randint(-2, 3)} + k")
+            w.put("        count += 1")
+            w.put("        pending.append(node.left)")
+            w.put("        pending.append(node.right)")
+            w.put("    return count")
+            w.put("")
+        if rng.random() < 0.6:
+            methods.append("pop_min")
+            w.put("@ppy.native")
+            w.put("def pop_min(self, k: int) -> int:")
+            w.put("    node = self.root")
+            w.put("    if node is None:")
+            w.put("        return k")
+            w.put("    while node.left is not None:")
+            w.put("        node = node.left")
+            w.put("    if node.parent is None:")
+            w.put("        self.root = node.right")
+            w.put("    else:")
+            w.put("        node.parent.left = node.right")
+            w.put("    if node.right is not None:")
+            w.put("        node.right.parent = node.parent")
+            w.put("    node.parent = None")
+            w.put("    node.right = None")
+            w.put("    self.size -= 1")
+            w.put("    return node.key")
+            w.put("")
+        if rng.random() < 0.5:
+            methods.append("graft")
+            w.put("@ppy.native")
+            w.put("def graft(self, k: int) -> int:")
+            w.put("    made = SNode(k)")
+            w.put(f"    made.{rng.choice(('left', 'right'))} = self.root")
+            w.put("    if self.root is not None:")
+            w.put("        self.root.parent = made")
+            w.put("    self.root = made")
+            w.put("    self.size += 1")
+            w.put("    return self.size")
+            w.put("")
+        w.depth -= 1
+        w.put("")
+        return methods
+
+    def dlist_class(self, w: _Writer) -> list[str]:
+        """A doubly linked list, unannotated, edited in place natively: pushes
+        at both ends, reversal by tuple assignment, rotation, and dropping
+        nodes by key. Its links make cycles every crossing has to keep."""
+        rng = self.structure
+        w.put("class DList:")
+        w.depth += 1
+        w.put("def __init__(self):")
+        w.put("    self.head = None")
+        w.put("    self.tail = None")
+        w.put("    self.count = 0")
+        w.put("")
+        w.put("@ppy.native")
+        w.put("def push(self, key: int) -> None:")
+        w.put("    made = DNode(key)")
+        w.put("    made.prev = self.tail")
+        w.put("    if self.tail is None:")
+        w.put("        self.head = made")
+        w.put("    else:")
+        w.put("        self.tail.next = made")
+        w.put("    self.tail = made")
+        w.put("    self.count += 1")
+        w.put("")
+        methods: list[str] = []
+        if rng.random() < 0.7:
+            methods.append("push_front")
+            w.put("@ppy.native")
+            w.put("def push_front(self, key: int) -> int:")
+            w.put("    made = DNode(key)")
+            w.put("    made.next = self.head")
+            w.put("    if self.head is None:")
+            w.put("        self.tail = made")
+            w.put("    else:")
+            w.put("        self.head.prev = made")
+            w.put("    self.head = made")
+            w.put("    self.count += 1")
+            w.put("    return self.count")
+            w.put("")
+        if rng.random() < 0.7:
+            methods.append("reverse")
+            w.put("@ppy.native")
+            w.put("def reverse(self, k: int) -> int:")
+            w.put("    node = self.head")
+            w.put("    self.head, self.tail = self.tail, self.head")
+            w.put("    while node is not None:")
+            w.put("        node.prev, node.next = node.next, node.prev")
+            if rng.random() < 0.5:
+                w.put(f"        node.key += k * {rng.randint(1, 3)}")
+            w.put("        node = node.prev")
+            w.put("    return self.count")
+            w.put("")
+        if rng.random() < 0.6:
+            methods.append("rotate")
+            w.put("@ppy.native")
+            w.put("def rotate(self, k: int) -> int:")
+            w.put("    moved = 0")
+            w.put(f"    while moved < k % {rng.randint(2, 5)} and self.head is not self.tail:")
+            w.put("        first = self.head")
+            w.put("        self.head = first.next")
+            w.put("        self.head.prev = None")
+            w.put("        first.next = None")
+            w.put("        first.prev = self.tail")
+            w.put("        self.tail.next = first")
+            w.put("        self.tail = first")
+            w.put("        moved += 1")
+            w.put("    return moved")
+            w.put("")
+        if rng.random() < 0.6:
+            modulus = rng.randint(2, 4)
+            methods.append("drop")
+            w.put("@ppy.native")
+            w.put("def drop(self, k: int) -> int:")
+            w.put("    node = self.head")
+            w.put("    gone = 0")
+            w.put("    while node is not None:")
+            w.put("        after = node.next")
+            w.put(f"        if (node.key + k) % {modulus} == 0:")
+            w.put("            if node.prev is None:")
+            w.put("                self.head = after")
+            w.put("            else:")
+            w.put("                node.prev.next = after")
+            w.put("            if after is None:")
+            w.put("                self.tail = node.prev")
+            w.put("            else:")
+            w.put("                after.prev = node.prev")
+            w.put("            gone += 1")
+            w.put("            self.count -= 1")
+            w.put("        node = after")
+            w.put("    return gone")
+            w.put("")
+        w.depth -= 1
+        w.put("")
+        return methods
+
+    def structures_part(self, w: _Writer) -> list[str]:
+        """The structure classes, and what `main` does with them: builds a tree
+        and a list, holds on to nodes, edits them through the methods in a
+        drawn order, and prints shapes, links, and identities after each."""
+        rng = self.structure
+        tree = self.tree_class(w)
+        listed = self.dlist_class(w)
+        w.put("")
+        keys = rng.sample(range(-20, 40), rng.randint(3, 9))
+        after = ["t = STree()"]
+        after.extend(f"t.insert({key})" for key in keys)
+        after.append("first = t.root")
+        after.append("print(sshape(t.root), t.size, slinked(t))")
+        for _ in range(rng.randint(2, 6)):
+            if not tree:
+                break
+            method = rng.choice(tree)
+            argument = rng.choice(keys) if method.startswith("rotate") else rng.randint(-3, 9)
+            after.append(f"print(t.{method}({argument}), sshape(t.root), t.size, slinked(t))")
+        after.append(
+            "print(first is t.root, first.parent is None, t.find(" + str(keys[0]) + ") is not None)"
+        )
+        after.append("d = DList()")
+        after.extend(f"d.push({rng.randint(-9, 9)})" for _ in range(rng.randint(0, 6)))
+        after.append("ends = (d.head, d.tail)")
+        after.append("print(dkeys(d), d.count)")
+        for _ in range(rng.randint(2, 6)):
+            if not listed:
+                break
+            method = rng.choice(listed)
+            after.append(f"print(d.{method}({rng.randint(-3, 9)}), dkeys(d), d.count)")
+        after.append("print(ends[0] is d.head, ends[1] is d.tail, ends[0] is d.tail)")
+        return after
+
 
 #: The first line of a program whose functions have no annotations; it runs
 #: without strict mode.
 UNANNOTATED_MARK = "# fuzz: unannotated"
+#: The first line of a program whose structure classes have no annotations on
+#: their fields; it runs without strict mode too (it starts with the mark above).
+STRUCTURES_MARK = "# fuzz: unannotated fields"
 
 
 def _unannotated(signature: str) -> str:
@@ -1664,6 +1986,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     unannotated: bool = False,
     *,
     boundary: bool = False,
+    structures: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
@@ -1679,8 +2002,14 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     with arguments of other types, which the native entry must hand to the
     Python body. With `boundary`, a function Python calls natively writes
     through lists of lists, a dict of lists, a set, and objects that share
-    rows and point at each other (`STATE_PATHS` too)."""
-    return _Generator(seed, prints, state, stdlib, calls, unannotated, boundary).program()
+    rows and point at each other (`STATE_PATHS` too). With `structures`,
+    classes with unannotated fields (a search tree with parent links, a
+    doubly linked list) are edited in place by methods Python calls natively:
+    rotations, unlinking, tuple-assigned swaps, new nodes linked in
+    (`STATE_PATHS`, without strict mode)."""
+    return _Generator(
+        seed, prints, state, stdlib, calls, unannotated, boundary, structures
+    ).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:

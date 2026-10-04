@@ -153,6 +153,22 @@ class AliasInfo:
             return frozenset({name, EXTERNAL})
         return frozenset({EXTERNAL})
 
+    def roots_of(self, node: ast.expr) -> frozenset[str]:
+        """What an expression's value may be, where the map has no name for
+        it (`tail(head).value = 0`): anything from outside, or any object the
+        names in it are or hold."""
+        found: set[str] = {EXTERNAL}
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Name):
+                continue
+            roots = self.roots_at(child, child.id)
+            found.update(roots)
+            for root in roots:
+                if root in self.params or root.endswith(ELEMENT):
+                    found.add(root.removesuffix(ELEMENT) + ELEMENT)
+                found.update(self.holds.get(root, ()))
+        return frozenset(found)
+
     def param_roots(self, roots: frozenset[str]) -> frozenset[str]:
         """The parameters these objects are, or are held inside."""
         inside = {root.removesuffix(ELEMENT) for root in roots if root.endswith(ELEMENT)}
@@ -170,12 +186,16 @@ class _Analyzer:
         params: frozenset[str],
         immutable: frozenset[str],
         fresh: frozenset[str] = frozenset(),
+        constructors: frozenset[str] = frozenset(),
     ) -> None:
         self.params = params
         self.immutable = immutable
         #: Calls, spelled as written, that make a new collection of their
         #: argument's elements: `deque(xs)`, `collections.Counter(xs)`.
         self.fresh = fresh
+        #: The project's classes, spelled as written: calling one makes a new
+        #: object, which may hold what it was given.
+        self.constructors = constructors
         self.at: dict[int, _State | list[_State]] = {}
         self.holds: dict[str, set[str]] = {}
 
@@ -392,7 +412,32 @@ class _Analyzer:
             return receiver
         return foreign
 
+    def call_result(self, node: ast.Call, state: _State) -> frozenset[str]:
+        """What a call the analysis does not model hands back: anything from
+        outside, or what its arguments and its receiver are or hold. A
+        function may return what it was given (`tail(head)`), or an object
+        reached from it (`self.find(key)`), and a write through the result
+        then lands in the caller's object."""
+        found: set[str] = {EXTERNAL}
+        given = [
+            argument.value if isinstance(argument, ast.Starred) else argument
+            for argument in node.args
+        ]
+        given.extend(keyword.value for keyword in node.keywords)
+        if isinstance(node.func, ast.Attribute):
+            given.append(node.func.value)
+        for argument in given:
+            roots = self.eval(argument, state) - self.immutable
+            # A parameter handed in is reached, not named: a write through
+            # the result is charged to it, while the result is no alias of
+            # the parameter itself (`value = total(items)` uses no `items`).
+            found.update(root + ELEMENT if root in self.params else root for root in roots)
+            found.update(self.elements_of(roots))
+        return frozenset(found)
+
     def store_into(self, container: frozenset[str], stored: frozenset[str]) -> None:
+        # A number or a string held is no object a write can reach.
+        stored = stored - self.immutable
         for root in container:
             self.holds.setdefault(root, set()).update(stored)
 
@@ -404,10 +449,11 @@ class _Analyzer:
                 # What a parameter or external container holds came from
                 # outside this function.
                 found.add(EXTERNAL)
-            if root in self.params or root.endswith(ELEMENT):
+            if (root in self.params and root not in self.immutable) or root.endswith(ELEMENT):
                 # And it is inside the parameter: a write through it is a
                 # write the caller sees in what it passed. It is not the
-                # parameter itself, which returning it would be.
+                # parameter itself, which returning it would be. A number
+                # or a string holds nothing.
                 found.add(root.removesuffix(ELEMENT) + ELEMENT)
             found.update(self.holds.get(root, ()))
         return frozenset(found) if found else frozenset({EXTERNAL})
@@ -482,6 +528,17 @@ class _Analyzer:
                     return alloc
                 if node.func.id in _FRESH_SCALAR:
                     return frozenset()
+            if self.constructors and ast.unparse(node.func) in self.constructors:
+                head = node.func
+                while isinstance(head, ast.Attribute):
+                    head = head.value
+                if isinstance(head, ast.Name) and head.id not in state:
+                    # `Node(value, head)`: a new object, holding what it was given.
+                    alloc = self.site(node)
+                    for argument in [*node.args, *(k.value for k in node.keywords)]:
+                        inner = argument.value if isinstance(argument, ast.Starred) else argument
+                        self.store_into(alloc, self.eval(inner, state))
+                    return alloc
             # `ppy.buffer[int](n)` and `ppy.scan[Buffer[int]](n)` make the
             # memory they return, so nothing else can already alias it.
             if isinstance(node.func, ast.Subscript) and ast.unparse(node.func.value) in _FRESH_PPY:
@@ -494,7 +551,7 @@ class _Analyzer:
                 made = frozenset({site})
                 self.store_into(made, frozenset({f"{site}.elements"}))
                 return made
-            return frozenset({EXTERNAL})
+            return self.call_result(node, state)
         if isinstance(node, ast.Subscript):
             base = self.eval(node.value, state)
             self.eval(node.slice, state)
@@ -504,6 +561,11 @@ class _Analyzer:
                 self.store_into(alloc, self.elements_of(base))
                 return alloc
             return self.elements_of(base)
+        if isinstance(node, ast.Attribute):
+            # A field holds what was stored into it: `node = self.root` is an
+            # object inside `self`, so a write through `node` lands in what
+            # the caller passed as `self`.
+            return self.elements_of(self.eval(node.value, state))
         if isinstance(node, ast.IfExp):
             self.eval(node.test, state)
             return self.eval(node.body, state) | self.eval(node.orelse, state)
@@ -561,6 +623,7 @@ def analyze_aliases(
     immutable_params: frozenset[str] = frozenset(),
     settled_globals: frozenset[str] = frozenset(),
     fresh_calls: frozenset[str] = frozenset(),
+    constructors: frozenset[str] = frozenset(),
 ) -> AliasInfo:
     """Analyze one function. Nested function bodies are left out: a name they
     capture is not re-bound here, and what they do with it is the effect
@@ -572,6 +635,8 @@ def analyze_aliases(
     each is rooted as a parameter is, since native code is handed it as one.
     `fresh_calls` are the calls, as spelled here, that make a new collection
     (`deque`, `collections.Counter`): the module's imports decide them.
+    `constructors` are the project's classes as spelled here: a call of one
+    makes a new object holding its arguments.
     """
     params = (
         frozenset(
@@ -586,4 +651,4 @@ def analyze_aliases(
         )
         | settled_globals
     )
-    return _Analyzer(params, immutable_params & params, fresh_calls).run(node)
+    return _Analyzer(params, immutable_params & params, fresh_calls, constructors).run(node)

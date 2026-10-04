@@ -574,6 +574,36 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
             self.__dict__.setdefault("_made_nodes", []).append(following)
             self._assign(following)  # type: ignore[attr-defined]
 
+    def _unpack_into_places(self, target: ast.expr, node: ast.Assign) -> bool:
+        """`node.left, node.right = node.right, node.left`: a tuple display
+        unpacked into fields or elements. Every value is made first, each into
+        a hidden local, and then bound to its target from left to right, as
+        Python evaluates the right side before it assigns."""
+        value = node.value
+        if not (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, (ast.Tuple, ast.List))
+            and len(target.elts) == len(value.elts)
+            and not any(isinstance(e, ast.Starred) for e in [*target.elts, *value.elts])
+            and any(isinstance(e, (ast.Attribute, ast.Subscript)) for e in target.elts)
+        ):
+            return False
+        held: list[ast.expr] = []
+        for element in value.elts:
+            t = self._type_of(element)  # type: ignore[attr-defined]
+            self._hidden_count += 1
+            name = f".u{self._hidden_count}"
+            made = self._typed(ast.Name(name, ast.Store()), t, element)
+            first = ast.copy_location(ast.Assign([made], element), node)
+            self.__dict__.setdefault("_made_nodes", []).append(first)
+            self._assign(first)  # type: ignore[attr-defined]
+            held.append(self._typed(ast.Name(name, ast.Load()), t, element))
+        for place, read in zip(target.elts, held, strict=True):
+            each = ast.copy_location(ast.Assign([place], read), node)
+            self.__dict__.setdefault("_made_nodes", []).append(each)
+            self._assign(each)  # type: ignore[attr-defined]
+        return True
+
     def _assign_choice(self, target: ast.expr, node: ast.Assign) -> bool:
         """`r, c = (a, b) if flag else (b, a)`: the choice as an `if` statement,
         each side made and unpacked where it is chosen."""
