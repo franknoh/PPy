@@ -743,21 +743,26 @@ def _settle(  # type: ignore[no-untyped-def]
 
 
 def _describe(sites: list[str]) -> str:
-    calls = [s for s in sites if not s.startswith("doctest ") and s != "the default value"]
-    doctests = [s.removeprefix("doctest ") for s in sites if s.startswith("doctest ")]
+    calls = [
+        s
+        for s in sites
+        if not s.startswith(("doctest ", "parametrize ")) and s != "the default value"
+    ]
     parts = []
-    if calls:
-        shown = ", ".join(list(dict.fromkeys(calls))[:_SHOWN_SITES])
-        unshown = len(dict.fromkeys(calls)) - _SHOWN_SITES
+    for kind, words in (
+        ("", "call"),
+        ("doctest ", "doctest call"),
+        ("parametrize ", "parametrize case"),
+    ):
+        found = calls if not kind else [s.removeprefix(kind) for s in sites if s.startswith(kind)]
+        if not found:
+            continue
+        unique = list(dict.fromkeys(found))
+        shown = ", ".join(unique[:_SHOWN_SITES])
+        unshown = len(unique) - _SHOWN_SITES
         more = f", and {unshown} more places" if unshown > 0 else ""
-        plural = "s" if len(calls) != 1 else ""
-        parts.append(f"{len(calls)} call{plural} ({shown}{more})")
-    if doctests:
-        shown = ", ".join(list(dict.fromkeys(doctests))[:_SHOWN_SITES])
-        unshown = len(dict.fromkeys(doctests)) - _SHOWN_SITES
-        more = f", and {unshown} more places" if unshown > 0 else ""
-        plural = "s" if len(doctests) != 1 else ""
-        parts.append(f"{len(doctests)} doctest call{plural} ({shown}{more})")
+        plural = "s" if len(found) != 1 else ""
+        parts.append(f"{len(found)} {words}{plural} ({shown}{more})")
     if "the default value" in sites:
         parts.append("the default value")
     return " and ".join(parts)

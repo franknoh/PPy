@@ -256,8 +256,13 @@ class _Generator:
         calls: bool = False,
         unannotated: bool = False,
         boundary: bool = False,
+        shapes: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: With `unannotated`, also the shapes inference reads beyond plain
+        #: calls (see `shapes_part`), drawn from a sequence of their own.
+        self.shapes = shapes and unannotated
+        self.shaper = random.Random(seed ^ 0x5A9E)
         #: Whether functions take defaults and keyword-only parameters, and
         #: `main` calls them by keyword and leaves defaults out, drawn from a
         #: sequence of their own so the rest of the program stays the same.
@@ -1427,6 +1432,10 @@ class _Generator:
         after = self.state_part(w) if self.with_state else []
         if self.with_boundary:
             after.extend(self.boundary_part(w))
+        raw: list[str] = []
+        if self.shapes:
+            shaped, raw = self.shapes_part(w)
+            after.extend(shaped)
         w.put("def main() -> None:")
         if self.stdlib:
             w.put(f"    random.seed({self.seed})")
@@ -1437,7 +1446,7 @@ class _Generator:
         w.put("")
         w.put("")
         w.put("main()")
-        if foreign:
+        if foreign or raw:
             # Python calls each function by a name the analysis cannot follow,
             # with other types: the native entry must refuse them and run the
             # Python body, which prints what CPython prints.
@@ -1450,7 +1459,136 @@ class _Generator:
                 w.put(f"        print(getattr(here, {call[0]!r})({call[1]}))")
                 w.put("    except Exception as e:")
                 w.put("        print(type(e).__name__)")
+            for line in raw:
+                w.put("    try:")
+                w.put(f"        print({line})")
+                w.put("    except Exception as e:")
+                w.put("        print(type(e).__name__)")
         return "\n".join(w.lines) + "\n"
+
+    def shapes_part(self, w: _Writer) -> tuple[list[str], list[str]]:
+        """What inference reads beside plain calls: a function behind a
+        `functools.wraps` decorator, a value class used through operators, a
+        parameter declared `list`, one function called with an `int` and a
+        `float`, an `argparse` option with `type=int`, and functions nothing
+        calls with a type, typed by `range(n)` or a string method. Returns
+        `main`'s lines, and the expressions Python evaluates after `main`
+        with other types, through names the analysis cannot follow."""
+        rng = self.shaper
+        k = [rng.randint(-4, 9) for _ in range(8)]
+        cls, keep, decorated = self.name("Pt"), self.name("keep"), self.name("dec")
+        listed, mixed, tally, caps, opt = (
+            self.name(p) for p in ("lsum", "mix", "tally", "caps", "opt")
+        )
+        w.lines.extend(
+            f"""\
+import argparse
+import functools
+
+
+def {keep}(fn):
+    @functools.wraps(fn)
+    def inner(*args, **kwargs):
+        return fn(*args, **kwargs)
+
+    return inner
+
+
+@{keep}
+def {decorated}(a, b):
+    total = 0
+    for i in range(a):
+        total += (i * b) % 7
+    return total
+
+
+class {cls}:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other):
+        return {cls}(self.x + other.x, self.y + other.y)
+
+    def __mul__(self, k):
+        return {cls}(self.x * k, self.y - k)
+
+    def __lt__(self, other):
+        return self.x < other.x or (self.x == other.x and self.y < other.y)
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+    def __getitem__(self, i):
+        return self.x if i % 2 == 0 else self.y
+
+
+def {listed}(xs: list, k):
+    total = 0
+    for v in xs:
+        total += v * k
+    return total
+
+
+def {mixed}(x, y):
+    return x * {k[0]} + y
+
+
+def {tally}(n):
+    total = 0
+    for i in range(n):
+        total += i * {k[1]}
+    return total
+
+
+def {caps}(s):
+    return s.upper() + s.strip()
+
+
+def {opt}(n):
+    return n * {k[2]} - 1
+
+""".splitlines()
+        )
+        ints = [rng.randint(-6, 12) for _ in range(12)]
+        floats = [round(rng.uniform(-5, 5), 2) for _ in range(2)]
+        main = [
+            "parser = argparse.ArgumentParser()",
+            f'parser.add_argument("--n", type=int, default={rng.randint(0, 9)})',
+            "args = parser.parse_args()",
+            f"print({opt}(args.n))",
+            (
+                f"print({decorated}({abs(ints[0])}, {ints[1]}),"
+                f" {decorated}({abs(ints[2])}, {ints[3]}))"
+            ),
+            f"p, q = {cls}({ints[4]}, {ints[5]}), {cls}({ints[6]}, {ints[7]})",
+            f"r = p + q * {ints[8]}",
+            (
+                f"print(r.x, r.y, r[{ints[9]}], p < q, q < p, p == q,"
+                f" p == {cls}({ints[4]}, {ints[5]}))"
+            ),
+            f"ps = [{cls}({ints[10]}, 1), p, q, {cls}({ints[10]}, 0)]",
+            "ps.sort()",
+            "print([(t.x, t.y) for t in ps])",
+            f"print({listed}([{ints[0]}, {ints[1]}, {ints[2]}], {ints[3]}), {listed}([], 2))",
+            f"print({mixed}({ints[4]}, {ints[5]}), {mixed}({floats[0]}, {ints[6]}))",
+        ]
+        later = [
+            f"getattr(here, {decorated!r})({floats[1]}, 2)",
+            f"getattr(here, {cls!r})(1, 2) * 2.5 == getattr(here, {cls!r})(2.5, -0.5)",
+            f"getattr(here, {cls!r})(1, 2)[True]",
+            f"getattr(here, {cls!r})(1, 2) == 3",
+            f"getattr(here, {listed!r})([1.5, 2], 2)",
+            f"getattr(here, {listed!r})(['a'], 2)",
+            f"getattr(here, {mixed!r})('a', 'b')",
+            f"getattr(here, {mixed!r})(True, 1)",
+            f"getattr(here, {tally!r})({abs(ints[11])}), getattr(here, {tally!r})(True)",
+            f"getattr(here, {tally!r})(2.5)",
+            f"getattr(here, {caps!r})(' ab '), getattr(here, {caps!r})(b'x ')",
+            f"getattr(here, {caps!r})(3)",
+            f"getattr(here, {opt!r})('ab')",
+        ]
+        return main, later
 
     def foreign_call(self, name: str, kinds: list[str]) -> tuple[str, str]:
         """A call of `name` with arguments of other types than `main` passes."""
@@ -1618,6 +1756,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     unannotated: bool = False,
     *,
     boundary: bool = False,
+    shapes: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
@@ -1633,8 +1772,11 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     with arguments of other types, which the native entry must hand to the
     Python body. With `boundary`, a function Python calls natively writes
     through lists of lists, a dict of lists, a set, and objects that share
-    rows and point at each other (`STATE_PATHS` too)."""
-    return _Generator(seed, prints, state, stdlib, calls, unannotated, boundary).program()
+    rows and point at each other (`STATE_PATHS` too). With `shapes` (and
+    `unannotated`), it also has what inference reads beside plain calls:
+    a decorator, operators on a value class, a `list` parameter, mixed
+    `int` and `float` calls, `argparse`, and functions typed by their body."""
+    return _Generator(seed, prints, state, stdlib, calls, unannotated, boundary, shapes).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
