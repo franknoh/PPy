@@ -1011,3 +1011,83 @@ def test_a_list_of_ints_for_a_sequence_of_floats_keeps_its_ints(tmp_path: Path):
     for function in ("total", "biggest", "mean"):
         explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
         assert "llvm backend: native" in explained.stdout, (function, explained.stdout)
+
+
+BOOL_STORES = """
+from collections.abc import Callable
+from dataclasses import dataclass
+
+
+@dataclass
+class Box:
+    v: int
+
+
+def local(flag: bool) -> int:
+    x: int = flag
+    return x
+
+
+def rebound(flag: bool, n: int) -> int:
+    y = n
+    y = flag
+    return y
+
+
+def returned(n: int) -> int:
+    return n > 2
+
+
+def listed(flag: bool) -> list[int]:
+    xs: list[int] = [1]
+    xs.append(flag)
+    return xs
+
+
+def keyed(flag: bool) -> int:
+    d: dict[str, int] = {}
+    d["a"] = flag
+    return len(d)
+
+
+def boxed(flag: bool) -> int:
+    return Box(flag).v
+
+
+def through(f: Callable[[int], int], flag: bool) -> int:
+    return f(flag)
+
+
+def arithmetic(flag: bool, n: int) -> int:
+    z: int = flag + n
+    w: int = int(flag)
+    z += flag
+    return z * 2 - w
+
+
+def main() -> None:
+    print(local(True), rebound(True, 3), returned(5), listed(False))
+    print(keyed(True), boxed(True), through(returned, True), arithmetic(True, 2))
+
+
+main()
+"""
+
+
+def test_a_bool_stored_where_an_int_is_declared_stays_in_python(tmp_path: Path):
+    """Each store of a `bool` into an `int` slot keeps its function in Python
+    (native code would hold `True` as 1); arithmetic on `bool`s does not."""
+    (tmp_path / "prog.ppy").write_text(BOOL_STORES, encoding="utf-8")
+    import json
+
+    done = _run(tmp_path, "-m", "ppy_compiler", "explain", "--summary", "--json", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    reasons = {f["qualname"]: f["reason"] for f in json.loads(done.stdout)["functions"]}
+    stores = "stores a `bool` where an `int` is declared"
+    for name in ("local", "rebound", "returned", "listed", "keyed", "boxed", "through"):
+        assert stores in reasons[f"prog.{name}"], (name, reasons[f"prog.{name}"])
+    assert stores not in reasons["prog.arithmetic"]
+    expected = _expected(tmp_path, BOOL_STORES)
+    done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert done.returncode == 0, done.stderr
+    assert _output(done).strip() == expected

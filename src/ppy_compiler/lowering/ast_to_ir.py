@@ -17,7 +17,7 @@ import ast
 import math
 import re
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from dataclasses import replace as dataclass_replace
 from pathlib import Path
@@ -106,6 +106,7 @@ from .exceptions import ExceptionLowering, OwnedTemporaries, uses_exceptions
 from .expressions import ExpressionLowering
 from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
+from .boolness import hidden_bool
 from .intness import ModuleIntness, gives_bool, gives_int
 from .memo import cached_decorator, define_cached
 from .stdlib import StdlibLowering
@@ -1444,25 +1445,56 @@ class Frontend:
                 else None,
             )
 
+    def _broken(self, name: str, own: set[str], memo: dict[str, bool]) -> bool:
+        """Whether calling `name` reaches a function with no native body: one
+        that is missing or only declared, or a helper of this module (a
+        closure entry, the adapter of a function used as a value) that calls
+        one. A function of `lowered` is checked as a caller on its own."""
+        if name in memo:
+            return memo[name]
+        target = self.module.functions.get(name)
+        if target is None or (target.is_declaration and not target.attributes.get("ppy.external")):
+            memo[name] = True
+            return True
+        memo[name] = False  # a cycle through helpers breaks nothing by itself
+        if name in own or target.is_declaration:
+            return False
+        found = any(self._broken(callee, own, memo) for callee in _referenced(target))
+        memo[name] = found
+        return found
+
     def _reject_callers_of_rejected(self, lowered: Lowered) -> None:
         """A caller of a function that did not lower runs on CPython too."""
         while True:
             blocked: dict[str, str] = {}
+            own = {self.declared[q][0].name for q in lowered.functions}
+            memo: dict[str, bool] = {}
             for qualname in lowered.functions:
                 function = self.declared[qualname][0]
-                for op in function.operations():
-                    if op.name not in {"core.call", "async.create"}:
-                        continue
-                    callee = op.attributes["callee"].name  # type: ignore[union-attr]
-                    target = self.module.functions.get(callee)
-                    if target is None or (
-                        target.is_declaration and not target.attributes.get("ppy.external")
-                    ):
+                for callee in _referenced(function):
+                    if self._broken(callee, own, memo):
                         blocked[qualname] = callee
                         break
             if not blocked:
+                # A helper nothing native can reach any more, that calls what
+                # has no body, goes too: it would not link.
+                for name, helper in list(self.module.functions.items()):
+                    if name in own or helper.is_declaration:
+                        continue
+                    if self._broken(name, own, memo):
+                        del self.module.functions[name]
                 return
             for qualname, callee in blocked.items():
+                # Through a helper, name the function it reaches that has no body.
+                seen: set[str] = set()
+                while callee not in seen and callee in self.module.functions:
+                    seen.add(callee)
+                    helper = self.module.functions[callee]
+                    if helper.is_declaration or any(
+                        f.name == callee and q != callee for q, (f, _s) in self.declared.items()
+                    ):
+                        break  # a function of the program, not a helper
+                    callee = next((c for c in _referenced(helper) if memo.get(c)), callee)
                 source = next(
                     (q for q, (f, _s) in self.declared.items() if f.name == callee), callee
                 )
@@ -1471,6 +1503,18 @@ class Frontend:
                 )
                 del lowered.functions[qualname]
                 self._drop(qualname)
+
+
+def _referenced(function: IRFunction) -> Iterator[str]:
+    """The functions `function` calls or takes the address of (a closure entry)."""
+    for op in function.operations():
+        if op.name in {"core.call", "async.create"} or (
+            op.name == "core.call_intrinsic"
+            and op.attributes.get("intrinsic") == "ppy.function_address"
+        ):
+            callee = op.attributes.get("callee")
+            if callee is not None:
+                yield callee.name  # type: ignore[union-attr]
 
 
 def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
@@ -1662,6 +1706,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         self._stable = {
             name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
         } - stored
+        self._refuse_hidden_bools(node)
         self._bind_constant_tables(node)
         self._bind_constant_strings(node)
         self._bind_optionals(node)
@@ -1670,6 +1715,35 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if self._open():
             self._return_default()
         self._finish_exceptions()
+
+    def _refuse_hidden_bools(self, node: ast.FunctionDef) -> None:
+        """Keep in Python a function that stores a `bool` where native code
+        holds an `int`, which would turn `True` into `1` (`lowering.boolness`)."""
+        module = self.frontend.analysis.name
+
+        def direct(call: ast.Call) -> bool:
+            # A module function called by name: `intness` decides the call.
+            return (
+                isinstance(call.func, ast.Name)
+                and f"{module}.{call.func.id}" in self.frontend.analysis.functions
+                and self.frontend.called_directly(call.func.id)
+            )
+
+        found = hidden_bool(
+            node,
+            self.info.ret,
+            self._type_of,
+            self._local_type,
+            self.frontend.analysis.symbols.classes,
+            direct,
+            module,
+            {p.name: p.type for p in self.info.params},
+        )
+        if found is not None:
+            self._location(found)
+            raise Unsupported(
+                "stores a `bool` where an `int` is declared, which native code would hold as 1"
+            )
 
     def _bind_parameters(self) -> None:
         """Each parameter into the representation the body reads it by."""

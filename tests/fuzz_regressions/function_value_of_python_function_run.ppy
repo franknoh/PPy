@@ -1,0 +1,25 @@
+# fuzz: path=run (a native function passed a function that stays in Python as a value failed IR verification)
+from collections.abc import Callable
+
+
+def shown(n: int) -> int:
+    print(n, type(n).__name__)
+    return n * 2
+
+
+def applied(f: Callable[[int], int], v: int) -> int:
+    return f(v)
+
+
+def go(k: int) -> int:
+    s = 0
+    for i in range(k):
+        s += i * i % 7
+    return s + applied(shown, k)
+
+
+def main() -> None:
+    print(go(100))
+
+
+main()
