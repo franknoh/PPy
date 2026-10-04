@@ -260,16 +260,13 @@ def object_chain(info, classes):  # type: ignore[no-untyped-def]
     for entry in info.mro:
         if entry == "object":
             continue
+        if any(entry in getattr(c, "structural", ()) for c in [info, *chain]):
+            # The checker writes into the MRO what a class is only by its
+            # members: `Iterable` for one with `__iter__`, and each project
+            # Protocol whose members it covers, wherever that is defined.
+            # None of them is in the record.
+            continue
         found = classes.get(entry)
-        if found is None and entry in {"Iterable", "Iterator"} and entry not in info.base_names:
-            # The checker says a class with `__iter__` is `Iterable`, and with
-            # `__next__` too an `Iterator`; nothing of either is in the record.
-            continue
-        if found is not None and found.is_protocol and _structural(info, found, classes):
-            # A Protocol the class satisfies by its members alone (the checker
-            # writes those into the MRO): it gives the class nothing, wherever
-            # it is defined.
-            continue
         if found is None and _builtin_exception(entry):
             # `class ParseError(ValueError)`: the builtin exception is the
             # record's header (see `exception_header`), not a class of its own.
@@ -286,20 +283,6 @@ def object_chain(info, classes):  # type: ignore[no-untyped-def]
     if [entry.qualname for entry in chain][:1] != [info.qualname]:
         return None
     return list(reversed(chain))
-
-
-def _structural(info, protocol, classes) -> bool:  # type: ignore[no-untyped-def]
-    """Whether `info` is an instance of `protocol` only structurally: no class
-    along its MRO names the protocol as a base."""
-    for entry in info.mro:
-        found = classes.get(entry)
-        if found is None or found is protocol:
-            continue
-        for base in found.base_names:
-            spelled = base.partition("[")[0]
-            if spelled == protocol.qualname or spelled.rpartition(".")[2] == protocol.name:
-                return False
-    return True
 
 
 def canonical_ir_modules(  # type: ignore[no-untyped-def]

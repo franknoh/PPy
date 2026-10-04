@@ -308,6 +308,34 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
         fields = found.setdefault(owner, {})
         fields[attr] = _by_bases(value if attr not in fields else T.join(fields[attr], value))
 
+    analysis = None
+
+    def stored_in(container: ast.expr, key: ast.expr, value: T.Type) -> T.Type | None:
+        """The container `container[key] = value` makes of `container`'s type."""
+        held = T.strip_literal(analysis.type_of(container))  # type: ignore[union-attr]
+        if not isinstance(held, T.Instance):
+            return None
+        if held.name == "dict":
+            return T.instance("dict", T.strip_literal(analysis.type_of(key)), value)  # type: ignore[union-attr]
+        if held.name == "list" and not isinstance(key, ast.Slice):
+            return T.instance("list", value)
+        return None
+
+    def lift(node: ast.expr, filled: T.Type) -> None:
+        """`filled` is what `node` holds: the field it is, or is inside of,
+        holds as much."""
+        while isinstance(node, ast.Subscript):
+            parent = stored_in(node.value, node.slice, filled)
+            if parent is None:
+                return
+            node, filled = node.value, parent
+        if isinstance(node, ast.Attribute):
+            owner = owner_of(analysis.type_of(node.value), node.attr)  # type: ignore[union-attr]
+            # Only a field whose element nothing has told yet learns it here;
+            # one already typed is checked against what is stored.
+            if owner is not None and _never_inside(symbols.classes[owner].fields[node.attr]):
+                note(owner, node.attr, filled)
+
     for module_name, analysis in modules.items():
         module_symbols = getattr(analysis, "symbols", None)
         if module_symbols is None:
@@ -324,37 +352,49 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
                     owner = owner_of(analysis.type_of(target.value), target.attr)
                     if owner is not None:
                         note(owner, target.attr, analysis.type_of(value))
-                elif isinstance(target, ast.Subscript) and isinstance(target.value, ast.Attribute):
-                    # `self.index[key] = i`: an entry of the field's dict.
-                    held = target.value
-                    owner = owner_of(analysis.type_of(held.value), held.attr)
-                    if owner is None:
-                        continue
-                    current = T.strip_literal(analysis.type_of(held))
-                    if isinstance(current, T.Instance) and current.name == "dict":
-                        key_type = T.strip_literal(analysis.type_of(target.slice))
-                        note(owner, held.attr, T.instance("dict", key_type, analysis.type_of(value)))
+                elif isinstance(target, ast.Subscript):
+                    # `self.index[key] = i`, `self.grid[r][c] = 0`: an entry
+                    # of the field's container, or of one inside it.
+                    entry = stored_in(target.value, target.slice, analysis.type_of(value))
+                    if entry is not None:
+                        lift(target.value, entry)
+            if not isinstance(node, ast.Call) or node.keywords:
+                continue
+            func = node.func
             if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr in _STORES
-                and isinstance(node.func.value, ast.Attribute)
-                and len(node.args) == _STORES[node.func.attr]
-                and not node.keywords
+                isinstance(func, ast.Attribute)
+                and func.attr in _STORES
+                and len(node.args) == _STORES[func.attr]
             ):
-                held = node.func.value
-                owner = owner_of(analysis.type_of(held.value), held.attr)
-                if owner is None:
-                    continue
-                current = T.strip_literal(analysis.type_of(held))
-                kind = node.func.attr
-                if not isinstance(current, T.Instance):
-                    continue
-                if current.name == "list" and kind in {"append", "insert"}:
-                    note(owner, held.attr, T.instance("list", analysis.type_of(node.args[-1])))
-                elif current.name == "set" and kind == "add":
-                    note(owner, held.attr, T.instance("set", analysis.type_of(node.args[-1])))
+                # `self.queue.append(item)`, `self.adj[u].append(v)`.
+                receiver = T.strip_literal(analysis.type_of(func.value))
+                element = analysis.type_of(node.args[-1])
+                if isinstance(receiver, T.Instance) and receiver.name == "list" and func.attr in {
+                    "append",
+                    "insert",
+                }:
+                    lift(func.value, T.instance("list", element))
+                elif isinstance(receiver, T.Instance) and receiver.name == "set" and func.attr == "add":
+                    lift(func.value, T.instance("set", element))
+            elif len(node.args) == 2 and _spelled(func) in _HEAP_PUSHES:
+                # `heapq.heappush(self.heap, (priority, item))`.
+                receiver = T.strip_literal(analysis.type_of(node.args[0]))
+                if isinstance(receiver, T.Instance) and receiver.name == "list":
+                    lift(node.args[0], T.instance("list", analysis.type_of(node.args[1])))
     return found
+
+
+#: `heapq.heappush` as a module may spell it: its second argument becomes an
+#: element of its first.
+_HEAP_PUSHES = frozenset({"heapq.heappush", "heappush"})
+
+
+def _spelled(func: ast.expr) -> str:
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        return f"{func.value.id}.{func.attr}"
+    return ""
 
 
 def _by_bases(t: T.Type) -> T.Type:
@@ -369,6 +409,18 @@ def _by_bases(t: T.Type) -> T.Type:
         if not (isinstance(m, T.Instance) and any(b in names for b in m.mro[1:] if b != m.name))
     ]
     return T.union(*kept) if len(kept) != len(t.members) else t
+
+
+def _never_inside(t: T.Type) -> bool:
+    """An empty container's type: `list[Never]`, `dict[str, list[Never]]`."""
+    t = T.strip_literal(t)
+    if isinstance(t, T.NeverType):
+        return True
+    if isinstance(t, T.Instance):
+        return any(_never_inside(a) for a in t.args)
+    if isinstance(t, T.Union_):
+        return any(_never_inside(m) for m in t.members)
+    return False
 
 
 def _unknown_inside(t: T.Type) -> bool:

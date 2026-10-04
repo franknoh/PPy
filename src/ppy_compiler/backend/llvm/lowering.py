@@ -473,6 +473,10 @@ def eligible(
         if declared is None and not passes_globals:
             # A global written where it is not passed: reading it is the blocker.
             continue
+        if declared is not None and _native_param(name, declared, layouts) is None:
+            # No native form even read: the parameter's type is the blocker,
+            # which the check of each parameter below names.
+            continue
         described = _buffer_element(declared) if declared is not None else None
         handle = _collection_param(name, declared, layouts) if declared is not None else None
         # Writing through a borrowed buffer is visible to the caller, which is

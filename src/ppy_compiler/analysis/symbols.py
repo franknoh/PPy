@@ -252,6 +252,10 @@ class ClassInfo:
     #: Class attributes the program assigns through the class after the body
     #: set them (`LRUCache._MAX_CAPACITY = n`): shared state, read as such.
     rebound: set[str] = field(default_factory=set)
+    #: What the MRO holds only structurally: `Iterable`, `Iterator`, and the
+    #: project Protocols whose members the class covers. None of them gives
+    #: the class a field or a method.
+    structural: set[str] = field(default_factory=set)
 
     def instance(self, args: tuple[T.Type, ...] = ()) -> T.Instance:
         return T.Instance(self.qualname, args, self.mro or (self.qualname, "object"))
@@ -692,6 +696,7 @@ class ProjectSymbols:
                     gained.append(protocol.qualname)
             if gained:
                 kept = [entry for entry in info.mro if entry != "object"]
+                info.structural.update(g for g in gained if g not in kept)
                 info.mro = (*kept, *(g for g in gained if g not in kept), "object")
 
     def _member_names(self, info: ClassInfo) -> set[str]:
