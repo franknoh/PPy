@@ -461,9 +461,7 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
             default = self._type_of(parameter.default)  # type: ignore[attr-defined]
             if gives_bool(default) if exact == "int" else gives_int(default):
                 return None
-        augmented = {
-            id(n.target) for n in ast.walk(info.node) if isinstance(n, ast.AugAssign)
-        }
+        augmented = {id(n.target) for n in ast.walk(info.node) if isinstance(n, ast.AugAssign)}
         for n in ast.walk(info.node):
             if (
                 isinstance(n, ast.Name)

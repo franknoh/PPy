@@ -474,9 +474,7 @@ class ModuleIntness:
                 plain = not statement.decorator_list
                 defined[statement.name] = defined.get(statement.name, 0) + (1 if plain else 2)
         direct = {name for name, count in defined.items() if count == 1}
-        called = {
-            id(node.func) for node in ast.walk(self.tree) if isinstance(node, ast.Call)
-        }
+        called = {id(node.func) for node in ast.walk(self.tree) if isinstance(node, ast.Call)}
         for node in ast.walk(self.tree):
             if isinstance(node, ast.Name) and node.id in direct:
                 if not isinstance(node.ctx, ast.Load) or id(node) not in called:
@@ -535,9 +533,7 @@ class ModuleIntness:
                 found = frozenset(
                     name
                     for name in carrying
-                    if _Taint(
-                        node, self.types, set(params), {name}, callee, ambient, boolean
-                    ).run()
+                    if _Taint(node, self.types, set(params), {name}, callee, ambient, boolean).run()
                 )
                 if found != exact[qualname]:
                     exact[qualname] = found | exact[qualname]
@@ -594,7 +590,7 @@ def real_float_locals(
             bind(node.target, node.value)
         elif isinstance(node, ast.AugAssign):
             augmented.add(id(node.target))
-            if not isinstance(node.op, _FLOATING + (ast.Div,)):
+            if not isinstance(node.op, (*_FLOATING, ast.Div)):
                 bind(node.target, None)
         elif isinstance(node, ast.NamedExpr):
             bind(node.target, node.value)
