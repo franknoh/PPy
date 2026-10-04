@@ -951,10 +951,13 @@ def test_settled_globals_reach_methods_and_nested_functions(tmp_path: Path):
 
 
 def test_a_reason_never_names_an_implicit_global():
+    from ppy_compiler.analysis.settled import implicit_name
     from ppy_compiler.backend.llvm.lowering import Unsupported
 
-    reason = str(Unsupported("`m.f` expects a `list[int]`, not `__global_m_PRIMES`"))
-    assert "__global_" not in reason and "a module global passed on" in reason
+    made = implicit_name("pkg.m", "MAX_SIZE")
+    reason = str(Unsupported(f"parameter `{made}` is `list[Any]`, which has no native ABI"))
+    assert reason == "parameter `MAX_SIZE` is `list[Any]`, which has no native ABI"
+    assert "__global_" not in str(Unsupported("`f` expects a `list[int]`, not `__global_x_Y`"))
 
 
 #: `max(a, b)` and `min(a, b, c)` of objects ordered by `__lt__` or `__gt__`:

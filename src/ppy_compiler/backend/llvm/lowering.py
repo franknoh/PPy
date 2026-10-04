@@ -125,12 +125,21 @@ def _declared_bounds(interval) -> tuple[int | None, int | None]:  # type: ignore
 _IMPLICIT = re.compile(r"`__global_[A-Za-z0-9_]+`")
 
 
+def _spelled(found: re.Match[str]) -> str:
+    """A global by the name the program spells, where the reason named the
+    parameter native code passes it by."""
+    from ...analysis.settled import spelled_global  # pylint: disable=import-outside-toplevel
+
+    name = spelled_global(found.group(0).strip("`"))
+    return f"`{name}`" if name is not None else "a module global"
+
+
 class Unsupported(Exception):
     """Raised when a construct has no native lowering."""
 
     def __init__(self, *args: object) -> None:
         if args and isinstance(args[0], str) and "`__global_" in args[0]:
-            args = (_IMPLICIT.sub("a module global passed on", args[0]), *args[1:])
+            args = (_IMPLICIT.sub(_spelled, args[0]), *args[1:])
         super().__init__(*args)
 
 

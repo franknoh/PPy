@@ -26,9 +26,21 @@ if TYPE_CHECKING:
 __all__ = ["cell_scope", "close_settled_globals", "implicit_name", "implicit_parameter_name"]
 
 
+#: Each implicit parameter name made, to the global's own name, so a reason
+#: that mentions one can say the name the program spells (`spelled_global`).
+_SPELLED: dict[str, str] = {}
+
+
 def implicit_name(module: str, name: str) -> str:
     """The parameter a global the function does not read by name is passed as."""
-    return f"__global_{module.replace('.', '_')}_{name}"
+    made = f"__global_{module.replace('.', '_')}_{name}"
+    _SPELLED[made] = name
+    return made
+
+
+def spelled_global(made: str) -> str | None:
+    """The global an `implicit_name` stands for, or None."""
+    return _SPELLED.get(made)
 
 
 def cell_scope(enclosing: str) -> str:
