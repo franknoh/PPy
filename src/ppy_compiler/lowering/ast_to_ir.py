@@ -4876,14 +4876,14 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             raise Unsupported(f"`{target}` of objects of different classes has no native lowering")
         # The best so far, held as a local no program can name.
         held = f"{target}.best:{node.lineno}:{node.col_offset}"
-        best = ast.copy_location(ast.Name(id=held, ctx=ast.Load()), node)
+        best = ast.Name(id=held, ctx=ast.Load())
+        ast.copy_location(best, node)
         first, owned = self._handle(node.args[0])
         self._bind(held, shape, first, owned)
         operator = ast.Gt if target == "max" else ast.Lt
         for candidate in node.args[1:]:
-            compare = ast.copy_location(
-                ast.Compare(left=candidate, ops=[operator()], comparators=[best]), node
-            )
+            compare = ast.Compare(left=candidate, ops=[operator()], comparators=[best])
+            ast.copy_location(compare, node)
             found = self._object_compare(compare)
             if found is None:
                 raise Unsupported(f"`{target}` of objects whose class does not order them")
