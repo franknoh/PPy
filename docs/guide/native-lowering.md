@@ -188,6 +188,19 @@ The subset includes what a loop is normally made of:
   side), and that no loop, `with`, handler, or nested scope rebinds, is
   decided the same way. Object classes are tested by the class tag the
   instance carries.
+- A `bool` stays a `bool` in Python wherever it is stored: after
+  `x: int = flag`, `x` prints `True`. Native code holds an `int` as a
+  64-bit word, which keeps only the 1. So a function that stores a `bool`
+  where an `int` is declared stays in Python, and a standalone build reports
+  it. That covers a local (also one rebound from an `int`), a return from an
+  `-> int` function, an element of a `list[int]`, `dict[..., int]`, or
+  `tuple[int, ...]`, an `int` field, and an argument through a
+  `Callable[[int], ...]` or to a class. A call of a module function by name
+  stays in Python only where the callee prints, returns, stores, or tests
+  that parameter. Arithmetic is not a store: `flag + n`, `-flag`, and
+  `True + 1` are `int`s in Python too and stay native. To keep the function
+  native, annotate the slot `bool`, or store `int(flag)` where an `int` is
+  meant.
 - A chained comparison, `0 <= i < n`, is its comparisons joined by `and`,
   each operand evaluated once and the ones after a false comparison not at
   all.
