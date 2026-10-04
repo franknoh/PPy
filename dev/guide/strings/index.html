@@ -2142,6 +2142,8 @@
       
         
       
+        
+      
     
     
     
@@ -2706,6 +2708,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3352,6 +3382,8 @@
       
         
       
+        
+      
     
     
     
@@ -3552,6 +3584,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4781,9 +4841,14 @@ without a copy, and a returned string back out as a new Python string.
 A string with a lone surrogate has no UTF-8, and a call with one runs as
 Python.</p>
 <p>A <code>list[str]</code>, <code>dict[str, V]</code>, or <code>set[str]</code> parameter or result is
-passed by handle between native functions. From Python it crosses by copy
-when the function does more than one pass of work over its strings; see
-<a href="../containers/#between-functions">Lists, dicts, and sets</a>.</p>
+passed by handle between native functions. From Python, a call that writes
+through none of its parameters reads such a container in place: each
+string in it is the Python string's own UTF-8, borrowed for the call, and a
+string it hands back is the caller's object. A call that writes copies the
+strings in. Either way native code pays to hold each string and to hash
+each key it looks up, so Python calls the function natively only when it
+does more than one pass of work over its strings (<code>for w in words: for ch
+in w:</code>); see <a href="../containers/#between-functions">Lists, dicts, and sets</a>.</p>
 <h2 id="reading-and-printing">Reading and printing<a class="headerlink" href="#reading-and-printing" title="Permanent link">&para;</a></h2>
 <p>In a standalone binary, <code>ppy.input[str]()</code> and <code>input()</code> read one line
 without its newline, <code>ppy.scan[str]()</code> reads the next whitespace-delimited

@@ -1974,6 +1974,8 @@
       
         
       
+        
+      
     
     
     
@@ -2538,6 +2540,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3184,6 +3214,8 @@
       
         
       
+        
+      
     
     
     
@@ -3384,6 +3416,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4700,7 +4760,7 @@ canonical IR after the shared passes and nothing above it
 answer. A guard that fails at runtime falls back to the Python body instead of
 answering differently.</p>
 <p>The invariant is checked by tests. <code>examples/run_all.py</code> runs all
-64 example programs on all three paths and diffs the output,
+66 example programs on all three paths and diffs the output,
 and the test suite does the same per feature.</p>
 <h2 id="cache-and-incremental-builds">Cache and incremental builds<a class="headerlink" href="#cache-and-incremental-builds" title="Permanent link">&para;</a></h2>
 <p>The store is content-addressed: a key is a blake2b digest over the source, the
@@ -4797,16 +4857,34 @@ learning which argument shapes repeat).</p>
 <ul>
 <li>Lists, dicts, sets, and objects of the project's classes cross in C
   (<code>backend/llvm/crossing.c</code>), from type tables emitted for each signature.
-  Each argument is copied into a runtime handle, an object reached twice
-  becomes one handle, and after a call that writes through a parameter
-  every container and object that came in is copied back into the
-  caller's object. An element that did not change keeps its Python object.</li>
+  An object reached twice becomes one handle.</li>
+<li>A call that writes through no parameter and takes no objects reads its
+    containers in place: its lists, inner lists included, are laid out in
+    an arena the call owns (<code>px_chunk</code>, kept between calls) and marked
+    immortal for the call; a string is the Python string's own UTF-8,
+    borrowed; a dict or set is filled without hashing and indexed at its
+    first lookup. A row or string handed back is the caller's object. When
+    the call answers, <code>px_settle</code> counts the call's references, and
+    anything still held past the call (a string a cached callee kept) is
+    copied into memory of its own.</li>
+<li>A call that writes copies each argument into a runtime handle. Every
+    entry records whether a written parameter brought it in, and only those
+    are copied back into the caller's objects. Of a list of numbers only
+    the elements whose words changed are set again; an element that did not
+    change keeps its Python object.</li>
+<li>A function that draws from <code>random</code> saves the generator's state in the
+  wrapper with one <code>memcpy</code> and puts it back only where Python runs the call
+  again (<code>binding.attach_random</code> hands the wrapper the state's address once
+  per module).</li>
 <li>A function that prints, reads input, or calls into Python enters and
   leaves its call, commits held output, and drops it on a fallback in C
   (<code>wrapper_effects.c</code>); it calls back into Python only for a raise after a
   barrier or a write that failed.</li>
 <li>A function that reads settled module globals keeps a Python frame that
-  reads them, which then calls the C entry.</li>
+  reads them, which then calls the C entry (<code>binding._bind_globals</code>). The
+  same frame reads a nested function's shared variables from the
+  <code>__closure__</code> of the function object it was called through, and packs
+  the positions a <code>*args</code> parameter takes into one list.</li>
 <li>A call with keywords, or with defaults left out, is bound in C: the
   wrapper matches <code>kwnames</code> against the Python function's parameter names
   (read from its code object when the wrapper is bound) and fills what is
@@ -4815,8 +4893,8 @@ learning which argument shapes repeat).</p>
   <code>TypeError</code>; a guard that refuses the bound arguments hands Python the
   call as it was spelled.</li>
 </ul>
-<p>A two-int call costs 29 ns through the wrapper, against 30 ns for CPython's
-own call. <a href="../../guide/native-lowering/#what-a-call-costs">What a call costs</a>
+<p>A two-int call costs 32 ns through the wrapper, as CPython's own call
+does. <a href="../../guide/native-lowering/#what-a-call-costs">What a call costs</a>
 has the measured table for each shape, from <code>examples/bench_boundary.py</code>.</p>
 <p>Built artifacts ship the compiled wrapper and bind through it at launch. The
 ctypes trampoline remains only as the fallback where no C toolchain exists

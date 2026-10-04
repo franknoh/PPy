@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/31_torchrun/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/56_options_and_doctests/">
       
       
-        <link rel="prev" href="../29_flax/">
+        <link rel="prev" href="../52_unannotated/">
       
       
-        <link rel="next" href="../41_columnar/">
+        <link rel="next" href="../../reference/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>A trainer under torchrun and accelerate launch - PPy</title>
+        <title>Options and doctests - PPy</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-trainer-under-torchrun-and-accelerate-launch" class="md-skip">
+        <a href="#options-and-doctests" class="md-skip">
           Skip to content
         </a>
       
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A trainer under torchrun and accelerate launch
+              Options and doctests
             
           </span>
         </div>
@@ -2789,8 +2789,6 @@
                 
   
   
-    
-  
   
   
     
@@ -2832,11 +2830,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
           <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
@@ -2857,7 +2855,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3152,37 +3150,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    A trainer under torchrun and accelerate launch
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../31_torchrun/" class="md-nav__link">
         
   
   
@@ -3198,114 +3169,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run it
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-the-launcher-starts-it" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How the launcher starts it
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-two-kernels" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The two kernels
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#warm-the-cache-before-the-launch" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Warm the cache before the launch
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Results
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#31_torchrunfeaturesppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        31_torchrun/features.ppy
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#31_torchrunmodelppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        31_torchrun/model.ppy
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -3351,6 +3214,8 @@
                 
   
   
+    
+  
   
   
     
@@ -3382,11 +3247,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" checked>
         
           
           <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
@@ -3407,7 +3272,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3590,10 +3455,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../56_options_and_doctests/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -3609,6 +3501,114 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-prints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-types-come-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the types come from
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-boundary-still-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The boundary still checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-code-comes-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the code comes from
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#56_options_and_doctestspuzzlesppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        56_options_and_doctests/puzzles.ppy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -4530,10 +4530,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#how-the-launcher-starts-it" class="md-nav__link">
+  <a href="#the-program" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How the launcher starts it
+        The program
       
     </span>
   </a>
@@ -4541,10 +4541,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-two-kernels" class="md-nav__link">
+  <a href="#where-the-types-come-from" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The two kernels
+        Where the types come from
       
     </span>
   </a>
@@ -4552,10 +4552,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#warm-the-cache-before-the-launch" class="md-nav__link">
+  <a href="#the-boundary-still-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Warm the cache before the launch
+        The boundary still checks
       
     </span>
   </a>
@@ -4563,10 +4563,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#results" class="md-nav__link">
+  <a href="#timing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Results
+        Timing
       
     </span>
   </a>
@@ -4574,10 +4574,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#31_torchrunfeaturesppy" class="md-nav__link">
+  <a href="#where-the-code-comes-from" class="md-nav__link">
     <span class="md-ellipsis">
       
-        31_torchrun/features.ppy
+        Where the code comes from
       
     </span>
   </a>
@@ -4585,10 +4585,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#31_torchrunmodelppy" class="md-nav__link">
+  <a href="#56_options_and_doctestspuzzlesppy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        31_torchrun/model.ppy
+        56_options_and_doctests/puzzles.ppy
       
     </span>
   </a>
@@ -4615,248 +4615,335 @@
   
 
 
-<h1 id="a-trainer-under-torchrun-and-accelerate-launch">A trainer under <code>torchrun</code> and <code>accelerate launch</code><a class="headerlink" href="#a-trainer-under-torchrun-and-accelerate-launch" title="Permanent link">&para;</a></h1>
-<p>A plain PyTorch trainer whose kernels are <code>.ppy</code> modules, started by
-<code>python</code>, <code>torchrun</code>, or <code>accelerate launch</code>. <code>import ppy</code> is the whole
-integration: each rank finds the kernels' native build in the project cache,
-and preprocessing that took 110 ms per rank in Python takes 1.6 ms. There is
-no bootstrap, no launcher of its own, and no <code>ppy run</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>  <span class="c1"># first: the import hook, serving .ppy modules from their native build</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">features</span>  <span class="c1"># features.ppy: the preprocessing loops, native</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">model</span>  <span class="c1"># model.ppy: the model as one ATen region, native</span>
-</code></pre></div>
+<h1 id="options-and-doctests">Options and doctests<a class="headerlink" href="#options-and-doctests" title="Permanent link">&para;</a></h1>
+<p>A command-line script written without annotations: <code>argparse</code> options,
+doctests on the functions, a <code>functools.lru_cache</code> recursion, and a small
+vector class used through <code>+</code>, <code>*</code>, and <code>&lt;</code>. The folder's <code>pyproject.toml</code>
+turns strict mode off. <code>ppy run</code> types the functions from the parser's
+<code>type=int</code> options, from the operators applied to the class, and from the
+calls and doctests, and compiles them.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>.
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>python<span class="w"> </span>train.py
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>torchrun<span class="w"> </span>--standalone<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">2</span><span class="w"> </span>train.py
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>accelerate<span class="w"> </span>launch<span class="w"> </span>--multi_gpu<span class="w"> </span>--num_processes<span class="w"> </span><span class="m">2</span><span class="w"> </span>train.py
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nv">PPY_IMPORT</span><span class="o">=</span>python<span class="w"> </span>python<span class="w"> </span>train.py
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>ppy<span class="w"> </span>check<span class="w"> </span>.
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>python<span class="w"> </span>features.ppy<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w"> </span>features.ppy
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>python<span class="w"> </span>model.ppy<span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w"> </span>model.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>puzzles.ppy
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>puzzles.ppy
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ppy<span class="w"> </span>run<span class="w"> </span>puzzles.ppy<span class="w"> </span>--limit<span class="w"> </span><span class="m">1000</span><span class="w"> </span>--terms<span class="w"> </span><span class="m">50</span><span class="w"> </span>--steps<span class="w"> </span><span class="m">1000</span><span class="w"> </span>--seed<span class="w"> </span><span class="m">3</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>ppy<span class="w"> </span>explain<span class="w"> </span>puzzles.walk
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>ppy<span class="w"> </span>explain<span class="w"> </span>--summary<span class="w"> </span>puzzles.ppy
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>ppy build --warm .</code></strong>, <strong><code>ppy check .</code></strong></p>
-<p><em>(prints nothing; exits 0)</em></p>
-<p><strong><code>python train.py</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a># rank 0/1 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rank 0: prep       1.8 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>rank 0: train    683.4 ms   loss 1.0412 -&gt; 1.0107
+<p><strong><code>python  puzzles.ppy</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># sieve: 0.244 s
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>primes below 5000000 : 348513 the last 4999999
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a># mean_gap: 0.010 s
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>mean gap: 14.3467
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a># partitions: 0.034 s
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>partitions of 400 : 6727090051741041926
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a># walk: 0.831 s
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>farthest squared distance, times it moved: (7065320, 2681)
 </code></pre></div>
-<p><strong><code>torchrun --standalone --nproc_per_node=2 train.py</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># rank 0/2 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>rank 0: prep       1.8 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>rank 0: train    659.0 ms   loss 1.0412 -&gt; 1.0123
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a># rank 1/2 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>rank 1: prep       1.8 ms   checksum=-20883.104755 outside=4005
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>rank 1: train    657.1 ms   loss 1.0486 -&gt; 1.0239
+<p><strong><code>ppy run puzzles.ppy</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a># sieve: 0.127 s
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>primes below 5000000 : 348513 the last 4999999
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a># mean_gap: 0.001 s
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>mean gap: 14.3467
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a># partitions: 0.029 s
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>partitions of 400 : 6727090051741041926
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a># walk: 0.207 s
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>farthest squared distance, times it moved: (7065320, 2681)
 </code></pre></div>
-<p><strong><code>accelerate launch --multi_gpu --num_processes 2 train.py</code></strong></p>
-<p><em>not run here: <code>accelerate</code> is not installed</em></p>
-<p><strong><code>PPY_IMPORT=python python train.py</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a># rank 0/1 device=cpu native=False region=False loader=PPySourceLoader
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>rank 0: prep     118.9 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>rank 0: train    161.7 ms   loss 1.0412 -&gt; 1.0107
+<p><strong><code>ppy run puzzles.ppy --limit 1000 --terms 50 --steps 1000 --seed 3</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># sieve: 0.000 s
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>primes below 1000 : 168 the last 997
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a># mean_gap: 0.000 s
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>mean gap: 5.9581
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a># partitions: 0.000 s
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>partitions of 50 : 204226
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a># walk: 0.000 s
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>farthest squared distance, times it moved: (5972, 75)
 </code></pre></div>
-<p><strong><code>python features.ppy &amp;&amp; ppy run features.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>checksum=-2083.056718 outside=134 counts=[452, 3853, 11555, 16790, 16661, 11022, 3174, 359]
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>checksum=-2083.056718 outside=134 counts=[452, 3853, 11555, 16790, 16661, 11022, 3174, 359]
+<p><strong><code>ppy explain puzzles.walk</code></strong></p>
+<details class="note">
+<summary>23 lines</summary>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>function: walk
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>qualname: puzzles.walk
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>semantic type: (int, int) -&gt; tuple[int, int]
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>effects: Alloc, MayRaise[TypeError, ValueError, ZeroDivisionError], ReadObject, WriteObject
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>purity: impure
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>optimization: O2
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>python backend: optimized
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>llvm backend: native
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>python boundary: a generated CPython-ABI wrapper
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>jit: not requested
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>parallel: rejected
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>reason: `farthest` carries a dependency across iterations
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>reductions: +
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>representation:
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>  steps: int -&gt; i64 (guarded)
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>  seed: int -&gt; i64 (guarded)
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>  return: tuple[int, int] -&gt; PyObject*
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>inferred (not annotated):
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>  steps: int, from 1 call (puzzles.ppy:107)
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>  seed: int, from 1 call (puzzles.ppy:107)
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>  (the Python boundary checks these at each call, and runs the Python body otherwise)
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>  return: tuple[int, int], from the body's return statements
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>refinements: len == 2
 </code></pre></div>
-<p><strong><code>python model.ppy    &amp;&amp; ppy run model.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a># aten region: False
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>loss=4.584410
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a># aten region: True
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>loss=4.584410
+</details>
+<p><strong><code>ppy explain --summary puzzles.ppy</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>10 functions, 61 statements
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  native, called from Python              5 functions ( 50%)       29 statements ( 48%)
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  native, called from native code         4 functions ( 40%)       10 statements ( 16%)
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  Python                                  1 functions ( 10%)       22 statements ( 36%)
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>what keeps functions in Python, by statements kept out (a function can count under more than one):
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>       22 statements      1 functions  calls a Python function whose `argparse.ArgumentParser` result native code cannot take back
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>      call a function that changes nothing (its result is checked, and falls back), or keep the call out of the hot function
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>      see https://ppy.franknoh.dev/latest/guide/native-effects/
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>      puzzles.ppy:87 puzzles.main
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>native, but Python calls the Python body (why its boundary is not used):
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>      1 functions  calls itself without a loop; CPython's recursion limit stays in force
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>      3 functions  copying the collections in costs more than the body does with them
 </code></pre></div>
 <!-- outputs:end -->
 
-<p><code>accelerate</code> is not a dependency of this repository. <code>--multi_gpu</code> is what
-makes it launch several processes, and the script runs them on the CPU when
-there is no CUDA device.</p>
-<h2 id="how-the-launcher-starts-it">How the launcher starts it<a class="headerlink" href="#how-the-launcher-starts-it" title="Permanent link">&para;</a></h2>
-<p>The program does not know how it was started. <code>train.py</code> reads the
-environment every launcher agrees on (<code>RANK</code>, <code>WORLD_SIZE</code>, <code>LOCAL_RANK</code>)
-and runs the same under <code>python</code>, <code>torchrun</code>, and <code>accelerate launch</code>. The
-launcher starts ordinary interpreters, and each one's <code>import ppy</code> finds the
-kernels' native build.</p>
-<h2 id="the-two-kernels">The two kernels<a class="headerlink" href="#the-two-kernels" title="Permanent link">&para;</a></h2>
-<p><code>features.ppy</code> holds the per-batch arithmetic as loops over borrowed
-buffers: standardizing rows, appending interactions, and bucketing the
-result. That is where the time goes on the Python side of a trainer, and
-where the native path wins.</p>
-<p><code>model.ppy</code> imports torch. Its <code>forward_loss</code> is one function of curated
-tensor operations, compiled into an ATen region that ships beside the
-manifest and loads without the compiler in the process. <code>.backward()</code> sees
-the same graph, because every <code>at::</code> call still goes through the
-dispatcher.</p>
-<h2 id="warm-the-cache-before-the-launch">Warm the cache before the launch<a class="headerlink" href="#warm-the-cache-before-the-launch" title="Permanent link">&para;</a></h2>
-<p>The first process to import a kernel builds it into <code>.ppy-cache/</code>, and every
-process after that finds the build. Under a launcher the ranks start
-together. Without a warm cache each rank builds the same artifact and the
-first to finish is kept, which is correct but paid for N times.</p>
-<p><code>ppy build --warm .</code> before the launch builds every kernel once, and no rank
-builds anything. A cold first build of the torch region takes tens of
-seconds, once.</p>
-<h2 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h2>
-<p>CPU, 2 ranks, each on 20,000 rows × 16 columns; 100 steps of a 32-unit MLP.</p>
+<h2 id="the-program">The program<a class="headerlink" href="#the-program" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Vector(x, y)</code> has <code>__add__</code>, <code>__mul__</code> by a number, <code>__lt__</code> that
+  compares squared lengths, and <code>norm()</code>, the squared length.</li>
+<li><code>sieve(limit)</code> marks composites in a list of bools and returns the
+  primes up to <code>limit</code>.</li>
+<li><code>partitions(total, largest)</code> counts the ways to write <code>total</code> as a sum
+  of parts no larger than <code>largest</code>, under <code>@functools.lru_cache</code>.</li>
+<li><code>walk(steps, seed)</code> takes <code>steps</code> steps of a random walk on the grid
+  (from a linear congruential generator), each one a <code>Vector</code> added to the
+  position. It keeps the farthest point, comparing points with <code>&lt;</code>, and
+  returns its squared distance and how many times it moved.</li>
+<li><code>mean_gap(primes, tolerance=EPSILON)</code> is the mean gap between
+  consecutive primes.</li>
+<li><code>main()</code> reads <code>--limit</code>, <code>--terms</code>, <code>--steps</code>, and <code>--seed</code> with
+  <code>argparse</code> and prints each result. The lines that start with <code>#</code> are
+  timings, which differ between runs.</li>
+</ul>
+<h2 id="where-the-types-come-from">Where the types come from<a class="headerlink" href="#where-the-types-come-from" title="Permanent link">&para;</a></h2>
+<p>No parameter is annotated. In strict mode <code>ppy check puzzles.ppy</code> reports
+27 errors: twelve <code>E1201</code>, one per parameter, and the reads and calls that
+follow from them. With <code>strict = false</code>:</p>
+<ul>
+<li><strong>Options.</strong> <code>parser.add_argument("--limit", type=int, default=5_000_000)</code>
+  makes <code>args.limit</code> an <code>int</code>: the parser gives it a value of that type
+  whether or not the option is on the command line. <code>sieve(args.limit)</code>
+  is then a call with an <code>int</code>, and so are the calls of <code>partitions</code> and
+  <code>walk</code>. An option with no default that is not required could be <code>None</code>
+  and would not count.</li>
+<li><strong>Operators.</strong> <code>position + step * (1 + state % 2)</code> in <code>walk</code> is a call of
+  <code>Vector.__mul__</code> with an <code>int</code> and of <code>Vector.__add__</code> with a <code>Vector</code>,
+  and <code>farthest &lt; position</code> is a call of <code>Vector.__lt__</code>. A comparison
+  method is only typed as taking its own class, since sorting and lookups
+  call it with two of the class's objects. Written as
+  <code>farthest = max(farthest, position)</code>, the comparison would not count, and
+  <code>walk</code> would stay in Python: <code>max</code> of two objects has no native form.</li>
+<li><strong>Decorators.</strong> <code>lru_cache</code> keeps the function's parameters, so
+  <code>partitions</code> is typed from its calls as an undecorated function would
+  be. A project decorator counts the same way only when its wrapper is
+  made with <code>functools.wraps(fn)</code> and does nothing but call
+  <code>fn(*args, **kwargs)</code>.</li>
+<li><strong>Defaults.</strong> <code>tolerance=EPSILON</code> is a module constant written as a
+  literal, so it counts as a call passing a <code>float</code>.</li>
+<li><strong>Doctests.</strong> Here every function is also called from <code>main</code>, so the
+  doctests only agree with the calls. Without <code>main</code>, they would type some
+  of the same parameters: <code>sieve(20)</code> gives <code>limit</code> an <code>int</code>, and <code>a * 3</code>
+  on the doctest's <code>a = Vector(1, 2)</code> gives <code>__mul__</code>'s <code>factor</code> one. The
+  <code>Vector(3, 4)</code> and <code>Vector(2, 2)</code> operands of <code>+</code> and <code>&lt;</code> in the doctest
+  are not counted, so <code>other</code> would stay unknown.</li>
+</ul>
+<p><code>main</code> itself stays in Python: the parser is a Python object native code
+has no value for. Everything it calls is native, and <code>ppy explain
+--summary</code> counts <code>partitions</code> as native but called through its Python
+body by Python, because it calls itself without a loop and CPython's
+recursion limit stays in force.</p>
+<h2 id="the-boundary-still-checks">The boundary still checks<a class="headerlink" href="#the-boundary-still-checks" title="Permanent link">&para;</a></h2>
+<p><code>walk</code> is native and checks its two arguments when Python calls it. The
+third command passes small options: the values are still <code>int</code>s, so
+nothing changes but the sizes. From <code>--terms 406</code> the count of
+<code>partitions</code> passes 64 bits. Python calls <code>partitions</code> through its Python
+body already, so the sum is CPython's own and every path prints the same
+number.</p>
+<h2 id="timing">Timing<a class="headerlink" href="#timing" title="Permanent link">&para;</a></h2>
+<p>Wall time for the whole program, the mean of five runs, measured from a
+checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultra 9
+386H under WSL2):</p>
 <table>
 <thead>
 <tr>
-<th>per rank</th>
-<th style="text-align: right;"><code>PPY_IMPORT=python</code></th>
-<th style="text-align: right;"><code>import ppy</code></th>
+<th></th>
+<th style="text-align: right;">seconds</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>preprocessing (<code>standardize</code> + <code>bucketize</code>)</td>
-<td style="text-align: right;">109.9 ms</td>
-<td style="text-align: right;"><strong>1.6 ms</strong></td>
+<td><code>python puzzles.ppy</code></td>
+<td style="text-align: right;">1.18</td>
 </tr>
 <tr>
-<td>100 training steps (<code>forward_loss</code> region)</td>
-<td style="text-align: right;">399 ms</td>
-<td style="text-align: right;">250–600 ms</td>
+<td><code>ppy run puzzles.ppy</code>, after the first run built the cache</td>
+<td style="text-align: right;">0.44</td>
 </tr>
 </tbody>
 </table>
-<p>The preprocessing is the point. The region removes four Python round trips
-per step, which <a href="../21_training_torch/">21_training_torch</a> measures
-at about 20% in isolation. Here the step is dominated by the tensor work,
-and the run-to-run noise of a two-rank CPU launch is wider than the gain. On
-an accelerator the region changes nothing measurable.</p>
-<ul>
-<li><code>PPY_IMPORT=python</code> runs the same files as plain Python.</li>
-<li><code>PPY_QUIET=1</code> silences the per-rank notes.</li>
-</ul>
-<p>Read on: <a href="../24_interop/">Interop</a> ·
-<a href="../../cli/">CLI: <code>ppy build --warm</code></a> ·
-<a href="../../internals/migrating/">Migrating a real project</a></p>
-<p><code>features.ppy</code>, <code>model.ppy</code>, and <code>train.py</code> are hand-written; there is no
-conversion step.</p>
-<h2 id="31_torchrunfeaturesppy"><code>31_torchrun/features.ppy</code><a class="headerlink" href="#31_torchrunfeaturesppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="sd">"""The per-batch preprocessing of a trainer, as native loops over borrowed buffers.</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="sd">`standardize` centers and scales every row and appends the pairwise</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="sd">interactions the model trains on; `bucketize` counts how the standardized</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="sd">values spread, the kind of running statistic a trainer logs each step. Both</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="sd">index rather than slice, so their buffers are borrowed and the loops lower</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="sd">to native code writing into memory the caller owns.</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="sd">"""</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="kn">import</span><span class="w"> </span><span class="nn">array</span>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
-<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
-<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffer</span>
-<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
-<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
-<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="k">def</span><span class="w"> </span><span class="nf">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
-<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>        <span class="n">base</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span>
-<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>        <span class="n">target</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span>
-<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>
-<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>        <span class="n">sum_</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>            <span class="n">sum_</span> <span class="o">+=</span> <span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span>
-<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>        <span class="n">mean</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">sum_</span> <span class="o">/</span> <span class="n">cols</span>
-<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>
-<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>        <span class="n">spread</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>            <span class="n">spread</span> <span class="o">+=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span>
-<a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>        <span class="n">deviation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">spread</span> <span class="o">/</span> <span class="n">cols</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-8</span>
-<a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>
-<a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>            <span class="n">value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="n">deviation</span>
-<a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">value</span>
-<a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a>            <span class="n">interaction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">cols</span><span class="p">]</span>
-<a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">cols</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">interaction</span>
-<a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">interaction</span>
-<a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a>    <span class="k">return</span> <span class="n">total</span>
-<a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a>
-<a id="__codelineno-7-42" name="__codelineno-7-42" href="#__codelineno-7-42"></a>
-<a id="__codelineno-7-43" name="__codelineno-7-43" href="#__codelineno-7-43"></a><span class="k">def</span><span class="w"> </span><span class="nf">bucketize</span><span class="p">(</span>
-<a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a>    <span class="n">values</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">counts</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">bins</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">low</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">high</span><span class="p">:</span> <span class="nb">float</span>
-<a id="__codelineno-7-45" name="__codelineno-7-45" href="#__codelineno-7-45"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-7-46" name="__codelineno-7-46" href="#__codelineno-7-46"></a><span class="w">    </span><span class="sd">"""Count the first `count` values into `bins` equal slots over [low, high).</span>
-<a id="__codelineno-7-47" name="__codelineno-7-47" href="#__codelineno-7-47"></a>
-<a id="__codelineno-7-48" name="__codelineno-7-48" href="#__codelineno-7-48"></a><span class="sd">    Returns how many fell outside the range.</span>
-<a id="__codelineno-7-49" name="__codelineno-7-49" href="#__codelineno-7-49"></a><span class="sd">    """</span>
-<a id="__codelineno-7-50" name="__codelineno-7-50" href="#__codelineno-7-50"></a>    <span class="n">width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">high</span> <span class="o">-</span> <span class="n">low</span><span class="p">)</span> <span class="o">/</span> <span class="n">bins</span>
-<a id="__codelineno-7-51" name="__codelineno-7-51" href="#__codelineno-7-51"></a>    <span class="n">outside</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-<a id="__codelineno-7-52" name="__codelineno-7-52" href="#__codelineno-7-52"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
-<a id="__codelineno-7-53" name="__codelineno-7-53" href="#__codelineno-7-53"></a>        <span class="n">offset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">low</span><span class="p">)</span> <span class="o">/</span> <span class="n">width</span>
-<a id="__codelineno-7-54" name="__codelineno-7-54" href="#__codelineno-7-54"></a>        <span class="k">if</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="mf">0.0</span> <span class="ow">or</span> <span class="n">offset</span> <span class="o">&gt;=</span> <span class="n">bins</span><span class="p">:</span>
-<a id="__codelineno-7-55" name="__codelineno-7-55" href="#__codelineno-7-55"></a>            <span class="n">outside</span> <span class="o">+=</span> <span class="mi">1</span>
-<a id="__codelineno-7-56" name="__codelineno-7-56" href="#__codelineno-7-56"></a>        <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-7-57" name="__codelineno-7-57" href="#__codelineno-7-57"></a>            <span class="n">counts</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">)]</span> <span class="o">+=</span> <span class="mi">1</span>
-<a id="__codelineno-7-58" name="__codelineno-7-58" href="#__codelineno-7-58"></a>    <span class="k">return</span> <span class="n">outside</span>
-<a id="__codelineno-7-59" name="__codelineno-7-59" href="#__codelineno-7-59"></a>
-<a id="__codelineno-7-60" name="__codelineno-7-60" href="#__codelineno-7-60"></a>
-<a id="__codelineno-7-61" name="__codelineno-7-61" href="#__codelineno-7-61"></a><span class="k">def</span><span class="w"> </span><span class="nf">_check</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-7-62" name="__codelineno-7-62" href="#__codelineno-7-62"></a><span class="w">    </span><span class="sd">"""A checksum on a fixed input, so the three paths can be compared."""</span>
-<a id="__codelineno-7-63" name="__codelineno-7-63" href="#__codelineno-7-63"></a>    <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span>
-<a id="__codelineno-7-64" name="__codelineno-7-64" href="#__codelineno-7-64"></a>    <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span>
-<a id="__codelineno-7-65" name="__codelineno-7-65" href="#__codelineno-7-65"></a>    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12345</span>
-<a id="__codelineno-7-66" name="__codelineno-7-66" href="#__codelineno-7-66"></a>    <span class="n">raw</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span><span class="p">))</span>
-<a id="__codelineno-7-67" name="__codelineno-7-67" href="#__codelineno-7-67"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-7-68" name="__codelineno-7-68" href="#__codelineno-7-68"></a>        <span class="n">seed</span> <span class="o">=</span> <span class="p">(</span><span class="n">seed</span> <span class="o">*</span> <span class="mi">1103515245</span> <span class="o">+</span> <span class="mi">12345</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2147483648</span>
-<a id="__codelineno-7-69" name="__codelineno-7-69" href="#__codelineno-7-69"></a>        <span class="n">raw</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">seed</span> <span class="o">/</span> <span class="mf">2147483648.0</span> <span class="o">-</span> <span class="mf">0.5</span>
-<a id="__codelineno-7-70" name="__codelineno-7-70" href="#__codelineno-7-70"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span>
-<a id="__codelineno-7-71" name="__codelineno-7-71" href="#__codelineno-7-71"></a>    <span class="n">counts</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"q"</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">8</span><span class="p">)</span>
-<a id="__codelineno-7-72" name="__codelineno-7-72" href="#__codelineno-7-72"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
-<a id="__codelineno-7-73" name="__codelineno-7-73" href="#__codelineno-7-73"></a>    <span class="n">outside</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">bucketize</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">counts</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">)</span>
-<a id="__codelineno-7-74" name="__codelineno-7-74" href="#__codelineno-7-74"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"checksum=</span><span class="si">{</span><span class="n">total</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2"> outside=</span><span class="si">{</span><span class="n">outside</span><span class="si">}</span><span class="s2"> counts=</span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">counts</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-7-75" name="__codelineno-7-75" href="#__codelineno-7-75"></a>
-<a id="__codelineno-7-76" name="__codelineno-7-76" href="#__codelineno-7-76"></a>
-<a id="__codelineno-7-77" name="__codelineno-7-77" href="#__codelineno-7-77"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
-<a id="__codelineno-7-78" name="__codelineno-7-78" href="#__codelineno-7-78"></a>    <span class="n">_check</span><span class="p">()</span>
+<p>Each part, as the program prints it, the mean of five runs in seconds:</p>
+<table>
+<thead>
+<tr>
+<th>part</th>
+<th style="text-align: right;">CPython</th>
+<th style="text-align: right;"><code>ppy run</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sieve(5_000_000)</code></td>
+<td style="text-align: right;">0.253</td>
+<td style="text-align: right;">0.132</td>
+</tr>
+<tr>
+<td><code>mean_gap</code></td>
+<td style="text-align: right;">0.011</td>
+<td style="text-align: right;">0.001</td>
+</tr>
+<tr>
+<td><code>partitions(400, 400)</code></td>
+<td style="text-align: right;">0.037</td>
+<td style="text-align: right;">0.031</td>
+</tr>
+<tr>
+<td><code>walk(2_000_000, 7)</code></td>
+<td style="text-align: right;">0.838</td>
+<td style="text-align: right;">0.219</td>
+</tr>
+</tbody>
+</table>
+<p>There is no standalone build: <code>main</code> stays in Python.</p>
+<h2 id="where-the-code-comes-from">Where the code comes from<a class="headerlink" href="#where-the-code-comes-from" title="Permanent link">&para;</a></h2>
+<p><code>puzzles.ppy</code> is hand-written.</p>
+<p>Read on: <a href="../../guide/subset/#types-from-call-sites">Types from call sites</a>
+and <a href="../../guide/classes/#operators">Classes</a>.</p>
+<h2 id="56_options_and_doctestspuzzlesppy"><code>56_options_and_doctests/puzzles.ppy</code><a class="headerlink" href="#56_options_and_doctestspuzzlesppy" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">EPSILON</span> <span class="o">=</span> <span class="mf">1e-9</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">Vector</span><span class="p">:</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="sd">"""</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="sd">    &gt;&gt;&gt; a = Vector(1, 2)</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="sd">    &gt;&gt;&gt; (a + Vector(3, 4)).norm(), (a * 3).norm(), a &lt; Vector(2, 2)</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="sd">    (52, 45, True)</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="sd">    """</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">x</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">=</span> <span class="n">y</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>        <span class="k">return</span> <span class="n">Vector</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">factor</span><span class="p">):</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>        <span class="k">return</span> <span class="n">Vector</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">*</span> <span class="n">factor</span><span class="p">)</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">norm</span><span class="p">()</span>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">norm</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span>
+<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>
+<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>
+<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="k">def</span><span class="w"> </span><span class="nf">sieve</span><span class="p">(</span><span class="n">limit</span><span class="p">):</span>
+<a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="w">    </span><span class="sd">"""</span>
+<a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="sd">    &gt;&gt;&gt; sieve(20)</span>
+<a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="sd">    [2, 3, 5, 7, 11, 13, 17, 19]</span>
+<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a><span class="sd">    """</span>
+<a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a>    <span class="n">marks</span> <span class="o">=</span> <span class="p">[</span><span class="kc">True</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">limit</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>    <span class="n">marks</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">marks</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+<a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a>    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="o">**</span><span class="mf">0.5</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+<a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>        <span class="k">if</span> <span class="n">marks</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span>
+<a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a>            <span class="k">for</span> <span class="n">multiple</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="n">n</span><span class="p">,</span> <span class="n">limit</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+<a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>                <span class="n">marks</span><span class="p">[</span><span class="n">multiple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+<a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">limit</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="n">marks</span><span class="p">[</span><span class="n">n</span><span class="p">]]</span>
+<a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a>
+<a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a>
+<a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a><span class="nd">@functools</span><span class="o">.</span><span class="n">lru_cache</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a><span class="k">def</span><span class="w"> </span><span class="nf">partitions</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">largest</span><span class="p">):</span>
+<a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a><span class="w">    </span><span class="sd">"""</span>
+<a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a><span class="sd">    &gt;&gt;&gt; for n in [1, 5, 10]:</span>
+<a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a><span class="sd">    ...     print(partitions(n, n))</span>
+<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a><span class="sd">    1</span>
+<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a><span class="sd">    7</span>
+<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a><span class="sd">    42</span>
+<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a><span class="sd">    """</span>
+<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a>    <span class="k">if</span> <span class="n">total</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a>        <span class="k">return</span> <span class="mi">1</span>
+<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a>    <span class="k">if</span> <span class="n">total</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">largest</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a>        <span class="k">return</span> <span class="mi">0</span>
+<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>    <span class="k">return</span> <span class="n">partitions</span><span class="p">(</span><span class="n">total</span> <span class="o">-</span> <span class="n">largest</span><span class="p">,</span> <span class="n">largest</span><span class="p">)</span> <span class="o">+</span> <span class="n">partitions</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">largest</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>
+<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a>
+<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a><span class="k">def</span><span class="w"> </span><span class="nf">walk</span><span class="p">(</span><span class="n">steps</span><span class="p">,</span> <span class="n">seed</span><span class="p">):</span>
+<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a>    <span class="n">position</span> <span class="o">=</span> <span class="n">Vector</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a>    <span class="n">farthest</span> <span class="o">=</span> <span class="n">Vector</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a>    <span class="n">records</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a>    <span class="n">state</span> <span class="o">=</span> <span class="n">seed</span>
+<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">steps</span><span class="p">):</span>
+<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a>        <span class="n">state</span> <span class="o">=</span> <span class="p">(</span><span class="n">state</span> <span class="o">*</span> <span class="mi">1103515245</span> <span class="o">+</span> <span class="mi">12345</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2147483648</span>
+<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a>        <span class="n">step</span> <span class="o">=</span> <span class="n">Vector</span><span class="p">(</span><span class="n">state</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">state</span> <span class="o">//</span> <span class="mi">3</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a>        <span class="n">position</span> <span class="o">=</span> <span class="n">position</span> <span class="o">+</span> <span class="n">step</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">state</span> <span class="o">%</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-6-71" name="__codelineno-6-71" href="#__codelineno-6-71"></a>        <span class="k">if</span> <span class="n">farthest</span> <span class="o">&lt;</span> <span class="n">position</span><span class="p">:</span>
+<a id="__codelineno-6-72" name="__codelineno-6-72" href="#__codelineno-6-72"></a>            <span class="n">farthest</span> <span class="o">=</span> <span class="n">position</span>
+<a id="__codelineno-6-73" name="__codelineno-6-73" href="#__codelineno-6-73"></a>            <span class="n">records</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-6-74" name="__codelineno-6-74" href="#__codelineno-6-74"></a>    <span class="k">return</span> <span class="n">farthest</span><span class="o">.</span><span class="n">norm</span><span class="p">(),</span> <span class="n">records</span>
+<a id="__codelineno-6-75" name="__codelineno-6-75" href="#__codelineno-6-75"></a>
+<a id="__codelineno-6-76" name="__codelineno-6-76" href="#__codelineno-6-76"></a>
+<a id="__codelineno-6-77" name="__codelineno-6-77" href="#__codelineno-6-77"></a><span class="k">def</span><span class="w"> </span><span class="nf">mean_gap</span><span class="p">(</span><span class="n">primes</span><span class="p">,</span> <span class="n">tolerance</span><span class="o">=</span><span class="n">EPSILON</span><span class="p">):</span>
+<a id="__codelineno-6-78" name="__codelineno-6-78" href="#__codelineno-6-78"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">primes</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+<a id="__codelineno-6-79" name="__codelineno-6-79" href="#__codelineno-6-79"></a>        <span class="k">return</span> <span class="mf">0.0</span>
+<a id="__codelineno-6-80" name="__codelineno-6-80" href="#__codelineno-6-80"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-6-81" name="__codelineno-6-81" href="#__codelineno-6-81"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">primes</span><span class="p">)):</span>
+<a id="__codelineno-6-82" name="__codelineno-6-82" href="#__codelineno-6-82"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">primes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">primes</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-6-83" name="__codelineno-6-83" href="#__codelineno-6-83"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">total</span> <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">primes</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-6-84" name="__codelineno-6-84" href="#__codelineno-6-84"></a>    <span class="k">return</span> <span class="mf">0.0</span> <span class="k">if</span> <span class="n">result</span> <span class="o">&lt;</span> <span class="n">tolerance</span> <span class="k">else</span> <span class="n">result</span>
+<a id="__codelineno-6-85" name="__codelineno-6-85" href="#__codelineno-6-85"></a>
+<a id="__codelineno-6-86" name="__codelineno-6-86" href="#__codelineno-6-86"></a>
+<a id="__codelineno-6-87" name="__codelineno-6-87" href="#__codelineno-6-87"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+<a id="__codelineno-6-88" name="__codelineno-6-88" href="#__codelineno-6-88"></a>    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">"number puzzles"</span><span class="p">)</span>
+<a id="__codelineno-6-89" name="__codelineno-6-89" href="#__codelineno-6-89"></a>    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--limit"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">5_000_000</span><span class="p">)</span>
+<a id="__codelineno-6-90" name="__codelineno-6-90" href="#__codelineno-6-90"></a>    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--terms"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">400</span><span class="p">)</span>
+<a id="__codelineno-6-91" name="__codelineno-6-91" href="#__codelineno-6-91"></a>    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--steps"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2_000_000</span><span class="p">)</span>
+<a id="__codelineno-6-92" name="__codelineno-6-92" href="#__codelineno-6-92"></a>    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--seed"</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">7</span><span class="p">)</span>
+<a id="__codelineno-6-93" name="__codelineno-6-93" href="#__codelineno-6-93"></a>    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+<a id="__codelineno-6-94" name="__codelineno-6-94" href="#__codelineno-6-94"></a>    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-6-95" name="__codelineno-6-95" href="#__codelineno-6-95"></a>    <span class="n">primes</span> <span class="o">=</span> <span class="n">sieve</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">limit</span><span class="p">)</span>
+<a id="__codelineno-6-96" name="__codelineno-6-96" href="#__codelineno-6-96"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# sieve: </span><span class="si">{</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> s"</span><span class="p">)</span>
+<a id="__codelineno-6-97" name="__codelineno-6-97" href="#__codelineno-6-97"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"primes below"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">limit</span><span class="p">,</span> <span class="s2">":"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">primes</span><span class="p">),</span> <span class="s2">"the last"</span><span class="p">,</span> <span class="n">primes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+<a id="__codelineno-6-98" name="__codelineno-6-98" href="#__codelineno-6-98"></a>    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-6-99" name="__codelineno-6-99" href="#__codelineno-6-99"></a>    <span class="n">gap</span> <span class="o">=</span> <span class="n">mean_gap</span><span class="p">(</span><span class="n">primes</span><span class="p">)</span>
+<a id="__codelineno-6-100" name="__codelineno-6-100" href="#__codelineno-6-100"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# mean_gap: </span><span class="si">{</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> s"</span><span class="p">)</span>
+<a id="__codelineno-6-101" name="__codelineno-6-101" href="#__codelineno-6-101"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"mean gap:"</span><span class="p">,</span> <span class="nb">round</span><span class="p">(</span><span class="n">gap</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+<a id="__codelineno-6-102" name="__codelineno-6-102" href="#__codelineno-6-102"></a>    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-6-103" name="__codelineno-6-103" href="#__codelineno-6-103"></a>    <span class="n">count</span> <span class="o">=</span> <span class="n">partitions</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">terms</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">terms</span><span class="p">)</span>
+<a id="__codelineno-6-104" name="__codelineno-6-104" href="#__codelineno-6-104"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# partitions: </span><span class="si">{</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> s"</span><span class="p">)</span>
+<a id="__codelineno-6-105" name="__codelineno-6-105" href="#__codelineno-6-105"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"partitions of"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">terms</span><span class="p">,</span> <span class="s2">":"</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
+<a id="__codelineno-6-106" name="__codelineno-6-106" href="#__codelineno-6-106"></a>    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-6-107" name="__codelineno-6-107" href="#__codelineno-6-107"></a>    <span class="n">farthest</span> <span class="o">=</span> <span class="n">walk</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">steps</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">seed</span><span class="p">)</span>
+<a id="__codelineno-6-108" name="__codelineno-6-108" href="#__codelineno-6-108"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# walk: </span><span class="si">{</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> s"</span><span class="p">)</span>
+<a id="__codelineno-6-109" name="__codelineno-6-109" href="#__codelineno-6-109"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"farthest squared distance, times it moved:"</span><span class="p">,</span> <span class="n">farthest</span><span class="p">)</span>
+<a id="__codelineno-6-110" name="__codelineno-6-110" href="#__codelineno-6-110"></a>
+<a id="__codelineno-6-111" name="__codelineno-6-111" href="#__codelineno-6-111"></a>
+<a id="__codelineno-6-112" name="__codelineno-6-112" href="#__codelineno-6-112"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
+<a id="__codelineno-6-113" name="__codelineno-6-113" href="#__codelineno-6-113"></a>    <span class="n">main</span><span class="p">()</span>
 </code></pre></div>
-<h2 id="31_torchrunmodelppy"><code>31_torchrun/model.ppy</code><a class="headerlink" href="#31_torchrunmodelppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="sd">"""The model: one function of curated tensor operations, compiled into one ATen region.</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="sd">Every `at::` call inside the region still goes through the dispatcher, so</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="sd">autograd sees the graph it always did and `.backward()` is unchanged; what</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="sd">the region removes is the Python round trip between operators.</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="sd">"""</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
-<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward_loss</span><span class="p">(</span>
-<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">w1</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="n">b1</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">w2</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="n">b2</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>    <span class="n">hidden</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w1</span><span class="p">),</span> <span class="n">b1</span><span class="p">))</span>
-<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="n">predicted</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="n">w2</span><span class="p">),</span> <span class="n">b2</span><span class="p">)</span>
-<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>    <span class="n">residual</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">predicted</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="n">residual</span><span class="p">,</span> <span class="n">residual</span><span class="p">))</span>
-<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
-<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>
-<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="k">def</span><span class="w"> </span><span class="nf">_check</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="w">    </span><span class="sd">"""The loss on a fixed input, so the three paths can be compared."""</span>
-<a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
-<a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>    <span class="n">y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>    <span class="n">w1</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
-<a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>    <span class="n">w2</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"# aten region:"</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">forward_loss</span><span class="p">,</span> <span class="s2">"__ppy_region__"</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
-<a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"loss=</span><span class="si">{</span><span class="n">forward_loss</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">,</span><span class="w"> </span><span class="n">w1</span><span class="p">,</span><span class="w"> </span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">w2</span><span class="p">,</span><span class="w"> </span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>
-<a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>
-<a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
-<a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>    <span class="n">_check</span><span class="p">()</span>
-</code></pre></div>
-<p>Source: <a href="https://github.com/franknoh/PPy/blob/main/examples/31_torchrun"><code>examples/31_torchrun</code></a>.</p>
+<p>Source: <a href="https://github.com/franknoh/PPy/blob/main/examples/56_options_and_doctests"><code>examples/56_options_and_doctests</code></a>.</p>
 
 
 
@@ -4894,7 +4981,7 @@ conversion step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../29_flax/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Flax">
+          <a href="../52_unannotated/" class="md-footer__link md-footer__link--prev" aria-label="Previous: An unannotated module">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4904,20 +4991,20 @@ conversion step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Flax
+                An unannotated module
               </div>
             </div>
           </a>
         
         
           
-          <a href="../41_columnar/" class="md-footer__link md-footer__link--next" aria-label="Next: Columnar expressions">
+          <a href="../../reference/" class="md-footer__link md-footer__link--next" aria-label="Next: Reference">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Columnar expressions
+                Reference
               </div>
             </div>
             <div class="md-footer__button md-icon">

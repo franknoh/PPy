@@ -16,7 +16,7 @@
         <link rel="prev" href="../53_caches_and_counters/">
       
       
-        <link rel="next" href="../38_cuda/">
+        <link rel="next" href="../55_linked_structures/">
       
       
         
@@ -1984,6 +1984,8 @@
       
         
       
+        
+      
     
     
     
@@ -2688,6 +2690,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3327,6 +3357,8 @@
       
         
       
+        
+      
     
     
     
@@ -3530,6 +3562,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4601,10 +4661,10 @@ Python's own lists and objects.</p>
 as native and called from Python, and the rest as native code they call.</p>
 <ul>
 <li><strong>A list of lists written in place.</strong> <code>advance(grid, 40)</code> copies the
-  128 rows into native memory, runs, and copies each row back into the
-  same Python list. <code>grid</code> is still the caller's object, and so is each
-  row, so <code>sum(map(sum, grid))</code> in <code>main</code> counts what native code left
-  there. A row that a call did not change keeps its elements as they were.</li>
+  128 rows into native memory, runs, and then sets back into each row only
+  the cells whose value changed. <code>grid</code> is still the caller's object, and
+  so is each row, so <code>sum(map(sum, grid))</code> in <code>main</code> counts what native
+  code left there. A cell the call did not change keeps its object.</li>
 <li><strong>An object made natively.</strong> The <code>Census</code> that <code>advance</code> returns was
   made by native code. It comes back as a new <code>Census</code> instance with its
   fields set; <code>__init__</code> does not run a second time.</li>
@@ -4633,11 +4693,11 @@ checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultr
 <tbody>
 <tr>
 <td><code>python world.ppy</code></td>
-<td style="text-align: right;">2.26</td>
+<td style="text-align: right;">2.20</td>
 </tr>
 <tr>
 <td><code>ppy run world.ppy</code>, after the first run built the cache</td>
-<td style="text-align: right;">0.58</td>
+<td style="text-align: right;">0.25</td>
 </tr>
 </tbody>
 </table>
@@ -4653,18 +4713,18 @@ checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultr
 <tbody>
 <tr>
 <td>five <code>advance(grid, 40)</code> calls</td>
-<td style="text-align: right;">1.43 s</td>
-<td style="text-align: right;">0.385 s</td>
+<td style="text-align: right;">1.51 s</td>
+<td style="text-align: right;">0.177 s</td>
 </tr>
 <tr>
 <td>five <code>orbit(bodies, 0.0005, 400)</code> calls</td>
-<td style="text-align: right;">0.700 s</td>
-<td style="text-align: right;">0.120 s</td>
+<td style="text-align: right;">0.685 s</td>
+<td style="text-align: right;">0.032 s</td>
 </tr>
 <tr>
 <td>one <code>orbit(bodies, 0.0005, 1)</code> call, 60 bodies in and out</td>
-<td style="text-align: right;">353 µs</td>
-<td style="text-align: right;">73 µs</td>
+<td style="text-align: right;">346 µs</td>
+<td style="text-align: right;">29 µs</td>
 </tr>
 </tbody>
 </table>
@@ -4852,13 +4912,13 @@ the example is the crossing, which a standalone binary does not have.</p>
         
         
           
-          <a href="../38_cuda/" class="md-footer__link md-footer__link--next" aria-label="Next: GPU kernels">
+          <a href="../55_linked_structures/" class="md-footer__link md-footer__link--next" aria-label="Next: Linked structures">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                GPU kernels
+                Linked structures
               </div>
             </div>
             <div class="md-footer__button md-icon">

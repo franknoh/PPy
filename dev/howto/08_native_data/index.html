@@ -2086,6 +2086,8 @@
       
         
       
+        
+      
     
     
     
@@ -2653,6 +2655,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3305,6 +3335,8 @@
       
         
       
+        
+      
     
     
     
@@ -3508,6 +3540,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4495,9 +4555,10 @@ values, and which stay boxed. <code>ppy explain</code> says which is which, and 
 <ul>
 <li>Scalars, fixed-size tuples, and all-scalar classes are handed over flat.</li>
 <li>A <code>list[float]</code> is copied into a buffer on the way in.</li>
-<li>Other lists, dicts, sets, and objects are copied into native handles,
-  and back after a call that writes them
-  (<a href="../../guide/containers/">Lists, dicts, and sets</a>); this example
+<li>Other lists, dicts, and sets are read in place by a call that writes
+  through none of its parameters, and otherwise copied into native handles
+  and back after the call. Objects are always copied
+  (<a href="../../guide/containers/">Lists, dicts, and sets</a>). This example
   does not use them.</li>
 </ul>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>

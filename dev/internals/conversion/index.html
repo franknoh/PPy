@@ -1974,6 +1974,8 @@
       
         
       
+        
+      
     
     
     
@@ -2538,6 +2540,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3184,6 +3214,8 @@
       
         
       
+        
+      
     
     
     
@@ -3384,6 +3416,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4962,19 +5022,48 @@ result and native code runs on it:</p>
 <ul>
 <li>it takes one type per parameter: <code>int</code> with <code>float</code> joins to <code>float</code>, an
   object type with <code>None</code> to <code>X | None</code>, and any other union leaves the
-  parameter unknown, where the converter would write the union;</li>
-<li>a default value counts as a call, and a parameter no call types takes
-  what its module's doctests pass as literals;</li>
+  parameter unknown, where the converter would write the union. A function
+  is not compiled once per type its calls pass;</li>
+<li>a default value counts as a call (a literal, a module constant written as
+  one, or <code>int(...)</code>, <code>float(...)</code>, <code>str(...)</code>, <code>bool(...)</code>, <code>len(...)</code>),
+  and a parameter no call types takes what its module's doctests and
+  <code>pytest.mark.parametrize</code> cases pass as literals;</li>
+<li>a value whose type the program states counts as a typed argument:
+  <code>int(input())</code>, and <code>args.k</code> of an <code>argparse</code> parser whose
+  <code>add_argument</code> gives it a type and a value whether or not the option is
+  given;</li>
+<li>an operator on an instance is a call site of its dunder (<code>a + b</code> of
+  <code>type(a).__add__</code> and <code>type(b).__radd__</code>, <code>a[k]</code> of <code>__getitem__</code>, and so
+  on); comparison methods are typed only as taking their own class;</li>
+<li>a parameter declared with an open element type (<code>list</code>, <code>dict[str,
+  Any]</code>) is refined to the element type every call agrees on, and goes back
+  to its declaration on retraction;</li>
+<li>a parameter with no evidence at all takes the one builtin its body's use
+  admits: <code>range(n)</code> an <code>int</code>, string methods only a <code>str</code>;</li>
 <li>methods that override one another take their evidence together;</li>
-<li>a function used as a value, a decorated one, one called with <code>*args</code> or
-  <code>**kwargs</code>, a nested function, and a dunder other than <code>__init__</code> are
+<li>a decorator that keeps the parameters (<code>staticmethod</code>, <code>classmethod</code>,
+  <code>functools.cache</code>, <code>functools.lru_cache</code>, <code>abc.abstractmethod</code>,
+  <code>typing.final</code>, a pytest mark, or a project decorator whose one wrapper is
+  <code>@functools.wraps(fn)</code> over <code>(*args, **kwargs)</code> and only calls
+  <code>fn(*args, **kwargs)</code>) is looked through; a function used as a value, one
+  with another decorator, one called with <code>*args</code> or <code>**kwargs</code>, a nested
+  function, and a dunder other than <code>__init__</code> and the operator methods are
   left alone;</li>
 <li>an inferred type that makes the checker report an error the analysis
   without it did not is taken back, first for the functions involved, then
   for the module, and at last for everything.</li>
 </ul>
+<p>Unannotated fields are typed in the same analysis (<code>infer_fields</code> in
+<code>analysis/inference.py</code>): every assignment to the field anywhere in the
+project, not only the class's own <code>self.x = ...</code>, and, for a field that
+starts as an empty container, what is appended, added, pushed, or stored
+into it. A value the checker cannot type is no evidence, a field annotated
+anywhere keeps its annotation, and a union of a class with its subclasses
+collapses to the base. The fields are seeded before parameter inference
+runs, so taking a parameter's type back restores them.</p>
 <p>Each native entry checks the exact type of every argument when Python calls
-it, so a caller with other types runs the Python body. The Python backend
+it, so a caller with other types runs the Python body. An object's fields
+are checked the same way when it crosses. The Python backend
 and the bodies <code>ppy run</code> falls back to are optimized from the analysis
 before inference, since nothing guards them. <code>ppy convert</code> and <code>ppy
 migrate</code> do not use this pass, and their output does not depend on it.

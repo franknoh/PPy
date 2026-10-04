@@ -2097,6 +2097,8 @@
       
         
       
+        
+      
     
     
     
@@ -2664,6 +2666,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3316,6 +3346,8 @@
       
         
       
+        
+      
     
     
     
@@ -3519,6 +3551,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4541,9 +4601,10 @@ string knows its length in code points and whether it is all ASCII, so an
 index into ASCII text is one step, and the one-character strings the
 comparison reads are static and never allocated.</p>
 <p><code>word_count</code> makes one pass over its text. Called from Python, the text
-would first be copied into a native string, which costs about what that
-one pass saves, so the cost model leaves Python's call on the Python body;
-a native caller calls it natively. The
+itself is borrowed, but every word in the <code>dict</code> it returns is a string
+made natively and then decoded into a Python string, which costs about
+what that one pass saves, so the cost model leaves Python's call on the
+Python body; a native caller calls it natively. The
 <a href="../48_strings/">Strings example</a> counts words over 200,000 lines,
 where the work is worth the copy.</p>
 <h2 id="very-large-text">Very large text<a class="headerlink" href="#very-large-text" title="Permanent link">&para;</a></h2>

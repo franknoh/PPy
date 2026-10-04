@@ -2159,6 +2159,8 @@
       
         
       
+        
+      
     
     
     
@@ -2723,6 +2725,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3369,6 +3399,8 @@
       
         
       
+        
+      
     
     
     
@@ -3569,6 +3601,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4641,9 +4701,9 @@ a function may contain to lower.</p>
 <p>A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit <code>@ppy.native</code>/<code>@ppy.jit</code>/<code>@ppy.specialize</code>/<code>@ppy.parallel</code> gets the
 boundary. Native callers call its native symbol directly, boundary or not.</p>
-<p>The generated wrapper's call costs about what a Python call does: 29 ns for
+<p>The generated wrapper's call costs about what a Python call does: 32 ns for
 <code>def add(x: int, y: int) -&gt; int: return x + y</code> called from Python, against
-30 ns for CPython's own call of it. So straight-line work pays from two
+32 ns for CPython's own call of it. So straight-line work pays from two
 operations (<code>0.5 * base * height</code>), and a one-operation helper stays on the
 Python side (remarked as <code>R3004</code>). The rest costs more:</p>
 <table>
@@ -4676,7 +4736,7 @@ Python side (remarked as <code>R3004</code>). The rest costs more:</p>
 </tr>
 <tr>
 <td>a call that draws from <code>random</code></td>
-<td>4: the wrapper saves its state (2.5 KB) and puts it back where the call falls back</td>
+<td>4: the wrapper saves its state (2.5 KB) and puts it back where the call falls back; 16 where the function also reads module globals, since the Python-level binding saves the state then</td>
 </tr>
 </tbody>
 </table>
@@ -4712,103 +4772,103 @@ median of three runs, in nanoseconds:</p>
 <tbody>
 <tr>
 <td><code>x + y</code> of two ints, kept in Python by the cost model</td>
-<td style="text-align: right;">31</td>
-<td style="text-align: right;">32</td>
+<td style="text-align: right;">29</td>
+<td style="text-align: right;">28</td>
 </tr>
 <tr>
 <td><code>x + y</code> of two ints, <code>@ppy.native</code></td>
 <td style="text-align: right;">32</td>
-<td style="text-align: right;">31</td>
+<td style="text-align: right;">32</td>
 </tr>
 <tr>
 <td>the same, <code>y</code> passed by keyword</td>
-<td style="text-align: right;">40</td>
 <td style="text-align: right;">36</td>
+<td style="text-align: right;">32</td>
 </tr>
 <tr>
 <td>the same, <code>y</code> left to its default</td>
+<td style="text-align: right;">31</td>
 <td style="text-align: right;">33</td>
-<td style="text-align: right;">34</td>
 </tr>
 <tr>
 <td>a loop of 100 additions</td>
-<td style="text-align: right;">64</td>
-<td style="text-align: right;">991</td>
+<td style="text-align: right;">62</td>
+<td style="text-align: right;">894</td>
 </tr>
 <tr>
 <td><code>sum</code> of a borrowed buffer of 100 ints</td>
-<td style="text-align: right;">74</td>
-<td style="text-align: right;">296</td>
+<td style="text-align: right;">68</td>
+<td style="text-align: right;">279</td>
 </tr>
 <tr>
 <td>a guard that fails, so the Python body runs</td>
-<td style="text-align: right;">103</td>
+<td style="text-align: right;">83</td>
 <td style="text-align: right;">39</td>
 </tr>
 <tr>
 <td>a <code>list[int]</code> of 100 written in place, <code>@ppy.native</code></td>
-<td style="text-align: right;">1,182</td>
-<td style="text-align: right;">2,729</td>
+<td style="text-align: right;">1,082</td>
+<td style="text-align: right;">2,500</td>
 </tr>
 <tr>
 <td>a <code>dict[int, int]</code> of 100 walked, <code>@ppy.native</code></td>
-<td style="text-align: right;">1,386</td>
-<td style="text-align: right;">1,893</td>
+<td style="text-align: right;">1,214</td>
+<td style="text-align: right;">1,754</td>
 </tr>
 <tr>
 <td>a chain of 10 objects walked, <code>@ppy.native</code></td>
-<td style="text-align: right;">837</td>
-<td style="text-align: right;">153</td>
+<td style="text-align: right;">795</td>
+<td style="text-align: right;">145</td>
 </tr>
 <tr>
 <td>a function returning <code>None</code> that fills a list of 100</td>
-<td style="text-align: right;">342</td>
-<td style="text-align: right;">656</td>
+<td style="text-align: right;">325</td>
+<td style="text-align: right;">578</td>
 </tr>
 <tr>
 <td>a <code>list[int]</code> of 100 summed</td>
-<td style="text-align: right;">243</td>
-<td style="text-align: right;">946</td>
+<td style="text-align: right;">230</td>
+<td style="text-align: right;">902</td>
 </tr>
 <tr>
 <td>a <code>list[list[int]]</code> of 10 by 10 summed, <code>@ppy.native</code></td>
-<td style="text-align: right;">535</td>
-<td style="text-align: right;">1,057</td>
+<td style="text-align: right;">491</td>
+<td style="text-align: right;">949</td>
 </tr>
 <tr>
 <td>the lengths of a <code>list[str]</code> of 100 summed, <code>@ppy.native</code></td>
-<td style="text-align: right;">1,910</td>
-<td style="text-align: right;">1,330</td>
+<td style="text-align: right;">1,758</td>
+<td style="text-align: right;">1,200</td>
 </tr>
 <tr>
 <td>100 lookups in a <code>set[int]</code>, <code>@ppy.native</code></td>
-<td style="text-align: right;">2,816</td>
-<td style="text-align: right;">1,121</td>
+<td style="text-align: right;">2,442</td>
+<td style="text-align: right;">1,004</td>
 </tr>
 <tr>
 <td>100 lookups of <code>list[str]</code> keys in a <code>dict[str, int]</code>, <code>@ppy.native</code></td>
-<td style="text-align: right;">9,941</td>
-<td style="text-align: right;">1,605</td>
+<td style="text-align: right;">9,053</td>
+<td style="text-align: right;">1,468</td>
 </tr>
 <tr>
 <td>the trues of a <code>list[bool]</code> of 100 counted</td>
-<td style="text-align: right;">205</td>
-<td style="text-align: right;">696</td>
+<td style="text-align: right;">177</td>
+<td style="text-align: right;">640</td>
 </tr>
 <tr>
 <td>one element of a <code>list[int]</code> of 100 written, <code>@ppy.native</code></td>
-<td style="text-align: right;">260</td>
-<td style="text-align: right;">41</td>
+<td style="text-align: right;">250</td>
+<td style="text-align: right;">35</td>
 </tr>
 <tr>
 <td>a function returning <code>None</code> that reads 100 and writes one</td>
-<td style="text-align: right;">491</td>
-<td style="text-align: right;">1,902</td>
+<td style="text-align: right;">393</td>
+<td style="text-align: right;">1,699</td>
 </tr>
 <tr>
 <td>a <code>random.randint</code> and an addition</td>
-<td style="text-align: right;">57</td>
-<td style="text-align: right;">133</td>
+<td style="text-align: right;">53</td>
+<td style="text-align: right;">123</td>
 </tr>
 </tbody>
 </table>
@@ -4987,8 +5047,9 @@ places runs any code, and the rest are names, constants, or attributes.
 Python evaluates a default once, when the <code>def</code> runs, so the compiler puts a
 default into the call only where it is a constant: a number, a string,
 <code>None</code>, or a tuple of those. A call that leaves out a parameter whose
-default is anything else (<code>xs: list[int] = []</code>), a call with <code>*args</code> or
-<code>**kwargs</code>, and a method call bound by keyword where a subclass overrides
+default is anything else (<code>xs: list[int] = []</code>), a call that spreads
+<code>*args</code> (other than a list passed whole to a <code>*args</code> parameter, as in
+<a href="#types-that-lower">Types that lower</a>) or <code>**kwargs</code>, and a method call bound by keyword where a subclass overrides
 the method stay in Python.</p>
 <p>When Python calls a native function with keywords or with defaults left
 out, the boundary binds the call by the Python function's own signature,
@@ -5051,29 +5112,29 @@ much of the code goes native and what keeps the rest in Python. Here it is
 over the <code>sorts</code> folder of TheAlgorithms/Python with <code>--no-strict</code>, trimmed
 to the first two reasons:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>175 functions, 1389 statements
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  native, called from Python              2 functions (  1%)       24 statements (  2%)
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  native, called from native code         2 functions (  1%)       18 statements (  1%)
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  Python                                171 functions ( 98%)     1347 statements ( 97%)
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  native, called from Python              7 functions (  4%)       88 statements (  6%)
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  native, called from native code         7 functions (  4%)       74 statements (  5%)
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  Python                                161 functions ( 92%)     1227 statements ( 88%)
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  (73 of the Python functions are generic: each native caller compiles its own instance)
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>what keeps functions in Python, by statements kept out (a function can count under more than one):
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>      143 statements     10 functions  writes to a parameter native code copies
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>      return the new value, or take a `Buffer`, a list, or a ppy collection
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>      see https://ppy.franknoh.dev/latest/guide/native/
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>      sorts/circle_sort.py:50 sorts.circle_sort.circle_sort.&lt;locals&gt;.circle_sort_util
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>      sorts/dutch_national_flag_sort.py:33 sorts.dutch_national_flag_sort.dutch_national_flag_sort
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>       53 statements     10 functions  a parameter or result with no annotation the checker could infer
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>       81 statements      3 functions  a parameter of type `(Any) -&gt; Any | NoneType`
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>      take a type native code holds (numbers, str, tuples, lists, dicts, sets, ppy collections, project classes)
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>      see https://ppy.franknoh.dev/latest/guide/native-lowering/
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>      sorts/power_sort.py:34 sorts.power_sort._find_run
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>      sorts/power_sort.py:137 sorts.power_sort._merge
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>      sorts/power_sort.py:199 sorts.power_sort.power_sort
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>       59 statements     12 functions  a parameter or result with no annotation the checker could infer
 <a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>      annotate it, or run `ppy convert` to write the inferred annotations
 <a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>      see https://ppy.franknoh.dev/latest/guide/subset/
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>      sorts/external_sort.py:13 sorts.external_sort.FileSplitter.__init__
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>      sorts/external_sort.py:26 sorts.external_sort.FileSplitter.split
 <a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>      sorts/external_sort.py:48 sorts.external_sort.NWayMerge.select
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>  ... 60 more reasons, 70 functions (--limit to see more, --json for all)
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>  ... 62 more reasons, 73 functions (--limit to see more, --json for all)
 <a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>
 <a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>native, but Python calls the Python body (why its boundary is not used):
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>      1 functions  copying its strings across costs what one pass over them saves
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>      1 functions  copying the collections in costs more than the body does with them
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>      6 functions  copying the collections in costs more than the body does with them
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>      1 functions  copying its strings across costs what one pass over them saves
 </code></pre></div>
 <p>Read it from the top down:</p>
 <ul>
@@ -5087,13 +5148,14 @@ to the first two reasons:</p>
 <li>A generic function is not a blocker: it has no entry point of its own and
   is compiled for each native caller that names its types. Most of <code>sorts</code>
   is generic sorts that nothing calls natively.</li>
-<li>A nested function that shares no variable with the functions around it
-  is counted on its own, since it has an entry of its own
+<li>A nested function that shares no variable with the functions around it,
+  or only reads variables nothing rebinds while it runs, is counted on its
+  own, since it has an entry of its own
   (<a href="../closures/#a-nested-function-in-a-python-function">Functions as values</a>).
-  One that shares a variable lowers with the function around it: it counts
-  as native and called from native code when that function is native, and
-  otherwise says that the function around it stays in Python, which is the
-  reason to fix.</li>
+  One that rebinds a shared variable lowers with the function around it: it
+  counts as native and called from native code when that function is
+  native, and otherwise says that the function around it stays in Python,
+  which is the reason to fix.</li>
 <li>Each reason says what to do and links the page that explains it. The
   first places it occurs are listed with their line.</li>
 </ul>

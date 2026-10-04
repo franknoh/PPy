@@ -1974,6 +1974,8 @@
       
         
       
+        
+      
     
     
     
@@ -2538,6 +2540,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3184,6 +3214,8 @@
       
         
       
+        
+      
     
     
     
@@ -3384,6 +3416,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -5152,6 +5212,18 @@ is most likely to break something:</p>
 <td><code>--unannotated</code></td>
 <td>functions with no annotations, run with <code>strict = false</code> and called afterwards from Python with arguments of other types (paths with Python by default)</td>
 </tr>
+<tr>
+<td><code>--inference</code></td>
+<td>with <code>--unannotated</code>: a <code>functools.wraps</code> decorator, a value class used through operators and sorted, a <code>list</code>-annotated parameter, a function called with an <code>int</code> and a <code>float</code>, an <code>argparse</code> option, and parameters typed only by <code>range(n)</code> or string methods</td>
+</tr>
+<tr>
+<td><code>--structures</code></td>
+<td>a search tree with parent links and a doubly linked list, fields unannotated, relinked in place by <code>@ppy.native</code> methods (inserts through a field alias, rotations through a call's result, mirroring by tuple assignment, unlinking, reversal); <code>main</code> prints shapes and identities after each call (paths with Python)</td>
+</tr>
+<tr>
+<td><code>--shapes</code></td>
+<td>the shapes the corpus kept in Python: an <code>if</code>/<code>elif</code>/<code>else</code> that returns on every side, list parameters (<code>if not xs</code>, <code>== []</code>, unpacking, slicing, returning), module string constants, tuple assignment of lists, <code>*args</code> of numbers; with <code>--state</code>, a function that falls off its end and a nested function handed cells</td>
+</tr>
 </tbody>
 </table>
 <p><code>--paths python,ppy,run</code> limits a batch to some of the paths. Flags
@@ -5236,6 +5308,8 @@ and the comparison projects' toolchains. The workflow commits what moved back
 to <code>dev</code>.</p>
 <p>A hosted runner has none of that, which is why <code>benchmark.yml</code> only reports
 on a schedule.</p>
+<p>The runner lives in <code>~/actions-runner</code> on that machine and stops with it.
+<code>~/actions-runner/start.sh</code> brings it back.</p>
 <h3 id="tables-the-runner-does-not-refresh">Tables the runner does not refresh<a class="headerlink" href="#tables-the-runner-does-not-refresh" title="Permanent link">&para;</a></h3>
 <p>Three kinds of number are measured by hand, from a <code>/tmp</code> checkout with
 nothing else running, and committed with the change that moved them:</p>
@@ -5246,13 +5320,12 @@ nothing else running, and committed with the change that moved them:</p>
   it. It flags a warm run slower than <code>python</code> beyond the margin. Run it in
   the default environment (<code>uv sync</code>): an example whose libraries are not
   installed is left out, as are the device examples.</li>
-<li><code>python examples/bench_boundary.py</code> prints the cost of a call for each
-  shape that crosses the boundary. The table in the native lowering guide
-  ("What a call costs") is its output under <code>ppy run</code> beside the same
-  program under <code>python</code>.</li>
+<li><code>python examples/bench_boundary.py --python</code> prints the cost of a call
+  for each shape that crosses the boundary, under <code>ppy run</code> and under
+  <code>python</code>. The table in the native lowering guide ("What a call costs") is
+  its output.</li>
 <li>An example README's own timing table (<code>51_clinic</code> and later) is the mean
-  of five runs of each command. The runner lives in <code>~/actions-runner</code> on that machine and
-stops with it. <code>~/actions-runner/start.sh</code> brings it back.</li>
+  of five runs of each command.</li>
 </ul>
 <p>A change that touches only prose (the docs, a README, the changelog, a
 recorded measurement) skips the test matrix. <code>ci.yml</code> sorts the changed

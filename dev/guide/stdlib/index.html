@@ -2153,6 +2153,8 @@
       
         
       
+        
+      
     
     
     
@@ -2717,6 +2719,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3363,6 +3393,8 @@
       
         
       
+        
+      
     
     
     
@@ -3563,6 +3595,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4752,6 +4812,11 @@ in place. A native function and Python code can take turns drawing, and the
 sequence is the one CPython would give. When a native call falls back to
 Python after it drew (an integer grew past 64 bits, say), the generator is put
 back as it was before the call, so the Python rerun draws the same numbers.
+The generated wrapper saves the generator's 2.5 KB of state with one copy
+before such a call, so a call that draws costs about what any other call
+does (<a href="../native-lowering/#what-a-call-costs">What a call costs</a>). A function
+that also reads module globals is bound by the Python-level binding, which
+saves the state through <code>ctypes</code> and costs about 1.6 µs a call.
 <code>gauss</code> keeps a value back between calls in a Python attribute, which is why
 it stays in Python under <code>ppy run</code>.</p>
 <p>A program that never seeds draws different numbers on each run, on every

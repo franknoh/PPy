@@ -2103,6 +2103,8 @@
       
         
       
+        
+      
     
     
     
@@ -2667,6 +2669,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3313,6 +3343,8 @@
       
         
       
+        
+      
     
     
     
@@ -3513,6 +3545,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4616,13 +4676,18 @@ project:</p>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">strict</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </code></pre></div>
 <p>Then <code>ppy run script.py</code> types each unannotated parameter from the calls
-the project makes to it, its default value, and its doctests, compiles the
-functions that types, and runs the rest on CPython. What the analysis
+the project makes to it (an <code>argparse</code> option and an operator on an
+instance count as calls), its default value, and its doctests, and each
+unannotated field from what the program stores into it. It compiles the
+functions that types and runs the rest on CPython. What the analysis
 cannot follow, such as <code>eval</code> or an import that fails, is a <code>W2010</code>
 warning and runs as CPython runs it. <code>ppy explain --summary --no-strict .</code>
 says how much went native and what kept the rest in Python, and <code>ppy
 explain module.function</code> lists the types it inferred and where from.
-<a href="../howto/52_unannotated/">An unannotated module</a> walks through one.</p>
+<a href="../howto/52_unannotated/">An unannotated module</a> walks through one,
+<a href="../howto/55_linked_structures/">Linked structures</a> does the same for
+classes, and <a href="../howto/56_options_and_doctests/">Options and doctests</a> for a
+script run from the command line.</p>
 <p>Two commands turn existing Python into PPy:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>convert<span class="w"> </span>kernel.py<span class="w">     </span><span class="c1"># untyped Python to strict PPy, inferred from the call sites</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>migrate<span class="w"> </span>legacy.py<span class="w">     </span><span class="c1"># the permissive form: dynamic features go behind boundaries</span>
@@ -4630,7 +4695,7 @@ explain module.function</code> lists the types it inferred and where from.
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../guide/">Guide</a>: the subset and the directives, then native memory, SIMD, threads, parallel loops, derivatives, coroutines, GPU kernels, XLA, and generics.</li>
-<li><a href="../howto/">Examples</a>: 54 folders, one page each.</li>
+<li><a href="../howto/">Examples</a>: 56 folders, one page each.</li>
 <li><a href="../cli/">CLI</a>: all commands and options, including <code>ppy emit</code>, <code>inspect --stage</code>, <code>--report-opt</code>, <code>--sanitize</code>, and <code>--profile</code>/<code>--pgo</code>.</li>
 </ul>
 

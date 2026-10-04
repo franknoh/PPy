@@ -2065,6 +2065,8 @@
       
         
       
+        
+      
     
     
     
@@ -2629,6 +2631,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3275,6 +3305,8 @@
       
         
       
+        
+      
     
     
     
@@ -3475,6 +3507,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4521,17 +4581,18 @@ to a native build in about ten minutes.</p>
   compile to native code, reference counted with cycles collected, and
   give the same answers as CPython.</li>
 <li><strong>Existing Python as it is.</strong> Without strict mode, <code>ppy run</code> types
-  unannotated parameters from the project's calls, defaults, and doctests,
-  and runs what the analysis cannot follow on CPython
+  unannotated parameters from the project's calls, defaults, doctests,
+  <code>argparse</code> options, and operators, types unannotated fields from what the
+  program stores into them, and runs what the analysis cannot follow on CPython
   (<a href="guide/subset/#types-from-call-sites">Types from call sites</a>).</li>
 <li><strong>Eight library plugins.</strong> NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.</li>
 <li><strong>A cheap call boundary.</strong> A native call with two <code>int</code> arguments costs
-  29 ns from Python, against 30 ns for CPython's own call. Lists, dicts,
+  32 ns from Python, as CPython's own call does. Lists, dicts,
   sets, and objects cross in the same generated C wrapper, and what a call
   writes comes back into the caller's objects.</li>
 <li><strong>Tested.</strong> 1488 test functions on Python 3.12, 3.13, and
-  3.14, with 68% statement coverage. 81 diagnostic codes,
+  3.14, with 67% statement coverage. 81 diagnostic codes,
   each documented in one place.</li>
 </ul>
 </div>
@@ -4554,7 +4615,7 @@ to a native build in about ten minutes.</p>
 </tr>
 <tr>
 <td><a href="howto/">Examples</a></td>
-<td>54 folders and 64 programs with their commands and output. 18 of them are measured against Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop; the results are collected on the <a href="howto/comparisons/">comparisons page</a>.</td>
+<td>56 folders and 66 programs with their commands and output. 18 of them are measured against Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop; the results are collected on the <a href="howto/comparisons/">comparisons page</a>.</td>
 </tr>
 <tr>
 <td><a href="reference/">Reference</a></td>

@@ -2092,6 +2092,8 @@
       
         
       
+        
+      
     
     
     
@@ -2656,6 +2658,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3302,6 +3332,8 @@
       
         
       
+        
+      
     
     
     
@@ -3502,6 +3534,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4568,9 +4628,13 @@ on with the value it was handed at the call.</p>
 <p>A literal constant (<code>LIMIT = 10</code>) is folded where it is read and needs none
 of this.</p>
 <p>A global that is not settled keeps its readers in Python. Neither kind
-reaches a standalone build or a C export, and a method, a nested function,
-a thread's body, and a function used as a value are not passed globals, so
-they too stay in Python when they read one.</p>
+reaches a standalone build or a C export.</p>
+<p>A method may read settled globals when every native call reaches it by
+name with its arguments spelled out: it is not a property, a static or
+class method, or a dunder other than <code>__init__</code>, and it neither overrides
+another method nor is overridden. A nested function, a thread's body, and
+a function used as a value are not passed globals, so they stay in Python
+when they read one.</p>
 <h2 id="the-three-execution-paths">The three execution paths<a class="headerlink" href="#the-three-execution-paths" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

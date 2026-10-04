@@ -2097,6 +2097,8 @@
       
         
       
+        
+      
     
     
     
@@ -2664,6 +2666,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3316,6 +3346,8 @@
       
         
       
+        
+      
     
     
     
@@ -3519,6 +3551,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4547,8 +4607,11 @@ container the function made and one it was given.</p>
 <p>All four functions lower to native code: plain lists, dicts, and sets are
 native (see <a href="../../guide/containers/">Lists, dicts, and sets</a>).
 Python calls <code>histogram</code> and <code>grow</code> natively. It calls <code>distinct</code> and
-<code>flatten</code> on their Python bodies: each makes one pass over what it is
-given, which costs what copying it in would. <code>main</code> stays in Python,
+<code>flatten</code> on their Python bodies: neither writes through its parameter, so
+the boundary would read the list in place rather than copy it, but each
+does one operation per string or per row (<code>seen.add(value)</code> hashes a
+string, <code>out.extend(row)</code> copies a row), and holding each string or row
+natively costs about what the native loop saves. <code>main</code> stays in Python,
 because <code>sorted(...items())</code> sorts <code>(key, count)</code> tuples, which native code
 does not order. All of them are strict and typed, and all but <code>main</code> are
 pure.</p>

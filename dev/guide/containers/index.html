@@ -2092,6 +2092,8 @@
       
         
       
+        
+      
     
     
     
@@ -2656,6 +2658,34 @@
     
   
     Objects and grids across the boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/55_linked_structures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linked structures
   
 
     
@@ -3302,6 +3332,8 @@
       
         
       
+        
+      
     
     
     
@@ -3502,6 +3534,34 @@
     
   
     An unannotated module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/56_options_and_doctests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Options and doctests
   
 
     
@@ -4704,9 +4764,10 @@ Python.</p>
   Python, since CPython keeps and prints the key as it came.</li>
 <li><code>v = d.get(k)</code> with no default, of a dict of numbers, binds <code>v</code> as a
   number or <code>None</code>: native code keeps a flag beside the number. <code>v is None</code>,
-  <code>v is not None</code>, <code>if v:</code>, <code>print(v)</code>, and <code>v</code> as a number once a test has
-  shown it holds one are native; <code>v += x</code> raises CPython's <code>TypeError</code> where
-  <code>v</code> is <code>None</code>. A <code>d.get(k)</code> used any other way (passed on, returned, a
+  <code>v is not None</code>, <code>if v:</code>, <code>print(v)</code>, <code>v = None</code>, and <code>v</code> as a number
+  (<code>v += x</code> included) once a test has shown it holds one are native. The
+  checker reports <code>v += x</code> on a <code>v</code> that may still be <code>None</code> as <code>E1302</code>,
+  with or without strict mode. A <code>d.get(k)</code> used any other way (passed on, returned, a
   dict of strings) stays in Python. With a default, <code>get</code> is native.</li>
 <li><code>sort(key=...)</code>, <code>sorted(key=...)</code>, <code>min(key=...)</code>, and <code>max(key=...)</code>
   natively take a key giving numbers or tuples of them, and <code>min</code> and <code>max</code>
