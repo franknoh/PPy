@@ -427,10 +427,13 @@ class _Analyzer:
         if isinstance(node.func, ast.Attribute):
             given.append(node.func.value)
         for argument in given:
-            roots = self.eval(argument, state)
-            found.update(roots)
+            roots = self.eval(argument, state) - self.immutable
+            # A parameter handed in is reached, not named: a write through
+            # the result is charged to it, while the result is no alias of
+            # the parameter itself (`value = total(items)` uses no `items`).
+            found.update(root + ELEMENT if root in self.params else root for root in roots)
             found.update(self.elements_of(roots))
-        return frozenset(found - self.immutable)
+        return frozenset(found)
 
     def store_into(self, container: frozenset[str], stored: frozenset[str]) -> None:
         # A number or a string held is no object a write can reach.
