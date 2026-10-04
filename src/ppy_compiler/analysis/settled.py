@@ -13,10 +13,15 @@ makes.
 from __future__ import annotations
 
 import ast
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 from . import types as T
 from .closures import cell_captures
 from .results import FunctionAnalysis, ImplicitGlobal, ProjectAnalysis
+
+if TYPE_CHECKING:
+    from .symbols import ClassInfo, FunctionInfo
 
 __all__ = ["cell_scope", "close_settled_globals", "implicit_name", "implicit_parameter_name"]
 
@@ -32,17 +37,45 @@ def cell_scope(enclosing: str) -> str:
     return f"{enclosing}.<locals>"
 
 
-def _plain(analysis: FunctionAnalysis, held: dict[tuple[str, str], ImplicitGlobal]) -> bool:
+def _one_method(info: FunctionInfo, classes: Mapping[str, ClassInfo]) -> bool:
+    """A method every native call reaches by name with its arguments spelled
+    (`obj.method(...)`, `Class(...)` for `__init__`): not a property, a static
+    or class method, or another dunder an operator calls, and neither
+    overriding a method nor overridden, so no call goes by the object's class
+    to another implementation that takes other parameters."""
+    if info.decorators or info.is_static or info.is_property:
+        return False
+    if info.name.startswith("__") and info.name != "__init__":
+        return False
+    owner = classes.get(info.owner or "")
+    if owner is None:
+        return False
+    for other in classes.values():
+        if other is owner or info.name not in other.methods:
+            continue
+        if owner.qualname in other.mro or other.qualname in owner.mro:
+            return False
+    return True
+
+
+def _plain(
+    analysis: FunctionAnalysis,
+    held: dict[tuple[str, str], ImplicitGlobal],
+    classes: Mapping[str, ClassInfo],
+) -> bool:
     """A function of the module that can take more parameters than it spells:
-    not a method, a closure, a generic, a generator, or a coroutine, whose
-    callers do not pass arguments the way a native call to a function does.
+    not a closure, a generic, a generator, or a coroutine, whose callers do
+    not pass arguments the way a native call to a function does, and a method
+    only where every call reaches it by name (`_one_method`).
 
     A function defined in another one is, where all it takes are the cells
     of that one: Python's boundary reads them from the function object it
     calls, and its one native caller is itself."""
     info = analysis.info
-    if info.type_params or info.is_generator or info.is_async or info.owner is not None:
+    if info.type_params or info.is_generator or info.is_async:
         return False
+    if info.owner is not None:
+        return info.enclosing is None and _one_method(info, classes)
     if info.enclosing is None:
         return True
     scope = cell_scope(info.enclosing)
@@ -130,6 +163,7 @@ def close_settled_globals(project: ProjectAnalysis) -> None:
     functions: dict[str, FunctionAnalysis] = {}
     for module in project.modules.values():
         functions.update(module.functions)
+    classes = project.symbols.classes
     found: dict[str, dict[tuple[str, str], ImplicitGlobal]] = {}
     native: dict[str, bool] = {}
     for qualname, analysis in functions.items():
@@ -178,7 +212,7 @@ def close_settled_globals(project: ProjectAnalysis) -> None:
                             wanted.written or (held is not None and held.written),
                         )
                         changed = True
-            if own and not _plain(analysis, own):
+            if own and not _plain(analysis, own, classes):
                 ok = False
             if ok != native[qualname]:
                 native[qualname] = ok

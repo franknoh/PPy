@@ -754,6 +754,12 @@ class CollectionLowering:
         del self._temporaries[waiting:]  # type: ignore[attr-defined]
         results = function.results  # type: ignore[attr-defined]
         overrides = [] if exact else self._overrides(shape, attr)
+        if overrides and any(
+            getattr(getattr(p, "native", p), "source", "") for p in rest.parameters
+        ):
+            # Module globals passed after the arguments are this method's
+            # own; an override takes its own, so no one call serves both.
+            raise Unsupported(f"`{attr}` reads module globals and is overridden")
         if overrides:
             called = self._dispatch(shape, attr, receiver, values, overrides, function)
         else:
