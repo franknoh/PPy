@@ -731,4 +731,4 @@ if __name__ == "__main__":
 def test_an_int_returned_for_a_declared_float_stays_an_int(tmp_path: Path):
     _agrees(tmp_path, FLOAT_RESULT, [])
     explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.merge_cost")
-    assert "returns an `int` where `float` is declared" in explained.stdout, explained.stdout
+    assert "returns a value that may be an `int`" in explained.stdout, explained.stdout
