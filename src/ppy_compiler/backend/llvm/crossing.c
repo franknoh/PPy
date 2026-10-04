@@ -193,8 +193,43 @@ typedef struct {
 
 #define PX_INLINE 16
 
+/* A call that writes through no parameter reads its containers as they
+   were when it began, and nothing it does can change them: its lists, and
+   the strings in them, are laid out in a block of memory the call owns
+   (`px_chunk`) instead of one allocation per handle. A string is the
+   Python string's own bytes, borrowed (header word 6 is 2, word 22 the
+   object, which the call holds); a list's records sit in the block. Such a
+   handle is marked in header word 19 (`PX_ARENA`, a word the collector only
+   uses for the handles it tracks, and these are not on the thread's heap
+   list) and starts at `PX_IMMORTAL` references more than a fresh handle,
+   so nothing native code does lets it reach zero and be freed.
+
+   When the call is done, the references are counted: a list no one holds
+   any more lets go of what it holds, and anything still held past the call
+   (a cached function's table kept it) has escaped. Then the whole block is
+   kept for good, each list's records and each string's bytes copied into
+   memory of their own, as a fresh handle would have them. */
+#define PX_ARENA ((int64_t)0x70784152454e41LL)
+#define PX_IMMORTAL ((int64_t)1 << 60)
+
+typedef struct px_chunk {
+    struct px_chunk *next;
+    size_t used, room;
+    int64_t words[];
+} px_chunk;
+
+/* The block a call takes, kept between calls (the GIL guards it). */
+static px_chunk *px_spare = NULL;
+/* Blocks whose handles escaped their call: kept, never freed. */
+static px_chunk *px_kept_chunks = NULL;
+
 typedef struct {
     px_classes *classes;
+    int readonly, escaped;
+    px_chunk *chunks;
+    /* The arena handles the call made, in the order it made them. */
+    int8_t **made;
+    Py_ssize_t made_count, made_room;
     px_entry *entries;
     Py_ssize_t count, room;
     /* Open addressing over entry indices plus one, by object and by handle. */
@@ -206,10 +241,17 @@ typedef struct {
     px_entry entries0[PX_INLINE];
     Py_ssize_t by_obj0[PX_INLINE * 2], by_handle0[PX_INLINE * 2];
     int8_t *owned0[PX_INLINE * 2];
+    int8_t *made0[PX_INLINE * 4];
 } ppy_cross;
 
-static void px_begin(ppy_cross *x, px_classes *classes) {
+static void px_begin(ppy_cross *x, px_classes *classes, int readonly) {
     x->classes = classes;
+    x->readonly = readonly;
+    x->escaped = 0;
+    x->chunks = NULL;
+    x->made = x->made0;
+    x->made_count = 0;
+    x->made_room = PX_INLINE * 4;
     x->entries = x->entries0;
     x->count = 0;
     x->room = PX_INLINE;
@@ -223,12 +265,17 @@ static void px_begin(ppy_cross *x, px_classes *classes) {
     x->owned_room = PX_INLINE * 2;
 }
 
+static void px_settle(ppy_cross *x);
+
 /* Every reference the call held let go of, and the objects it held. */
 static void px_end(ppy_cross *x) {
     for (Py_ssize_t i = 0; i < x->owned_count; i++) {
         ppy_rt.release(x->owned[i]);
     }
     x->owned_count = 0;
+    if (x->made_count > 0) {
+        px_settle(x);
+    }
     for (Py_ssize_t i = 0; i < x->count; i++) {
         Py_DECREF(x->entries[i].obj);
     }
@@ -265,6 +312,234 @@ static int px_own(ppy_cross *x, int8_t *handle) {
     }
     x->owned[x->owned_count++] = handle;
     return 0;
+}
+
+/* `words` zeroed words from the call's block, or NULL out of memory. */
+static int64_t *px_alloc(ppy_cross *x, size_t words) {
+    px_chunk *c = x->chunks;
+    if (c == NULL || c->used + words > c->room) {
+        size_t room = words > 8192 ? words : 8192;
+        px_chunk *fresh = NULL;
+        if (px_spare != NULL && px_spare->room >= room) {
+            fresh = px_spare;
+            px_spare = NULL;
+        } else {
+            fresh = (px_chunk *)PyMem_Malloc(sizeof(px_chunk) + room * 8);
+            if (fresh == NULL) {
+                return NULL;
+            }
+            fresh->room = room;
+        }
+        fresh->used = 0;
+        fresh->next = x->chunks;
+        x->chunks = fresh;
+        c = fresh;
+    }
+    int64_t *found = c->words + c->used;
+    c->used += words;
+    memset(found, 0, words * 8);
+    return found;
+}
+
+static int px_made(ppy_cross *x, int8_t *handle) {
+    if (x->made_count == x->made_room) {
+        Py_ssize_t room = x->made_room * 2;
+        int8_t **grown = (int8_t **)PyMem_Malloc((size_t)room * sizeof(int8_t *));
+        if (grown == NULL) {
+            return -1;
+        }
+        memcpy(grown, x->made, (size_t)x->made_count * sizeof(int8_t *));
+        if (x->made != x->made0) {
+            PyMem_Free(x->made);
+        }
+        x->made = grown;
+        x->made_room = room;
+    }
+    x->made[x->made_count++] = handle;
+    return 0;
+}
+
+static int px_arena_handle(const int8_t *handle) {
+    return handle != NULL && ((const int64_t *)handle)[19] == PX_ARENA;
+}
+
+/* A borrowed string: the bytes of `o`, an exact `str`, held for the call.
+   0 done, -1 refused (a lone surrogate has no UTF-8), -2 out of memory. */
+static int px_borrow_text(ppy_cross *x, PyObject *o, int64_t *word) {
+    Py_ssize_t size = 0;
+    const char *data;
+    int ascii = PyUnicode_IS_ASCII(o);
+    if (ascii) {
+        data = (const char *)PyUnicode_DATA(o);
+        size = PyUnicode_GET_LENGTH(o);
+    } else {
+        data = PyUnicode_AsUTF8AndSize(o, &size);
+        if (data == NULL) {
+            PyErr_Clear();
+            return -1;
+        }
+    }
+    int64_t *h = px_alloc(x, 25);
+    if (h == NULL || px_made(x, (int8_t *)h) < 0) {
+        PyErr_NoMemory();
+        return -2;
+    }
+    h[0] = (int64_t)size;
+    h[1] = (int64_t)size / 8 + 1;
+    h[2] = (int64_t)(intptr_t)data;
+    h[3] = (int64_t)PyUnicode_GET_LENGTH(o);
+    h[5] = ascii;
+    h[6] = 2;
+    h[8] = 1;
+    h[11] = PX_IMMORTAL + 1;
+    h[12] = 4;
+    h[15] = 1;
+    h[19] = PX_ARENA;
+    Py_INCREF(o);
+    h[22] = (int64_t)(intptr_t)o;
+    *word = (int64_t)(intptr_t)h;
+    return 0;
+}
+
+/* A list of `n` elements, `words` each, laid out in the call's block. */
+static int8_t *px_arena_list(ppy_cross *x, Py_ssize_t n, int64_t words, int64_t floats,
+                             int64_t handles) {
+    int64_t w = words > 0 ? words : 1;
+    int64_t *h = px_alloc(x, (size_t)(26 + 2 * w));
+    int64_t room = n > 0 ? (int64_t)n : 1;
+    int64_t *records = h != NULL ? px_alloc(x, (size_t)(room * w)) : NULL;
+    if (records == NULL || px_made(x, (int8_t *)h) < 0) {
+        return NULL;
+    }
+    int64_t leaves = (int64_t)((uint64_t)handles >> 32);
+    h[0] = (int64_t)n;
+    h[1] = room;
+    h[2] = (int64_t)(intptr_t)records;
+    h[8] = words;
+    h[9] = floats;
+    h[10] = handles & 0xFFFFFFFF;
+    h[11] = PX_IMMORTAL + 1;
+    h[13] = (int64_t)((uint64_t)leaves << 48);
+    h[14] = (int64_t)(intptr_t)(h + 26);
+    h[15] = words;
+    h[19] = PX_ARENA;
+    return (int8_t *)h;
+}
+
+/* The call's blocks given back, or kept for good where `keep`. */
+static void px_chunks_done(ppy_cross *x, int keep) {
+    px_chunk *c = x->chunks;
+    x->chunks = NULL;
+    while (c != NULL) {
+        px_chunk *next = c->next;
+        if (keep) {
+            c->next = px_kept_chunks;
+            px_kept_chunks = c;
+        } else if (px_spare == NULL || px_spare->room < c->room) {
+            if (px_spare != NULL) {
+                PyMem_Free(px_spare);
+            }
+            px_spare = c;
+        } else {
+            PyMem_Free(c);
+        }
+        c = next;
+    }
+}
+
+/* Let go of the arena handles' objects and blocks; a call that did not
+   answer leaves nothing that outlives it. */
+static void px_close(ppy_cross *x) {
+    for (Py_ssize_t i = 0; i < x->made_count; i++) {
+        int64_t *h = (int64_t *)x->made[i];
+        if (h[12] == 4 && h[22] != 0) {
+            Py_DECREF((PyObject *)(intptr_t)h[22]);
+        }
+    }
+    x->made_count = 0;
+    if (x->made != x->made0) {
+        PyMem_Free(x->made);
+        x->made = x->made0;
+    }
+    px_chunks_done(x, 0);
+}
+
+/* `result`, once the arena is given back. */
+static PyObject *ppy_closed(PyObject *result, ppy_cross *x) {
+    px_close(x);
+    return result;
+}
+
+/* Once the call's own references are let go of: each arena list no one
+   holds lets go of what it holds, as its release would; one still held is
+   one the call kept, and so is all it holds (`escaped`). The lists come in
+   the order they were made, a list before what it holds. */
+static void px_settle(ppy_cross *x) {
+    for (Py_ssize_t i = 0; i < x->made_count; i++) {
+        int64_t *h = (int64_t *)x->made[i];
+        if (h[11] > PX_IMMORTAL) {
+            x->escaped = 1;
+            continue;
+        }
+        if (h[12] != 0 || h[10] == 0) {
+            continue;
+        }
+        int64_t *records = (int64_t *)(intptr_t)h[2];
+        for (int64_t at = 0; at < h[0]; at++) {
+            int64_t *value = records + at * h[15];
+            for (int64_t w = 0; w < h[8]; w++) {
+                if (((h[10] >> w) & 1) && value[w] != 0) {
+                    int8_t *child = (int8_t *)(intptr_t)value[w];
+                    value[w] = 0;
+                    if (px_arena_handle(child)) {
+                        ((int64_t *)child)[11]--;
+                    } else {
+                        ppy_rt.release(child);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* After a call that answered: the arena given back, or, where a handle
+   escaped, kept for good. */
+static void px_keep(ppy_cross *x) {
+    int escaped = x->escaped;
+    if (!escaped) {
+        px_close(x);
+        return;
+    }
+    /* Something kept a handle past the call: every one keeps its memory. */
+    for (Py_ssize_t i = 0; i < x->made_count; i++) {
+        int64_t *h = (int64_t *)x->made[i];
+        if (h[12] == 4) {
+            char *bytes = (char *)malloc((size_t)h[0] + 1);
+            if (bytes == NULL) {
+                Py_FatalError("out of memory keeping a string native code kept");
+            }
+            memcpy(bytes, (const void *)(intptr_t)h[2], (size_t)h[0] + 1);
+            h[2] = (int64_t)(intptr_t)bytes;
+            h[6] = 0;
+            Py_DECREF((PyObject *)(intptr_t)h[22]);
+            h[22] = 0;
+        } else {
+            size_t size = (size_t)(h[1] * (h[15] > 0 ? h[15] : 1)) * 8;
+            void *records = malloc(size);
+            if (records == NULL) {
+                Py_FatalError("out of memory keeping a list native code kept");
+            }
+            memcpy(records, (const void *)(intptr_t)h[2], size);
+            h[2] = (int64_t)(intptr_t)records;
+        }
+        h[19] = 0;
+    }
+    x->made_count = 0;
+    if (x->made != x->made0) {
+        PyMem_Free(x->made);
+        x->made = x->made0;
+    }
+    px_chunks_done(x, 1);
 }
 
 static size_t px_hash(const void *pointer, Py_ssize_t slots) {
@@ -527,6 +802,9 @@ static int px_word(ppy_cross *x, PyObject *o, const ppy_xs *s, int64_t *words) {
         if (!PyUnicode_CheckExact(o)) {
             return -1;
         }
+        if (x->readonly) {
+            return px_borrow_text(x, o, words);
+        }
         Py_ssize_t size = 0;
         const char *data = PyUnicode_AsUTF8AndSize(o, &size);
         if (data == NULL) {
@@ -579,6 +857,30 @@ static int px_fill(ppy_cross *x, int8_t *handle, PyObject *o, const ppy_xs *s) {
            sequence's, let go of with it if the rest is refused. */
         Py_ssize_t n = PyList_GET_SIZE(o);
         int64_t *records = (int64_t *)(intptr_t)((int64_t *)handle)[2];
+        if (v->kind == PX_BOOL) {
+            PyObject **items = ((PyListObject *)o)->ob_item;
+            for (Py_ssize_t i = 0; i < n; i++) {
+                PyObject *item = items[i];
+                if (item != Py_True && item != Py_False) {
+                    return -1;
+                }
+                records[i] = item == Py_True;
+            }
+            return 0;
+        }
+        if (v->kind == PX_STR && x->readonly) {
+            PyObject **items = ((PyListObject *)o)->ob_item;
+            for (Py_ssize_t i = 0; i < n; i++) {
+                if (!PyUnicode_CheckExact(items[i])) {
+                    return -1;
+                }
+                int done = px_borrow_text(x, items[i], records + i);
+                if (done != 0) {
+                    return done;
+                }
+            }
+            return 0;
+        }
         if (v->kind == PX_INT || v->kind == PX_FLOAT) {
             /* Numbers, the common case, checked and copied in one loop. */
             char kind = v->kind == PX_INT ? 'i' : 'f';
@@ -775,6 +1077,20 @@ static int px_in(ppy_cross *x, PyObject *o, const ppy_xs *s, int8_t **out) {
     int64_t words = v != NULL ? px_words(v) : 0;
     int64_t floats = v != NULL ? px_floats(v) : 0;
     int64_t handles = v != NULL ? px_handles(v) : 0;
+    if (x->readonly && s->kind == PX_LIST) {
+        /* Laid out in the call's block: nothing to let go of but its elements. */
+        int8_t *made = px_arena_list(x, PyList_GET_SIZE(o), words, floats, handles);
+        if (made == NULL || px_add(x, o, made, s, 1) < 0) {
+            PyErr_NoMemory();
+            return -2;
+        }
+        int done = px_fill(x, made, o, s);
+        if (done != 0) {
+            return done;
+        }
+        *out = made;
+        return 0;
+    }
     int8_t *handle = s->kind == PX_LIST
                          ? ppy_rt.seq_new((int64_t)PyList_GET_SIZE(o), words, floats, handles)
                          : ppy_rt.map_new(px_words(s->key), words, floats, handles);
@@ -889,6 +1205,9 @@ static int px_holds(ppy_cross *x, PyObject *old, const int64_t *words, const ppy
             return 0;
         }
         const int64_t *header = (const int64_t *)(intptr_t)words[0];
+        if (header[19] == PX_ARENA && (PyObject *)(intptr_t)header[22] == old) {
+            return 1;
+        }
         Py_ssize_t size = 0;
         const char *data = PyUnicode_AsUTF8AndSize(old, &size);
         if (data == NULL) {
@@ -955,6 +1274,10 @@ static PyObject *px_value(ppy_cross *x, const int64_t *words, const ppy_xs *s, i
         return px_record_out(x, words, s);
     case PX_STR: {
         const int64_t *header = (const int64_t *)(intptr_t)words[0];
+        if (header[19] == PX_ARENA && header[22] != 0) {
+            /* A borrowed string goes back as the string it is. */
+            return Py_NewRef((PyObject *)(intptr_t)header[22]);
+        }
         return PyUnicode_DecodeUTF8((const char *)(intptr_t)header[2], (Py_ssize_t)header[0],
                                     NULL);
     }

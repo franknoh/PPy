@@ -658,16 +658,24 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     # container that came in copied back after a call that writes, and the
     # handles the call held let go of on every way out, before a sweep.
     end = "    px_end(&ppy_x);\n" if crossing else ""
+    # The arena of a call that writes through no parameter (`crossing.c`):
+    # given back once nothing can read it any more, the last thing before
+    # each way out; an answered call keeps what escaped it.
+    close = "    px_close(&ppy_x);\n" if crossing else ""
+    keep = "    px_keep(&ppy_x);\n" if crossing else ""
+    readonly = int(copied is not None and _reads_only(signature, copied))
     sync = ""
     if crossing and any(p.is_handle and p.written for p in signature.parameters):
         sync = (
-            "    if (px_sync(&ppy_x) < 0) {\n        px_end(&ppy_x);\n        return NULL;\n    }\n"
+            "    if (px_sync(&ppy_x) < 0) {\n        px_end(&ppy_x);\n        px_close(&ppy_x);\n"
+            "        return NULL;\n    }\n"
         )
     if crossing:
         # Every variable is declared before the first jump to the cleanup.
         declarations = "    ppy_cross ppy_x;\n" + declarations
         body = (
-            f"    px_begin(&ppy_x, {classes});\n    if (!ppy_rt_ready) goto ppy_fallback;\n"
+            f"    px_begin(&ppy_x, {classes}, {readonly});\n"
+            "    if (!ppy_rt_ready) goto ppy_fallback;\n"
             + (f"    if (!px_resolve({classes})) goto ppy_fallback;\n" if classes != "NULL" else "")
             + body
         )
@@ -690,12 +698,13 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     held = managed and signature.effects
     qualname = signature.qualname
     enter = leave = ""
-    sanitized = f'{end}        return ppy_sanitizer_failed(status, "{qualname}");\n'
+    sanitized = f'{end}{close}        return ppy_sanitizer_failed(status, "{qualname}");\n'
     failed = (
         f"{end}        if (status == -1) {{\n            ppy_raised((void *)chosen);\n        }}\n"
+        f"{close}"
         f"        return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);\n"
     )
-    answered = f"{sync}    PyObject *ppy_result = {boxed};\n{end}    return ppy_result;\n"
+    answered = f"{sync}    PyObject *ppy_result = {boxed};\n{end}{keep}    return ppy_result;\n"
     if held:
         # Output held while the call runs: written out once it answers,
         # dropped where it falls back, and a call that raised after a
@@ -704,21 +713,27 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         enter = "    int64_t ppy_outer = ppy_io.enter();\n"
         leave = "    int64_t ppy_crossed = ppy_io.leave(ppy_outer);\n"
         sanitized = (
-            f"{end}        ppy_io.discard();\n        ppy_io_settle();\n"
+            f"{end}{close}        ppy_io.discard();\n        ppy_io_settle();\n"
             f'        return ppy_sanitizer_failed(status, "{qualname}");\n'
         )
+        crossed = f'ppy_io_crossed(status, "{qualname}")'
+        if crossing:
+            crossed = (
+                f'ppy_closed(ppy_io_crossed(status, "{qualname}"), &ppy_x)'
+            )
         failed = (
             f"{end}        if (ppy_crossed) {{\n"
-            f'            return ppy_io_crossed(status, "{qualname}");\n        }}\n'
+            f"            return {crossed};\n        }}\n"
             "        ppy_io.discard();\n"
             "        if (status == -1) {\n            ppy_raised((void *)chosen);\n        }\n"
+            f"{close}"
             "        ppy_io_settle();\n"
             f"        return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);\n"
         )
         synced = sync.replace("return NULL;", "return ppy_io_commit_result(NULL);")
         answered = (
             f"{synced}    PyObject *ppy_result = {boxed};\n"
-            f"{end}    return ppy_io_commit_result(ppy_result);\n"
+            f"{end}    ppy_result = ppy_io_commit_result(ppy_result);\n{keep}    return ppy_result;\n"
         )
     return f"""
 /* {signature.qualname}: {signature} */
@@ -842,9 +857,26 @@ ppy_bound_call:;
 {answered}
 ppy_fallback:
 {cleanup}
-{end}    return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);
+{end}{close}    return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);
 }}
 """
+
+
+def _reads_only(signature: NativeSignature, crossing: _Crossing) -> bool:
+    """Whether a call's containers may be laid out in its arena (`crossing.c`):
+    it writes through no parameter, and none holds an object, whose fields
+    `getattr` reads and which may be in a cycle with what holds it."""
+
+    def plain(spec: Spec | None) -> bool:
+        if spec is None:
+            return True
+        if spec.kind in {"object", "record"}:
+            return False
+        return plain(spec.key) and plain(spec.value)
+
+    if any(p.is_handle and p.written for p in signature.parameters):
+        return False
+    return all(plain(spec) for tag, spec in crossing.specs.items() if tag != "r")
 
 
 def _type_assignments(index: int, object_params: list[NativeParam]) -> str:
