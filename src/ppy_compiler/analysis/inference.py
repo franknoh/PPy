@@ -201,8 +201,13 @@ def modules_with_unannotated_fields(symbols) -> set[str]:  # type: ignore[no-unt
             continue
         for method in info.methods.values():
             for node in method.nodes:
-                if isinstance(node, ast.Assign) and len(node.targets) == 1:
-                    for target, _value in _field_assignments(node.targets[0], node.value):
+                if isinstance(node, ast.Assign):
+                    pairs = [
+                        pair
+                        for each in node.targets
+                        for pair in _field_assignments(each, node.value)
+                    ]
+                    for target, _value in pairs:
                         if (
                             is_self_attribute(target, method) and target.attr not in info.fields  # type: ignore[union-attr]
                         ):
@@ -237,27 +242,31 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
         seen: dict[str, T.Type] = {}
         for method in methods:
             for node in method.nodes:
-                if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                if not isinstance(node, ast.Assign):
                     continue
-                for target, value in _field_assignments(node.targets[0], node.value):
+                # `self.left = self.right = self` assigns each target the value.
+                pairs = [
+                    pair for each in node.targets for pair in _field_assignments(each, node.value)
+                ]
+                for target, value in pairs:
                     if not is_self_attribute(target, method):
                         continue
                     assigned = T.strip_literal(module_analysis.type_of(value))
                     if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
                         continue
                     name = target.attr  # type: ignore[union-attr]
-                    seen[name] = assigned if name not in seen else T.join(seen[name], assigned)
+                    seen[name] = assigned if name not in seen else _merge(seen[name], assigned)
         for name, assigned in outside.get(info.qualname, {}).items():
             if name in info.annotated_fields:
                 continue
-            seen[name] = assigned if name not in seen else T.join(seen[name], assigned)
+            seen[name] = assigned if name not in seen else _merge(seen[name], assigned)
         for name, assigned in seen.items():
             current = info.fields.get(name, T.UNKNOWN)
             if name in info.declared_fields:
                 # A field the class body annotated is what its author said.
                 continue
             joined = _by_bases(
-                assigned if isinstance(current, T.UnknownType) else T.join(current, assigned)
+                assigned if isinstance(current, T.UnknownType) else _merge(current, assigned)
             )
             if joined != current:
                 info.fields[name] = joined
@@ -306,7 +315,7 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
         if isinstance(value, (T.UnknownType, T.AnyType, T.NeverType)) or _unknown_inside(value):
             return
         fields = found.setdefault(owner, {})
-        fields[attr] = _by_bases(value if attr not in fields else T.join(fields[attr], value))
+        fields[attr] = _by_bases(value if attr not in fields else _merge(fields[attr], value))
 
     analysis = None
 
@@ -341,8 +350,10 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
         if module_symbols is None:
             continue
         for node in module_symbols.module.nodes:
-            if isinstance(node, ast.Assign) and len(node.targets) == 1:
-                pairs = _field_assignments(node.targets[0], node.value)
+            if isinstance(node, ast.Assign):
+                pairs = [
+                    pair for each in node.targets for pair in _field_assignments(each, node.value)
+                ]
             elif isinstance(node, ast.AnnAssign) and node.value is not None:
                 pairs = [(node.target, node.value)]
             else:
@@ -409,6 +420,46 @@ def _by_bases(t: T.Type) -> T.Type:
         if not (isinstance(m, T.Instance) and any(b in names for b in m.mro[1:] if b != m.name))
     ]
     return T.union(*kept) if len(kept) != len(t.members) else t
+
+
+def _merge(seen: T.Type, more: T.Type) -> T.Type:
+    """Two values stored into one field, as one type. Where one is the other
+    with parts the checker could not tell (`list[<unknown>]` beside
+    `list[list[int]]`), the told one is the evidence: the untold part says
+    nothing against it, and the boundary checks what crosses."""
+    if _told(seen, more):
+        return seen
+    if _told(more, seen):
+        return more
+    return T.join(seen, more)
+
+
+def _told(known: T.Type, partial: T.Type) -> bool:
+    """Whether `known` is `partial` with its unknown parts told."""
+    known, partial = T.strip_literal(known), T.strip_literal(partial)
+    if isinstance(partial, (T.UnknownType, T.AnyType)):
+        return not _unknown_inside(known)
+    if isinstance(known, T.Instance) and isinstance(partial, T.Instance):
+        return (
+            known.name == partial.name
+            and len(known.args) == len(partial.args)
+            and all(
+                mine == theirs or isinstance(theirs, T.NeverType) or _told(mine, theirs)
+                for mine, theirs in zip(known.args, partial.args, strict=True)
+            )
+            and known != partial
+        )
+    if isinstance(known, T.Tuple_) and isinstance(partial, T.Tuple_):
+        return (
+            known.homogeneous == partial.homogeneous
+            and len(known.items) == len(partial.items)
+            and all(
+                mine == theirs or _told(mine, theirs)
+                for mine, theirs in zip(known.items, partial.items, strict=True)
+            )
+            and known != partial
+        )
+    return False
 
 
 def _never_inside(t: T.Type) -> bool:
