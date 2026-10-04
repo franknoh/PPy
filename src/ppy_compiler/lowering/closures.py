@@ -34,9 +34,9 @@ from ..analysis.closures import (
     shared_with_closures,
 )
 from ..backend.llvm.lowering import Unsupported, _scalar_name
-from .calls import _only_called
 from ..ir import I64, PtrType, Successor, Value
 from ..ir.dialects import core
+from .calls import _only_called
 from .collections import HANDLE, Held, Kind, Shape, shape_of
 
 __all__ = ["ClosureLowering"]

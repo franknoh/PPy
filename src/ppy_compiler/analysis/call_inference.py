@@ -194,9 +194,7 @@ class CallSiteInference:
         self.candidates = self._candidates()
         #: Families whose inference made the checker report an error.
         self.retracted: set[str] = set()
-        self._doctests: list[tuple[str, ast.Call, _Target, dict[str, T.Type], object]] | None = (
-            None
-        )
+        self._doctests: list[tuple[str, ast.Call, _Target, dict[str, T.Type], object]] | None = None
         self._parametrized: dict[tuple[str, int], _Evidence] | None = None
         self._argparse: dict[int, T.Type] | None = None
         self._constants: dict[str, dict[str, T.Type]] | None = None
@@ -430,13 +428,19 @@ class CallSiteInference:
 
         stored: set[int] = set()
         # A module that binds `max` or `min` itself calls its own.
-        shadowed = {
-            n.id
-            for n in module.module.nodes
-            if isinstance(n, ast.Name) and not isinstance(n.ctx, ast.Load)
-        } | {
-            n.name for n in module.module.nodes if isinstance(n, (ast.FunctionDef, ast.ClassDef))
-        } | set(getattr(module, "imports", {}))
+        shadowed = (
+            {
+                n.id
+                for n in module.module.nodes
+                if isinstance(n, ast.Name) and not isinstance(n.ctx, ast.Load)
+            }
+            | {
+                n.name
+                for n in module.module.nodes
+                if isinstance(n, (ast.FunctionDef, ast.ClassDef))
+            }
+            | set(getattr(module, "imports", {}))
+        )
         for node in module.module.nodes:
             if isinstance(node, ast.BinOp) and type(node.op) in _BINARY:
                 forward, reflected = _BINARY[type(node.op)]
@@ -477,9 +481,13 @@ class CallSiteInference:
             ):
                 # `max(a, b)` asks `b > a`: `b.__gt__(a)`, or `a.__lt__(b)`;
                 # `min(a, b)` asks `b < a`. Any earlier one may be the best.
-                forward, reflected = ("__gt__", "__lt__") if node.func.id == "max" else (
-                    "__lt__",
-                    "__gt__",
+                forward, reflected = (
+                    ("__gt__", "__lt__")
+                    if node.func.id == "max"
+                    else (
+                        "__lt__",
+                        "__gt__",
+                    )
                 )
                 for at, later in enumerate(node.args[1:], start=1):
                     for best in node.args[:at]:
