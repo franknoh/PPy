@@ -935,6 +935,8 @@ class _Checker:
         #: Parameters handed to a callee that writes through what it is given.
         self._delegated: set[str] = set()
         self._foreign_writes = False
+        #: The project's classes as this module calls them (`_constructor_calls`).
+        self._constructors: frozenset[str] | None = None
         #: Settled globals the body reads, and whether it read any other.
         self._settled_reads: dict[str, T.Type] = {}
         self._unsettled_global = False
@@ -3056,9 +3058,8 @@ class _Checker:
     def _constructor_calls(self) -> frozenset[str]:
         """The project's classes, spelled as this module calls them: each call
         of one makes a new object."""
-        cached = getattr(self, "_constructors", None)
-        if cached is not None:
-            return cached  # type: ignore[no-any-return]
+        if self._constructors is not None:
+            return self._constructors
         spelled = {info.name for info in self.symbols.classes.values()}
         for local, binding in self.symbols.imports.items():
             if binding.canonical in self.project.classes:
