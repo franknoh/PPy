@@ -141,34 +141,34 @@ native filesystem.
 **`python  buffers_and_jit.ppy`**
 
 ```text
-list[float] copied        103.743 us   
-Buffer[float] borrowed    174.309 us   0.60x, same sum: True
-dot, strict order         261.275 us   
-dot, @ppy.fastmath        260.866 us   1.00x, differs by 0.00e+00
-digest, generic           267.616 us   
-digest, @ppy.jit          264.037 us   1.01x, same: True
+list[float] copied        101.722 us   
+Buffer[float] borrowed    158.351 us   0.64x, same sum: True
+dot, strict order         261.382 us   
+dot, @ppy.fastmath        269.680 us   0.97x, differs by 0.00e+00
+digest, generic           262.025 us   
+digest, @ppy.jit          265.819 us   0.99x, same: True
 ```
 
 **`ppy     buffers_and_jit.ppy`**
 
 ```text
-list[float] copied        103.171 us   
-Buffer[float] borrowed    160.804 us   0.64x, same sum: True
-dot, strict order         262.343 us   
-dot, @ppy.fastmath        260.466 us   1.01x, differs by 0.00e+00
-digest, generic           273.349 us   
-digest, @ppy.jit          267.708 us   1.02x, same: True
+list[float] copied        102.489 us   
+Buffer[float] borrowed    158.478 us   0.65x, same sum: True
+dot, strict order         256.616 us   
+dot, @ppy.fastmath        257.552 us   1.00x, differs by 0.00e+00
+digest, generic           267.159 us   
+digest, @ppy.jit          266.705 us   1.00x, same: True
 ```
 
 **`ppy run buffers_and_jit.ppy`**
 
 ```text
-list[float] copied         11.610 us   
-Buffer[float] borrowed      4.061 us   2.86x, same sum: True
-dot, strict order           3.925 us   
-dot, @ppy.fastmath          0.972 us   4.04x, differs by 4.07e-10
-digest, generic            11.917 us   
-digest, @ppy.jit            7.818 us   1.52x, same: True
+list[float] copied         11.868 us   
+Buffer[float] borrowed      3.825 us   3.10x, same sum: True
+dot, strict order           3.848 us   
+dot, @ppy.fastmath          0.830 us   4.63x, differs by 4.07e-10
+digest, generic            11.500 us   
+digest, @ppy.jit            8.226 us   1.40x, same: True
 ```
 
 <!-- outputs:end -->

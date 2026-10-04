@@ -125,12 +125,183 @@ Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 **`ppy emit ir generic.ppy`**
 
 <details markdown="1">
-<summary>102 lines</summary>
+<summary>273 lines</summary>
 
 ```text
 ppyir 1
 module @generic
 dialect core 1
+attrs {ppy.libraries = ["ppy_collections"]}
+
+private global @ppy.str.0 : buffer<u8> = "("
+private global @ppy.str.1 : buffer<u8> = ", "
+private global @ppy.str.2 : buffer<u8> = ")"
+
+func @generic_Point___init__(%self: ptr<i8>, %x: i64, %y: i64) -> () attrs {effects = ["write_memory", "write_object"], ppy.abi = "ppy", ppy.qualname = "generic.Point.__init__", ppy.releases_gil = false, ppy.symbol = "ppy_generic_Point___init__"} loc("examples/40_generics/generic.ppy":9:4) {
+^entry:
+    %self_addr = core.alloca {ppy.owns = true} : ptr<ptr<i8>, stack> loc("examples/40_generics/generic.ppy":9:4)
+    core.store %self, %self_addr
+    core.call_extern %self {abi = "c", callee = "ppy_coll_retain"}
+    %x_addr = core.alloca : ptr<i64, stack>
+    core.store %x, %x_addr
+    %y_addr = core.alloca : ptr<i64, stack>
+    core.store %y, %y_addr
+    %0 = core.load %self_addr : ptr<i8> loc("examples/40_generics/generic.ppy":10:8)
+    %1 = core.cast %0 : i64
+    %2 = core.const 0 : i64
+    %3 = core.cmp.ne %1, %2 : bool
+    core.guard %3 {kind = "bounds", message = "`None` has no attribute `x`", raises = "AttributeError: 'NoneType' object has no attribute 'x'"}
+    %4 = core.cast %0 {ppy.reads = true} : ptr<i64>
+    %5 = core.const 3 : i64
+    %6 = core.ptr_offset %4, %5 : ptr<i64>
+    %7 = core.load %6 : i64
+    %8 = core.cast %0 {ppy.reads = true} : ptr<i64>
+    %9 = core.const 1 : i64
+    %10 = core.ptr_offset %8, %9 : ptr<i64>
+    %11 = core.load %10 : i64
+    %12 = core.cast %0 {ppy.reads = true} : ptr<i64>
+    %13 = core.const 15 : i64
+    %14 = core.ptr_offset %12, %13 : ptr<i64>
+    %15 = core.load %14 : i64
+    %16 = core.cast %0 {ppy.reads = true} : ptr<ptr<i64>>
+    %17 = core.const 2 : i64
+    %18 = core.ptr_offset %16, %17 : ptr<ptr<i64>>
+    %19 = core.load %18 : ptr<i64>
+    %20 = core.cmp.ge %7, %11 : bool
+    %21 = core.sub %7, %11 {overflow = "wrap"} : i64
+    %22 = core.select %20, %21, %7 : i64
+    %23 = core.mul %22, %15 {overflow = "wrap"} : i64
+    %24 = core.ptr_offset %19, %23 : ptr<i64>
+    %25 = core.cast %24 : ptr<i8>
+    %26 = core.load %x_addr : i64
+    %x_entry = core.load %x_addr : i64
+    %27 = core.cast %25 : ptr<i64>
+    core.store %26, %27
+    %28 = core.load %self_addr : ptr<i8> loc("examples/40_generics/generic.ppy":11:8)
+    %29 = core.cast %28 : i64
+    %30 = core.const 0 : i64
+    %31 = core.cmp.ne %29, %30 : bool
+    core.guard %31 {kind = "bounds", message = "`None` has no attribute `y`", raises = "AttributeError: 'NoneType' object has no attribute 'y'"}
+    %32 = core.cast %28 {ppy.reads = true} : ptr<i64>
+    %33 = core.const 3 : i64
+    %34 = core.ptr_offset %32, %33 : ptr<i64>
+    %35 = core.load %34 : i64
+    %36 = core.cast %28 {ppy.reads = true} : ptr<i64>
+    %37 = core.const 1 : i64
+    %38 = core.ptr_offset %36, %37 : ptr<i64>
+    %39 = core.load %38 : i64
+    %40 = core.cast %28 {ppy.reads = true} : ptr<i64>
+    %41 = core.const 15 : i64
+    %42 = core.ptr_offset %40, %41 : ptr<i64>
+    %43 = core.load %42 : i64
+    %44 = core.cast %28 {ppy.reads = true} : ptr<ptr<i64>>
+    %45 = core.const 2 : i64
+    %46 = core.ptr_offset %44, %45 : ptr<ptr<i64>>
+    %47 = core.load %46 : ptr<i64>
+    %48 = core.cmp.ge %35, %39 : bool
+    %49 = core.sub %35, %39 {overflow = "wrap"} : i64
+    %50 = core.select %48, %49, %35 : i64
+    %51 = core.mul %50, %43 {overflow = "wrap"} : i64
+    %52 = core.ptr_offset %47, %51 : ptr<i64>
+    %53 = core.cast %52 : ptr<i8>
+    %54 = core.cast %53 : ptr<i64>
+    %55 = core.const 1 : i64
+    %56 = core.ptr_offset %54, %55 : ptr<i64>
+    %57 = core.cast %56 : ptr<i8>
+    %58 = core.load %y_addr : i64
+    %y_entry = core.load %y_addr : i64
+    %59 = core.cast %57 : ptr<i64>
+    core.store %58, %59
+    %60 = core.load %self_addr : ptr<i8>
+    core.call_extern %60 {abi = "c", callee = "ppy_coll_release"}
+    core.ret
+}
+
+func @generic_Point_name(%self: ptr<i8>) -> ptr<i8> attrs {effects = ["alloc", "read_object"], ppy.abi = "ppy", ppy.qualname = "generic.Point.name", ppy.releases_gil = false, ppy.symbol = "ppy_generic_Point_name"} loc("examples/40_generics/generic.ppy":13:4) {
+^entry:
+    %self_addr = core.alloca {ppy.owns = true} : ptr<ptr<i8>, stack> loc("examples/40_generics/generic.ppy":13:4)
+    core.store %self, %self_addr
+    core.call_extern %self {abi = "c", callee = "ppy_coll_retain"}
+    %0 = core.const 0 : i64 loc("examples/40_generics/generic.ppy":14:8)
+    %1 = core.call_extern %0 {abi = "c", callee = "ppy_str_builder"} : ptr<i8>
+    %2 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.0"} : ptr<u8>
+    %3 = core.const 1 : i64
+    core.call_extern %1, %2, %3 {abi = "c", callee = "ppy_str_add_bytes"}
+    %4 = core.load %self_addr : ptr<i8>
+    %5 = core.cast %4 : i64
+    %6 = core.const 0 : i64
+    %7 = core.cmp.ne %5, %6 : bool
+    core.guard %7 {kind = "bounds", message = "`None` has no attribute `x`", raises = "AttributeError: 'NoneType' object has no attribute 'x'"}
+    %8 = core.cast %4 {ppy.reads = true} : ptr<i64>
+    %9 = core.const 3 : i64
+    %10 = core.ptr_offset %8, %9 : ptr<i64>
+    %11 = core.load %10 : i64
+    %12 = core.cast %4 {ppy.reads = true} : ptr<i64>
+    %13 = core.const 1 : i64
+    %14 = core.ptr_offset %12, %13 : ptr<i64>
+    %15 = core.load %14 : i64
+    %16 = core.cast %4 {ppy.reads = true} : ptr<i64>
+    %17 = core.const 15 : i64
+    %18 = core.ptr_offset %16, %17 : ptr<i64>
+    %19 = core.load %18 : i64
+    %20 = core.cast %4 {ppy.reads = true} : ptr<ptr<i64>>
+    %21 = core.const 2 : i64
+    %22 = core.ptr_offset %20, %21 : ptr<ptr<i64>>
+    %23 = core.load %22 : ptr<i64>
+    %24 = core.cmp.ge %11, %15 : bool
+    %25 = core.sub %11, %15 {overflow = "wrap"} : i64
+    %26 = core.select %24, %25, %11 : i64
+    %27 = core.mul %26, %19 {overflow = "wrap"} : i64
+    %28 = core.ptr_offset %23, %27 : ptr<i64>
+    %29 = core.cast %28 : ptr<i8>
+    %30 = core.cast %29 : ptr<i64>
+    %31 = core.load %30 : i64
+    core.call_extern %1, %31 {abi = "c", callee = "ppy_str_add_int"}
+    %32 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.1"} : ptr<u8>
+    %33 = core.const 2 : i64
+    core.call_extern %1, %32, %33 {abi = "c", callee = "ppy_str_add_bytes"}
+    %34 = core.load %self_addr : ptr<i8>
+    %35 = core.cast %34 : i64
+    %36 = core.const 0 : i64
+    %37 = core.cmp.ne %35, %36 : bool
+    core.guard %37 {kind = "bounds", message = "`None` has no attribute `y`", raises = "AttributeError: 'NoneType' object has no attribute 'y'"}
+    %38 = core.cast %34 {ppy.reads = true} : ptr<i64>
+    %39 = core.const 3 : i64
+    %40 = core.ptr_offset %38, %39 : ptr<i64>
+    %41 = core.load %40 : i64
+    %42 = core.cast %34 {ppy.reads = true} : ptr<i64>
+    %43 = core.const 1 : i64
+    %44 = core.ptr_offset %42, %43 : ptr<i64>
+    %45 = core.load %44 : i64
+    %46 = core.cast %34 {ppy.reads = true} : ptr<i64>
+    %47 = core.const 15 : i64
+    %48 = core.ptr_offset %46, %47 : ptr<i64>
+    %49 = core.load %48 : i64
+    %50 = core.cast %34 {ppy.reads = true} : ptr<ptr<i64>>
+    %51 = core.const 2 : i64
+    %52 = core.ptr_offset %50, %51 : ptr<ptr<i64>>
+    %53 = core.load %52 : ptr<i64>
+    %54 = core.cmp.ge %41, %45 : bool
+    %55 = core.sub %41, %45 {overflow = "wrap"} : i64
+    %56 = core.select %54, %55, %41 : i64
+    %57 = core.mul %56, %49 {overflow = "wrap"} : i64
+    %58 = core.ptr_offset %53, %57 : ptr<i64>
+    %59 = core.cast %58 : ptr<i8>
+    %60 = core.cast %59 : ptr<i64>
+    %61 = core.const 1 : i64
+    %62 = core.ptr_offset %60, %61 : ptr<i64>
+    %63 = core.cast %62 : ptr<i8>
+    %64 = core.cast %63 : ptr<i64>
+    %65 = core.load %64 : i64
+    core.call_extern %1, %65 {abi = "c", callee = "ppy_str_add_int"}
+    %66 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.2"} : ptr<u8>
+    %67 = core.const 1 : i64
+    core.call_extern %1, %66, %67 {abi = "c", callee = "ppy_str_add_bytes"}
+    %68 = core.call_extern %1 {abi = "c", callee = "ppy_str_finish"} : ptr<i8>
+    %69 = core.load %self_addr : ptr<i8>
+    core.call_extern %69 {abi = "c", callee = "ppy_coll_release"}
+    core.ret %68
+}
 
 func @generic_sweep(%n: i64) -> f64 attrs {effects = ["may_raise"], ppy.abi = "ppy", ppy.qualname = "generic.sweep", ppy.releases_gil = true, ppy.symbol = "ppy_generic_sweep"} loc("examples/40_generics/generic.ppy":33:0) {
 ^entry:

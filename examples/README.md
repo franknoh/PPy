@@ -83,6 +83,8 @@ reports the mean and spread. The site collects those sections on one page.
 | `52_unannotated` | a module with no annotations compiled under `strict = false`, its types inferred from calls, defaults, and doctests |
 | `53_caches_and_counters` | `Counter`, `defaultdict`, `random.Random`, and dynamic programs under `cache` and `lru_cache`, in native code |
 | `54_objects_and_grids` | a grid and a list of objects that native code changes in place and Python reads back |
+| `55_linked_structures` | a search tree with parent links and a linked list, fields unannotated, relinked in place by native methods |
+| `56_options_and_doctests` | a script driven by `argparse` options, typed from the options, doctests, `lru_cache`, and operators on a class |
 
 
 A folder of related problems keeps them in numbered subfolders, and every
