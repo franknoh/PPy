@@ -129,7 +129,8 @@ The types are:
 A parameter has to be annotated, or under `--no-strict` inferred from the
 calls the project makes ([Types from call sites](subset.md#types-from-call-sites)).
 `list[Any]`, a bare `list`, and NumPy arrays have no native form, and a
-function that takes one runs as Python. Under `--no-strict`, a local written
+function that takes one runs as Python. Under `--no-strict`, a parameter
+declared as a bare `list` takes the element type its calls agree on, and a local written
 `out: list = []` (or `dict`, `set` with an empty display) is typed as
 `out = []` would be, by what the function puts in it.
 
