@@ -92,11 +92,11 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python trees.ppy` | @@PY55@@ |
-| `ppy run trees.ppy`, after the first run built the cache | @@RUN55@@ |
+| `python trees.ppy` | 0.65 |
+| `ppy run trees.ppy`, after the first run built the cache | 0.30 |
 
-`workload(50_000, 7)` alone, as the program prints it: @@WPY55@@ s under
-CPython and @@WRUN55@@ s under `ppy run`.
+`workload(50_000, 7)` alone, as the program prints it: 0.63 s under
+CPython and 0.27 s under `ppy run`.
 
 There is no standalone build: the program has no `main()`, and a
 standalone binary needs a native `main` to start from.

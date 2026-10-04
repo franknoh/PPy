@@ -136,17 +136,18 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python numbers.ppy` | 7.27 |
+| `python numbers.ppy` | 7.06 |
 | `ppy run numbers.ppy`, after the first run built the cache | 0.50 |
 
-Timed one part at a time inside the program (one run each):
+Timed one part at a time inside the program, in seconds, the mean of five
+runs:
 
 | part | CPython | `ppy run` |
 |---|---:|---:|
-| `count_primes(2_000_000)` | 2.53 | 0.13 |
-| `longest_collatz(1_000_000)` | 4.19 | 0.17 |
+| `count_primes(2_000_000)` | 2.52 | 0.13 |
+| `longest_collatz(1_000_000)` | 4.13 | 0.17 |
 | `harshad_numbers(1_000_000)` | 0.17 | 0.03 |
-| `mean([float(digit_sum(n)) for n in range(1_000_000)])` | 0.21 | 0.11 |
+| `mean([float(digit_sum(n)) for n in range(1_000_000)])` | 0.20 | 0.11 |
 
 The last line's comprehension runs in Python and calls `digit_sum(n)` a
 million times, leaving `base` to its default. The generated wrapper binds

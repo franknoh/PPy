@@ -105,16 +105,16 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python world.ppy` | 2.26 |
-| `ppy run world.ppy`, after the first run built the cache | 0.58 |
+| `python world.ppy` | 2.20 |
+| `ppy run world.ppy`, after the first run built the cache | 0.25 |
 
 Timed inside the program, the mean of five runs:
 
 | part | CPython | `ppy run` |
 |---|---:|---:|
-| five `advance(grid, 40)` calls | 1.43 s | 0.385 s |
-| five `orbit(bodies, 0.0005, 400)` calls | 0.700 s | 0.120 s |
-| one `orbit(bodies, 0.0005, 1)` call, 60 bodies in and out | 353 µs | 73 µs |
+| five `advance(grid, 40)` calls | 1.51 s | 0.177 s |
+| five `orbit(bodies, 0.0005, 400)` calls | 0.685 s | 0.032 s |
+| one `orbit(bodies, 0.0005, 1)` call, 60 bodies in and out | 346 µs | 29 µs |
 
 There is no standalone build: `main` stays in Python, and the point of
 the example is the crossing, which a standalone binary does not have.
