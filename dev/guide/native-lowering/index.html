@@ -4895,8 +4895,20 @@ Python to fall back to and refuses such a function.</p>
   (<code>int</code>, <code>float</code>, <code>bool</code>, <code>str</code>, <code>list</code>, <code>dict</code>, <code>set</code>, <code>tuple</code>,
   <code>type(None)</code>) fold to a constant where the checker's type of <code>x</code> decides
   the answer. An <code>int</code> may be a <code>bool</code> and a <code>float</code> may be an <code>int</code>, so
-  <code>isinstance(n, bool)</code> of an <code>n: int</code> stays in Python. Object classes are
-  tested by the class tag the instance carries.</li>
+  <code>isinstance(n, bool)</code> of an <code>n: int</code> local stays in Python. A parameter of
+  a module-level function that is only called by name and never rebound in
+  its body is the exception: Python's calls reach it only with a real <code>int</code>
+  (the boundary refuses a <code>bool</code>), and a native call that passes a <code>bool</code> to
+  an <code>int</code> parameter whose body shows the difference (prints it, formats
+  it, asks its class, returns it) stays in Python, so <code>isinstance(n, bool)</code>
+  of that parameter is <code>False</code> natively. A <code>float</code> parameter that shows
+  whether it is an <code>int</code> is likewise always a <code>float</code>. A local that every
+  assignment gives a real <code>int</code> (an int literal, <code>len(...)</code>, <code>int(...)</code>, or
+  arithmetic other than <code>&amp;</code>, <code>|</code>, <code>^</code> on ints and bools) or a real <code>float</code>
+  (a float literal, <code>float(...)</code>, or arithmetic with a real float on one
+  side), and that no loop, <code>with</code>, handler, or nested scope rebinds, is
+  decided the same way. Object classes are tested by the class tag the
+  instance carries.</li>
 <li>A chained comparison, <code>0 &lt;= i &lt; n</code>, is its comparisons joined by <code>and</code>,
   each operand evaluated once and the ones after a false comparison not at
   all.</li>
