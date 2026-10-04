@@ -26,6 +26,7 @@ __all__ = [
     "Scope",
     "callable_spelled",
     "captured_names",
+    "cell_captures",
     "closure_nodes",
     "free_names",
     "is_plain_callable",
@@ -169,6 +170,23 @@ def shared_with_closures(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[st
     for child in closure_nodes(node):
         shared |= free_names(child)
     return shared & own_names(node)
+
+
+def cell_captures(node: Scope, outer: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """The variables of `outer` that `node`, a function defined directly in it,
+    reads and that no one rebinds while `node` runs: `node` does not, no
+    function nested in `outer` declares them `nonlocal`, and they are not a
+    function or class `outer` defines. A call of `node` may be handed each one
+    as it is in its cell when the call starts, and see what reading the cell
+    would have shown for the whole call: the frame of `outer` is waiting on
+    the call, and nothing else binds the name."""
+    shared = free_names(node) & own_names(outer)
+    defined = {
+        child.name
+        for child in _scope_nodes(outer)
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
+    return shared - defined - rebound_by_closures(outer)
 
 
 def rebound_by_closures(node: Scope) -> set[str]:

@@ -21,9 +21,9 @@ from __future__ import annotations
 import ast
 
 from ..analysis import types as T
-from ..analysis.closures import free_names, own_names
+from ..analysis.closures import cell_captures, free_names, own_names
 from ..analysis.symbols import FunctionInfo, ParamInfo
-from ..backend.llvm.lowering import Unsupported
+from ..backend.llvm.lowering import Unsupported, variadic_element
 
 __all__ = ["CallBinding", "constant_default", "nested_entry_refusal"]
 
@@ -74,6 +74,9 @@ def bind_arguments(
     call cannot be bound at compile time."""
     params: list[ParamInfo] = [p for p in info.params if not p.global_of][skip:]
     shown = info.name
+    star = next((p for p in params if p.kind == "var_positional"), None)
+    if star is not None and variadic_element(info) is not None and not keywords:
+        return _bind_variadic(info, params, star, args)
     if any(p.kind not in _BINDABLE for p in params):
         raise Unsupported(f"`{shown}` takes `*args` or `**kwargs`, which a native call cannot bind")
     if any(isinstance(a, ast.Starred) for a in args):
@@ -125,6 +128,29 @@ def bind_arguments(
     return spelled
 
 
+def _bind_variadic(
+    info: FunctionInfo, params: list[ParamInfo], star: ParamInfo, args: list[ast.expr]
+) -> list[ast.expr]:
+    """A call to a function of `*args: T` (`variadic_element`): the named
+    parameters by position, then the rest packed into the list its native
+    entry takes, or a list given whole as `*xs`."""
+    named = params[: params.index(star)]
+    if any(isinstance(a, ast.Starred) for a in args[: len(named)]):
+        raise Unsupported(f"a call to `{info.name}` with `*arguments` has no native lowering")
+    if len(args) < len(named):
+        raise Unsupported(f"`{info.name}` called with the wrong number of arguments")
+    rest = args[len(named) :]
+    if len(rest) == 1 and isinstance(rest[0], ast.Starred):
+        packed: ast.expr = rest[0].value
+    elif any(isinstance(a, ast.Starred) for a in rest):
+        raise Unsupported(f"a call to `{info.name}` with `*arguments` has no native lowering")
+    else:
+        packed = ast.List(elts=list(rest), ctx=ast.Load())
+        if rest:
+            ast.copy_location(packed, rest[0])
+    return [*args[: len(named)], packed]
+
+
 class CallBinding:  # pylint: disable=too-few-public-methods
     """Binding a call's keywords and defaults; mixed into `_FunctionLowering`."""
 
@@ -169,6 +195,16 @@ class CallBinding:  # pylint: disable=too-few-public-methods
             if keywords:
                 raise Unsupported("keyword arguments have no native ABI")
             return args
+        element = variadic_element(info)
+        if element is not None and not keywords:
+            spelled = bind_arguments(info, args, keywords, skip)
+            packed = spelled[-1]
+            if isinstance(packed, ast.List) and packed not in args:
+                # The list the positions are packed into: typed as the list of
+                # numbers the entry takes, and kept alive with its type.
+                self.__dict__.setdefault("_defaults_kept", []).append(packed)
+                self.frontend.analysis.node_types[id(packed)] = T.list_of(element)  # type: ignore[attr-defined]
+            return spelled
         needed = len([p for p in info.params if not p.global_of]) - skip
         if not keywords and len(args) == needed:
             return args
@@ -245,6 +281,10 @@ def nested_entry_refusal(info: FunctionInfo, enclosing: dict[str, FunctionInfo])
                     "function around it"
                 )
             shared.discard(info.name)
+        if first:
+            # What it only reads of the function around it is handed to its
+            # entry, as each cell holds it when the call starts.
+            shared -= cell_captures(node, outer.node)
         if shared:
             names = ", ".join(f"`{n}`" for n in sorted(shared))
             return f"shares {names} with the function around it, so it runs where that one does"

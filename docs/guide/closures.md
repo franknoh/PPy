@@ -97,10 +97,46 @@ def solve(rows: list[tuple[int, int]], **options: int) -> int:
 ```
 
 `solve` stays in Python, since a native function takes no `**options`, but
-`fib` is native. A nested function may call itself by its own name. One that
-reads or writes a variable of the function around it, uses its own name as
-a value, or has a decorator runs as Python with that function, and `ppy
-explain` names the shared variables.
+`fib` is native. A nested function may call itself by its own name.
+
+A nested function may also use variables of the function around it, as long
+as nothing rebinds them while it runs: it does not assign them, and no
+function nested in the same one declares them `nonlocal`. Its native entry
+then takes each such variable as one more parameter. Each time Python calls
+the function object a `def` made, it reads the variable from that object's
+cell, so the call sees the value the variable holds at that moment, as
+CPython does. The function around it is waiting on the call, so the value
+cannot change before the call returns. A list or a dict the nested function
+writes into, such as a `visited` list in a depth-first search, is passed by
+handle and written back, the same way a module global it writes is.
+
+```python
+def outer(n: int, k: int) -> int:
+    import sys  # outer stays in Python
+
+    scale = k * 2
+    seen = [0] * n
+
+    def sweep(m: int) -> int:
+        t = 0
+        for i in range(len(seen)):
+            seen[i] += i * scale + m
+            t += seen[i]
+        return t
+
+    first = sweep(1)
+    scale = 100  # the next call reads 100
+    return first + sweep(2)
+```
+
+An empty cell (a variable read before the function around it binds it)
+runs the call as Python, which raises CPython's `NameError`. Python binds the
+entry again for each function object, since each has its own cells.
+
+A nested function that rebinds a variable of the function around it
+(`nonlocal total; total += x`), shares a variable of a function further out,
+uses its own name as a value, or has a decorator runs as Python with that
+function, and `ppy explain` names the shared variables.
 
 A call by a plain name inside a function follows Python's scopes: a nested
 function the function around it defines is called before a module function

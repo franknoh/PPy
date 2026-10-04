@@ -1338,7 +1338,24 @@ class _Checker:
         for name, info in self.symbols.functions.items():
             env.set(name, Binding(info.signature()))
         for name, declared in self.symbols.globals.items():
-            env.set(name, Binding(declared, self.symbols.global_facts.get(name, Facts())))
+            facts = self.symbols.global_facts.get(name, Facts())
+            if (
+                name not in self.symbols.constant_globals
+                and name not in self.symbols.settled_globals
+                and name not in self.symbols.pattern_globals
+            ):
+                # A global bound more than once (`COUNTER += 1` under `global`,
+                # a second module-level binding): what its first binding gave
+                # says nothing of what a call finds in it.
+                facts = facts.with_(
+                    int_range=None,
+                    length=None,
+                    constant=None,
+                    has_constant=False,
+                    exact_class=None,
+                    non_null=False,
+                )
+            env.set(name, Binding(declared, facts))
 
     def _imported_name_type(self, module: str, origin: str, depth: int = 0) -> T.Type:
         qualname = f"{module}.{origin}"
@@ -1512,6 +1529,20 @@ class _Checker:
         if node.value is not None and self._bind_type_alias([node.target], node.value, env):
             return
         resolved = self.annotations.resolve(node.annotation)
+        if (
+            isinstance(node.target, ast.Name)
+            and isinstance(node.annotation, ast.Name)
+            and node.annotation.id in {"list", "dict", "set"}
+            and isinstance(node.value, (ast.List, ast.Dict, ast.Set))
+            and not (node.value.keys if isinstance(node.value, ast.Dict) else node.value.elts)
+            and node.target.id not in env
+        ):
+            # `out: list = []`: the bare annotation says only what the empty
+            # display already does, so what the name holds is told, as for
+            # `out = []`, by what the function puts in it. Strict mode has
+            # already refused the bare annotation.
+            self._bind_target(node.target, self._expr(node.value, env), env, source=node.value)
+            return
         declared = Binding(resolved.type, resolved.facts)
         bound_type = resolved.type
         if node.value is not None:

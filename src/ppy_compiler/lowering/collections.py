@@ -754,6 +754,12 @@ class CollectionLowering:
         del self._temporaries[waiting:]  # type: ignore[attr-defined]
         results = function.results  # type: ignore[attr-defined]
         overrides = [] if exact else self._overrides(shape, attr)
+        if overrides and any(
+            getattr(getattr(p, "native", p), "source", "") for p in rest.parameters
+        ):
+            # Module globals passed after the arguments are this method's
+            # own; an override takes its own, so no one call serves both.
+            raise Unsupported(f"`{attr}` reads module globals and is overridden")
         if overrides:
             called = self._dispatch(shape, attr, receiver, values, overrides, function)
         else:
@@ -1828,6 +1834,10 @@ class CollectionLowering:
             return self._rt("ppy_coll_none", (), HANDLE), True
         if isinstance(node, ast.Name):
             held = self.collections.get(node.id)
+            if held is None and node.id == "__file__":
+                found = self._module_file()  # type: ignore[attr-defined]
+                if found is not None:
+                    return found, True
             if held is None:
                 raise Unsupported(f"`{node.id}` is not a native collection")
             return core.load(self.b, held.slot), False

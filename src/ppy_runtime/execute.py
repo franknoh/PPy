@@ -62,10 +62,24 @@ def _binder(natives: NativeBinder, module_name: str):  # type: ignore[no-untyped
             return natives.bind(module_name, function, value)
         found = nested.get(function)
         if found is None:
-            found = nested[function] = natives.bind(module_name, function, value)
+            found = natives.bind(module_name, function, value)
+            if _reads_cells(found):
+                # Handed the cells of the function object each `def` makes:
+                # each one is bound for itself.
+                return found
+            nested[function] = found
         return found
 
     return bind
+
+
+def _reads_cells(bound: object) -> bool:
+    """Whether a native entry reads variables from its function's cells."""
+    signature = getattr(bound, "__ppy_native__", None)
+    parameters = getattr(signature, "parameters", ())
+    return any(
+        getattr(p, "source", "").rpartition(":")[0].endswith(".<locals>") for p in parameters
+    )
 
 
 def _prepare_natives(

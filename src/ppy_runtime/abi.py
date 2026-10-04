@@ -15,6 +15,7 @@ __all__ = [
     "STATUS_OK",
     "STATUS_RAISED",
     "TEXT",
+    "VARIADIC",
     "CrossingClass",
     "NativeParam",
     "NativeSignature",
@@ -47,6 +48,12 @@ _ABI_NAMES = {
 #: A string at the Python boundary: its UTF-8 bytes and how many. As a
 #: result, the bytes are a copy the boundary frees once it has read them.
 TEXT = "text"
+
+
+#: The `source` of a parameter that is a function's `*args` of numbers: the
+#: positions Python spells after the named ones, which the boundary packs into
+#: the list the native entry takes.
+VARIADIC = "*"
 
 
 def _abi_name(scalar: str) -> str:

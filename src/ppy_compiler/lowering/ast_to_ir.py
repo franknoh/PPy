@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import math
 import re
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from dataclasses import replace as dataclass_replace
@@ -27,7 +28,7 @@ from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
-from ..analysis.closures import own_names
+from ..analysis.closures import cell_captures, own_names, shared_with_closures
 from ..analysis.lexical import LexicalBindings
 from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo, ParamInfo, derivative_spec, fold_flags
@@ -36,6 +37,7 @@ from ..backend.llvm.lowering import (
     _MATH_INTRINSICS,
     _MAX_TUPLE_WIDTH,
     _NARROW,
+    VARIADIC,
     ClassLayouts,
     Unsupported,
     _declared_bounds,
@@ -46,6 +48,7 @@ from ..backend.llvm.lowering import (
     eligible,
     should_lower_native,
     with_implicit_globals,
+    with_variadic,
     writes,
     written_params,
 )
@@ -95,7 +98,8 @@ from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .calls import CallBinding, nested_entry_refusal
 from .closures import ClosureLowering
-from .collections import HANDLE, Held, crossing_classes, records_of
+from .collections import HANDLE, Held, Kind, Shape, crossing_classes, records_of
+from .containers import _ALIASES as _CONTAINER_ALIASES
 from .containers import ContainerLowering
 from .effects import EffectLowering, check_effects, rule_of, wants_exceptions
 from .exceptions import ExceptionLowering, OwnedTemporaries, uses_exceptions
@@ -486,6 +490,8 @@ class Frontend:
                 # shares nothing with the functions around it, on its own too,
                 # for Python to call when the function around it is Python's.
                 refused = nested_entry_refusal(info, enclosing)
+                if refused is None and not self._passes_globals(info, analysis):
+                    refused = self._cells_refusal(info, enclosing)
                 if refused is not None:
                     lowered.rejected[qualname] = refused
                     continue
@@ -507,6 +513,8 @@ class Frontend:
                 )
                 continue
             passes_globals = self._passes_globals(info, analysis)
+            # `*args` of numbers is a list its native entry takes.
+            info = with_variadic(info)  # noqa: PLW2901
             # The settled globals it reads are parameters of its native entry.
             info = with_implicit_globals(info, analysis) if passes_globals else info  # noqa: PLW2901
             try:
@@ -627,6 +635,7 @@ class Frontend:
     def signature(
         self, info: FunctionInfo, analysis: FunctionAnalysis | None = None
     ) -> IRSignature:
+        info = with_variadic(info)
         parameters = []
         written = written_params(analysis)
         for parameter in info.params:
@@ -1023,6 +1032,20 @@ class Frontend:
 
     def _drop(self, qualname: str) -> None:
         self.declared[qualname][0].body.blocks.clear()
+
+    def _cells_refusal(self, info: FunctionInfo, enclosing: dict[str, FunctionInfo]) -> str | None:
+        """Why a nested function that reads variables of the function around it
+        has no entry here: only `ppy run`'s boundary hands it their cells."""
+        outer = enclosing.get(info.enclosing or "")
+        if outer is None or not isinstance(info.node, ast.FunctionDef):
+            return None
+        if not isinstance(outer.node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return None
+        cells = cell_captures(info.node, outer.node) - {info.name}
+        if not cells:
+            return None
+        names = ", ".join(f"`{n}`" for n in sorted(cells))
+        return f"shares {names} with the function around it, so it runs where that one does"
 
     def _passes_globals(self, info: FunctionInfo, analysis: FunctionAnalysis) -> bool:
         """Whether the settled globals `info` reads are passed to it as
@@ -1562,6 +1585,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         self.objects: dict[str, Value] = {}
         #: Match locals: name -> (found slot, the spans' slots, the pattern).
         self.matches: dict[str, tuple[Value, Value, regex_dialect.Compiled]] = {}
+        #: Locals of type `int | None` (or `float`, `bool`): whether one holds
+        #: a number, and the number, each in a slot of its own.
+        self.optionals: dict[str, tuple[Value, Value, str]] = {}
         #: Collections by local name: what they are, their element, the slot
         #: holding the handle, and whether this function made it (and frees it).
         self.collections: dict[str, Held] = {}
@@ -1622,6 +1648,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
         } - stored
         self._bind_constant_tables(node)
+        self._bind_constant_strings(node)
+        self._bind_optionals(node)
         self._body(node.body)
         self._check_cells()
         if self._open():
@@ -1783,6 +1811,13 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             case ast.Assign():
                 self._assign(node)
             case ast.AnnAssign():
+                if (
+                    node.value is not None
+                    and isinstance(node.target, ast.Name)
+                    and node.target.id in self.optionals
+                ):
+                    self._assign_optional(node.target.id, node.value)
+                    return
                 if node.value is not None:
                     if isinstance(node.target, ast.Name) and self._make_collection(
                         node.target.id, node.value, self._type_of(node.target)
@@ -1845,6 +1880,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             case ast.Expr(value=ast.Constant()):
                 return
             case ast.Expr(value=ast.Call() | ast.Await()):
+                if isinstance(node, ast.Expr) and self._print_optional(node):
+                    return
                 if isinstance(node.value, ast.Call) and self._plugin_spec(node.value) is not None:
                     self._plugin_call(node.value)
                 elif isinstance(node.value, ast.Call):
@@ -1877,6 +1914,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             values = self._tuple_expr(node.value)
             if values is None or len(values) != len(expected.items):
                 raise Unsupported("the returned tuple does not match the declared shape")
+            if isinstance(node.value, ast.Tuple) and any(
+                t == F64 and gives_int(self._type_of(element))
+                for element, t in zip(node.value.elts, expected.items, strict=False)
+            ):
+                raise Unsupported("returns an `int` where `float` is declared, which CPython keeps")
             items = [
                 self._coerce_type(item, t) for item, t in zip(values, expected.items, strict=True)
             ]
@@ -1892,13 +1934,25 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._release_collections()
             core.ret(self.b, handle)
             return
-        returned = self._coerce_type(self._expr(node.value), expected)
+        value = self._expr(node.value)
+        if expected == F64 and not self.bindings and gives_int(self._type_of(node.value)):
+            # `-> float` takes an int, and CPython hands that int back:
+            # `return total` with an int total is `16`, not `16.0`. In an
+            # instance of a generic the checker's type of `A + B` is the
+            # first operand's, which says nothing of the value: not asked.
+            raise Unsupported("returns an `int` where `float` is declared, which CPython keeps")
+        returned = self._coerce_type(value, expected)
         self._leave_for_return()
         self._release_collections()
         core.ret(self.b, returned)
 
     def _return_default(self) -> None:
-        if self.b.block is not None and id(self.b.block) in self._dead:
+        if self.b.block is not None and (
+            id(self.b.block) in self._dead
+            or (self.b.block is not self.entry and not self._has_edge_to(self.b.block))
+        ):
+            # Every way through the body returned or raised before here (an
+            # `if`/`else` whose sides both return): the end is not reached.
             core.unreachable(self.b)
             return
         if self._frame() is not None:
@@ -1910,13 +1964,30 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._release_collections()
             core.ret(self.b)
             return
-        raise Unsupported("control flow can fall off the end without returning a value")
+        if self.frontend.standalone:
+            raise Unsupported("control flow can fall off the end without returning a value")
+        # CPython returns None here, which a native result cannot hold: the
+        # call falls back and Python runs it, returning that None. The effect
+        # check sees the fall back like any guard, so it never follows an
+        # effect that cannot be run again.
+        self._leave_for_return()
+        self._release_collections()
+        core.guard(
+            self.b,
+            core.const(self.b, False, BOOL),
+            "contract",
+            "falls off the end and returns None",
+        )
+        core.unreachable(self.b)
 
     def _assign(self, node: ast.Assign) -> None:
         if len(node.targets) != 1:
             self._chained_assign(node)
             return
         target = node.targets[0]
+        if isinstance(target, ast.Name) and target.id in self.optionals:
+            self._assign_optional(target.id, node.value)
+            return
         if self._assign_choice(target, node) or self._unpack_into_places(target, node):
             return
         if isinstance(target, ast.Name) and self._make_collection(
@@ -1924,6 +1995,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         ):
             return
         if self._unpack_strings(target, node.value):
+            return
+        if self._unpack_references(target, node.value):
             return
         if isinstance(target, ast.Subscript) and self._is_collection(target.value):
             self._item(target.value, target.slice, node.value)
@@ -1948,11 +2021,111 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 raise Unsupported("a match is bound to a name")
             self._assign_match(target.id, spec)
             return
+        if self._unpack_buffer(target, node.value):
+            return
         values = self._tuple_expr(node.value)
         if values is not None:
             self._store_tuple(target, values)
             return
         self._store(target, self._expr(node.value))
+
+    def _unpack_references(self, target: ast.expr, value: ast.expr) -> bool:
+        """`holes, seen = [0] * n, []` and `a, b = b, a` of collections, strings,
+        or objects. Python takes every value before it binds a name: where no
+        value reads a name the statement binds, that is each pair in turn;
+        otherwise each value is taken first, with its own reference."""
+        if not (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, ast.Tuple)
+            and len(target.elts) == len(value.elts)
+            and all(isinstance(e, ast.Name) for e in target.elts)
+            and not any(isinstance(e, ast.Starred) for e in value.elts)
+        ):
+            return False
+        names = [e.id for e in target.elts if isinstance(e, ast.Name)]
+        if not any(
+            self._reference_of(item) is not None
+            or isinstance(item, _DISPLAYS)
+            or (isinstance(item, ast.Name) and item.id in self.collections)
+            for item in value.elts
+        ):
+            return False
+        read = {
+            inner.id
+            for item in value.elts
+            for inner in ast.walk(item)
+            if isinstance(inner, ast.Name)
+        }
+        if not read & set(names):
+            for name, item in zip(target.elts, value.elts, strict=True):
+                pair = ast.Assign(targets=[name], value=item)
+                ast.copy_location(pair, value)
+                self._assign(pair)
+            return True
+        kinds: list[Kind | Shape | None] = []
+        for item in value.elts:
+            if isinstance(item, ast.Name):
+                held = self.collections.get(item.id)
+                kinds.append(held.kind if held is not None else None)
+            else:
+                kinds.append(self._reference_of(item))
+        taken: list[Value] = []
+        for item, kind in zip(value.elts, kinds, strict=True):
+            if kind is None:
+                taken.append(self._expr(item))
+                continue
+            handle, owned = self._handle(item)
+            if not owned:
+                self._retain(handle)
+            taken.append(handle)
+        for name, kind, item in zip(target.elts, kinds, taken, strict=True):
+            assert isinstance(name, ast.Name)
+            if kind is None:
+                self._store(name, item)
+            else:
+                self._bind(name.id, kind, item, True)
+        return True
+
+    def _unpack_buffer(self, target: ast.expr, value: ast.expr) -> bool:
+        """`a, b, c = xs` of a list a buffer holds: its length checked as
+        CPython checks it, then each item into its name."""
+        if not (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, ast.Name)
+            and value.id in self.buffers
+            and target.elts
+            and all(isinstance(e, ast.Name) for e in target.elts)
+        ):
+            return False
+        count = len(target.elts)
+        buffer = self.buffers[value.id]
+        length = core.cast(self.b, core.buffer_len(self.b, buffer), I64)
+        expected = core.const(self.b, count, I64)
+        self._guard(
+            core.cmp(self.b, "ge", length, expected),
+            "bounds",
+            "not enough values to unpack",
+            raises=f"ValueError: not enough values to unpack (expected {count}, got {{0}})",
+            values=(length,),
+        )
+        # CPython 3.14 says how many there were; 3.13 does not.
+        got = ", got {0}" if sys.version_info >= (3, 14) else ""
+        self._guard(
+            core.cmp(self.b, "le", length, expected),
+            "bounds",
+            "too many values to unpack",
+            raises=f"ValueError: too many values to unpack (expected {count}{got})",
+            values=(length,),
+        )
+        items = [
+            self._coerce(
+                core.buffer_load(self.b, buffer, core.const(self.b, i, I64)),
+                _read_as(_kind(buffer.type.element)),  # type: ignore[union-attr]
+            )
+            for i in range(count)
+        ]
+        self._store_tuple(target, items)
+        return True
 
     def _standalone_buffer(self, name: str, value: ast.expr) -> bool:
         """`xs = ppy.buffer[int](n)`: a zeroed allocation from the C support.
@@ -2175,13 +2348,21 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             return
         if self._augment_set(node):
             return
-        current = self._load(node.target.id)
+        if node.target.id in self.optionals:
+            current = self._optional_operand(node)
+        else:
+            current = self._load(node.target.id)
         if self.prover is not None and current.type == I64:
             self._term_for_load(current, node.target)
         value = self._expr(node.value)
         self._store(node.target, self._binary(current, value, type(node.op)))
 
     def _store(self, target: ast.expr, value: Value) -> None:
+        if isinstance(target, ast.Name) and target.id in self.optionals:
+            present, slot, kind = self.optionals[target.id]
+            core.store(self.b, core.const(self.b, True, BOOL), present)
+            core.store(self.b, self._coerce(value, kind), slot)
+            return
         if isinstance(target, ast.Attribute):
             raise Unsupported("a flattened value class cannot be written back")
         if isinstance(target, ast.Subscript):
@@ -2227,13 +2408,26 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         core.cond_br(self.b, condition, Successor(then_block), Successor(else_block))
         self.b.at_end(then_block)
         self._body(node.body)
-        if self._open():
-            core.br(self.b, Successor(merge))
+        reached = self._branch_on(merge)
         self.b.at_end(else_block)
         self._body(node.orelse)
-        if self._open():
-            core.br(self.b, Successor(merge))
+        reached = self._branch_on(merge) or reached
+        if not reached:
+            # Both sides return or raise: no path reaches what follows the
+            # `if`, so the end of the function after it needs no value.
+            self._dead.add(id(merge))
         self.b.at_end(merge)
+
+    def _branch_on(self, block: Block) -> bool:
+        """Close the current block with a branch to `block`, when a path still
+        reaches it; whether one did. A block no path reaches ends unreachable."""
+        if not self._open():
+            return False
+        if id(self.b.block) in self._dead:
+            core.unreachable(self.b)
+            return False
+        core.br(self.b, Successor(block))
+        return True
 
     def _while(self, node: ast.While) -> None:
         if node.orelse:
@@ -2648,6 +2842,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 constant = self._stdlib_constant(node)
                 if constant is not None:
                     return constant
+                if node.id in self.optionals:
+                    return self._optional_value(node)
                 loaded = self._load(node.id)
                 if loaded.type == I64:
                     interval = self._induction.get(node.id)
@@ -2796,6 +2992,28 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             core.store(self._entry_builder(), packed, slot)
             self.tuples[name] = slot
 
+    def _bind_constant_strings(self, node: ast.FunctionDef) -> None:
+        """Each module-level string the body reads (`LETTERS = "ABC..."`), bound
+        once to a borrowed local that holds the literal: the runtime keeps every
+        literal for good, and a name bound once to a literal never changes."""
+        symbols = getattr(self.frontend.analysis, "symbols", None)
+        if symbols is None or getattr(self, "device", False):
+            return
+        own = own_names(node)
+        read = {
+            inner.id
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Load)
+        }
+        for name in sorted(read - own - set(self.collections) - set(self.slots)):
+            text = symbols.constant_globals.get(name)
+            if not isinstance(text, str):
+                continue
+            kind = self._reference_of_type(T.STR)
+            if kind is None:
+                return
+            self._bind(name, kind, self._string_literal(text), False)
+
     def _module_constant(self, name: str) -> Value | None:
         symbols = getattr(self.frontend.analysis, "symbols", None)
         if symbols is None:
@@ -2813,6 +3031,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if name in self.matches:
             # The match as a truth value: whether there was one.
             return core.load(self.b, self.matches[name][0])
+        if name in self.optionals:
+            raise Unsupported(f"`{name}` may be `None`, which has no native number")
         if name in self.objects:
             raise Unsupported(f"`{name}` is a value class, which has no single scalar value")
         if name in self.tuples:
@@ -2836,6 +3056,10 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             return self._truth_of(node.operand, empty=True)
         if isinstance(node.op, ast.Not):
             absent = self._string_truth(node.operand, empty=True)
+            if absent is None:
+                absent = self._buffer_truth(node.operand, empty=True)
+            if absent is None:
+                absent = self._optional_truth(node.operand, empty=True)
             if absent is None:
                 absent = self._object_truth(node.operand, empty=True)
             if absent is not None:
@@ -2948,6 +3172,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         identity = self._match_identity(node)
         if identity is not None:
             return identity
+        identity = self._optional_identity(node)
+        if identity is not None:
+            return identity
         folded = self._feature_membership(node)
         if folded is not None:
             return folded
@@ -2960,6 +3187,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         equal = self._collection_equality(node)
         if equal is not None:
             return equal
+        empty = self._buffer_empty_compare(node)
+        if empty is not None:
+            return empty
         operator = node.ops[0]
         container = node.comparators[0]
         if isinstance(operator, (ast.In, ast.NotIn)) and self._is_collection(container):
@@ -4372,7 +4602,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             held = {p.global_of: p.name for p in self.info.params if p.global_of}
             passed = []
             for source in sources:
-                if not source:
+                if not source or source == VARIADIC:
+                    # `*args` is spelled, packed into its list, with the rest.
                     continue
                 if source not in held:
                     raise Unsupported(
@@ -5244,6 +5475,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         text = self._string_truth(node)
         if text is not None:
             return text
+        held = self._buffer_truth(node)
+        if held is None:
+            held = self._optional_truth(node)
+        if held is not None:
+            return held
         present = self._object_truth(node)
         if present is not None:
             return present
@@ -5252,6 +5488,266 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             return self._boolop_truth(node)
         return self._truth(self._expr(node))
 
+    # -- `int | None` locals ----------------------------------------------------
+
+    def _bind_optionals(self, node: ast.FunctionDef) -> None:
+        """Each local the checker types `int | None`, `float | None`, or
+        `bool | None`: a flag that says whether it holds a number, and the
+        number, both in the entry block, the flag false (`None`)."""
+        if getattr(self, "device", False):
+            return
+        shared = shared_with_closures(node) | set(getattr(self, "captures", {}))
+        params = {p.name for p in self.info.params}
+        kinds: dict[str, str] = {}
+        pending: list[ast.AST] = list(node.body)
+        while pending:
+            statement = pending.pop()
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue  # its names are its own
+            pending.extend(ast.iter_child_nodes(statement))
+            targets: list[ast.expr] = []
+            if isinstance(statement, ast.Assign):
+                targets = list(statement.targets)
+                value: ast.expr | None = statement.value
+            elif isinstance(statement, ast.AnnAssign):
+                targets, value = [statement.target], statement.value
+            else:
+                continue
+            for target in targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                # What the checker says the binding gives, before any narrowing.
+                found = _optional_kind(self._type_of(target))
+                if found is None and value is not None:
+                    found = _optional_kind(self._type_of(value))
+                if found is not None:
+                    kinds.setdefault(target.id, found)
+        for name, kind in sorted(kinds.items()):
+            if name in params or name in shared:
+                continue
+            if name in self.slots or name in self.collections or name in self.buffers:
+                continue
+            entry = self._entry_builder()
+            present = self._alloca(BOOL, f"{name}.present")
+            slot = self._alloca(_scalar_type(kind), name)
+            core.store(entry, core.const(entry, False, BOOL), present)
+            core.store(entry, self._literal_at(entry, kind), slot)
+            self.optionals[name] = (present, slot, kind)
+
+    @staticmethod
+    def _literal_at(b: Builder, kind: str) -> Value:
+        if kind == "float":
+            return core.const(b, 0.0, F64)
+        if kind == "bool":
+            return core.const(b, False, BOOL)
+        return core.const(b, 0, I64)
+
+    def _assign_optional(self, name: str, value: ast.expr) -> None:
+        """`v = None`, `v = d.get(k)`, `v = w` of another such local, or `v =` a
+        number."""
+        present, slot, kind = self.optionals[name]
+        if isinstance(value, ast.Constant) and value.value is None:
+            core.store(self.b, core.const(self.b, False, BOOL), present)
+            return
+        if isinstance(value, ast.Name) and value.id in self.optionals:
+            other_present, other_slot, other_kind = self.optionals[value.id]
+            core.store(self.b, core.load(self.b, other_present), present)
+            loaded = core.load(self.b, other_slot)
+            core.store(self.b, self._coerce(loaded, kind) if other_kind != kind else loaded, slot)
+            return
+        got = self._optional_get(value)
+        if got is not None:
+            found, number = got
+            core.store(self.b, found, present)
+            core.store(self.b, self._coerce(number, kind), slot)
+            return
+        number = self._expr(value)
+        core.store(self.b, core.const(self.b, True, BOOL), present)
+        core.store(self.b, self._coerce(number, kind), slot)
+
+    def _optional_get(self, node: ast.expr) -> tuple[Value, Value] | None:
+        """`d.get(k)` of a dict of numbers: whether `k` is there, and its value
+        (the first record's, discarded, where it is not)."""
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and len(node.args) == 1
+            and not node.keywords
+            and self._is_collection(node.func.value)
+        ):
+            return None
+        kind, handle, owned = self._receiver(node.func.value)
+        if kind.name in _CONTAINER_ALIASES:
+            kind = Kind(_CONTAINER_ALIASES[kind.name], kind.value, kind.key, kind.flavor)
+        shape = kind.value
+        if kind.key is None or shape is None or shape.kind not in {"int", "float", "bool"}:
+            raise Unsupported("`get` without a default takes a dict of numbers natively")
+        family = kind.family
+        key = self._key(kind, node.args[0])
+        found = self._rt(f"ppy_{family}_find", (handle, key))
+        present = self._found(found)
+        safe = core.select(self.b, present, found, self._word(0))
+        value = self._read(self._rt(f"ppy_{family}_value_at", (handle, safe), HANDLE), shape)
+        keys_done = getattr(self, "_keys_done", None)
+        if keys_done is not None:
+            keys_done()
+        self._done_with(handle, owned)
+        return present, value
+
+    def _optional_value(self, node: ast.Name) -> Value:
+        """The number an `int | None` local holds, where the checker says it
+        holds one (`v` after `if v is not None:`)."""
+        _present, slot, kind = self.optionals[node.id]
+        if T.strip_literal(self._type_of(node)) != _KIND_TYPES[kind]:
+            raise Unsupported(f"`{node.id}` may be `None` here, which has no native number")
+        return core.load(self.b, slot)
+
+    def _optional_operand(self, node: ast.AugAssign) -> Value:
+        """`v += x` of a local that may be `None`: CPython's `TypeError` where it
+        is, and the number it holds otherwise."""
+        assert isinstance(node.target, ast.Name)
+        present, slot, _kind = self.optionals[node.target.id]
+        other = _OPERAND_NAMES.get(T.strip_literal(self._type_of(node.value)), "")
+        symbol = _AUGMENTED.get(type(node.op), "")
+        raises = (
+            f"TypeError: unsupported operand type(s) for {symbol}=: 'NoneType' and '{other}'"
+            if other and symbol
+            else ""
+        )
+        self._guard(core.load(self.b, present), "contract", "an operand is None", raises=raises)
+        return core.load(self.b, slot)
+
+    def _optional_identity(self, node: ast.Compare) -> Value | None:
+        """`v is None` and `v is not None` of such a local: its flag."""
+        op = node.ops[0]
+        if not isinstance(op, (ast.Is, ast.IsNot)):
+            return None
+        left, right = node.left, node.comparators[0]
+        if isinstance(right, ast.Name) and right.id in self.optionals:
+            left, right = right, left
+        if not (isinstance(left, ast.Name) and left.id in self.optionals):
+            return None
+        if not (isinstance(right, ast.Constant) and right.value is None):
+            return None
+        present = core.load(self.b, self.optionals[left.id][0])
+        if isinstance(op, ast.IsNot):
+            return present
+        return core.cmp(self.b, "eq", present, core.const(self.b, False, BOOL))
+
+    def _optional_truth(self, node: ast.expr, *, empty: bool = False) -> Value | None:
+        """`if v:` of such a local: it holds a number, and the number is not zero."""
+        if not (isinstance(node, ast.Name) and node.id in self.optionals):
+            return None
+        present_slot, slot, kind = self.optionals[node.id]
+        present = core.load(self.b, present_slot)
+        nonzero = self._truth(core.load(self.b, slot))
+        truth = core.bitwise(self.b, "and", present, nonzero)
+        if empty:
+            return core.bitwise(self.b, "xor", truth, core.const(self.b, True, BOOL))
+        del kind
+        return truth
+
+    def _print_optional(self, node: ast.Expr) -> bool:
+        """`print(..., v, ...)` of a local that may be `None`: an `if` that
+        prints `None` in its place where it holds none, and the number where
+        it does, which is what `print` writes for each."""
+        call = node.value
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "print"
+            and self._resolves_to_builtin(call.func)
+        ):
+            return False
+        index = next(
+            (
+                i
+                for i, argument in enumerate(call.args)
+                if isinstance(argument, ast.Name)
+                and argument.id in self.optionals
+                and T.strip_literal(self._type_of(argument))
+                != _KIND_TYPES[self.optionals[argument.id][2]]
+            ),
+            None,
+        )
+        if index is None:
+            return False
+        name = call.args[index]
+        assert isinstance(name, ast.Name)
+        if _optional_kind(self._type_of(name)) is None:
+            # `None` for certain here: `print` writes `None`.
+            absent = self._typed(ast.Constant("None"), T.STR, name)
+            args = [*call.args[:index], absent, *call.args[index + 1 :]]
+            printed = ast.copy_location(
+                ast.Call(func=call.func, args=args, keywords=call.keywords), call
+            )
+            self.frontend.analysis.node_types[id(printed)] = T.NONE
+            self.__dict__.setdefault("_made_nodes", []).append(printed)
+            made = ast.Expr(printed)
+            ast.copy_location(made, node)
+            self.__dict__.setdefault("_made_nodes", []).append(made)
+            self._statement(made)
+            return True
+        kind = self.optionals[name.id][2]
+        held = self._typed(ast.Name(name.id, ast.Load()), _KIND_TYPES[kind], name)
+        absent = self._typed(ast.Constant("None"), T.STR, name)
+        sides: list[list[ast.stmt]] = []
+        for replacement in (absent, held):
+            args = [*call.args[:index], replacement, *call.args[index + 1 :]]
+            printed = ast.copy_location(
+                ast.Call(func=call.func, args=args, keywords=call.keywords), call
+            )
+            self.frontend.analysis.node_types[id(printed)] = T.NONE
+            self.__dict__.setdefault("_made_nodes", []).append(printed)
+            side = ast.Expr(printed)
+            ast.copy_location(side, node)
+            sides.append([side])
+        test = self._typed(
+            ast.Compare(left=name, ops=[ast.Is()], comparators=[ast.Constant(None)]),
+            T.BOOL,
+            name,
+        )
+        choice = ast.If(test, sides[0], sides[1])
+        ast.copy_location(choice, node)
+        self.__dict__.setdefault("_made_nodes", []).append(choice)
+        self._if(choice)
+        return True
+
+    def _resolves_to_builtin(self, func: ast.Name) -> bool:
+        symbols = self.frontend.analysis.symbols
+        if func.id in symbols.functions or func.id in symbols.imports:
+            return False
+        lexical = symbols.lexical
+        targets = getattr(lexical, "targets_at", None)
+        return targets is None or targets(func) in (set(), {f"builtins.{func.id}"})
+
+    def _buffer_empty_compare(self, node: ast.Compare) -> Value | None:
+        """`xs == []` and `xs != []` of a list, lent as a buffer or held by
+        handle: its length against 0."""
+        operator = node.ops[0]
+        if not isinstance(operator, (ast.Eq, ast.NotEq)):
+            return None
+        left, right = node.left, node.comparators[0]
+        if isinstance(left, ast.List) and not left.elts:
+            left, right = right, left
+        if not (isinstance(right, ast.List) and not right.elts):
+            return None
+        empty = isinstance(operator, ast.Eq)
+        kind = self._kind_of(left)
+        if kind is not None and kind.name == "List":
+            # A list held by handle: equal to `[]` exactly when it is empty.
+            return self._truth_of(left, empty=empty)
+        return self._buffer_truth(left, empty=empty)
+
+    def _buffer_truth(self, node: ast.expr, *, empty: bool = False) -> Value | None:
+        """`if xs:` of a list a buffer holds: whether it holds anything (with
+        `empty`, whether it holds nothing), as CPython's `len(xs) != 0`."""
+        if not (isinstance(node, ast.Name) and node.id in self.buffers):
+            return None
+        length = core.cast(self.b, core.buffer_len(self.b, self.buffers[node.id]), I64)
+        return core.cmp(self.b, "eq" if empty else "ne", length, core.const(self.b, 0, I64))
+
     def _truth(self, value: Value) -> Value:
         if value.type == BOOL:
             return value
@@ -5259,6 +5755,32 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
 
 
 _SPELLING = {"add": "+", "sub": "-", "mul": "*"}
+#: How CPython names an operand's type in a `TypeError`.
+_OPERAND_NAMES = {T.INT: "int", T.FLOAT: "float", T.BOOL: "bool", T.STR: "str"}
+#: An augmented assignment's operator, as CPython spells it.
+_AUGMENTED = {
+    ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/", ast.FloorDiv: "//",
+    ast.Mod: "%", ast.Pow: "**", ast.LShift: "<<", ast.RShift: ">>",
+    ast.BitAnd: "&", ast.BitOr: "|", ast.BitXor: "^",
+}  # fmt: skip
+#: The checker's type of each kind of number an `int | None` local may hold.
+_KIND_TYPES = {"int": T.INT, "float": T.FLOAT, "bool": T.BOOL}
+
+
+def _optional_kind(t: T.Type) -> str | None:
+    """ "int", "float", or "bool" for `int | None` and the like, else None."""
+    base = T.strip_literal(t)
+    if not (isinstance(base, T.Union_) and T.is_optional(base)):
+        return None
+    present = T.strip_literal(T.remove_none(base))
+    for name, scalar in _KIND_TYPES.items():
+        if present == scalar:
+            return name
+    return None
+
+
+#: Displays and comprehensions: a new container, whatever the checker said.
+_DISPLAYS = (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)
 _NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip", "aio", "tile")
 _SHUFFLES = {"shfl": "idx", "shfl_up": "up", "shfl_down": "down", "shfl_xor": "xor"}
 _ANNOTATION_KINDS = {

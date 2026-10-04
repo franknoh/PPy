@@ -1,0 +1,14 @@
+# fuzz: path=standalone (d.get(k) with no default kept the function in Python, so a standalone build failed)
+def look(d: dict[str, int], key: str) -> int:
+    found = d.get(key)
+    n: int = -1 if found is None else found
+    return n
+
+
+def main() -> None:
+    d: dict[str, int] = {}
+    d["ab"] = 3
+    print(look(d, "ab"), look(d, " spaced out "))
+
+
+main()
