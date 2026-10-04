@@ -23,27 +23,27 @@ ppy explain --summary puzzles.ppy
 **`python  puzzles.ppy`**
 
 ```text
-# sieve: 0.241 s
+# sieve: 0.244 s
 primes below 5000000 : 348513 the last 4999999
 # mean_gap: 0.010 s
 mean gap: 14.3467
-# partitions: 0.033 s
+# partitions: 0.034 s
 partitions of 400 : 6727090051741041926
-# walk: 0.807 s
-farthest squared distance: 7065320
+# walk: 0.831 s
+farthest squared distance, times it moved: (7065320, 2681)
 ```
 
 **`ppy run puzzles.ppy`**
 
 ```text
-# sieve: 0.129 s
+# sieve: 0.127 s
 primes below 5000000 : 348513 the last 4999999
 # mean_gap: 0.001 s
 mean gap: 14.3467
 # partitions: 0.029 s
 partitions of 400 : 6727090051741041926
-# walk: 0.204 s
-farthest squared distance: 7065320
+# walk: 0.207 s
+farthest squared distance, times it moved: (7065320, 2681)
 ```
 
 **`ppy run puzzles.ppy --limit 1000 --terms 50 --steps 1000 --seed 3`**
@@ -56,18 +56,18 @@ mean gap: 5.9581
 # partitions: 0.000 s
 partitions of 50 : 204226
 # walk: 0.000 s
-farthest squared distance: 5972
+farthest squared distance, times it moved: (5972, 75)
 ```
 
 **`ppy explain puzzles.walk`**
 
 <details markdown="1">
-<summary>21 lines</summary>
+<summary>23 lines</summary>
 
 ```text
 function: walk
 qualname: puzzles.walk
-semantic type: (int, int) -> int
+semantic type: (int, int) -> tuple[int, int]
 effects: Alloc, MayRaise[TypeError, ValueError, ZeroDivisionError], ReadObject, WriteObject
 purity: impure
 optimization: O2
@@ -77,15 +77,17 @@ python boundary: a generated CPython-ABI wrapper
 jit: not requested
 parallel: rejected
 reason: `farthest` carries a dependency across iterations
+reductions: +
 representation:
   steps: int -> i64 (guarded)
   seed: int -> i64 (guarded)
-  return: int -> PyLong*
+  return: tuple[int, int] -> PyObject*
 inferred (not annotated):
-  steps: int, from 1 call (puzzles.ppy:105)
-  seed: int, from 1 call (puzzles.ppy:105)
+  steps: int, from 1 call (puzzles.ppy:107)
+  seed: int, from 1 call (puzzles.ppy:107)
   (the Python boundary checks these at each call, and runs the Python body otherwise)
-  return: int, from the body's return statements
+  return: tuple[int, int], from the body's return statements
+refinements: len == 2
 ```
 
 </details>
@@ -93,16 +95,16 @@ inferred (not annotated):
 **`ppy explain --summary puzzles.ppy`**
 
 ```text
-10 functions, 59 statements
-  native, called from Python              5 functions ( 50%)       27 statements ( 46%)
-  native, called from native code         4 functions ( 40%)       10 statements ( 17%)
-  Python                                  1 functions ( 10%)       22 statements ( 37%)
+10 functions, 61 statements
+  native, called from Python              5 functions ( 50%)       29 statements ( 48%)
+  native, called from native code         4 functions ( 40%)       10 statements ( 16%)
+  Python                                  1 functions ( 10%)       22 statements ( 36%)
 
 what keeps functions in Python, by statements kept out (a function can count under more than one):
        22 statements      1 functions  calls a Python function whose `argparse.ArgumentParser` result native code cannot take back
       call a function that changes nothing (its result is checked, and falls back), or keep the call out of the hot function
       see https://ppy.franknoh.dev/latest/guide/native-effects/
-      puzzles.ppy:85 puzzles.main
+      puzzles.ppy:87 puzzles.main
 
 native, but Python calls the Python body (why its boundary is not used):
       1 functions  calls itself without a loop; CPython's recursion limit stays in force
@@ -121,8 +123,8 @@ native, but Python calls the Python body (why its boundary is not used):
   of parts no larger than `largest`, under `@functools.lru_cache`.
 - `walk(steps, seed)` takes `steps` steps of a random walk on the grid
   (from a linear congruential generator), each one a `Vector` added to the
-  position, and returns the squared distance of the farthest point it
-  reached, comparing points with `<`.
+  position. It keeps the farthest point, comparing points with `<`, and
+  returns its squared distance and how many times it moved.
 - `mean_gap(primes, tolerance=EPSILON)` is the mean gap between
   consecutive primes.
 - `main()` reads `--limit`, `--terms`, `--steps`, and `--seed` with
@@ -145,7 +147,9 @@ follow from them. With `strict = false`:
   `Vector.__mul__` with an `int` and of `Vector.__add__` with a `Vector`,
   and `farthest < position` is a call of `Vector.__lt__`. A comparison
   method is only typed as taking its own class, since sorting and lookups
-  call it with two of the class's objects.
+  call it with two of the class's objects. Written as
+  `farthest = max(farthest, position)`, the comparison would not count, and
+  `walk` would stay in Python: `max` of two objects has no native form.
 - **Decorators.** `lru_cache` keeps the function's parameters, so
   `partitions` is typed from its calls as an undecorated function would
   be. A project decorator counts the same way only when its wrapper is
@@ -183,17 +187,17 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python puzzles.ppy` | 1.14 |
-| `ppy run puzzles.ppy`, after the first run built the cache | 0.42 |
+| `python puzzles.ppy` | 1.18 |
+| `ppy run puzzles.ppy`, after the first run built the cache | 0.44 |
 
 Each part, as the program prints it, the mean of five runs in seconds:
 
 | part | CPython | `ppy run` |
 |---|---:|---:|
-| `sieve(5_000_000)` | 0.242 | 0.128 |
-| `mean_gap` | 0.010 | 0.001 |
-| `partitions(400, 400)` | 0.035 | 0.030 |
-| `walk(2_000_000, 7)` | 0.818 | 0.207 |
+| `sieve(5_000_000)` | 0.253 | 0.132 |
+| `mean_gap` | 0.011 | 0.001 |
+| `partitions(400, 400)` | 0.037 | 0.031 |
+| `walk(2_000_000, 7)` | 0.838 | 0.219 |
 
 There is no standalone build: `main` stays in Python.
 

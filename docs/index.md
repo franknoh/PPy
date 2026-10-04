@@ -105,7 +105,7 @@ to a native build in about ten minutes.
   sets, and objects cross in the same generated C wrapper, and what a call
   writes comes back into the caller's objects.
 - **Tested.** @@TEST_FUNCTIONS@@ test functions on Python 3.12, 3.13, and
-  3.14, with 68% statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
+  3.14, with 67% statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
   each documented in one place.
 
 </div>

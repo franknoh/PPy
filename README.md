@@ -44,8 +44,8 @@ Documentation: **[ppy.franknoh.dev](https://ppy.franknoh.dev/)**
   sets reads them in place instead of copying them.
 - `ppy convert` and `ppy migrate` bring existing Python over one module at a
   time.
-- 2,480 tests on Python 3.12, 3.13, and 3.14, covering 68% of the
-  compiler's 55k statements, plus differential fuzzing of generated
+- 2,570 tests on Python 3.12, 3.13, and 3.14, covering 67% of the
+  compiler's 56k statements, plus differential fuzzing of generated
   programs. 81 diagnostic codes, each documented once.
 
 ## Installation

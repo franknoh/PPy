@@ -208,14 +208,14 @@
    "warm": 0.24536109203472733
   },
   "55_linked_structures/trees.ppy": {
-   "python": 0.6571568389190361,
-   "cold": 1.015462867973838,
-   "warm": 0.3023248719982803
+   "python": 0.65,
+   "cold": 1.064,
+   "warm": 0.323
   },
   "56_options_and_doctests/puzzles.ppy": {
-   "python": 1.1315582219976932,
-   "cold": 0.9525880109868012,
-   "warm": 0.41685052507091314
+   "python": 1.178,
+   "cold": 1.028,
+   "warm": 0.439
   },
   "15_algorithms/15a_nqueens/nqueens.ppy": {
    "python": 0.14796791493427008,

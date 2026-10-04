@@ -142,7 +142,7 @@ if __name__ == "__main__":
     print("found, depth of 0, total:", workload(50_000, 7))
     print(f"# workload: {time.perf_counter() - start:.2f} s")
     small = LinkedList()
-    for value in range(5):
-        small.push(value)
+    for item in range(5):
+        small.push(item)
     small.reverse()
     print("reversed in place:", small.total(), small.length)

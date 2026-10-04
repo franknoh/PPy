@@ -32,7 +32,7 @@ reversed in place: 10 5
 
 ```text
 found, depth of 0, total: (207200, 1, 1249975000)
-# workload: 0.29 s
+# workload: 0.30 s
 reversed in place: 10 5
 ```
 
@@ -146,11 +146,11 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python trees.ppy` | 0.65 |
-| `ppy run trees.ppy`, after the first run built the cache | 0.30 |
+| `python trees.ppy` | 0.67 |
+| `ppy run trees.ppy`, after the first run built the cache | 0.34 |
 
-`workload(50_000, 7)` alone, as the program prints it: 0.63 s under
-CPython and 0.27 s under `ppy run`.
+`workload(50_000, 7)` alone, as the program prints it, the mean of five runs: 0.65 s under
+CPython and 0.30 s under `ppy run`.
 
 There is no standalone build: the program has no `main()`, and a
 standalone binary needs a native `main` to start from.
