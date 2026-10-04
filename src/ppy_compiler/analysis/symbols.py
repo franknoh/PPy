@@ -877,6 +877,12 @@ class ProjectSymbols:
         through it (spec 8.1).
         """
         resolver = self.resolver(symbols)
+        #: Names the module binds more than once: `head = None`, a node later,
+        #: is a variable, whatever its first value spells.
+        stores: dict[str, int] = {}
+        for inner in symbols.module.nodes:
+            if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Store):
+                stores[inner.id] = stores.get(inner.id, 0) + 1
         for node in symbols.module.tree.body:
             if isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
                 symbols.type_aliases[node.name.id] = node.value
@@ -902,6 +908,12 @@ class ProjectSymbols:
             ):
                 target, value = node.target, node.value
             if not isinstance(target, ast.Name) or value is None:
+                continue
+            if isinstance(node, ast.Assign) and (
+                stores.get(target.id, 0) > 1
+                or (isinstance(value, ast.Constant) and value.value is None)
+            ):
+                # `X = None` alone names nothing anyone annotates with.
                 continue
             if self._is_type_expression(symbols, value):
                 symbols.type_aliases[target.id] = value

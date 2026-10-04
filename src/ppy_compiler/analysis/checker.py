@@ -7492,6 +7492,11 @@ class _Checker:
         """Could a mutating callee reach anything this function does not own?"""
         if declared is not None and T.is_immutable(declared):
             return True
+        if T.strip_literal(self.module.node_types.get(id(argument), T.UNKNOWN)) == T.NONE:
+            # `None` here (`root = None` before a loop that binds an object):
+            # nothing to write through. Where the name holds an object later,
+            # the pass that sees it asks again.
+            return True
         if (
             isinstance(argument, ast.Name)
             and self._aliases is not None

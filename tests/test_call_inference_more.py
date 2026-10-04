@@ -817,3 +817,68 @@ def test_an_int_returned_for_a_declared_float_stays_an_int(tmp_path: Path):
     _agrees(tmp_path, FLOAT_RESULT, [])
     explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.merge_cost")
     assert "returns an `int` where `float` is declared" in explained.stdout, explained.stdout
+
+
+#: A local bound to `None` first and to an object later is the object or
+#: `None`: `prev = None` before a loop that relinks a list, `root = None`
+#: before the calls that grow a tree. A module that binds `head = None` and
+#: then a node is not naming a type.
+NONE_FIRST = """
+class Node:
+    def __init__(self, value):
+        self.value = value
+        self.next = None
+        self.left = None
+        self.right = None
+
+
+def reverse(head: Node) -> Node | None:
+    prev = None
+    node = head
+    while node is not None:
+        nxt = node.next
+        node.next = prev
+        prev = node
+        node = nxt
+    return prev
+
+
+def insert(node: Node | None, key: int) -> Node:
+    if node is None:
+        return Node(key)
+    if key < node.value:
+        node.left = insert(node.left, key)
+    else:
+        node.right = insert(node.right, key)
+    return node
+
+
+def build(count: int) -> int:
+    root = None
+    for k in range(count):
+        root = insert(root, (k * 7919) % count)
+    return root.value
+
+
+def main():
+    head = Node(1)
+    head.next = Node(2)
+    head.next.next = Node(3)
+    back = reverse(head)
+    print(back.value, back.next.value, build(200))
+
+
+main()
+chain = None
+for i in range(5):
+    cell = Node(i)
+    cell.next = chain
+    chain = cell
+print(chain.value, chain.next.value)
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_local_bound_to_none_then_an_object_goes_native(tmp_path: Path):
+    _agrees(tmp_path, NONE_FIRST, ["reverse", "build"])
