@@ -90,6 +90,14 @@ class BuiltWrappers:
 
         return attach(self.module, library)
 
+    def attach_random(self, owner=None) -> bool:  # type: ignore[no-untyped-def]
+        """Point the wrappers of functions that draw at `random`'s state."""
+        if self.module is None:
+            return False
+        from ppy_runtime.binding import attach_random  # pylint: disable=import-outside-toplevel
+
+        return attach_random(self.module, owner)
+
     def attach_effects(self, library=None) -> bool:  # type: ignore[no-untyped-def]
         """Point the wrappers of functions with effects at the held output."""
         if self.module is None:

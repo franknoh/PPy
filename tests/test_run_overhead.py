@@ -93,6 +93,35 @@ def weighed(d: dict[int, int]) -> int:
     return s
 
 
+def grid(g: list[list[int]]) -> int:
+    s = 0
+    for row in g:
+        for x in row:
+            s += x
+    return s
+
+
+def firsts(g: list[list[int]]) -> int:
+    s = 0
+    for row in g:
+        s += row[0]
+    return s
+
+
+def sizes(words: list[str]) -> int:
+    s = 0
+    for w in words:
+        s += len(w)
+    return s
+
+
+def report(xs: list[int], out: list[int]) -> None:
+    s = 0
+    for x in xs:
+        s += x * x % 7 + (x >> 2)
+    out[0] = s
+
+
 class Link:
     def __init__(self, value: int) -> None:
         self.value = value
@@ -164,6 +193,15 @@ def test_work_that_grows_with_the_argument_crosses(exposure, name: str):  # type
         ("weighed", True, ""),
         # Copying a chain of objects costs more than a short walk over it.
         ("chain", False, "object"),
+        # Read in place, an inner list costs about what holding it costs native
+        # code: a loop over its elements pays, one element of each does not.
+        ("grid", True, ""),
+        ("firsts", False, "copying the collections"),
+        # A borrowed string costs little to cross, and as much to hold as one
+        # `len` saves.
+        ("sizes", False, "copying the collections"),
+        # Returning nothing, it reads one list and writes another, and pays.
+        ("report", True, ""),
     ],
 )
 def test_the_crossing_is_taken_where_it_is_cheaper(exposure, name: str, exposed: bool, why: str):  # type: ignore[no-untyped-def]

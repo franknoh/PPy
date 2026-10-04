@@ -1265,9 +1265,9 @@ class _Binder(LibraryBinder):
                 register_function(signature.qualname, fallback)
             if types is not None:
                 register = wrappers.registrar(qualname)
-                # A function that draws needs `random`'s state saved around it,
-                # which only the Python-side wrapper does.
-                if not signature.draws and not (
+                # A function that draws has `random`'s state saved around it
+                # by the wrapper, once it holds the state's address.
+                if (not signature.draws or wrappers.attach_random()) and not (
                     observation_wanted(specializer, policy, info) and register is not None
                 ):
                     # Nothing to watch for: the wrapper holds the fallback in C
