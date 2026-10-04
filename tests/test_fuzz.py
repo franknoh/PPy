@@ -108,6 +108,21 @@ def test_unannotated_programs_with_inference_shapes_agree(seed: int):
     ]
 
 
+@pytest.mark.parametrize("seed", SEEDS[:2])
+def test_programs_that_edit_structures_agree(seed: int):
+    """Classes with unannotated fields, a tree with parent links and a doubly
+    linked list, relinked in place by methods Python calls natively: every
+    shape, link, and identity is CPython's."""
+    paths = tuple(p for p in _available() if p in STATE_PATHS)
+    source = generate_program(seed, structures=True)
+    assert source.startswith(UNANNOTATED_MARK) and "class STree" in source
+    mismatches = compare(run_program(source, paths))
+    assert not mismatches, [
+        (m.path, m.reason, m.expected.last_error, m.found.last_error, m.found.stderr[-2000:])
+        for m in mismatches
+    ]
+
+
 def _regressions() -> list[Path]:
     return sorted(REGRESSIONS.glob("*.ppy"))
 
