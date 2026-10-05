@@ -49,7 +49,12 @@ plain class that crosses again and again is the exception: it stays
 resident in native memory between calls
 ([Resident objects](classes.md#resident-objects)), and costs a flat price
 per call: about seven operations, one more per object, eight more for each
-object the call writes, and a hundred for each object the body makes.
+object the call writes, and a hundred for each object the body makes. A
+function that makes objects stays in Python when its heaviest loop, over 16
+passes, does less work than those hundreds, and always when it makes one
+inside a loop: an object native code makes is made in Python too when the
+call answers, about a microsecond each. `ppy explain` gives that reason as
+"the objects it makes cost more to hand to Python than its loops save".
 
 `ppy explain module.name` (or `FILE.ppy:LINE`) reports the decision and,
 when the answer is no, the first blocking construct.
@@ -229,8 +234,10 @@ code sets is set on the Python object when the call answers.
 What stays in Python: sorting, `min`, and `max` over elements that may be
 `None` (CPython raises for them, in an order that depends on the
 comparisons), keys that may be `None`, a format spec over a value that may
-be `None` (`f"{x:>4}"`), unions of numbers with anything but `None`, and
-tuples holding a value that may be `None`.
+be `None` (`f"{x:>4}"`), `x and y` used as a value of two such operands,
+`repr(s)` of a `str | None`, `d.get(k, default)` of a dict whose values
+may be `None`, unions of numbers with anything but `None`, and tuples
+holding a value that may be `None` (`tuple[int | None, int]`).
 
 ## What the body may contain
 
@@ -487,7 +494,10 @@ short straight-line body keeps it: dropping the GIL and taking it back costs
 about 20 ns, what two operations cost. A function that prints, reads, or
 calls into Python keeps the GIL too: its wrapper holds its output until the
 call ends and writes it out then, and the call takes the GIL where it
-reaches Python ([Effects in native code](native-effects.md)).
+reaches Python ([Effects in native code](native-effects.md)). So does a
+call whose objects are resident
+([Resident objects](classes.md#resident-objects)); the same function
+called with objects that are copied releases it.
 
 Reading input is its own guide: [Reading input](input.md).
 

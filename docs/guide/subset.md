@@ -215,7 +215,11 @@ These are valid Python that the checker accepts and types:
   call on CPython (see
   [A `float` given an `int`](native-lowering.md#a-float-given-an-int)).
 - A list written in place with narrower elements than declared:
-  `m: list[list[float]] = [[0] * n for _ in range(n)]`.
+  `m: list[list[float]] = [[0] * n for _ in range(n)]`, and rows of `None`
+  where the elements may be `None`:
+  `board: list[list[str | None]] = [[None] * w for _ in range(h)]`. The
+  same display outside a comprehension, `r: list[int | None] = [None] * w`,
+  is still `E1301` (`list[NoneType]` against `list[int | None]`).
 - A generator expression where a `Generator[T, None, None]` is declared.
 
 The standard library's `Queue`, `LifoQueue`, `PriorityQueue`, `deque`,
