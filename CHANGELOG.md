@@ -10,10 +10,12 @@ lists, dicts, and sets in place instead of copying them. More shapes lower
 `d.get(k)`), and more parameters take types without annotations. Fuzzing and
 the new examples found wrong answers that 0.6.0 also gave, now fixed: a
 project decorator skipped under `strict = false`, a bool stored as an int
-printing `1`, and writes through a field alias lost. On TheAlgorithms/Python
-the functions Python calls natively went from 806 to 867 (846 to 941 without
-strict mode), and 387 of 400 scripts print the same as under CPython, with
-the other 13 skipped and none differing.
+printing `1`, and writes through a field alias lost. Objects Python passes to native code keep
+their native records between calls, and numbers and strings that may be
+`None` run natively. On TheAlgorithms/Python the functions Python calls
+natively went from 806 to 909 (846 to 982 without strict mode), and 387 of
+400 scripts print the same as under CPython, with the other 13 skipped and
+none differing.
 
 ### Objects written in place
 
