@@ -58,6 +58,10 @@ static PyObject *ppy_sanitizer_failed(int status, const char *qualname) {
 
 /* A string result: the UTF-8 copy the native code made, read and freed. */
 static PyObject *ppy_text_result(char *data, long long length) {
+    if (length < 0) {
+        /* A string that may be `None`, and is. */
+        return Py_NewRef(Py_None);
+    }
     PyObject *made = PyUnicode_DecodeUTF8(data, (Py_ssize_t)length, NULL);
     free(data);
     return made;
@@ -1057,9 +1061,16 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
             size = f"text{position}_len"
             declarations.append(f"    const char *{data} = NULL;")
             declarations.append(f"    Py_ssize_t {size} = 0;")
+            if parameter.nullable:
+                # `None` is no bytes and a length of -1.
+                lines.append(f"    if ({source} == Py_None) {{")
+                lines.append(f"        {size} = -1;")
+                lines.append("    } else {")
             lines.append(f"    if (!PyUnicode_CheckExact({source})) PPY_GUARD_FAIL();")
             lines.append(f"    {data} = PyUnicode_AsUTF8AndSize({source}, &{size});")
             lines.append(f"    if ({data} == NULL) PPY_GUARD_FAIL();")
+            if parameter.nullable:
+                lines.append("    }")
             arguments.append(f"(char *){data}")
             arguments.append(f"(long long){size}")
             continue

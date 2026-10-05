@@ -28,7 +28,7 @@ from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, U8, BufferType, PtrType, Successor, TupleType, Value
 from ..ir.dialects import core
-from .collections import HANDLE, STR, Kind, Shape
+from .collections import HANDLE, OPTIONAL_STR, STR, Kind, Shape
 from .formatting import format_call, percent
 
 
@@ -130,7 +130,11 @@ class StringLowering:
         """`STR` when `node` is a string, from the checker or from what holds it."""
         collections = self.collections  # type: ignore[attr-defined]
         if isinstance(node, ast.Name) and node.id in collections:
-            return STR if collections[node.id].kind == STR else None
+            held = collections[node.id].kind
+            if held == OPTIONAL_STR and T.strip_literal(self._type_of(node)) == T.STR:  # type: ignore[attr-defined]
+                # A string or `None`, narrowed to the string.
+                return STR
+            return STR if held == STR else None
         found = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
         if found == T.STR:
             return STR
@@ -1167,7 +1171,7 @@ class StringLowering:
                 rt("ppy_str_add", (builder, handle), None)
             self._done_with(handle, owned)  # type: ignore[attr-defined]
             return
-        if self._optional_formatted(builder, node, spec):  # type: ignore[attr-defined]
+        if self._optional_formatted(builder, node, spec, conversion):  # type: ignore[attr-defined]
             return
         value = self._expr(node)  # type: ignore[attr-defined]
         kind = {I64: "int", F64: "float", BOOL: "bool"}.get(value.type)

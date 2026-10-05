@@ -502,6 +502,10 @@ int64_t ppy_str_order(int8_t *a, int8_t *b) {
     if (a == b) {
         return 0;
     }
+    if (a == NULL || b == NULL) {
+        /* `None` in a `str | None` slot: only equality asks, and it differs. */
+        return a == NULL ? -1 : 1;
+    }
     int64_t la = ppy_str_bytes(a);
     int64_t lb = ppy_str_bytes(b);
     int64_t n = la < lb ? la : lb;
@@ -536,6 +540,9 @@ int64_t ppy_str_hash(int8_t *handle) {
 int64_t ppy_str_equal(int8_t *a, int8_t *b) {
     if (a == b) {
         return 1;
+    }
+    if (a == NULL || b == NULL) {
+        return 0; /* `None` is no string */
     }
     int64_t *ha = (int64_t *)a;
     int64_t *hb = (int64_t *)b;

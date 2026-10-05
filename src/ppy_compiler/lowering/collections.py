@@ -48,6 +48,7 @@ from .intness import gives_int
 
 __all__ = [
     "HANDLE",
+    "OPTIONAL_STR",
     "STR",
     "CollectionLowering",
     "Kind",
@@ -123,7 +124,7 @@ class Shape:
     @property
     def words(self) -> int:
         if self.kind == "optional":
-            return 2
+            return 1 if self.parts[0] == "str" else 2
         return len(self.parts) if self.kind in {"tuple", "record"} else 1
 
     @property
@@ -132,13 +133,15 @@ class Shape:
 
     @property
     def handles(self) -> int:
-        return 1 if self.kind in {"collection", "object", "str", "function", "generator"} else 0
+        return 1 if self.reference else 0
 
     @property
     def reference(self) -> bool:
-        """Held by handle: a collection, a string, an instance of an object class,
-        or a function value."""
-        return self.kind in {"collection", "object", "str", "function", "generator"}
+        """Held by handle: a collection, a string (or `None`, the null handle,
+        where it may be), an instance of an object class, or a function value."""
+        return self.kind in {"collection", "object", "str", "function", "generator"} or (
+            self.kind == "optional" and self.parts[0] == "str"
+        )
 
     @property
     def comparable(self) -> bool:
@@ -150,7 +153,7 @@ class Shape:
     @property
     def text(self) -> int:
         """The words that are strings, as a key's mask."""
-        return 1 if self.kind == "str" else 0
+        return 1 if self.kind == "str" or self == OPTIONAL_STR else 0
 
     @property
     def leaves(self) -> int:
@@ -166,7 +169,7 @@ class Shape:
     def ir_type(self) -> IRType:
         if self.kind in _SCALARS:
             return _SCALARS[self.kind]
-        if self.kind == "optional":
+        if self.kind == "optional" and self.parts[0] != "str":
             # The number, and whether there is one.
             return TupleType((_SCALARS[self.parts[0]], BOOL))
         if self.kind == "tuple":
@@ -188,6 +191,8 @@ class Shape:
 
 #: A string: one handle word.
 STR = Shape("str")
+#: A string or `None`: one handle word, null for `None`.
+OPTIONAL_STR = Shape("optional", ("str",))
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,7 +291,7 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
         if len(members) != 1 or len(members) == len(base.members):
             return None
         found = shape_of(members[0], records)
-        if found is not None and found.kind in {"int", "float", "bool"}:
+        if found is not None and found.kind in {"int", "float", "bool", "str"}:
             return Shape("optional", (found.kind,))
         return found if found is not None and found.kind == "object" else None
     if base in (T.INT, T.FLOAT, T.BOOL):
@@ -488,7 +493,12 @@ class CollectionLowering:
 
     def _reference_of(self, node: ast.expr) -> Kind | Shape | None:
         """A collection, a string, or an object: what native code holds `node` by handle as."""
-        return self._kind_of(node) or self._object_of(node) or self._string_of(node)  # type: ignore[attr-defined]
+        return (
+            self._kind_of(node)
+            or self._object_of(node)
+            or self._string_of(node)  # type: ignore[attr-defined]
+            or self._text_or_none(node)  # type: ignore[attr-defined]
+        )
 
     def _reference_of_type(self, t: T.Type) -> Kind | Shape | None:
         found = shape_of(t, self._records())
@@ -1764,6 +1774,9 @@ class CollectionLowering:
         kind = self._reference_of(value) if not isinstance(value, ast.Name) else None
         if isinstance(value, ast.Name) and value.id in self.collections:
             kind = self.collections[value.id].kind
+        if self._local_text_or_none(name):  # type: ignore[attr-defined]
+            # A local that is a string or `None` is held so, whatever it is bound to.
+            kind = OPTIONAL_STR
         if kind is None and declared is not None:
             kind = self._reference_of_type(declared)
         if kind is None and name in self.collections:
@@ -1786,6 +1799,9 @@ class CollectionLowering:
         held = self.collections.get(name)
         if held is not None and held.kind != kind and not _related(held.kind, kind):
             raise Unsupported(f"`{name}` keeps one collection type")
+        if held is not None and kind == OPTIONAL_STR:
+            # Bound to a string first, it may be `None` later.
+            held.kind = OPTIONAL_STR
         if held is None:
             slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
             # The slot owns what it holds (a generator's frame lets go of it).
@@ -1850,6 +1866,10 @@ class CollectionLowering:
         """
         if isinstance(node, ast.Constant) and node.value is None:
             return self._rt("ppy_coll_none", (), HANDLE), True
+        if isinstance(node, (ast.Attribute, ast.Subscript)):
+            checked = self._narrowed_text(node)  # type: ignore[attr-defined]
+            if checked is not None:
+                return checked
         if isinstance(node, ast.Name):
             held = self.collections.get(node.id)
             if held is None and node.id == "__file__":
@@ -2617,6 +2637,9 @@ def _copies_before_writes(function: ast.AST, record: str, type_of) -> bool:  # t
 def _related(held: Kind | Shape, kind: Kind | Shape) -> bool:
     """Two object classes: a name holds either by the same handle, and what the
     checker says of each use decides which class it is read as."""
+    if {held, kind} == {STR, OPTIONAL_STR}:
+        # A string that may be `None`: one handle, null for `None`.
+        return True
     return (
         isinstance(held, Shape) and isinstance(kind, Shape) and held.kind == kind.kind == "object"
     )
@@ -2646,7 +2669,7 @@ def _scalar_name(t: T.Type | None) -> str:
 
 def _kinds(shape: Shape) -> tuple[str, ...]:
     if shape.kind == "optional":
-        return (shape.parts[0], "bool")
+        return ("str",) if shape.parts[0] == "str" else (shape.parts[0], "bool")
     return shape.parts if shape.kind in {"tuple", "record"} else (shape.kind,)
 
 

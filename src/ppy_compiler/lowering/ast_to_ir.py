@@ -797,7 +797,11 @@ class Frontend:
             for p, text in zip(native.parameters, texts, strict=True)
         ):
             return None
-        returns_text = T.strip_literal(info.ret) == T.STR
+        returned = T.strip_literal(info.ret)
+        # A string or `None` crosses as text too: `None` is no bytes and a
+        # length of -1 (`lowering/optionals.py`).
+        maybe_none = isinstance(returned, T.Union_) and T.remove_none(returned) == T.STR
+        returns_text = returned == T.STR or maybe_none
         if not any(texts) and not returns_text:
             return None
         function = self.declared[info.qualname][0]
@@ -821,14 +825,23 @@ class Frontend:
         b = Builder(entry)
         arguments: list[Value] = []
         made: list[Value] = []
-        for argument, is_text in zip(entry.arguments, texts, strict=True):
+        for argument, is_text, parameter in zip(
+            entry.arguments, texts, native.parameters, strict=True
+        ):
             if not is_text:
                 arguments.append(argument)
                 continue
             data = core.buffer_data(b, argument)
             length = core.cast(b, core.buffer_len(b, argument), I64)
+            if parameter.nullable:
+                # `None` came as a length of -1: the null handle.
+                absent = core.cmp(b, "lt", length, core.const(b, 0, I64))
+                length = core.select(b, absent, core.const(b, 0, I64), length)
             handle = core.call_extern(b, "ppy_str_new", (data, length), (HANDLE,)).results[0]
             made.append(handle)
+            if parameter.nullable:
+                none = core.call_extern(b, "ppy_coll_none", (), (HANDLE,)).results[0]
+                handle = core.select(b, absent, none, handle)
             arguments.append(handle)
         called = core.call(
             b, function.name, tuple(arguments), function.results, capture_status=True
@@ -848,9 +861,28 @@ class Frontend:
         core.guard(b, core.cmp(b, "eq", status, core.const(b, 0, I64)), "contract", "fell back")
         if returns_text:
             handle = results[0]
+            if maybe_none:
+                # `None` is no bytes and a length of -1.
+                there = thunk.body.add_block("text")
+                done = thunk.body.add_block("done", [("data", PtrType(U8)), ("length", I64)])
+                present = core.cmp(b, "ne", core.cast(b, handle, I64), core.const(b, 0, I64))
+                nothing = core.cast(
+                    b, core.call_extern(b, "ppy_coll_none", (), (HANDLE,)).results[0], PtrType(U8)
+                )
+                core.cond_br(
+                    b,
+                    present,
+                    Successor(there),
+                    Successor(done, [nothing, core.const(b, -1, I64)]),
+                )
+                b.at_end(there)
             data = core.call_extern(b, "ppy_str_export", (handle,), (PtrType(U8),)).results[0]
             length = core.call_extern(b, "ppy_str_bytes", (handle,), (I64,)).results[0]
             core.call_extern(b, "ppy_coll_release", (handle,), ())
+            if maybe_none:
+                core.br(b, Successor(done, [data, length]))
+                b.at_end(done)
+                data, length = done.arguments
             exported = b.create(
                 "core.call_intrinsic",
                 (data, length),
@@ -863,7 +895,7 @@ class Frontend:
         else:
             core.ret(b)
         parameters = tuple(
-            NativeParam(p.name, TEXT, source=p.source) if is_text else p
+            NativeParam(p.name, TEXT, source=p.source, nullable=p.nullable) if is_text else p
             for p, is_text in zip(native.parameters, texts, strict=True)
         )
         return replace(
@@ -5747,12 +5779,14 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
 
     def _optional_get(self, node: ast.expr) -> tuple[Value, Value] | None:
         """`d.get(k)` of a dict of numbers: whether `k` is there, and its value
-        (the first record's, discarded, where it is not)."""
+        (0 where it is not). A dict of numbers that may be `None` gives its
+        value's flag too, and `d.get(k, default)` the default where `k` is not
+        there (`lowering/optionals.py`)."""
         if not (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "get"
-            and len(node.args) == 1
+            and len(node.args) in (1, 2)
             and not node.keywords
             and self._is_collection(node.func.value)
         ):
@@ -5761,10 +5795,27 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if kind.name in _CONTAINER_ALIASES:
             kind = Kind(_CONTAINER_ALIASES[kind.name], kind.value, kind.key, kind.flavor)
         shape = kind.value
-        if kind.key is None or shape is None or shape.kind not in {"int", "float", "bool"}:
+        numbers = shape is not None and (
+            shape.kind in {"int", "float", "bool"}
+            or (shape.kind == "optional" and shape.parts[0] != "str")
+        )
+        if kind.key is None or shape is None or not numbers:
+            if len(node.args) == 2:
+                self._done_with(handle, owned)
+                return None
             raise Unsupported("`get` without a default takes a dict of numbers natively")
+        number = shape.parts[0] if shape.kind == "optional" else shape.kind
+        wanted = self._optional_kind_of(node) if len(node.args) == 2 else None
+        if len(node.args) == 2 and wanted is None:
+            self._done_with(handle, owned)
+            return None
         family = kind.family
         key = self._key(kind, node.args[0])
+        default = None
+        if wanted is not None:
+            # CPython evaluates the default, after the key, before it looks.
+            default = self._optional_pair(node.args[1], wanted)
+            number = wanted
         found = self._rt(f"ppy_{family}_find", (handle, key))
         present = self._found(found)
         safe = core.select(self.b, present, found, self._word(0))
@@ -5773,7 +5824,25 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if keys_done is not None:
             keys_done()
         self._done_with(handle, owned)
-        return present, value
+        if shape.kind == "optional":
+            flag, value = self._unpack(value)
+            present = core.bitwise(self.b, "and", present, flag)
+            if default is not None:
+                # The stored value, `None` included, wherever the key is there.
+                there = self._found(found)
+                value = self._as_kind(value, number, node)
+                return (
+                    core.select(self.b, there, flag, default[0]),
+                    core.select(self.b, there, value, default[1]),
+                )
+        if default is not None:
+            value = self._as_kind(value, number, node)
+            return (
+                core.select(self.b, present, core.const(self.b, True, BOOL), default[0]),
+                core.select(self.b, present, value, default[1]),
+            )
+        # `None` is the number 0 with its flag clear.
+        return present, core.select(self.b, present, value, self._zero(_kind(value.type)))
 
     def _optional_value(self, node: ast.Name) -> Value:
         """The number an `int | None` local holds, where the checker says it
@@ -5847,21 +5916,14 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self.__dict__.setdefault("_made_nodes", []).append(made)
             return self._print_optional(made)
         index = next(
-            (
-                i
-                for i, argument in enumerate(call.args)
-                if isinstance(argument, ast.Name)
-                and argument.id in self.optionals
-                and T.strip_literal(self._type_of(argument))
-                != _KIND_TYPES[self.optionals[argument.id][2]]
-            ),
+            (i for i, argument in enumerate(call.args) if self._prints_maybe_none(argument)),
             None,
         )
         if index is None:
             return False
         name = call.args[index]
         assert isinstance(name, ast.Name)
-        if _optional_kind(self._type_of(name)) is None:
+        if T.strip_literal(self._type_of(name)) == T.NONE:
             # `None` for certain here: `print` writes `None`.
             absent = self._typed(ast.Constant("None"), T.STR, name)
             args = [*call.args[:index], absent, *call.args[index + 1 :]]
@@ -5875,8 +5937,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self.__dict__.setdefault("_made_nodes", []).append(made)
             self._statement(made)
             return True
-        kind = self.optionals[name.id][2]
-        held = self._typed(ast.Name(name.id, ast.Load()), _KIND_TYPES[kind], name)
+        kind = self.optionals[name.id][2] if name.id in self.optionals else "str"
+        held = self._typed(ast.Name(name.id, ast.Load()), _KIND_TYPES.get(kind, T.STR), name)
         absent = self._typed(ast.Constant("None"), T.STR, name)
         sides: list[list[ast.stmt]] = []
         for replacement in (absent, held):

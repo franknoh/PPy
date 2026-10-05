@@ -835,8 +835,11 @@ def _dress(wrapper, signature, fallback) -> None:  # type: ignore[no-untyped-def
     wrapper.__module__ = getattr(fallback, "__module__", wrapper.__module__)
 
 
-def _text_result(address: int | None, length: int) -> str:
-    """A string the native code returned: its UTF-8 copy read, then freed."""
+def _text_result(address: int | None, length: int) -> str | None:
+    """A string the native code returned: its UTF-8 copy read, then freed.
+    A length of -1 is `None`, from a string that may be `None`."""
+    if length < 0:
+        return None
     try:
         return ctypes.string_at(address or 0, length).decode("utf-8") if length else ""
     finally:
@@ -1034,8 +1037,15 @@ def _expander_for(
     """Build the guard-and-convert step for one source-level parameter."""
     if parameter.is_text:
 
+        nullable = parameter.nullable
+
         def expand_text(value: object, atoms: list, borrowed: list) -> None:
-            """A `str` as its UTF-8 bytes; one with a lone surrogate has none."""
+            """A `str` as its UTF-8 bytes; one with a lone surrogate has none.
+            `None`, where the string may be `None`, is no bytes and -1."""
+            if value is None and nullable:
+                atoms.append(None)
+                atoms.append(-1)
+                return
             if type(value) is not str:
                 raise GuardFailed
             try:

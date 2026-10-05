@@ -443,6 +443,9 @@ def _collection_param(
         if len(members) != 1 or len(members) == len(base.members):
             return None
         base = T.strip_literal(members[0])
+        if base == T.STR:
+            # A string or `None`: the null handle is `None`.
+            return NativeParam(name, "handle", "str", class_name="str", nullable=True)
         if not isinstance(base, T.Instance) or base.name in _COLLECTIONS:
             return None
         nullable = True

@@ -23,6 +23,7 @@ from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported, optional_scalar
 from ..ir import BOOL, F64, I64, IRType, Successor, TupleType, Value
 from ..ir.dialects import core
+from .collections import HANDLE, OPTIONAL_STR, STR
 from .intness import gives_bool, gives_int
 
 __all__ = ["OptionalLowering", "optional_ir", "optional_kind"]
@@ -55,6 +56,16 @@ def optional_kind(t: T.Type) -> str | None:
 def optional_ir(kind: str) -> TupleType:
     """The packed IR value of a number of `kind` or `None`: the number, the flag."""
     return TupleType((_SCALARS[kind], BOOL))
+
+
+def _text_or_none_type(t: T.Type) -> bool:
+    """Whether `t` is `str | None`."""
+    base = T.strip_literal(t)
+    return (
+        isinstance(base, T.Union_)
+        and T.is_optional(base)
+        and T.strip_literal(T.remove_none(base)) == T.STR
+    )
 
 
 def is_packed(t: IRType) -> bool:
@@ -222,10 +233,10 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
                 _offset, field = self._field(shape, node.attr)  # type: ignore[attr-defined]
             except Unsupported:
                 return None
-            return field.parts[0] if field.kind == "optional" else None
+            return field.parts[0] if field.kind == "optional" and field != OPTIONAL_STR else None
         if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Slice):
             kind = self._kind_of(node.value)  # type: ignore[attr-defined]
-            if kind is None or kind.value is None:
+            if kind is None or kind.value is None or kind.value == OPTIONAL_STR:
                 return None
             return kind.value.parts[0] if kind.value.kind == "optional" else None
         if isinstance(node, ast.Call):
@@ -267,6 +278,142 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
             found = self._optional_order(node)
         return found
 
+    # -- strings that may be `None` --------------------------------------------------
+
+    def _text_or_none(self, node: ast.expr) -> object | None:
+        """`OPTIONAL_STR` where the checker says `node` is a string or `None`."""
+        return OPTIONAL_STR if _text_or_none_type(self._type_of(node)) else None  # type: ignore[attr-defined]
+
+    def _local_text_or_none(self, name: str) -> bool:
+        """Whether a local is a string at one binding and `None` at another."""
+        analysis = self.frontend.analysis.functions.get(self.info.qualname)  # type: ignore[attr-defined]
+        final = analysis.locals.get(name) if analysis is not None else None
+        return final is not None and _text_or_none_type(final)
+
+    def _maybe_text(self, node: ast.expr) -> bool:
+        """Whether `node` is a string that may be `None`, as the checker says it
+        here or as what holds it holds it (a local, a field, an element)."""
+        if isinstance(node, ast.Name):
+            held = self.collections.get(node.id)  # type: ignore[attr-defined]
+            return held is not None and held.kind == OPTIONAL_STR
+        if self._text_or_none(node) is not None:
+            return True
+        if isinstance(node, ast.Attribute):
+            shape = self._object_of(node.value)  # type: ignore[attr-defined]
+            if shape is None:
+                return False
+            try:
+                _offset, field = self._field(shape, node.attr)  # type: ignore[attr-defined]
+            except Unsupported:
+                return False
+            return field == OPTIONAL_STR
+        if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Slice):
+            kind = self._kind_of(node.value)  # type: ignore[attr-defined]
+            return kind is not None and kind.value == OPTIONAL_STR
+        return False
+
+    def _raw_handle(self, node: ast.expr) -> tuple[Value, bool]:
+        """A string that may be `None`, as its handle: null for `None`, whatever
+        the checker narrowed it to."""
+        self._reading_raw = True
+        try:
+            return self._handle(node)  # type: ignore[attr-defined,no-any-return]
+        finally:
+            self._reading_raw = False
+
+    def _narrowed_text(self, node: ast.expr) -> tuple[Value, bool] | None:
+        """`self.name` where the checker narrowed a field (or an element) that
+        may be `None` to its string: the handle, checked, since a call between
+        the test and the read may have set it to `None`."""
+        if self.__dict__.get("_reading_raw") or not isinstance(node, (ast.Attribute, ast.Subscript)):
+            return None
+        if T.strip_literal(self._type_of(node)) != T.STR or not self._maybe_text(node):  # type: ignore[attr-defined]
+            return None
+        handle, owned = self._raw_handle(node)
+        self._guard(  # type: ignore[attr-defined]
+            self._present(handle),  # type: ignore[attr-defined]
+            "contract",
+            "a string narrowed from `None` is None",
+            raises="TypeError: a value narrowed to a string is None",
+        )
+        return handle, owned
+
+    def _text_equal(self, node: ast.Compare) -> Value:
+        """`s == t` where a side is a string that may be `None`: `None` equals
+        only `None`, a string only an equal string, and nothing else either."""
+        b = self.b  # type: ignore[attr-defined]
+        op = node.ops[0]
+        handles = []
+        for side in (node.left, node.comparators[0]):
+            if isinstance(side, ast.Constant) and side.value is None:
+                handles.append((self._rt("ppy_coll_none", (), HANDLE), False))  # type: ignore[attr-defined]
+            elif self._maybe_text(side) or self._string_of(side) is not None:  # type: ignore[attr-defined]
+                handles.append(self._raw_handle(side))
+            else:
+                # A number is never a string, and never `None`.
+                self._expr(side)  # type: ignore[attr-defined]
+                handles.append(None)
+        if any(found is None for found in handles):
+            for found in handles:
+                if found is not None:
+                    self._done_with(*found)  # type: ignore[attr-defined]
+            return core.const(b, isinstance(op, ast.NotEq), BOOL)
+        (first, first_owned), (second, second_owned) = handles  # type: ignore[misc]
+        same = self._rt("ppy_str_equal", (first, second))  # type: ignore[attr-defined]
+        self._done_with(first, first_owned)  # type: ignore[attr-defined]
+        self._done_with(second, second_owned)  # type: ignore[attr-defined]
+        return core.cmp(b, "eq" if isinstance(op, ast.Eq) else "ne", same, self._word(1))  # type: ignore[attr-defined]
+
+    def _text_truth(self, node: ast.expr, empty: bool) -> Value:
+        """`if s:` of a string that may be `None`: there, and not empty."""
+        b = self.b  # type: ignore[attr-defined]
+        handle, owned = self._raw_handle(node)
+        present = self._present(handle)  # type: ignore[attr-defined]
+        there = self._block("text.there")  # type: ignore[attr-defined]
+        done = self._block("text.truth")  # type: ignore[attr-defined]
+        truth = done.add_argument(BOOL, "truth")
+        core.cond_br(b, present, Successor(there), Successor(done, [present]))
+        self.b.at_end(there)  # type: ignore[attr-defined]
+        length = self._rt("ppy_str_bytes", (handle,))  # type: ignore[attr-defined]
+        core.br(self.b, Successor(done, [core.cmp(self.b, "gt", length, self._word(0))]))  # type: ignore[attr-defined]
+        self.b.at_end(done)  # type: ignore[attr-defined]
+        self._done_with(handle, owned)  # type: ignore[attr-defined]
+        if empty:
+            return core.bitwise(self.b, "xor", truth, core.const(self.b, True, BOOL))  # type: ignore[attr-defined]
+        return truth
+
+    def _text_formatted(self, builder: Value, node: ast.expr, spec: str, conversion: int) -> bool:
+        """`f"{s}"`, `str(s)`, `repr(s)` of a string that may be `None`."""
+        if spec:
+            raise Unsupported("a format spec over a value that may be `None` stays in Python")
+        handle, owned = self._raw_handle(node)
+        there = self._block("format.text")  # type: ignore[attr-defined]
+        absent = self._block("format.none")  # type: ignore[attr-defined]
+        done = self._block("format.done")  # type: ignore[attr-defined]
+        core.cond_br(self.b, self._present(handle), Successor(there), Successor(absent))  # type: ignore[attr-defined]
+        self.b.at_end(there)  # type: ignore[attr-defined]
+        if conversion in (ord("r"), ord("a")):
+            self._add_repr(builder, handle)  # type: ignore[attr-defined]
+        else:
+            self._rt("ppy_str_add", (builder, handle), None)  # type: ignore[attr-defined]
+        core.br(self.b, Successor(done))  # type: ignore[attr-defined]
+        self.b.at_end(absent)  # type: ignore[attr-defined]
+        self._add_text(builder, "None")  # type: ignore[attr-defined]
+        core.br(self.b, Successor(done))  # type: ignore[attr-defined]
+        self.b.at_end(done)  # type: ignore[attr-defined]
+        self._done_with(handle, owned)  # type: ignore[attr-defined]
+        return True
+
+    def _prints_maybe_none(self, argument: ast.expr) -> bool:
+        """A local `print` is handed that may be `None` here."""
+        if not isinstance(argument, ast.Name):
+            return False
+        t = T.strip_literal(self._type_of(argument))  # type: ignore[attr-defined]
+        if argument.id in self.optionals:  # type: ignore[attr-defined]
+            return t != _TYPES[self.optionals[argument.id][2]]  # type: ignore[attr-defined]
+        held = self.collections.get(argument.id)  # type: ignore[attr-defined]
+        return held is not None and held.kind == OPTIONAL_STR and t != T.STR
+
     # -- locals ----------------------------------------------------------------------
 
     def _optional_local(self, node: ast.expr, kind: str) -> ast.Name:
@@ -274,10 +421,15 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         hidden local holding it, which the name machinery then reads."""
         if isinstance(node, ast.Name) and node.id in self.optionals:  # type: ignore[attr-defined]
             return node
-        present, value = self._optional_pair(node, kind)
         count = self.__dict__.get("_optional_hidden", 0)
         self._optional_hidden = count + 1
         name = f".optional{count}"
+        if kind == "str":
+            handle, owned = self._raw_handle(node)
+            self._bind(name, OPTIONAL_STR, handle, owned)  # type: ignore[attr-defined]
+            made = ast.Name(name, ast.Load())
+            return self._typed(made, T.union(T.STR, T.NONE), node)  # type: ignore[attr-defined,return-value]
+        present, value = self._optional_pair(node, kind)
         present_slot = self._alloca(BOOL, f"{name}.present")  # type: ignore[attr-defined]
         slot = self._alloca(_SCALARS[kind], name)  # type: ignore[attr-defined]
         core.store(self.b, present, present_slot)  # type: ignore[attr-defined]
@@ -293,8 +445,8 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         wanted = [
             i
             for i, argument in enumerate(call.args)
-            if not (isinstance(argument, ast.Name) and argument.id in self.optionals)  # type: ignore[attr-defined]
-            and self._either_kind(argument) is not None
+            if not isinstance(argument, ast.Name)
+            and (self._either_kind(argument) is not None or self._maybe_text(argument))
         ]
         if not wanted:
             return None
@@ -303,8 +455,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         args = list(call.args)
         for i in range(wanted[-1] + 1):
             if i in wanted:
-                kind = self._either_kind(args[i])
-                assert kind is not None
+                kind = self._either_kind(args[i]) or "str"
                 args[i] = self._optional_local(args[i], kind)
             elif not _plain(args[i]):
                 # Evaluated here, in its turn, ahead of the ones after it.
@@ -313,13 +464,19 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         return self._typed(made, T.NONE, call)  # type: ignore[attr-defined,return-value]
 
     def _scalar_local(self, node: ast.expr) -> ast.Name:
-        """A hidden local holding a number `node` gives, evaluated now."""
+        """A hidden local holding what `node` gives, evaluated now: a number, or
+        a string, a collection, or an object, held by handle."""
         t = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
-        if t not in (T.INT, T.FLOAT, T.BOOL):
-            raise Unsupported("a value that may be `None` is printed after one that is not a number")
-        value = self._expr(node)  # type: ignore[attr-defined]
         self._hidden_count += 1  # type: ignore[attr-defined]
         name = f".t{self._hidden_count}"  # type: ignore[attr-defined]
+        if t not in (T.INT, T.FLOAT, T.BOOL):
+            kind = self._reference_of(node)  # type: ignore[attr-defined]
+            if kind is None:
+                raise Unsupported("a value that may be `None` is printed after one with no native form")
+            handle, owned = self._handle(node)  # type: ignore[attr-defined]
+            self._bind(name, kind, handle, owned)  # type: ignore[attr-defined]
+            return self._typed(ast.Name(name, ast.Load()), t, node)  # type: ignore[attr-defined,return-value]
+        value = self._expr(node)  # type: ignore[attr-defined]
         self._store(ast.Name(name, ast.Store()), value)  # type: ignore[attr-defined]
         return self._typed(ast.Name(name, ast.Load()), t, node)  # type: ignore[attr-defined,return-value]
 
@@ -363,9 +520,15 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         self._typed(combined, _TYPES[kind] if kind != "bool" else T.INT, combined)  # type: ignore[attr-defined]
         combined.ppy_augmented = True  # type: ignore[attr-defined]
 
-    def _optional_formatted(self, builder: Value, node: ast.expr, spec: str) -> bool:
+    def _optional_formatted(
+        self, builder: Value, node: ast.expr, spec: str, conversion: int = -1
+    ) -> bool:
         """`f"{x}"` and `str(x)` of a number that may be `None`: `None`, or the
         number as it is written."""
+        if self._maybe_text(node) and not (
+            isinstance(node, ast.Name) and T.strip_literal(self._type_of(node)) == T.STR  # type: ignore[attr-defined]
+        ):
+            return self._text_formatted(builder, node, spec, conversion)
         kind = self._either_kind(node)
         if kind is None:
             return False
@@ -423,6 +586,13 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
             left, right = right, left
         if not (isinstance(right, ast.Constant) and right.value is None):
             return None
+        if self._maybe_text(left):
+            handle, owned = self._raw_handle(left)
+            present = self._present(handle)  # type: ignore[attr-defined]
+            self._done_with(handle, owned)  # type: ignore[attr-defined]
+            if isinstance(op, (ast.IsNot, ast.NotEq)):
+                return present
+            return core.bitwise(self.b, "xor", present, core.const(self.b, True, BOOL))  # type: ignore[attr-defined]
         kind = self._either_kind(left)
         if kind is None:
             return None
@@ -438,6 +608,8 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         if not isinstance(op, (ast.Eq, ast.NotEq)):
             return None
         left, right = node.left, node.comparators[0]
+        if self._maybe_text(left) or self._maybe_text(right):
+            return self._text_equal(node)
         kinds = [self._either_kind(side) for side in (left, right)]
         if kinds == [None, None]:
             return None
@@ -460,12 +632,40 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
             return core.bitwise(b, "xor", equal, core.const(b, True, BOOL))
         return equal
 
+    def _optional_in_display(
+        self, item: ast.expr, elements: list[ast.expr], like: ast.Compare
+    ) -> Value | None:
+        """`x in (True, None)` where `x` may be `None`, or a display holds
+        `None`: `x == e` for each `e` in turn, `None` equal only to `None`."""
+        kind = self._either_kind(item)
+        nones = [isinstance(e, ast.Constant) and e.value is None for e in elements]
+        if kind is None and not any(nones):
+            return None
+        if kind is None or kind == "float":
+            # A plain number is never `None`; a float's NaN is Python's to find.
+            return None
+        if not all(
+            none or (isinstance(e, ast.Constant) and type(e.value) in (int, bool))
+            for e, none in zip(elements, nones, strict=True)
+        ):
+            return None
+        left = self._optional_local(item, kind)
+        tests = [
+            (lambda e=e: self._pair(left, ast.Eq(), e, like))  # type: ignore[attr-defined,misc]
+            for e in elements
+        ]
+        return self._any_of(tests, stop_on=True)  # type: ignore[attr-defined]
+
     def _kind(self, value: Value) -> str:
         return {I64: "int", F64: "float", BOOL: "bool"}.get(value.type, "int")
 
     def _optional_test(self, node: ast.expr, *, empty: bool = False) -> Value | None:
         """`if x:` of a value that may be `None`: it holds a number, and the
         number is not zero (`not x`, with `empty`)."""
+        if self._maybe_text(node) and not (
+            isinstance(node, ast.Name) and T.strip_literal(self._type_of(node)) == T.STR  # type: ignore[attr-defined]
+        ):
+            return self._text_truth(node, empty)
         kind = self._either_kind(node)
         if kind is None:
             return None
