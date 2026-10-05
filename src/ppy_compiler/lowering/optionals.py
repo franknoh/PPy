@@ -404,6 +404,38 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         self._done_with(handle, owned)  # type: ignore[attr-defined]
         return True
 
+    def _text_or(self, node: ast.BoolOp) -> Value | None:
+        """`name or "default"` of strings, one of which may be `None`: the first
+        that is there and not empty, else the last; an owned handle."""
+        if not isinstance(node.op, ast.Or) or T.strip_literal(self._type_of(node)) != T.STR:  # type: ignore[attr-defined]
+            return None
+        if not all(
+            self._maybe_text(v) or self._string_of(v) is not None  # type: ignore[attr-defined]
+            or (isinstance(v, ast.Constant) and v.value is None)
+            for v in node.values
+        ):
+            return None
+        done = self._block("text.or")  # type: ignore[attr-defined]
+        result = done.add_argument(HANDLE, "or")
+        for index, value_node in enumerate(node.values):
+            handle, owned = self._raw_handle(value_node)
+            if not owned:
+                self._retain(handle)  # type: ignore[attr-defined]
+            if index == len(node.values) - 1:
+                core.br(self.b, Successor(done, [handle]))  # type: ignore[attr-defined]
+                break
+            there = self._block("text.or.there")  # type: ignore[attr-defined]
+            following = self._block("text.or.next")  # type: ignore[attr-defined]
+            core.cond_br(self.b, self._present(handle), Successor(there), Successor(following))  # type: ignore[attr-defined]
+            self.b.at_end(there)  # type: ignore[attr-defined]
+            length = self._rt("ppy_str_bytes", (handle,))  # type: ignore[attr-defined]
+            full = core.cmp(self.b, "gt", length, self._word(0))  # type: ignore[attr-defined]
+            core.cond_br(self.b, full, Successor(done, [handle]), Successor(following))  # type: ignore[attr-defined]
+            self.b.at_end(following)  # type: ignore[attr-defined]
+            self._release(handle)  # type: ignore[attr-defined]
+        self.b.at_end(done)  # type: ignore[attr-defined]
+        return result
+
     def _prints_maybe_none(self, argument: ast.expr) -> bool:
         """A local `print` is handed that may be `None` here."""
         if not isinstance(argument, ast.Name):
@@ -655,6 +687,26 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
             for e in elements
         ]
         return self._any_of(tests, stop_on=True)  # type: ignore[attr-defined]
+
+    def _optional_isinstance(
+        self, subject: ast.expr, wanted: list[str], possible: set[str]
+    ) -> Value | None:
+        """`isinstance(x, int)` where `x` is a number or `None`: one answer for
+        the number, whatever class it is, and one for `None`; the flag picks."""
+        kind = self._either_kind(subject)
+        if kind is None or "NoneType" not in possible:
+            return None
+        answers = {
+            any(name in T.BUILTIN_MRO.get(runtime, (runtime,)) for name in wanted)
+            for runtime in possible - {"NoneType"}
+        }
+        if len(answers) != 1:
+            return None
+        present, _value = self._optional_pair(subject, kind)
+        number = core.const(self.b, answers.pop(), BOOL)  # type: ignore[attr-defined]
+        mro = T.BUILTIN_MRO.get("NoneType", ("NoneType", "object"))
+        none = core.const(self.b, any(name in mro for name in wanted), BOOL)  # type: ignore[attr-defined]
+        return core.select(self.b, present, number, none)  # type: ignore[attr-defined]
 
     def _kind(self, value: Value) -> str:
         return {I64: "int", F64: "float", BOOL: "bool"}.get(value.type, "int")

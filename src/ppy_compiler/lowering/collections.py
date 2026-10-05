@@ -477,6 +477,9 @@ class CollectionLowering:
         """Whether a handle parameter takes `kind`: the same type, or an object of a
         class deriving from the parameter's."""
         element = parameter.element  # type: ignore[attr-defined]
+        if kind == OPTIONAL_STR:
+            # A string that may be `None`, to a parameter that takes `None` too.
+            return element == "str" and bool(getattr(parameter, "nullable", False))
         if kind.spelled == element:
             return True
         if not isinstance(kind, Shape) or kind.kind != "object":
@@ -1919,6 +1922,10 @@ class CollectionLowering:
             return self._element_handle(node)
         if isinstance(node, ast.IfExp) and self._reference_of(node) is not None:
             return self._reference_choice(node), True
+        if isinstance(node, ast.BoolOp):
+            chosen = self._text_or(node)  # type: ignore[attr-defined]
+            if chosen is not None:
+                return chosen, True
         if isinstance(node, (ast.BinOp, ast.UnaryOp, ast.IfExp)):
             return self._expr(node), True  # type: ignore[attr-defined]
         if isinstance(node, ast.Call):

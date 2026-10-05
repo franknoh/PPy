@@ -199,7 +199,10 @@ class ContainerLowering(CollectionApiLowering):
 
     def _repeated(self, kind: Kind, node: ast.BinOp) -> Value:
         """`[x] * n` and `n * [x]`: `n` copies of what the display holds, in order."""
-        left_list = self._builtin_of(node.left) is not None
+        # The display by its spelling: `[None]` has no element type of its own.
+        left_list = isinstance(node.left, ast.List) or (
+            not isinstance(node.right, ast.List) and self._builtin_of(node.left) is not None
+        )
         display, count_node = (node.left, node.right) if left_list else (node.right, node.left)
         if not isinstance(display, ast.List):
             raise Unsupported("a list is repeated natively when it is a display")

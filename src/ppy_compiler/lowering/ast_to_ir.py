@@ -184,6 +184,10 @@ class IRParameter:
         return self.native.is_optional if self.native is not None else False
 
     @property
+    def nullable(self) -> bool:
+        return self.native.nullable if self.native is not None else False
+
+    @property
     def kind(self) -> str:
         return self.native.kind if self.native is not None else str(self.type)
 
