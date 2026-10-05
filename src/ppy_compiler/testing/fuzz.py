@@ -2969,12 +2969,19 @@ def _capped(command: list[str], memory: str) -> list[str]:
 def _execute(
     command: list[str], cwd: Path, timeout: float, env: dict[str, str] | None = None
 ) -> tuple[int, str, str]:
-    """Run `command` in a process group of its own; at `timeout`, kill the group.
+    """Run `command` in a process group of its own and kill the group on the
+    way out, whichever way that is.
 
     `subprocess.run(timeout=...)` kills only the process it started and then
     waits for its pipes to close, which a child `ppy run` spawned keeps open:
     a program that loops natively held a run for a day. Killing the whole
-    group ends every process the command made, and the pipes with them.
+    group ends every process the command made, and the pipes with them. The
+    group is killed at the timeout, when the command has exited (a process
+    it left behind goes too), and when this process is interrupted or ends
+    by an exception; and the command itself is killed by the kernel if this
+    process dies without a chance to clean up (`_die_with_parent`): a fuzz
+    run killed from outside left a `ppy run` looping for seven hours, in a
+    session of its own that no signal to the run reached.
     """
     with subprocess.Popen(
         _capped(command, "2G"),
@@ -2984,6 +2991,7 @@ def _execute(
         text=True,
         env=env,
         start_new_session=True,
+        preexec_fn=_die_with_parent,  # noqa: PLW1509 - no threads start processes here
     ) as process:
         try:
             out, err = process.communicate(timeout=timeout)
@@ -2992,13 +3000,30 @@ def _execute(
             with contextlib.suppress(subprocess.TimeoutExpired):
                 process.communicate(timeout=10)
             return TIMED_OUT, "", "timed out"
+        finally:
+            _kill_group(process)
         return process.returncode, out, err
+
+
+def _die_with_parent() -> None:
+    """In the child, before `exec`: ask Linux to SIGKILL it when the process
+    that started it dies (`PR_SET_PDEATHSIG`). It holds across `exec`, so the
+    command (`systemd-run --scope` execs it in place) gets it too."""
+    if not sys.platform.startswith("linux"):
+        return
+    with contextlib.suppress(OSError, AttributeError):
+        import ctypes  # pylint: disable=import-outside-toplevel
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.prctl(1, signal.SIGKILL, 0, 0, 0)  # PR_SET_PDEATHSIG
 
 
 def _kill_group(process: subprocess.Popen[str]) -> None:
     try:
         os.killpg(process.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
+    except ProcessLookupError:
+        pass
+    except PermissionError:
         process.kill()
 
 
@@ -3142,17 +3167,35 @@ def compare(results: dict[str, Result]) -> list[Mismatch]:
 # -- minimizing ---------------------------------------------------------------
 
 
+#: The structure classes whose methods the minimizer keeps whole: a link
+#: assignment taken out of a rotation or a push leaves a cycle, which every
+#: walk of the structure then loops around forever.
+_KEPT_CLASSES = frozenset({"STree", "DList"})
+
+
 def _statements(source: str) -> list[tuple[int, int]]:
     """Line spans (start, end, 1-based inclusive) of every statement inside a
-    function, innermost last, so removing one leaves valid Python."""
+    function, innermost last, so removing one leaves valid Python.
+
+    A deletion must not leave a program that never ends: a statement inside
+    a `while` loop is not offered (the loop may go, but not the step that
+    ends it, as `n -= 2` in `countdown`), nor any in the methods of the
+    structure classes (`_KEPT_CLASSES`)."""
     tree = ast.parse(source)
+    kept: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.While) or (
+            isinstance(node, ast.ClassDef) and node.name in _KEPT_CLASSES
+        ):
+            for part in (*node.body, *getattr(node, "orelse", ())):
+                kept.update(id(child) for child in ast.walk(part))
     spans: list[tuple[int, int]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name not in {"__init__", "bump", "biggest"}:
             spans.extend(
                 (child.lineno, child.end_lineno or child.lineno)
                 for child in ast.walk(node)
-                if child is not node and isinstance(child, ast.stmt)
+                if child is not node and isinstance(child, ast.stmt) and id(child) not in kept
             )
     spans.extend(
         (node.lineno, node.end_lineno or node.lineno)
