@@ -234,8 +234,8 @@ The same wrapper carries what used to need Python frames:
   `TypeError`; a guard that refuses the bound arguments hands Python the
   call as it was spelled.
 
-A two-int call costs 32 ns through the wrapper, as CPython's own call
-does. [What a call costs](../guide/native-lowering.md#what-a-call-costs)
+A two-int call costs 35 ns through the wrapper, against 33 ns for
+CPython's own call. [What a call costs](../guide/native-lowering.md#what-a-call-costs)
 has the measured table for each shape, from `examples/bench_boundary.py`.
 
 Built artifacts ship the compiled wrapper and bind through it at launch. The

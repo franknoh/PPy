@@ -192,17 +192,17 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python puzzles.ppy` | 1.18 |
-| `ppy run puzzles.ppy`, after the first run built the cache | 0.44 |
+| `python puzzles.ppy` | 1.34 |
+| `ppy run puzzles.ppy`, after the first run built the cache | 0.53 |
 
 Each part, as the program prints it, the mean of five runs in seconds:
 
 | part | CPython | `ppy run` |
 |---|---:|---:|
-| `sieve(5_000_000)` | 0.253 | 0.132 |
-| `mean_gap` | 0.011 | 0.001 |
-| `partitions(400, 400)` | 0.037 | 0.031 |
-| `walk(2_000_000, 7)` | 0.838 | 0.219 |
+| `sieve(5_000_000)` | 0.304 | 0.143 |
+| `mean_gap` | 0.012 | 0.001 |
+| `partitions(400, 400)` | 0.045 | 0.039 |
+| `walk(2_000_000, 7)` | 0.934 | 0.281 |
 
 There is no standalone build: `main` stays in Python.
 

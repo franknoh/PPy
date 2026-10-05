@@ -15,9 +15,9 @@ A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit `@ppy.native`/`@ppy.jit`/`@ppy.specialize`/`@ppy.parallel` gets the
 boundary. Native callers call its native symbol directly, boundary or not.
 
-The generated wrapper's call costs about what a Python call does: 32 ns for
+The generated wrapper's call costs about what a Python call does: 35 ns for
 `def add(x: int, y: int) -> int: return x + y` called from Python, against
-32 ns for CPython's own call of it. So straight-line work pays from two
+33 ns for CPython's own call of it. So straight-line work pays from two
 operations (`0.5 * base * height`), and a one-operation helper stays on the
 Python side (remarked as `R3004`). The rest costs more:
 
@@ -69,41 +69,44 @@ median of three runs, in nanoseconds:
 
 | call | `ppy run` | CPython |
 |---|---:|---:|
-| `x + y` of two ints, kept in Python by the cost model | 29 | 28 |
-| `x + y` of two ints, `@ppy.native` | 32 | 32 |
-| the same, `y` passed by keyword | 36 | 32 |
-| the same, `y` left to its default | 31 | 33 |
-| a loop of 100 additions | 62 | 894 |
-| `sum` of a borrowed buffer of 100 ints | 68 | 279 |
-| a guard that fails, so the Python body runs | 83 | 39 |
-| a `list[int]` of 100 written in place, `@ppy.native` | 1,082 | 2,500 |
-| a `dict[int, int]` of 100 walked, `@ppy.native` | 1,214 | 1,754 |
-| a chain of 10 objects walked, `@ppy.native` | 141 | 174 |
-| a function returning `None` that fills a list of 100 | 325 | 578 |
-| a `list[int]` of 100 summed | 230 | 902 |
-| a `list[list[int]]` of 10 by 10 summed, `@ppy.native` | 491 | 949 |
-| the lengths of a `list[str]` of 100 summed, `@ppy.native` | 1,758 | 1,200 |
-| 100 lookups in a `set[int]`, `@ppy.native` | 2,442 | 1,004 |
-| 100 lookups of `list[str]` keys in a `dict[str, int]`, `@ppy.native` | 9,053 | 1,468 |
-| the trues of a `list[bool]` of 100 counted | 177 | 640 |
-| one element of a `list[int]` of 100 written, `@ppy.native` | 250 | 35 |
-| a function returning `None` that reads 100 and writes one | 393 | 1,699 |
-| a `random.randint` and an addition | 53 | 123 |
-| straight-line work on three objects, `@ppy.native` | 115 | 91 |
-| `find` in a 10,000-node linked list, `@ppy.native` | 38,407 | 70,162 |
-| `len` of a 10,000-node linked list, `@ppy.native` | 86,603 | 149,218 |
-| `contains` in a 10,000-node search tree, `@ppy.native` | 537 | 528 |
-| `push` onto a 10,000-node linked list, `@ppy.native` | 1,894 | 190 |
-| `insert` into a 10,000-node search tree, `@ppy.native` | 2,469 | 488 |
+| `x + y` of two ints, kept in Python by the cost model | 32 | 33 |
+| `x + y` of two ints, `@ppy.native` | 35 | 33 |
+| the same, `y` passed by keyword | 39 | 38 |
+| the same, `y` left to its default | 33 | 34 |
+| a loop of 100 additions | 70 | 993 |
+| `sum` of a borrowed buffer of 100 ints | 75 | 285 |
+| a guard that fails, so the Python body runs | 99 | 43 |
+| a `list[int]` of 100 written in place, `@ppy.native` | 1,208 | 2,738 |
+| a `dict[int, int]` of 100 walked, `@ppy.native` | 1,380 | 1,900 |
+| a chain of 10 objects walked, `@ppy.native` | 110 | 160 |
+| a function returning `None` that fills a list of 100 | 350 | 620 |
+| a `list[int]` of 100 summed | 274 | 948 |
+| a `list[list[int]]` of 10 by 10 summed, `@ppy.native` | 542 | 1,063 |
+| the lengths of a `list[str]` of 100 summed, `@ppy.native` | 2,028 | 1,313 |
+| 100 lookups in a `set[int]`, `@ppy.native` | 2,758 | 1,149 |
+| 100 lookups of `list[str]` keys in a `dict[str, int]`, `@ppy.native` | 10,562 | 1,739 |
+| the trues of a `list[bool]` of 100 counted | 207 | 714 |
+| one element of a `list[int]` of 100 written, `@ppy.native` | 278 | 36 |
+| a function returning `None` that reads 100 and writes one | 437 | 1,967 |
+| a `random.randint` and an addition | 61 | 135 |
+| straight-line work on three objects, `@ppy.native` | 100 | 78 |
+| `find` in a 10,000-node linked list, `@ppy.native` | 33,883 | 62,507 |
+| `len` of a 10,000-node linked list, `@ppy.native` | 79,835 | 128,830 |
+| `contains` in a 10,000-node search tree, `@ppy.native` | 410 | 467 |
+| `push` onto a 10,000-node linked list, `@ppy.native` | 1,848 | 163 |
+| `insert` into a 10,000-node search tree, `@ppy.native` | 1,738 | 448 |
 
 The object rows call functions and methods on objects that stay resident
-between calls ([Resident objects](classes.md#resident-objects)): before,
-each call copied the whole structure in and back, 3 to 5 ms for the
-10,000-node ones and 1,058 ns for the chain of 10. A resident object costs
-about 80 ns a call; native code then walks the nodes faster than CPython,
-but an object it makes is made in Python too, with a `__dict__` and a weak
-reference, about a microsecond, so `push` and `insert`, which make a node
-each, stay slower and the cost model keeps them in Python.
+between calls ([Resident objects](classes.md#resident-objects)). Copied at
+every call, as they were in 0.6, the 10,000-node ones took 3 to 5 ms a call
+and the chain of 10 about 1,060 ns. A resident object costs about 80 ns a
+call; native code then walks the nodes faster than CPython (`find` and
+`len` 1.6 to 1.8 times as fast), but an object it makes is made in Python
+too, with a `__dict__` and a weak reference, about a microsecond, so `push`
+and `insert`, which make a node each, stay slower and the cost model keeps
+them in Python. Straight-line work on three objects costs 100 ns against
+CPython's 78, so without `@ppy.native` such a function runs its Python
+body.
 
 The `@ppy.native` `x + y` row is the wrapper alone: parsing the arguments,
 the exact type checks, and boxing the result. A failed guard costs the
@@ -116,7 +119,8 @@ key it looks up. Those are the shapes the cost model keeps off the
 boundary, as the CPython column says it should: one operation per string,
 per lookup, or per object does not pay, and without `@ppy.native` Python
 runs their Python bodies. Measured on Python 3.14 on an Intel Core Ultra 9
-386H under WSL2.
+386H under WSL2; the CPython column is the same program in the same
+session.
 
 ## Byte-wide buffers
 

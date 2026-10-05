@@ -146,9 +146,10 @@ make nodes ([types from call sites](subset.md#types-from-call-sites)), and
   `Node | None`, so a list reversal written that way lowers.
 
 `ppy explain module.Class` (or the class's name) lists each field with its
-type and where it came from. For the circular `insert` above, every link
-shows only the `None` from `__init__`, which is how a field that did not
-settle looks:
+type and where it came from. Here is `ppy explain circ.Node` for a module
+`circ` with the unannotated recursive `insert` of the bullet above: every
+link shows only the `None` from `__init__`, which is how a field that did
+not settle looks:
 
 ```text
 class: Node
@@ -495,9 +496,9 @@ always where it makes one inside a loop. `ppy explain` gives this reason as
 `@ppy.native` asks for the crossing anyway. So a method with a loop over a
 resident structure (`find`, `__len__`, `contains`) is native when Python
 calls it, while a one-line getter, `is_empty`, or a `push` that makes a
-node runs its Python body. On a 10,000-node linked list, `find` takes 38 µs
-natively against 70 µs in CPython, and took 3 ms when the list was copied
-at every call; `push` takes 1.9 µs against CPython's 0.19 µs
+node runs its Python body. On a 10,000-node linked list, `find` takes 34 µs
+natively against 63 µs in CPython, and took 3 ms when the list was copied
+at every call; `push` takes 1.8 µs against CPython's 0.16 µs
 ([What a call costs](native-lowering.md#what-a-call-costs)).
 
 A method of a class that crosses this way is bound like a method: `node.f(x)`
