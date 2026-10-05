@@ -212,7 +212,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.7.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.0</span>
   </div>
 </a>
       </div>
@@ -419,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.7.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.0</span>
   </div>
 </a>
     </div>
@@ -4343,6 +4343,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#with-all-of-070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With all of 0.7.0
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4528,6 +4539,17 @@
     <span class="md-ellipsis">
       
         With all of 0.6.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#with-all-of-070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With all of 0.7.0
       
     </span>
   </a>
@@ -5025,6 +5047,112 @@ that CPython also fails to find, a <code>MutableSequence[T]</code> parameter, a
 generator expression assigned to a bare <code>Generator</code>, <code>globals()</code> passed to
 <code>timeit</code>), a double free after a native call raised, and a segfault where
 CPython raises <code>RecursionError</code>.</p>
+<h2 id="with-all-of-070">With all of 0.7.0<a class="headerlink" href="#with-all-of-070" title="Permanent link">&para;</a></h2>
+<p>The same summary over the same tree after 0.7.0: fields typed from every
+store, methods that edit objects in place, containers read in place at the
+boundary, the smaller shapes (implicit ends, list shapes, <code>*args</code>, nested
+functions with cells, <code>d.get(k)</code>), more inference evidence, and the fixes
+found along the way.</p>
+<table>
+<thead>
+<tr>
+<th>tier</th>
+<th style="text-align: right;">strict</th>
+<th style="text-align: right;"><code>--no-strict</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>native, called from Python</td>
+<td style="text-align: right;">867 functions (19%), 7,370 statements</td>
+<td style="text-align: right;">941 (20%), 7,973</td>
+</tr>
+<tr>
+<td>native, called from native code</td>
+<td style="text-align: right;">624, 3,204</td>
+<td style="text-align: right;">703, 3,543</td>
+</tr>
+<tr>
+<td>Python</td>
+<td style="text-align: right;">3,195 (68%), 26,395</td>
+<td style="text-align: right;">3,042 (65%), 25,453</td>
+</tr>
+</tbody>
+</table>
+<p>Against 0.6.0, the functions Python calls natively went from 806 to 867 in
+strict mode and from 846 to 941 with <code>--no-strict</code>, and all compiled
+functions from 1,418 to 1,644 with <code>--no-strict</code>. Writes to a parameter
+native code copies (173 functions) and implicit ends (27) are gone as
+reasons; writes to an object native code does not own fell from 116 to 74,
+bare-<code>list</code> parameters from 80 to 40, and nested functions held back by the
+function around them from 51 to 11.</p>
+<p>Most of what compiles but is not called natively from Python is one reason:
+424 functions read collections that cost more to bring across than the body
+does with them. Two thirds of those are methods, whose <code>self</code> is copied at
+every call. Under <code>--no-strict</code> the top of the Python table is now:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">statements</th>
+<th style="text-align: right;">functions</th>
+<th>reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">2,185</td>
+<td style="text-align: right;">291</td>
+<td>a parameter or result with no annotation the checker could infer</td>
+</tr>
+<tr>
+<td style="text-align: right;">1,368</td>
+<td style="text-align: right;">173</td>
+<td>a <code>numpy.ndarray</code> parameter</td>
+</tr>
+<tr>
+<td style="text-align: right;">932</td>
+<td style="text-align: right;">74</td>
+<td>writes to an object native code does not own</td>
+</tr>
+<tr>
+<td style="text-align: right;">526</td>
+<td style="text-align: right;">52</td>
+<td>a <code>list[Any]</code> result</td>
+</tr>
+<tr>
+<td style="text-align: right;">448</td>
+<td style="text-align: right;">40</td>
+<td>a <code>list[Any]</code> parameter</td>
+</tr>
+<tr>
+<td style="text-align: right;">444</td>
+<td style="text-align: right;">44</td>
+<td>reads a module global that can change</td>
+</tr>
+<tr>
+<td style="text-align: right;">411</td>
+<td style="text-align: right;">51</td>
+<td>a <code>ppy.dynamic</code> boundary</td>
+</tr>
+<tr>
+<td style="text-align: right;">402</td>
+<td style="text-align: right;">43</td>
+<td>a type defined in another module</td>
+</tr>
+<tr>
+<td style="text-align: right;">314</td>
+<td style="text-align: right;">36</td>
+<td>something that may fall back follows an effect</td>
+</tr>
+<tr>
+<td style="text-align: right;">304</td>
+<td style="text-align: right;">23</td>
+<td>a class field native code cannot hold (<code>int \| None</code> fields)</td>
+</tr>
+</tbody>
+</table>
+<p>The 400-script comparison: 387 match and 13 are skipped as nondeterministic
+or slow under CPython. None differs.</p>
 
 
 
