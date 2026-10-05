@@ -204,8 +204,14 @@ a nonzero number (a non-empty string); `x == 3` is false for `None`;
 `isinstance(x, int)`, `print(x)`, `str(x)`, `f"{x}"`, and the `repr` of a
 list or dict holding them (`[1, None]`) write `None` where it is one.
 `d.get(k)` with no default gives `None` for a missing key, `None in xs` and
-`xs.count(None)` find it, and `any`/`all` count it as false. After a test
-that narrows `x`, its number is read directly.
+`xs.count(None)` find it, and `any`/`all` count it as false. Of a
+`dict[str, int | None]`, `d.get(k, 5)` and `d.pop(k, 5)` give the stored
+`None` where the key holds one and the default only where the key is
+missing, and the checker types them `int | None` accordingly. A display of
+`None`s returned in place (`return [[None] * w for _ in range(h)]` from a
+`-> list[list[str | None]]`) is made as the declared type, as it is when
+assigned to an annotated local. After a test that narrows `x`, its number
+is read directly.
 
 A field the checker narrowed (`if node.label is not None:`) may still be
 `None` when a call between the test and the read set it so, which CPython
@@ -229,8 +235,10 @@ code sets is set on the Python object when the call answers.
 What stays in Python: sorting, `min`, and `max` over elements that may be
 `None` (CPython raises for them, in an order that depends on the
 comparisons), keys that may be `None`, a format spec over a value that may
-be `None` (`f"{x:>4}"`), unions of numbers with anything but `None`, and
-tuples holding a value that may be `None`.
+be `None` (`f"{x:>4}"`), unions of numbers with anything but `None`,
+tuples holding a value that may be `None`, and a value class that may be
+`None` (`d.get(k)` of a `dict[str, Item]` where `Item` holds only numbers:
+the class is its fields' words, with no flag beside them).
 
 ## What the body may contain
 

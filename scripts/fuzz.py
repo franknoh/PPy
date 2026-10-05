@@ -57,7 +57,12 @@ does (scale the result, print, count, cache, swap the arguments, hand back
 another function), called by name from Python and from native loops.
 
 Run it through the shared memory cap in a batch at a time; each program's
-paths run one after another, each under its own timeout and memory cap.
+paths run one after another, each under its own timeout and memory cap. A
+path runs in a process group of its own, which is killed at the timeout,
+when the path exits, and when this run ends by an exception, SIGTERM, or
+SIGHUP; a run killed outright takes the path's process with it. The
+minimizer keeps every statement inside a `while` and the structure classes'
+methods whole, so a reduced program ends whenever the original did.
 """
 
 from __future__ import annotations
