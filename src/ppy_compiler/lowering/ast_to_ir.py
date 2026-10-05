@@ -5919,7 +5919,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         named = self._name_optional_arguments(call)
         if named is not None:
             # Each argument that may be `None` is a local now; print those.
-            made = ast.copy_location(ast.Expr(named), node)
+            made = ast.Expr(named)
+            ast.copy_location(made, node)
             self.__dict__.setdefault("_made_nodes", []).append(made)
             return self._print_optional(made)
         index = next(

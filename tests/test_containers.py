@@ -667,9 +667,9 @@ def test_a_set_of_strings_walked_where_its_order_shows_stays_in_python(tmp_path:
 @requires_cc
 def test_get_without_a_default_binds_a_number_or_none(tmp_path: Path):
     """`v = d.get(k)` of a dict of numbers binds `v` as a number or `None`,
-    natively; `d.get(k)` used any other way (`or`, a dict of strings) keeps its
-    function in Python, with a reason, and the rest of the module lowers (it
-    raised `IndexError` in the lowering before)."""
+    natively; `d.get(k)` of a dict of strings is a string or `None` (a null
+    handle), and `or` picks the default for `None` (it raised `IndexError` in
+    the lowering before)."""
     source = """
     def look(d: dict[int, int], k: int) -> int:
         v = d.get(k)
@@ -704,7 +704,7 @@ def test_get_without_a_default_binds_a_number_or_none(tmp_path: Path):
     look = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.look")
     assert "llvm backend: native" in look.stdout, look.stdout
     named = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.named")
-    assert "llvm backend: boxed" in named.stdout, named.stdout
+    assert "llvm backend: native" in named.stdout, named.stdout
     total = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.total")
     assert "llvm backend: native" in total.stdout, total.stdout
     summary = _run(tmp_path, "-m", "ppy_compiler", "explain", "--summary")
