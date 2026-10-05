@@ -19,7 +19,7 @@ from .lowering import NativeParam, NativeSignature
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 
 class CachedLowering:
@@ -121,6 +121,7 @@ def _signature(s: NativeSignature) -> dict:
         "draws": s.draws,
         "classes": classes_to_json(s.classes),
         "effects": s.effects,
+        "optional": s.optional,
     }
 
 
@@ -137,6 +138,7 @@ def _read_signature(raw: dict) -> NativeSignature:
         draws=bool(raw.get("draws", False)),
         classes=classes_from_json(raw.get("classes", [])),
         effects=bool(raw.get("effects", False)),
+        optional=str(raw.get("optional", "")),
     )
 
 

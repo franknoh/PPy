@@ -40,11 +40,14 @@
 #define PX_SET 8
 #define PX_OBJECT 9
 #define PX_RECORD 10
+#define PX_OPTIONAL 11
 
 /* One type at the boundary: a scalar, a string, a tuple of scalars (`part`
    spells each word: 'i', 'f', or 'b'), a container, an object of a class
-   (`cls`, in the signature's table; `nullable` where it may be None), or a
-   value class's fields in place (`cls`, its words spelled in `part`). */
+   (`cls`, in the signature's table; `nullable` where it may be None, as a
+   string may be), a value class's fields in place (`cls`, its words spelled
+   in `part`), or a number that may be None (`part` its kind): its word, then
+   a word that says whether there is one, both 0 for None. */
 typedef struct ppy_xs {
     int kind;
     int parts;
@@ -799,6 +802,9 @@ static int64_t *px_record_of(int8_t *handle) {
 /* -- the layout of an element ------------------------------------------- */
 
 static int64_t px_words(const ppy_xs *s) {
+    if (s->kind == PX_OPTIONAL) {
+        return 2;
+    }
     return s->kind == PX_TUPLE || s->kind == PX_RECORD ? s->parts : 1;
 }
 
@@ -811,6 +817,9 @@ static int64_t px_floats(const ppy_xs *s) {
             }
         }
         return mask;
+    }
+    if (s->kind == PX_OPTIONAL) {
+        return s->part[0] == 'f' ? 1 : 0;
     }
     return s->kind == PX_FLOAT ? 1 : 0;
 }
@@ -1988,7 +1997,22 @@ static int px_word(ppy_cross *x, PyObject *o, const ppy_xs *s, int64_t *words) {
         return 0;
     case PX_RECORD:
         return px_record_in(x, o, s, words);
+    case PX_OPTIONAL:
+        words[0] = 0;
+        words[1] = 0;
+        if (o == Py_None) {
+            return 0;
+        }
+        if (px_scalar(o, s->part[0], words) != 0) {
+            return -1;
+        }
+        words[1] = 1;
+        return 0;
     case PX_STR: {
+        if (o == Py_None && s->nullable) {
+            words[0] = 0;
+            return 0;
+        }
         if (!PyUnicode_CheckExact(o)) {
             return -1;
         }
@@ -2065,6 +2089,10 @@ static int px_fill(ppy_cross *x, int8_t *handle, PyObject *o, const ppy_xs *s) {
         if (v->kind == PX_STR && x->readonly) {
             PyObject **items = ((PyListObject *)o)->ob_item;
             for (Py_ssize_t i = 0; i < n; i++) {
+                if (items[i] == Py_None && v->nullable) {
+                    records[i] = 0;
+                    continue;
+                }
                 if (!PyUnicode_CheckExact(items[i])) {
                     return -1;
                 }
@@ -2254,6 +2282,9 @@ static int px_same_spec(const ppy_xs *a, const ppy_xs *b) {
         return 0;
     }
     if ((a->kind == PX_OBJECT || a->kind == PX_RECORD) && a->cls != b->cls) {
+        return 0;
+    }
+    if (a->nullable != b->nullable) {
         return 0;
     }
     return px_same_spec(a->key, b->key) && px_same_spec(a->value, b->value);
@@ -2491,7 +2522,17 @@ static int px_holds(ppy_cross *x, PyObject *old, const int64_t *words, const ppy
         }
         return 1;
     }
+    case PX_OPTIONAL: {
+        if (!words[1]) {
+            return old == Py_None;
+        }
+        int64_t mine = 0;
+        return old != Py_None && px_scalar(old, s->part[0], &mine) == 0 && mine == words[0];
+    }
     case PX_STR: {
+        if (words[0] == 0) {
+            return old == Py_None;
+        }
         if (!PyUnicode_CheckExact(old)) {
             return 0;
         }
@@ -2563,7 +2604,15 @@ static PyObject *px_value(ppy_cross *x, const int64_t *words, const ppy_xs *s, i
     }
     case PX_RECORD:
         return px_record_out(x, words, s);
+    case PX_OPTIONAL:
+        if (!words[1]) {
+            return Py_NewRef(Py_None);
+        }
+        return px_scalar_value(words[0], s->part[0]);
     case PX_STR: {
+        if (words[0] == 0) {
+            return Py_NewRef(Py_None);
+        }
         const int64_t *header = (const int64_t *)(intptr_t)words[0];
         if (header[19] == PX_ARENA && header[22] != 0) {
             /* A borrowed string goes back as the string it is. */

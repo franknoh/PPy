@@ -195,6 +195,9 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
             if not _cheap(item):
                 self._expr(item)  # type: ignore[attr-defined]
             return core.const(self.b, False, BOOL)  # type: ignore[attr-defined]
+        optional = self._optional_in_display(item, elements, like)  # type: ignore[attr-defined]
+        if optional is not None:
+            return optional
         item_type = self._plain_type(item)
         kinds = {self._plain_type(e) for e in elements} | {item_type}
         if not kinds <= {T.INT, T.FLOAT, T.BOOL, T.STR}:
@@ -410,6 +413,9 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
                     if not _cheap(node.args[0]):
                         self._expr(node.args[0])  # type: ignore[attr-defined]
                     return core.const(self.b, answers.pop(), BOOL)  # type: ignore[attr-defined]
+                decided = self._optional_isinstance(subject, wanted, possible)  # type: ignore[attr-defined]
+                if decided is not None:
+                    return decided
                 raise Unsupported(
                     f"`isinstance` of a `{self._type_of(node.args[0])}` depends on the value"  # type: ignore[attr-defined]
                 )

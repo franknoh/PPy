@@ -609,12 +609,15 @@ def _bind(
         return _answer(slots)
 
     nothing = signature.returns_none
+    optional = bool(signature.optional)
 
     def _answer(slots: list) -> object:  # type: ignore[type-arg]
         if nothing:
             return None
         if text_result:
             return _text_result(slots[0].value, slots[1].value)
+        if optional:
+            return finalizers[0](slots[0].value) if slots[1].value else None
         if returns_tuple:
             return tuple(
                 finish(slot.value) for finish, slot in zip(finalizers, slots, strict=False)
@@ -832,8 +835,11 @@ def _dress(wrapper, signature, fallback) -> None:  # type: ignore[no-untyped-def
     wrapper.__module__ = getattr(fallback, "__module__", wrapper.__module__)
 
 
-def _text_result(address: int | None, length: int) -> str:
-    """A string the native code returned: its UTF-8 copy read, then freed."""
+def _text_result(address: int | None, length: int) -> str | None:
+    """A string the native code returned: its UTF-8 copy read, then freed.
+    A length of -1 is `None`, from a string that may be `None`."""
+    if length < 0:
+        return None
     try:
         return ctypes.string_at(address or 0, length).decode("utf-8") if length else ""
     finally:
@@ -991,6 +997,10 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             return None
         if signature.returns == (TEXT,):
             return _text_result(slots[0].value, slots[1].value)
+        if signature.optional:
+            # The number where its flag says there is one, else `None`.
+            first = _result_for(signature.returns[0])(slots[0].value)
+            return first if slots[1].value else None
         if len(slots) > 1:
             return tuple(
                 _result_for(atom)(slot.value)
@@ -1026,9 +1036,15 @@ def _expander_for(
 ) -> Callable[[object, list, list], None]:
     """Build the guard-and-convert step for one source-level parameter."""
     if parameter.is_text:
+        nullable = parameter.nullable
 
         def expand_text(value: object, atoms: list, borrowed: list) -> None:
-            """A `str` as its UTF-8 bytes; one with a lone surrogate has none."""
+            """A `str` as its UTF-8 bytes; one with a lone surrogate has none.
+            `None`, where the string may be `None`, is no bytes and -1."""
+            if value is None and nullable:
+                atoms.append(None)
+                atoms.append(-1)
+                return
             if type(value) is not str:
                 raise GuardFailed
             try:
@@ -1127,6 +1143,20 @@ def _expander_for(
                     raise GuardFailed from exc
 
         return expand_object
+
+    if parameter.is_optional:
+        number = _scalar_guard(parameter.abi[0], parameter.exact)
+
+        def expand_optional(value: object, atoms: list, borrowed: list) -> None:
+            """`None` as 0 with its flag clear; a number as itself, flagged."""
+            if value is None:
+                atoms.append(0)
+                atoms.append(0)
+                return
+            atoms.append(number(value))
+            atoms.append(1)
+
+        return expand_optional
 
     if parameter.is_tuple:
         element_guards = [_scalar_guard(atom, parameter.exact) for atom in parameter.abi]

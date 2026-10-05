@@ -199,7 +199,10 @@ class ContainerLowering(CollectionApiLowering):
 
     def _repeated(self, kind: Kind, node: ast.BinOp) -> Value:
         """`[x] * n` and `n * [x]`: `n` copies of what the display holds, in order."""
-        left_list = self._builtin_of(node.left) is not None
+        # The display by its spelling: `[None]` has no element type of its own.
+        left_list = isinstance(node.left, ast.List) or (
+            not isinstance(node.right, ast.List) and self._builtin_of(node.left) is not None
+        )
         display, count_node = (node.left, node.right) if left_list else (node.right, node.left)
         if not isinstance(display, ast.List):
             raise Unsupported("a list is repeated natively when it is a display")
@@ -456,6 +459,24 @@ class ContainerLowering(CollectionApiLowering):
             self._rt("ppy_str_add_bool", (builder, core.cast(self.b, value, I64)), None)
         elif shape.kind == "str":
             self._add_repr(builder, value)  # type: ignore[attr-defined]
+        elif shape.kind == "optional":
+            # `None`, or the number (or the string, whose handle is null for `None`).
+            if shape.parts[0] == "str":
+                present = self._present(value)  # type: ignore[attr-defined]
+            else:
+                present = core.tuple_extract(self.b, value, 1)
+            number = self._block("repr.number")  # type: ignore[attr-defined]
+            absent = self._block("repr.none")  # type: ignore[attr-defined]
+            shown = self._block("repr.shown")  # type: ignore[attr-defined]
+            core.cond_br(self.b, present, Successor(number), Successor(absent))
+            self.b.at_end(number)  # type: ignore[attr-defined]
+            inner = value if shape.parts[0] == "str" else core.tuple_extract(self.b, value, 0)
+            self._add_item_repr(builder, Shape(shape.parts[0]), inner)
+            core.br(self.b, Successor(shown))
+            self.b.at_end(absent)  # type: ignore[attr-defined]
+            self._add_text(builder, "None")
+            core.br(self.b, Successor(shown))
+            self.b.at_end(shown)  # type: ignore[attr-defined]
         elif shape.kind == "tuple":
             self._add_text(builder, "(")
             for index, part in enumerate(shape.parts):
@@ -504,7 +525,8 @@ class ContainerLowering(CollectionApiLowering):
         if source is None or source.mode == "items":
             return None
         shape = self._part(source, "values" if source.mode == "values" else "keys")
-        if shape.kind not in {"int", "float", "bool", "str"}:
+        numbers = shape.kind == "optional" and shape.parts[0] != "str"
+        if shape.kind not in {"int", "float", "bool", "str"} and not numbers:
             return None
         seeking = name == "any"
         answer = self._alloca(BOOL, f"{name}.answer")  # type: ignore[attr-defined]
@@ -514,6 +536,11 @@ class ContainerLowering(CollectionApiLowering):
             value = items[0][1]
             if shape.kind == "str":
                 true = core.cmp(self.b, "gt", self._rt("ppy_str_bytes", (value,)), self._word(0))
+            elif numbers:
+                # `None` is false, and so is a zero.
+                present = core.tuple_extract(self.b, value, 1)
+                number = self._truth(core.tuple_extract(self.b, value, 0))  # type: ignore[attr-defined]
+                true = core.bitwise(self.b, "and", present, number)
             else:
                 true = self._truth(value)  # type: ignore[attr-defined]
             if seeking:

@@ -14,6 +14,7 @@
     uv run python scripts/fuzz.py --structures --count 25  # linked structures edited in place
     uv run python scripts/fuzz.py --resident --count 25  # Python writes between native calls
     uv run python scripts/fuzz.py --shapes --count 25  # shapes the corpus kept in Python
+    uv run python scripts/fuzz.py --optional --count 25  # numbers and strings that may be None
 
 Each seed is a program from `ppy_compiler.testing.fuzz.generate_program`. It
 runs under CPython (the reference) and each path asked for, one at a time,
@@ -38,6 +39,12 @@ With `--shapes`, each program also has the shapes the corpus kept in
 Python (returns on every side, list parameters, string constants, tuple
 assignments, `*args`), on every path; with `--state` too, a function that
 falls off its end and a nested function handed its cells.
+With `--optional`, each program also holds `int | None`, `float | None`,
+`bool | None`, and `str | None` in parameters, results, fields, list and
+dict elements, and locals, prints them, and meets `None` in arithmetic
+through a field a call reset after it was tested, on every path. With
+`--resident` too, an object whose fields may be `None` is edited by a native
+method called again and again, and written from Python between the calls.
 With `--unannotated`, the functions have no annotations, run
 without strict mode, and are called from Python with arguments of other
 types than the ones their types were inferred from, on the paths with a
@@ -104,6 +111,7 @@ def _save(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     structures: bool = False,
     shapes: bool = False,
     bools: bool = False,
+    optional: bool = False,
     resident: bool = False,
 ) -> Path:
     REGRESSIONS.mkdir(parents=True, exist_ok=True)
@@ -111,6 +119,7 @@ def _save(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     domain = "_resident" if resident else domain
     domain += "_shapes" if shapes else ""
     domain += "_bools" if bools else ""
+    domain += "_optional" if optional else ""
     target = REGRESSIONS / f"seed{seed}{domain}_{path}.ppy"
     target.write_text(f"# fuzz: path={path} seed={seed} ({reason})\n{source}", encoding="utf-8")
     return target
@@ -132,6 +141,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     inference: bool = False,
     bools: bool = False,
     decorators: bool = False,
+    optional: bool = False,
     resident: bool = False,
 ) -> int:
     failures = 0
@@ -150,6 +160,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
             inference=inference,
             bools=bools,
             decorators=decorators,
+            optional=optional,
             resident=resident,
         )
         results = run_program(source, paths, timeout=60.0)
@@ -179,6 +190,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
             structures,
             shapes,
             bools,
+            optional,
             resident,
         )
         print(f"      saved {saved.relative_to(REGRESSIONS.parent.parent)}", flush=True)
@@ -228,6 +240,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="add the shapes the corpus kept in Python: returns on every side, list "
         "parameters, string constants, tuple assignments, *args (with --state, nested cells)",
+    )
+    parser.add_argument(
+        "--optional",
+        action="store_true",
+        help="hold int | None, float | None, bool | None, and str | None in parameters, "
+        "results, fields, and elements, and meet None in arithmetic",
     )
     parser.add_argument("--no-minimize", action="store_true")
     parser.add_argument("--replay", action="store_true")
@@ -290,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
             inference=options.inference,
             bools=options.bools,
             decorators=options.decorators,
+            optional=options.optional,
             resident=options.resident,
         )
         print(shown, end="")
@@ -323,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         options.inference,
         options.bools,
         options.decorators,
+        options.optional,
         options.resident,
     )
 
