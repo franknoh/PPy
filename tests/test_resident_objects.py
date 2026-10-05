@@ -30,7 +30,7 @@ native = pytest.mark.skipif(
     not llvm_available() or c_compiler() is None, reason="llvmlite or a C compiler is missing"
 )
 
-STACK = '''
+STACK = """
 import copy
 import gc
 import pickle
@@ -232,7 +232,7 @@ def main() -> None:
 
 
 main()
-'''
+"""
 
 #: The class gains a property named like a field: residency ends, and the
 #: property is what Python reads from then on.

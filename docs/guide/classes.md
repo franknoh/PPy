@@ -426,13 +426,18 @@ CPython does not report. The first call with an object copies it; the
 second makes it resident. With `PPY_RESIDENT=0` in the environment, every
 object is copied at every call.
 
-Because a resident object costs a flat price per call (about 60 ns, and
-about 100 ns more when the call writes it), the cost model judges a method
-on it as it judges a function of numbers: a loop is native, and
-straight-line work has to pay for the price (`ppy explain` gives the
-reason). Making an object natively and handing it to Python costs several
-times what CPython pays for it, so a straight-line `push` that makes a node
-stays in Python unless `@ppy.native` asks for the crossing.
+A resident object costs a flat price per call, about 80 ns, and more when
+the call writes it, so the cost model judges a method on one as it judges a
+function of numbers: a loop is native, and straight-line work has to pay
+for the price (`ppy explain` gives the reason). An object native code makes
+is made in Python too, with its `__dict__` and its weak reference, about a
+microsecond where CPython makes one in 200 ns, so a function that makes
+objects stays in Python unless its loops do far more than that
+("the objects it makes cost more to hand to Python than its loops save"),
+or `@ppy.native` asks for the crossing. On a 10,000-node linked list,
+`find` takes 38 µs natively against 70 µs in CPython, and took 3 ms when
+the list was copied at every call; `push` takes 1.9 µs against CPython's
+0.19 µs (`examples/bench_boundary.py`).
 
 A method of a class that crosses this way is bound like a method: `node.f(x)`
 passes `node` to the native code, and a `@staticmethod` stays static.

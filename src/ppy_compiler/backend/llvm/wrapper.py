@@ -761,9 +761,7 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         boxed = f"px_result(&ppy_x, (int8_t *)ppy_out0, &ppy_xs_{index}_r)"
     structs = _crossing_structs(index, copied) if copied is not None else ""
     if resident:
-        structs += (
-            f"\nstatic const int ppy_objects_{index}[] = {{{', '.join(map(str, objects))}}};"
-        )
+        structs += f"\nstatic const int ppy_objects_{index}[] = {{{', '.join(map(str, objects))}}};"
     resolver = ""
     if classes != "NULL":
         # The classes' Python classes are found at the first call, by this.
@@ -784,7 +782,9 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         f"        return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);\n"
     )
     made = "    px_resident_result(&ppy_x, ppy_result);\n" if resident else ""
-    answered = f"{sync}    PyObject *ppy_result = {boxed};\n{made}{end}{keep}    return ppy_result;\n"
+    answered = (
+        f"{sync}    PyObject *ppy_result = {boxed};\n{made}{end}{keep}    return ppy_result;\n"
+    )
     if held:
         # Output held while the call runs: written out once it answers,
         # dropped where it falls back, and a call that raised after a

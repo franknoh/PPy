@@ -2485,9 +2485,7 @@ def {opt}(n):
             elif roll < 0.85:
                 write = rng.choice(_PYTHON_WRITES)
                 value = rng.randint(-9, 30)
-                after.extend(
-                    line.format(k=rng.choice(keys), v=value) for line in write
-                )
+                after.extend(line.format(k=rng.choice(keys), v=value) for line in write)
                 after.append("print(sshape(t.root), t.size, dkeys(d), d.count)")
             else:
                 after.append(f"for _ in range({rng.randint(1, 40)}):")

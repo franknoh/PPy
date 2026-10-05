@@ -1483,9 +1483,12 @@ def _rewrites_identity(tree: ast.Module) -> bool:
     (or `__setattr__`) of either name or of a name the program computes, and
     `exec`, anywhere in the module."""
     for node in ast.walk(tree):
-        if isinstance(node, ast.Attribute) and isinstance(node.ctx, (ast.Store, ast.Del)):
-            if node.attr in _IDENTITY_ATTRIBUTES:
-                return True
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+            and node.attr in _IDENTITY_ATTRIBUTES
+        ):
+            return True
         if not isinstance(node, ast.Call):
             continue
         func = node.func

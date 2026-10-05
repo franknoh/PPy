@@ -734,8 +734,7 @@ def _resident_params(
     return frozenset(
         name
         for name, native in crossing
-        if (spec := crossing_spec(native.element, described)) is not None
-        and spec.kind == "object"
+        if (spec := crossing_spec(native.element, described)) is not None and spec.kind == "object"
     )
 
 
