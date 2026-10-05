@@ -986,6 +986,13 @@ class CollectionApiLowering(CollectionLowering):
             # `d.get(k)` of a map of objects or strings: `None`, the null
             # handle, where the key is not there.
             default, default_owned = self._rt("ppy_coll_none", (), HANDLE), False
+        elif len(arguments) == 1 and attr == "get" and shape.kind == "record":
+            # A value class is its fields' words, in a local as in the map;
+            # `Item | None` would need a flag beside them, which no local has.
+            raise Unsupported(
+                f"`get` without a default answers `{shape.record.rsplit('.', 1)[-1]} | None`,"
+                " and a value class that may be `None` has no native form"
+            )
         elif len(arguments) != 2:
             # `d.get(k)` and `d.setdefault(k)` answer `None` for a missing key,
             # which a value of this shape has no word for.
