@@ -4752,7 +4752,12 @@ its own terms.</p>
 <p>A container or an object crosses whole on each call, read in place where
 the call writes through none of its parameters and copied otherwise, so the
 body has to do work in proportion to it
-(<a href="../containers/#between-functions">Lists, dicts, and sets</a>).</p>
+(<a href="../containers/#between-functions">Lists, dicts, and sets</a>). An object of a
+plain class that crosses again and again is the exception: it stays
+resident in native memory between calls
+(<a href="../classes/#resident-objects">Resident objects</a>), and costs a flat price
+per call: about seven operations, one more per object, eight more for each
+object the call writes, and a hundred for each object the body makes.</p>
 <p><code>ppy explain module.name</code> (or <code>FILE.ppy:LINE</code>) reports the decision and,
 when the answer is no, the first blocking construct.</p>
 <h3 id="what-a-call-costs">What a call costs<a class="headerlink" href="#what-a-call-costs" title="Permanent link">&para;</a></h3>
@@ -4817,8 +4822,8 @@ median of three runs, in nanoseconds:</p>
 </tr>
 <tr>
 <td>a chain of 10 objects walked, <code>@ppy.native</code></td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">145</td>
+<td style="text-align: right;">141</td>
+<td style="text-align: right;">174</td>
 </tr>
 <tr>
 <td>a function returning <code>None</code> that fills a list of 100</td>
@@ -4870,8 +4875,46 @@ median of three runs, in nanoseconds:</p>
 <td style="text-align: right;">53</td>
 <td style="text-align: right;">123</td>
 </tr>
+<tr>
+<td>straight-line work on three objects, <code>@ppy.native</code></td>
+<td style="text-align: right;">115</td>
+<td style="text-align: right;">91</td>
+</tr>
+<tr>
+<td><code>find</code> in a 10,000-node linked list, <code>@ppy.native</code></td>
+<td style="text-align: right;">38,407</td>
+<td style="text-align: right;">70,162</td>
+</tr>
+<tr>
+<td><code>len</code> of a 10,000-node linked list, <code>@ppy.native</code></td>
+<td style="text-align: right;">86,603</td>
+<td style="text-align: right;">149,218</td>
+</tr>
+<tr>
+<td><code>contains</code> in a 10,000-node search tree, <code>@ppy.native</code></td>
+<td style="text-align: right;">537</td>
+<td style="text-align: right;">528</td>
+</tr>
+<tr>
+<td><code>push</code> onto a 10,000-node linked list, <code>@ppy.native</code></td>
+<td style="text-align: right;">1,894</td>
+<td style="text-align: right;">190</td>
+</tr>
+<tr>
+<td><code>insert</code> into a 10,000-node search tree, <code>@ppy.native</code></td>
+<td style="text-align: right;">2,469</td>
+<td style="text-align: right;">488</td>
+</tr>
 </tbody>
 </table>
+<p>The object rows call functions and methods on objects that stay resident
+between calls (<a href="../classes/#resident-objects">Resident objects</a>): before,
+each call copied the whole structure in and back, 3 to 5 ms for the
+10,000-node ones and 1,058 ns for the chain of 10. A resident object costs
+about 80 ns a call; native code then walks the nodes faster than CPython,
+but an object it makes is made in Python too, with a <code>__dict__</code> and a weak
+reference, about a microsecond, so <code>push</code> and <code>insert</code>, which make a node
+each, stay slower and the cost model keeps them in Python.</p>
 <p>The <code>@ppy.native</code> <code>x + y</code> row is the wrapper alone: parsing the arguments,
 the exact type checks, and boxing the result. A failed guard costs the
 wrapper plus a Python call. The rows that read a container and write none
