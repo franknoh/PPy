@@ -187,6 +187,10 @@ class CrossingClass:
     tag: int = 0
     #: The classes an instance of this one is an instance of, itself first.
     bases: tuple[str, ...] = ()
+    #: Whether an instance keeps its native record between calls (`crossing.c`):
+    #: every field a number, a string, a tuple of numbers, or an object of a
+    #: class that is resident too.
+    resident: bool = False
 
 
 def classes_to_json(classes: tuple[CrossingClass, ...]) -> list[dict]:
@@ -203,6 +207,7 @@ def classes_to_json(classes: tuple[CrossingClass, ...]) -> list[dict]:
             "handles": c.handles,
             "tag": c.tag,
             "bases": list(c.bases),
+            "resident": c.resident,
         }
         for c in classes
     ]
@@ -221,6 +226,7 @@ def classes_from_json(raw: list[dict]) -> tuple[CrossingClass, ...]:
             handles=int(c["handles"]),
             tag=int(c["tag"]),
             bases=tuple(str(b) for b in c["bases"]),
+            resident=bool(c.get("resident", False)),
         )
         for c in raw
     )

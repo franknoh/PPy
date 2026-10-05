@@ -1367,7 +1367,23 @@ class CollectionLowering:
             f"AttributeError: 'NoneType' object has no attribute '{target.attr}'",
         )
         self._store_into(self._field_address(handle, offset), field_shape, value, fresh=False)
+        self._touch(handle)
         self._done_with(handle, owned)
+
+    def _touch(self, handle: Value) -> None:
+        """After a field of `handle` is stored: a resident object's record (one
+        the Python boundary keeps between calls, `crossing.c`) is put on the
+        runtime's list once, so the boundary copies it back to its Python
+        object. Any other handle's word 19 never holds the mark."""
+        word = _header_word(self.b, handle, 19)
+        resident = core.cmp(self.b, "eq", word, self._word(RESIDENT_CLEAN))
+        touch = self._block("touch.call")  # type: ignore[attr-defined]
+        done = self._block("touch.done")  # type: ignore[attr-defined]
+        core.cond_br(self.b, resident, Successor(touch), Successor(done))
+        self.b.at_end(touch)  # type: ignore[attr-defined]
+        self._rt("ppy_coll_touch", (handle,), None)
+        core.br(self.b, Successor(done))
+        self.b.at_end(done)  # type: ignore[attr-defined]
 
     def _identity(self, node: ast.Compare) -> Value | None:
         """`x is None`, `x is not y`: handles compared as addresses."""
@@ -2714,6 +2730,11 @@ class _Called:
     results: tuple[Value, ...]
 
 
+#: Header word 19 of a resident object's handle while its record matches its
+#: Python object (`ppy_coll_touch`, `crossing.c`); one more once it does not.
+RESIDENT_CLEAN = 0x7078526573694400
+
+
 #: The header word an object's class tag is kept in: family word b, which a
 #: sequence (an object's record lives in a one-element sequence) leaves unused.
 _TAG = 4
@@ -2876,4 +2897,64 @@ def crossing_classes(
                 tag=class_tag(sub.qualname),
                 bases=tuple(entry for entry in sub.mro if entry in {c.qualname for c in chain}),
             )
-    return tuple(found[name] for name in sorted(found))
+    return _resident(found, by_name)
+
+
+#: The fields a resident object's record may hold besides objects: values
+#: Python cannot change in place.
+_RESIDENT_SCALARS = frozenset({"int", "float", "bool", "str"})
+
+
+def _resident(
+    found: dict[str, CrossingClass], by_name: dict[str, ClassInfo]
+) -> tuple[CrossingClass, ...]:
+    """The classes, each marked `resident` where its instances may keep their
+    native records between calls (`crossing.c`): a plain class whose every
+    field is a number, a string, a tuple of numbers, or an object of another
+    such class. A container, a value class, or anything else Python may
+    change without assigning one of the object's own attributes leaves the
+    class copied at every crossing."""
+
+    def plain(qualname: str) -> bool:
+        c = found[qualname]
+        info = by_name.get(qualname)
+        return (
+            c.kind == "object"
+            and info is not None
+            and not info.identity_rewritten
+            and info.slots is None
+            and not (info.is_enum or info.is_pydantic or info.is_protocol)
+        )
+
+    resident = {name for name in found if plain(name)}
+    changed = True
+    while changed:
+        changed = False
+        for name in sorted(resident):
+            for _field, _offset, spelled in found[name].fields:
+                if spelled.removesuffix("?") in _RESIDENT_SCALARS or spelled.startswith("tuple["):
+                    continue
+                if spelled.removesuffix("?") in resident:
+                    continue
+                resident.discard(name)
+                changed = True
+                break
+    return tuple(
+        _marked(found[name]) if name in resident else found[name] for name in sorted(found)
+    )
+
+
+def _marked(c: CrossingClass) -> CrossingClass:
+    return CrossingClass(
+        c.qualname,
+        c.module,
+        c.name,
+        c.kind,
+        c.fields,
+        words=c.words,
+        floats=c.floats,
+        handles=c.handles,
+        tag=c.tag,
+        bases=c.bases,
+        resident=True,
+    )

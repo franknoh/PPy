@@ -495,6 +495,8 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
     parts.extend(_support(signatures.values()))
     if any(s.crosses_collections for s in signatures.values()):
         methods.append('    {"ppy_runtime", ppy_runtime, METH_VARARGS, NULL},')
+        methods.append('    {"ppy_world", ppy_world, METH_VARARGS, NULL},')
+        methods.append('    {"ppy_world_stats", ppy_world_stats, METH_NOARGS, NULL},')
     if any(s.effects for s in signatures.values()):
         methods.append('    {"ppy_effects", ppy_effects, METH_VARARGS, NULL},')
     if any(s.draws for s in signatures.values()):
@@ -648,7 +650,7 @@ def _crossing_structs(index: int, crossing: _Crossing) -> str:
         entries.append(
             f'    {{"{c.qualname}", {int(c.kind == "record")}, {c.tag}LL, {c.words}, {c.floats}LL, '
             f"{c.handles}LL, {len(c.fields)}, ppy_fields_{index}_{number}, {len(bases)}, "
-            f"ppy_bases_{index}_{number}, NULL, NULL}},"
+            f"ppy_bases_{index}_{number}, NULL, NULL, {int(c.resident)}}},"
         )
     lines.append(f"static px_class ppy_classlist_{index}[] = {{\n" + "\n".join(entries) + "\n};")
     lines.append(
@@ -708,6 +710,10 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     # without the GIL (spec 16.6). A borrowed buffer stays pinned across it.
     release = "    Py_BEGIN_ALLOW_THREADS" if signature.releases_gil else ""
     acquire = "    Py_END_ALLOW_THREADS" if signature.releases_gil else ""
+    if signature.releases_gil and crossing:
+        # Resident objects (`crossing.c`) are only touched with the GIL held.
+        release = "    PyThreadState *ppy_saved = ppy_x.resident ? NULL : PyEval_SaveThread();"
+        acquire = "    if (ppy_saved != NULL) PyEval_RestoreThread(ppy_saved);"
 
     builder = _result_builder(index, signature)
     # A container crossing: the arguments copied in as the guards run, every
@@ -721,8 +727,16 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     keep = "    px_keep(&ppy_x);\n" if crossing else ""
     readonly = int(copied is not None and _reads_only(signature, copied))
     sync = ""
-    if crossing and any(p.is_handle and p.written for p in signature.parameters):
+    objects = _object_positions(signature, copied) if copied is not None else []
+    resident = bool(objects) and classes != "NULL"
+    if resident:
+        # The fields native code wrote in resident objects, set on them.
         sync = (
+            "    if (ppy_x.resident && px_drain(&ppy_x) < 0) {\n        px_end(&ppy_x);\n"
+            "        px_close(&ppy_x);\n        return NULL;\n    }\n"
+        )
+    if crossing and any(p.is_handle and p.written for p in signature.parameters):
+        sync += (
             "    if (px_sync(&ppy_x) < 0) {\n        px_end(&ppy_x);\n        px_close(&ppy_x);\n"
             "        return NULL;\n    }\n"
         )
@@ -733,6 +747,11 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
             f"    px_begin(&ppy_x, {classes}, {readonly});\n"
             "    if (!ppy_rt_ready) goto ppy_fallback;\n"
             + (f"    if (!px_resolve({classes})) goto ppy_fallback;\n" if classes != "NULL" else "")
+            + (
+                f"    px_resident(&ppy_x, args, ppy_objects_{index}, {len(objects)});\n"
+                if resident
+                else ""
+            )
             + body
         )
     boxed = _box(signature).replace("ppy_build_result(", f"ppy_build_result_{index}(")
@@ -741,6 +760,10 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     elif crossing and specs is not None and "r" in specs:
         boxed = f"px_result(&ppy_x, (int8_t *)ppy_out0, &ppy_xs_{index}_r)"
     structs = _crossing_structs(index, copied) if copied is not None else ""
+    if resident:
+        structs += (
+            f"\nstatic const int ppy_objects_{index}[] = {{{', '.join(map(str, objects))}}};"
+        )
     resolver = ""
     if classes != "NULL":
         # The classes' Python classes are found at the first call, by this.
@@ -760,7 +783,8 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         f"{close}"
         f"        return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);\n"
     )
-    answered = f"{sync}    PyObject *ppy_result = {boxed};\n{end}{keep}    return ppy_result;\n"
+    made = "    px_resident_result(&ppy_x, ppy_result);\n" if resident else ""
+    answered = f"{sync}    PyObject *ppy_result = {boxed};\n{made}{end}{keep}    return ppy_result;\n"
     if held:
         # Output held while the call runs: written out once it answers,
         # dropped where it falls back, and a call that raised after a
@@ -786,7 +810,7 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         )
         synced = sync.replace("return NULL;", "return ppy_io_commit_result(NULL);")
         answered = (
-            f"{synced}    PyObject *ppy_result = {boxed};\n"
+            f"{synced}    PyObject *ppy_result = {boxed};\n{made}"
             f"{end}    ppy_result = ppy_io_commit_result(ppy_result);\n"
             f"{keep}    return ppy_result;\n"
         )
@@ -930,6 +954,18 @@ ppy_fallback:
 {end}{close}    return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);
 }}
 """
+
+
+def _object_positions(signature: NativeSignature, crossing: _Crossing) -> list[int]:
+    """The arguments that are objects of the project's classes, which a call
+    keeps resident (`crossing.c`) where they crossed before."""
+    return [
+        position
+        for position, parameter in enumerate(signature.parameters)
+        if parameter.is_handle
+        and (spec := crossing.specs.get(str(position))) is not None
+        and spec.kind == "object"
+    ]
 
 
 def _reads_only(signature: NativeSignature, crossing: _Crossing) -> bool:
