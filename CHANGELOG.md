@@ -78,6 +78,34 @@ INTRO_PLACEHOLDER
   unknown instead of making it a `float`.
 - `scripts/fuzz.py --inference` fuzzes the new evidence.
 
+### Fixes
+
+- Fixed: with `strict = false`, a function behind a project decorator the
+  compiler does not vouch for ran without its decorator: `square(3)` under a
+  doubling decorator printed 9 where CPython prints 18, and a wrapper's
+  prints were lost. Such a function now stays in Python and calls go
+  through the decorated object. `scripts/fuzz.py --decorators` fuzzes this.
+- Fixed: releasing a linked chain of about 200,000 objects overflowed the C
+  stack, and returning a long chain to Python raised `RecursionError`. Both
+  now walk a worklist; a chain of 1,000,000 nodes works on every path.
+- Fixed: a `bool` stored where an `int` is declared (`x: int = True`, an
+  `-> int` function returning a comparison, `True` in a `list[int]`)
+  printed `1` in native code. Such a function now stays in Python, and a
+  standalone build refuses it with a reason. `scripts/fuzz.py --bools`
+  fuzzes this.
+- Fixed: `flag + flag` crashed compilation, and `+flag` gave a `bool` where
+  CPython gives an `int`.
+- Fixed: a native function that passed a function value which stayed in
+  Python crashed compilation.
+- `isinstance(n, bool)` of an `int` parameter or local that can only hold an
+  `int` is decided natively, so standalone builds accept it.
+- A local set to `None` and later to an object (`prev = None`) is a
+  `Node | None` natively.
+- `max(a, b)` and `min(a, b)` of objects lower natively, in CPython's order.
+- A doctest operand built by a constructor call counts as type evidence.
+- `ppy explain module.Class` lists each field's type and where it came from.
+- Reasons no longer show internal names such as `__global_PRIMES`.
+
 ## 0.6.0 — 2026-10-03
 
 More ordinary Python runs natively under `ppy run`: functions that print,
