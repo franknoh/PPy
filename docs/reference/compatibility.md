@@ -1,6 +1,6 @@
 # Compatibility
 
-PPy is at version 0.6. Some parts of it are more settled than others.
+PPy is at version 0.7. Some parts of it are more settled than others.
 This page says which parts you can build on, which parts will change, and
 what happens when the two sides of a boundary disagree.
 
@@ -17,7 +17,7 @@ The levels of each part:
 | surface | level | notes |
 |---|---|---|
 | the language subset: statements, expressions, the type system | settling | new constructs are added; accepted code is not un-accepted without a note |
-| `--no-strict` (`strict = false`): `W2010`, `W2011`, and parameter types inferred from calls, defaults, and doctests | settling | since 0.6. What it accepts only grows; which functions compile may change from release to release, never what a program prints |
+| `--no-strict` (`strict = false`): `W2010`, `W2011`, parameter types inferred from calls, defaults, doctests, and the other evidence the subset page lists, and field types from every store into a field | settling | since 0.6; more evidence and field types in 0.7. What it accepts only grows; which functions compile may change from release to release, never what a program prints |
 | what compiles natively under `ppy run`, and the cost model that decides which functions Python calls natively | experimental | grows every release; `ppy explain --summary` reports it. A function moving between native and Python changes speed, not output |
 | `ppy.pure`, `ppy.opt`, `ppy.native`, `ppy.jit`, `ppy.dynamic`, `ppy.check` | settling | the directives a program is written around |
 | `ppy.input`, `ppy.scan`, `ppy.buffer`, `ppy.read_ints`, `ppy.read_token` | experimental | `input` reads lines and `scan` tokens since 0.3; the spelling may still change |

@@ -253,7 +253,7 @@ int32_t ppy_toolbox_unused(int64_t n, int64_t *out) {
 **`ppy build toolbox.ppy --report-opt`**
 
 <details markdown="1">
-<summary>37 lines</summary>
+<summary>41 lines</summary>
 
 ```text
 optimization report: ppy-docs (O2, ir road)
@@ -263,10 +263,12 @@ module toolbox
   toolbox.pick: native, bound to Python
   toolbox.unused: native, native callers only
   block merged: 7
-  dead code removed: 17
+  dead code removed: 21
   note: 4
     - @toolbox_compute: core.cmp: folded 4 and 0
     - @toolbox_compute: core.guard: condition always holds
+    - @toolbox_main: core.add: identity element removed
+    - @toolbox_main: core.add: identity element removed
     - @toolbox_main: core.sub: folded 50 and 1
     - @toolbox_main: core.sub: folded 400 and 1
     - simplify-cfg: ^each.latch3 merged into ^endif7
@@ -276,6 +278,8 @@ module toolbox
     - simplify-cfg: ^for.guards7 merged into ^for.end6
     - simplify-cfg: ^for.setup8 merged into ^for.end6
     - simplify-cfg: ^for.latch11 merged into ^for.body10
+    - dce: unused core.const removed
+    - dce: unused core.const removed
     - dce: unused core.const removed
     - dce: unused core.const removed
     - dce: unused core.const removed
@@ -300,7 +304,7 @@ module toolbox
 **`ppy build --pgo toolbox.ppyprof toolbox.ppy --report-opt`**
 
 <details markdown="1">
-<summary>47 lines</summary>
+<summary>51 lines</summary>
 
 ```text
 optimization report: ppy-docs (O2, ir road)
@@ -315,11 +319,13 @@ module toolbox
   toolbox.pick: native, bound to Python
   toolbox.unused: native, native callers only
   block merged: 7
-  dead code removed: 17
+  dead code removed: 21
   note: 4
   profile applied: 4
     - @toolbox_compute: core.cmp: folded 4 and 0
     - @toolbox_compute: core.guard: condition always holds
+    - @toolbox_main: core.add: identity element removed
+    - @toolbox_main: core.add: identity element removed
     - @toolbox_main: core.sub: folded 50 and 1
     - @toolbox_main: core.sub: folded 400 and 1
     - profile: `toolbox.compute` is hot (100 call(s)); 2 branch(es) weighted, 1 loop(s) with trip counts
@@ -333,6 +339,8 @@ module toolbox
     - simplify-cfg: ^for.guards7 merged into ^for.end6
     - simplify-cfg: ^for.setup8 merged into ^for.end6
     - simplify-cfg: ^for.latch11 merged into ^for.body10
+    - dce: unused core.const removed
+    - dce: unused core.const removed
     - dce: unused core.const removed
     - dce: unused core.const removed
     - dce: unused core.const removed

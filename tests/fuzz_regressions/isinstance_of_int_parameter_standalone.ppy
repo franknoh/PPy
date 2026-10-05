@@ -1,0 +1,25 @@
+# fuzz: path=standalone seed=104 (`isinstance(n, bool)` of an `int` parameter kept a standalone build from building)
+def fn1(a2: int) -> str:
+    n3: int = -9
+    n3 *= a2 - a2
+    n7: int = 1 if isinstance(a2, bool) else 0
+    n8: int = 1 if isinstance(a2, int) else 0
+    return "yes" if n7 + n8 == 1 else "no"
+
+
+def fn2(x: float) -> int:
+    return 1 if isinstance(x, int) else 2
+
+
+def fn3(a: int, b: int = 3) -> int:
+    a += b
+    return 1 if isinstance(a, (bool, str)) else 0
+
+
+def main() -> None:
+    print(fn1(3037000499))
+    print(fn2(2.5))
+    print(fn3(4))
+
+
+main()

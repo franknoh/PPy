@@ -15,9 +15,9 @@ A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit `@ppy.native`/`@ppy.jit`/`@ppy.specialize`/`@ppy.parallel` gets the
 boundary. Native callers call its native symbol directly, boundary or not.
 
-The generated wrapper's call costs about what a Python call does: 29 ns for
+The generated wrapper's call costs about what a Python call does: 32 ns for
 `def add(x: int, y: int) -> int: return x + y` called from Python, against
-30 ns for CPython's own call of it. So straight-line work pays from two
+32 ns for CPython's own call of it. So straight-line work pays from two
 operations (`0.5 * base * height`), and a one-operation helper stays on the
 Python side (remarked as `R3004`). The rest costs more:
 
@@ -28,7 +28,7 @@ Python side (remarked as `R3004`). The rest costs more:
 | a value class | 1 more per field |
 | output held while the call runs (a `print`) | a loop: one line written through Python costs more than CPython's `print`, many cost much less |
 | a module global the function reads | 6 more: a Python frame reads it for the wrapper |
-| a call that draws from `random` | 4: the wrapper saves its state (2.5 KB) and puts it back where the call falls back |
+| a call that draws from `random` | 4: the wrapper saves its state (2.5 KB) and puts it back where the call falls back; 16 where the function also reads module globals, since the Python-level binding saves the state then |
 
 A straight-line function that calls itself, as `power(b, e - 1)` does,
 stays off the boundary: how deep it goes is the argument's to decide, and
@@ -59,26 +59,26 @@ median of three runs, in nanoseconds:
 
 | call | `ppy run` | CPython |
 |---|---:|---:|
-| `x + y` of two ints, kept in Python by the cost model | 31 | 32 |
-| `x + y` of two ints, `@ppy.native` | 32 | 31 |
-| the same, `y` passed by keyword | 40 | 36 |
-| the same, `y` left to its default | 33 | 34 |
-| a loop of 100 additions | 64 | 991 |
-| `sum` of a borrowed buffer of 100 ints | 74 | 296 |
-| a guard that fails, so the Python body runs | 103 | 39 |
-| a `list[int]` of 100 written in place, `@ppy.native` | 1,182 | 2,729 |
-| a `dict[int, int]` of 100 walked, `@ppy.native` | 1,386 | 1,893 |
-| a chain of 10 objects walked, `@ppy.native` | 837 | 153 |
-| a function returning `None` that fills a list of 100 | 342 | 656 |
-| a `list[int]` of 100 summed | 243 | 946 |
-| a `list[list[int]]` of 10 by 10 summed, `@ppy.native` | 535 | 1,057 |
-| the lengths of a `list[str]` of 100 summed, `@ppy.native` | 1,910 | 1,330 |
-| 100 lookups in a `set[int]`, `@ppy.native` | 2,816 | 1,121 |
-| 100 lookups of `list[str]` keys in a `dict[str, int]`, `@ppy.native` | 9,941 | 1,605 |
-| the trues of a `list[bool]` of 100 counted | 205 | 696 |
-| one element of a `list[int]` of 100 written, `@ppy.native` | 260 | 41 |
-| a function returning `None` that reads 100 and writes one | 491 | 1,902 |
-| a `random.randint` and an addition | 57 | 133 |
+| `x + y` of two ints, kept in Python by the cost model | 29 | 28 |
+| `x + y` of two ints, `@ppy.native` | 32 | 32 |
+| the same, `y` passed by keyword | 36 | 32 |
+| the same, `y` left to its default | 31 | 33 |
+| a loop of 100 additions | 62 | 894 |
+| `sum` of a borrowed buffer of 100 ints | 68 | 279 |
+| a guard that fails, so the Python body runs | 83 | 39 |
+| a `list[int]` of 100 written in place, `@ppy.native` | 1,082 | 2,500 |
+| a `dict[int, int]` of 100 walked, `@ppy.native` | 1,214 | 1,754 |
+| a chain of 10 objects walked, `@ppy.native` | 795 | 145 |
+| a function returning `None` that fills a list of 100 | 325 | 578 |
+| a `list[int]` of 100 summed | 230 | 902 |
+| a `list[list[int]]` of 10 by 10 summed, `@ppy.native` | 491 | 949 |
+| the lengths of a `list[str]` of 100 summed, `@ppy.native` | 1,758 | 1,200 |
+| 100 lookups in a `set[int]`, `@ppy.native` | 2,442 | 1,004 |
+| 100 lookups of `list[str]` keys in a `dict[str, int]`, `@ppy.native` | 9,053 | 1,468 |
+| the trues of a `list[bool]` of 100 counted | 177 | 640 |
+| one element of a `list[int]` of 100 written, `@ppy.native` | 250 | 35 |
+| a function returning `None` that reads 100 and writes one | 393 | 1,699 |
+| a `random.randint` and an addition | 53 | 123 |
 
 The `@ppy.native` `x + y` row is the wrapper alone: parsing the arguments,
 the exact type checks, and boxing the result. A failed guard costs the
@@ -174,8 +174,33 @@ The subset includes what a loop is normally made of:
   (`int`, `float`, `bool`, `str`, `list`, `dict`, `set`, `tuple`,
   `type(None)`) fold to a constant where the checker's type of `x` decides
   the answer. An `int` may be a `bool` and a `float` may be an `int`, so
-  `isinstance(n, bool)` of an `n: int` stays in Python. Object classes are
-  tested by the class tag the instance carries.
+  `isinstance(n, bool)` of an `n: int` local stays in Python. A parameter of
+  a module-level function that is only called by name and never rebound in
+  its body is the exception: Python's calls reach it only with a real `int`
+  (the boundary refuses a `bool`), and a native call that passes a `bool` to
+  an `int` parameter whose body shows the difference (prints it, formats
+  it, asks its class, returns it) stays in Python, so `isinstance(n, bool)`
+  of that parameter is `False` natively. A `float` parameter that shows
+  whether it is an `int` is likewise always a `float`. A local that every
+  assignment gives a real `int` (an int literal, `len(...)`, `int(...)`, or
+  arithmetic other than `&`, `|`, `^` on ints and bools) or a real `float`
+  (a float literal, `float(...)`, or arithmetic with a real float on one
+  side), and that no loop, `with`, handler, or nested scope rebinds, is
+  decided the same way. Object classes are tested by the class tag the
+  instance carries.
+- A `bool` stays a `bool` in Python wherever it is stored: after
+  `x: int = flag`, `x` prints `True`. Native code holds an `int` as a
+  64-bit word, which keeps only the 1. So a function that stores a `bool`
+  where an `int` is declared stays in Python, and a standalone build reports
+  it. That covers a local (also one rebound from an `int`), a return from an
+  `-> int` function, an element of a `list[int]`, `dict[..., int]`, or
+  `tuple[int, ...]`, an `int` field, and an argument through a
+  `Callable[[int], ...]` or to a class. A call of a module function by name
+  stays in Python only where the callee prints, returns, stores, or tests
+  that parameter. Arithmetic is not a store: `flag + n`, `-flag`, and
+  `True + 1` are `int`s in Python too and stay native. To keep the function
+  native, annotate the slot `bool`, or store `int(flag)` where an `int` is
+  meant.
 - A chained comparison, `0 <= i < n`, is its comparisons joined by `and`,
   each operand evaluated once and the ones after a false comparison not at
   all.
@@ -263,8 +288,9 @@ places runs any code, and the rest are names, constants, or attributes.
 Python evaluates a default once, when the `def` runs, so the compiler puts a
 default into the call only where it is a constant: a number, a string,
 `None`, or a tuple of those. A call that leaves out a parameter whose
-default is anything else (`xs: list[int] = []`), a call with `*args` or
-`**kwargs`, and a method call bound by keyword where a subclass overrides
+default is anything else (`xs: list[int] = []`), a call that spreads
+`*args` (other than a list passed whole to a `*args` parameter, as in
+[Types that lower](#types-that-lower)) or `**kwargs`, and a method call bound by keyword where a subclass overrides
 the method stay in Python.
 
 When Python calls a native function with keywords or with defaults left
@@ -312,29 +338,29 @@ to the first two reasons:
 
 ```text
 175 functions, 1389 statements
-  native, called from Python              2 functions (  1%)       24 statements (  2%)
-  native, called from native code         2 functions (  1%)       18 statements (  1%)
-  Python                                171 functions ( 98%)     1347 statements ( 97%)
+  native, called from Python              7 functions (  4%)       88 statements (  6%)
+  native, called from native code         7 functions (  4%)       74 statements (  5%)
+  Python                                161 functions ( 92%)     1227 statements ( 88%)
   (73 of the Python functions are generic: each native caller compiles its own instance)
 
 what keeps functions in Python, by statements kept out (a function can count under more than one):
-      143 statements     10 functions  writes to a parameter native code copies
-      return the new value, or take a `Buffer`, a list, or a ppy collection
-      see https://ppy.franknoh.dev/latest/guide/native/
-      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
-      sorts/circle_sort.py:50 sorts.circle_sort.circle_sort.<locals>.circle_sort_util
-      sorts/dutch_national_flag_sort.py:33 sorts.dutch_national_flag_sort.dutch_national_flag_sort
-       53 statements     10 functions  a parameter or result with no annotation the checker could infer
+       81 statements      3 functions  a parameter of type `(Any) -> Any | NoneType`
+      take a type native code holds (numbers, str, tuples, lists, dicts, sets, ppy collections, project classes)
+      see https://ppy.franknoh.dev/latest/guide/native-lowering/
+      sorts/power_sort.py:34 sorts.power_sort._find_run
+      sorts/power_sort.py:137 sorts.power_sort._merge
+      sorts/power_sort.py:199 sorts.power_sort.power_sort
+       59 statements     12 functions  a parameter or result with no annotation the checker could infer
       annotate it, or run `ppy convert` to write the inferred annotations
       see https://ppy.franknoh.dev/latest/guide/subset/
       sorts/external_sort.py:13 sorts.external_sort.FileSplitter.__init__
       sorts/external_sort.py:26 sorts.external_sort.FileSplitter.split
       sorts/external_sort.py:48 sorts.external_sort.NWayMerge.select
-  ... 60 more reasons, 70 functions (--limit to see more, --json for all)
+  ... 62 more reasons, 73 functions (--limit to see more, --json for all)
 
 native, but Python calls the Python body (why its boundary is not used):
+      6 functions  copying the collections in costs more than the body does with them
       1 functions  copying its strings across costs what one pass over them saves
-      1 functions  copying the collections in costs more than the body does with them
 ```
 
 Read it from the top down:
@@ -349,13 +375,14 @@ Read it from the top down:
 - A generic function is not a blocker: it has no entry point of its own and
   is compiled for each native caller that names its types. Most of `sorts`
   is generic sorts that nothing calls natively.
-- A nested function that shares no variable with the functions around it
-  is counted on its own, since it has an entry of its own
+- A nested function that shares no variable with the functions around it,
+  or only reads variables nothing rebinds while it runs, is counted on its
+  own, since it has an entry of its own
   ([Functions as values](closures.md#a-nested-function-in-a-python-function)).
-  One that shares a variable lowers with the function around it: it counts
-  as native and called from native code when that function is native, and
-  otherwise says that the function around it stays in Python, which is the
-  reason to fix.
+  One that rebinds a shared variable lowers with the function around it: it
+  counts as native and called from native code when that function is
+  native, and otherwise says that the function around it stays in Python,
+  which is the reason to fix.
 - Each reason says what to do and links the page that explains it. The
   first places it occurs are listed with their line.
 

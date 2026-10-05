@@ -91,9 +91,14 @@ A literal constant (`LIMIT = 10`) is folded where it is read and needs none
 of this.
 
 A global that is not settled keeps its readers in Python. Neither kind
-reaches a standalone build or a C export, and a method, a nested function,
-a thread's body, and a function used as a value are not passed globals, so
-they too stay in Python when they read one.
+reaches a standalone build or a C export.
+
+A method may read settled globals when every native call reaches it by
+name with its arguments spelled out: it is not a property, a static or
+class method, or a dunder other than `__init__`, and it neither overrides
+another method nor is overridden. A nested function, a thread's body, and
+a function used as a value are not passed globals, so they stay in Python
+when they read one.
 
 ## The three execution paths
 

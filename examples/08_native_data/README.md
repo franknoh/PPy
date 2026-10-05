@@ -5,9 +5,10 @@ values, and which stay boxed. `ppy explain` says which is which, and why:
 
 - Scalars, fixed-size tuples, and all-scalar classes are handed over flat.
 - A `list[float]` is copied into a buffer on the way in.
-- Other lists, dicts, sets, and objects are copied into native handles,
-  and back after a call that writes them
-  ([Lists, dicts, and sets](../../docs/guide/containers.md)); this example
+- Other lists, dicts, and sets are read in place by a call that writes
+  through none of its parameters, and otherwise copied into native handles
+  and back after the call. Objects are always copied
+  ([Lists, dicts, and sets](../../docs/guide/containers.md)). This example
   does not use them.
 
 ## Run it

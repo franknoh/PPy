@@ -123,9 +123,14 @@ A string with a lone surrogate has no UTF-8, and a call with one runs as
 Python.
 
 A `list[str]`, `dict[str, V]`, or `set[str]` parameter or result is
-passed by handle between native functions. From Python it crosses by copy
-when the function does more than one pass of work over its strings; see
-[Lists, dicts, and sets](containers.md#between-functions).
+passed by handle between native functions. From Python, a call that writes
+through none of its parameters reads such a container in place: each
+string in it is the Python string's own UTF-8, borrowed for the call, and a
+string it hands back is the caller's object. A call that writes copies the
+strings in. Either way native code pays to hold each string and to hash
+each key it looks up, so Python calls the function natively only when it
+does more than one pass of work over its strings (`for w in words: for ch
+in w:`); see [Lists, dicts, and sets](containers.md#between-functions).
 
 ## Reading and printing
 

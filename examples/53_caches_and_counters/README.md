@@ -86,24 +86,26 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python words.ppy` | 1.47 |
-| `ppy run words.ppy`, after the first run built the cache | 0.74 |
-| `./dist/words`, the standalone binary | 0.71 |
+| `python words.ppy` | 1.45 |
+| `ppy run words.ppy`, after the first run built the cache | 0.66 |
+| `./dist/words`, the standalone binary | 0.64 |
 
 Timed one part at a time inside the program, in seconds, the mean of five
 runs:
 
 | part | CPython | `ppy run` |
 |---|---:|---:|
-| `make_words` | 0.157 | 0.106 |
-| `letter_counts` | 0.131 | 0.100 |
-| `nearest` (22,350 `distance` calls) | 0.618 | 0.287 |
-| `cheapest(0, 250)` | 0.500 | 0.077 |
+| `make_words` | 0.154 | 0.106 |
+| `letter_counts` | 0.134 | 0.098 |
+| `nearest` (22,350 `distance` calls) | 0.606 | 0.235 |
+| `cheapest(0, 250)` | 0.492 | 0.106 |
 
 `cheapest` gains the most: each entry runs a loop of lookups into one
-table. `nearest` gains the least: every `distance` call makes a new table
-for `d`, and most of its entries are computed once and read once, so the
-native code spends its time on the table rather than on the arithmetic.
+table. `nearest` gains less: every `distance` call makes a new table for
+`d`, and most of its entries are computed once and read once, so the
+native code spends much of its time on the table rather than on the
+arithmetic. `make_words` and `letter_counts` gain the least, since most of
+their work is making strings and counting them in dicts.
 CPython's `cache` is written in C, and a hit costs it little more than a
 call.
 

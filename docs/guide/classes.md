@@ -132,6 +132,20 @@ make nodes ([types from call sites](subset.md#types-from-call-sites)), and
   class body) keeps its annotation.
 - A store that would add a field the class never sets itself is not
   counted, so such a field stays Python's.
+- Evidence that goes round in a circle settles nothing. In
+  `node.left = insert(node.left, key)` with an unannotated recursive
+  `insert`, the field's type waits on `insert`'s result, and `insert`'s
+  parameter on the field, so both stay unknown and the functions run on
+  CPython. Annotating `insert` (`node: Node | None, key: int -> Node`)
+  settles the field too. An `insert` method that walks down and stores
+  `Node(key)`, as above, needs no annotation.
+- A local that starts as `None` and later holds an object
+  (`prev = None` ... `prev = node`) keeps its function in Python; declare
+  it (`prev: Node | None = None`).
+
+[`55_linked_structures`](../howto/55_linked_structures.md) is a search tree
+with parent links and a linked list written this way, without annotations,
+edited in place by native code.
 
 The type is what the program shows, not a promise about every caller. Code
 outside the project can store anything. When an object crosses into native
@@ -359,7 +373,7 @@ def bump(head: Node | None) -> None:
 Called from Python, `bump(a)` runs natively and leaves each node's `value`
 one higher. `bump(None)` is native too, since the parameter allows `None`.
 
-The copy costs time in proportion to what crosses, about 100 ns an object
+The copy costs time in proportion to what crosses, about 80 ns an object
 in and as much back after a write, where CPython reads a field in a few
 nanoseconds. So Python calls the native body only when the function does
 work in proportion to it, and more than a few operations of it per object:
@@ -369,6 +383,14 @@ doing six operations or more on what it reaches. Without `@ppy.native`,
 `bump` above, which adds one to each node, would run its Python body when
 Python calls it; the directive asks for the crossing whatever it costs.
 Native callers pass objects by handle and copy nothing. `ppy explain` gives the reason for each function.
+
+So a method Python calls on a large structure, such as `tree.insert(key)`
+on a tree of a thousand nodes, usually runs its Python body: the whole tree
+would cross for one descent. Where the structure is built and worked on by
+a native function that Python calls with numbers and that returns numbers,
+nothing but the numbers crosses, and every method it calls runs natively
+([`55_linked_structures`](../howto/55_linked_structures.md)). Unlike
+containers, objects are always copied, also by a call that only reads them.
 
 A method of a class that crosses this way is bound like a method: `node.f(x)`
 passes `node` to the native code, and a `@staticmethod` stays static.
