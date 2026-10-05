@@ -117,6 +117,27 @@ the other 13 skipped and none differing.
 - `ppy explain module.Class` lists each field's type and where it came from.
 - Reasons no longer show internal names such as `__global_PRIMES`.
 
+### Examples and documentation
+
+- New examples, each agreeing on all three paths (mean of five runs):
+  - `55_linked_structures`: an unannotated search tree with parent links and
+    rotations, and a linked list reversed in place. python 0.67 s,
+    `ppy run` 0.34 s.
+  - `56_options_and_doctests`: an `argparse` script with `lru_cache`, a
+    `Vector` class used through operators, and doctests. python 1.18 s,
+    `ppy run` 0.44 s.
+- `54_objects_and_grids` runs in 0.25 s under `ppy run`, down from 0.58 s.
+- The guide, reference, and README describe 0.7.0, and the boundary table
+  is re-measured: a native two-int call costs 32 ns, as CPython's own call
+  does.
+
+### Known limitations
+
+- `int | None`, `float | None`, and `str | None` fields and container
+  elements have no native form, so functions that use them stay in Python.
+- An object passed from Python is copied in and back at every call, so many
+  small methods are still called through Python.
+
 ## 0.6.0 — 2026-10-03
 
 More ordinary Python runs natively under `ppy run`: functions that print,
