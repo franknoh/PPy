@@ -687,6 +687,10 @@ def _crossing_costs_more(
         and native.element != "str"
         and _crosses(native, classes)
     ]
+    # An object that stays resident (`crossing.c`) is not copied after its
+    # second crossing: what it costs is a flat price (`_crossing_cost`).
+    resident = _resident_params(crossing, classes)
+    crossing = [(name, native) for name, native in crossing if name not in resident]
     names = [name for name, _native in crossing]
     if crossing and not _works_through(info.node, names, info.name):
         return "copying the collections in costs more than the body does with them"
@@ -706,6 +710,24 @@ def _crossing_costs_more(
     if holds and not _nested_loop(info.node):
         return "copying its strings across costs what one pass over them saves"
     return None
+
+
+def _resident_params(
+    crossing: list[tuple[str, NativeParam]], classes: tuple[CrossingClass, ...]
+) -> frozenset[str]:
+    """The parameters that are objects the boundary keeps resident between
+    calls (`crossing.c`): every class the call crosses is one whose instances
+    may be (`CrossingClass.resident`)."""
+    objects = [c for c in classes if c.kind == "object"]
+    if not objects or not all(c.resident for c in objects):
+        return frozenset()
+    described = {c.qualname: c for c in classes}
+    return frozenset(
+        name
+        for name, native in crossing
+        if (spec := crossing_spec(native.element, described)) is not None
+        and spec.kind == "object"
+    )
 
 
 def _reads_in_place(
@@ -1087,7 +1109,7 @@ def should_lower_native(
         # Its depth is the argument's to decide, and native code has no
         # recursion limit to raise `RecursionError` at: CPython's frames do.
         return False, "calls itself without a loop; CPython's recursion limit stays in force"
-    if work >= _crossing_cost(info, analysis, layouts, written):
+    if work >= _crossing_cost(info, analysis, layouts, written, classes):
         return True, f"straight-line work ({work} operations)"
     return False, "the boundary crossing costs more than the body saves"
 
@@ -1111,6 +1133,15 @@ _CROSSING_GLOBALS = 6
 _CROSSING_DRAWS = 4
 _CROSSING_SLOW = 16
 _CROSSING_HELD = 40
+#: An object kept resident between calls (`crossing.c`) is found in the
+#: world rather than copied: about six operations. One the call writes has
+#: its record's changed fields set on the Python object after the call, and
+#: an object native code makes is made in Python, given a `__dict__` and a
+#: weak reference, and watched, which costs several times what CPython pays
+#: to make it.
+_CROSSING_RESIDENT = 6
+_CROSSING_RESIDENT_WRITTEN = 12
+_CROSSING_RESIDENT_MADE = 40
 
 
 def _crossing_cost(
@@ -1118,6 +1149,7 @@ def _crossing_cost(
     analysis: FunctionAnalysis,
     layouts: ClassLayouts | None,
     written: frozenset[str],
+    classes: tuple[CrossingClass, ...] = (),
 ) -> int:
     """How much straight-line work pays for a call through the boundary."""
     if Effect.RANDOM in analysis.effects:
@@ -1136,6 +1168,39 @@ def _crossing_cost(
     returned = _collection_param("", info.ret, layouts)
     if returned is not None and returned.element == "str":
         cost += _CROSSING_TEXT
+    return cost + _resident_cost(info, analysis, layouts, written, classes)
+
+
+def _resident_cost(
+    info: FunctionInfo,
+    analysis: FunctionAnalysis,
+    layouts: ClassLayouts | None,
+    written: frozenset[str],
+    classes: tuple[CrossingClass, ...],
+) -> int:
+    """What the resident objects of a call cost (`_CROSSING_RESIDENT`)."""
+    crossing = [
+        (param.name, native)
+        for param in info.params
+        if (native := _native_param(param.name, param.type, layouts, param.name in written))
+        is not None
+        and native.is_handle
+        and native.element != "str"
+        and _crosses(native, classes)
+    ]
+    resident = _resident_params(crossing, classes)
+    if not resident:
+        return 0
+    filled = writes(analysis)
+    cost = sum(
+        _CROSSING_RESIDENT + (_CROSSING_RESIDENT_WRITTEN if name in filled else 0)
+        for name in resident
+    )
+    made = {c.name for c in classes if c.kind == "object"}
+    cost += _CROSSING_RESIDENT_MADE * sum(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in made
+        for node in ast.walk(info.node)
+    )
     return cost
 
 

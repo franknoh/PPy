@@ -864,7 +864,9 @@ static int64_t px_handles(const ppy_xs *s) {
 typedef struct {
     PyObject *ref;  /* a weak reference to the object */
     PyObject *obj;  /* its address, the key: compared only while `ref` lives */
-    PyObject *dict; /* held, and watched */
+    /* Its `__dict__`, watched: not held, so the object's death lets it go
+       as CPython would; NULL once it was deallocated. */
+    PyObject *dict;
     int8_t *handle; /* held */
     px_classes *table;
     int cls;
@@ -899,32 +901,25 @@ static int px_word(ppy_cross *x, PyObject *o, const ppy_xs *s, int64_t *words);
 static int px_deferred(ppy_cross *x, PyObject *made, px_class *c, int8_t *handle, int fresh,
                        int rewrite);
 
-/* The object of an entry, a new reference; NULL where it died. */
-static PyObject *px_res_object(const px_res *e) {
+/* The object of an entry, borrowed; NULL where it died. The weak reference's
+   own field, read with the GIL held: CPython sets it to `None` as the
+   object dies (a build without the GIL has no world). */
+static PyObject *px_res_target(const px_res *e) {
     if (e->ref == NULL) {
         return NULL;
     }
-#if PY_VERSION_HEX >= 0x030D0000
-    PyObject *found = NULL;
-    if (PyWeakref_GetRef(e->ref, &found) <= 0) {
-        PyErr_Clear();
-        return NULL;
-    }
-    return found;
-#else
-    PyObject *found = PyWeakref_GET_OBJECT(e->ref);
-    return found == Py_None ? NULL : Py_NewRef(found);
-#endif
+    PyObject *found = ((PyWeakReference *)e->ref)->wr_object;
+    return found == Py_None ? NULL : found;
+}
+
+/* The object of an entry, a new reference; NULL where it died. */
+static PyObject *px_res_object(const px_res *e) {
+    PyObject *found = px_res_target(e);
+    return found != NULL ? Py_NewRef(found) : NULL;
 }
 
 static int px_res_alive(const px_res *e) {
-#if PY_VERSION_HEX >= 0x030D0000
-    PyObject *found = px_res_object(e);
-    Py_XDECREF(found);
-    return found != NULL;
-#else
-    return e->ref != NULL && PyWeakref_GET_OBJECT(e->ref) != Py_None;
-#endif
+    return px_res_target(e) != NULL;
 }
 
 static Py_ssize_t px_res_by_obj(px_world *w, PyObject *o) {
@@ -1034,7 +1029,6 @@ static void px_res_stale(px_world *w, Py_ssize_t at) {
    it is the boundary itself setting an attribute it copies back. */
 static int px_watched(PyDict_WatchEvent event, PyObject *dict, PyObject *key, PyObject *value) {
     px_world *w = px_the_world;
-    (void)event;
     (void)key;
     (void)value;
     if (w == NULL) {
@@ -1045,9 +1039,15 @@ static int px_watched(PyDict_WatchEvent event, PyObject *dict, PyObject *key, Py
         return 0;
     }
     Py_ssize_t at = px_res_by_dict(w, dict);
-    if (at >= 0) {
-        px_res_stale(w, at);
+    if (at < 0) {
+        return 0;
     }
+    if (event == PyDict_EVENT_DEALLOCATED) {
+        /* Its object died before it (`px_died`); the address may be reused. */
+        w->entries[at].dict = NULL;
+        return 0;
+    }
+    px_res_stale(w, at);
     return 0;
 }
 
@@ -1212,10 +1212,9 @@ static void px_world_clear(px_world *w) {
     }
     w->busy++;
     for (Py_ssize_t at = 0; at < count; at++) {
-        if (PyDict_Unwatch(w->watcher, entries[at].dict) < 0) {
+        if (entries[at].dict != NULL && PyDict_Unwatch(w->watcher, entries[at].dict) < 0) {
             PyErr_Clear();
         }
-        Py_DECREF(entries[at].dict);
         Py_DECREF(entries[at].ref);
     }
     w->busy--;
@@ -1274,10 +1273,9 @@ static void px_world_purge(px_world *w) {
     }
     w->busy++;
     for (Py_ssize_t i = 0; i < dropped; i += 2) {
-        if (PyDict_Unwatch(w->watcher, gone[i]) < 0) {
+        if (gone[i] != NULL && PyDict_Unwatch(w->watcher, gone[i]) < 0) {
             PyErr_Clear();
         }
-        Py_DECREF(gone[i]);
         Py_DECREF(gone[i + 1]);
     }
     w->busy--;
@@ -1288,12 +1286,12 @@ static void px_world_purge(px_world *w) {
 /* An object admitted: its dict watched, its handle held. The index, or -1
    with a Python error set. */
 static Py_ssize_t px_res_add(px_world *w, PyObject *o, PyObject *dict, int8_t *handle,
-                             px_classes *table, int cls) {
+                             px_classes *table, int cls, int watch) {
     PyObject *ref = PyWeakref_NewRef(o, w->on_death);
     if (ref == NULL) {
         return -1;
     }
-    if (PyDict_Watch(w->watcher, dict) < 0) {
+    if (watch && PyDict_Watch(w->watcher, dict) < 0) {
         Py_DECREF(ref);
         return -1;
     }
@@ -1322,7 +1320,7 @@ static Py_ssize_t px_res_add(px_world *w, PyObject *o, PyObject *dict, int8_t *h
     px_res *e = &w->entries[at];
     e->ref = ref;
     e->obj = o;
-    e->dict = Py_NewRef(dict);
+    e->dict = dict;
     e->handle = handle;
     e->table = table;
     e->cls = cls;
@@ -1368,6 +1366,9 @@ static int px_fields_in(ppy_cross *x, PyObject *dict, const px_class *c, int8_t 
         }
     }
     px_adopt_strings(c, handle);
+    /* The record is its object's: a field native code stores from now on is
+       copied back (`ppy_coll_touch`). */
+    ((int64_t *)handle)[19] = PX_CLEAN;
     return 0;
 }
 
@@ -1384,12 +1385,14 @@ static int px_refresh(ppy_cross *x, px_world *w, Py_ssize_t at) {
     x->classes = e->table;
     const px_class *c = px_res_class(e);
     int8_t *handle = e->handle;
-    PyObject *dict = Py_NewRef(e->dict);
+    PyObject *watched = e->dict;
+    /* The object's own dict, still the one watched. */
+    PyObject *dict = PyObject_GenericGetDict(o, NULL);
     int done = -1;
-    if (Py_TYPE(o) == c->type) {
+    if (dict != NULL && dict == watched && Py_TYPE(o) == c->type) {
         done = px_fields_in(x, dict, c, handle);
     }
-    Py_DECREF(dict);
+    Py_XDECREF(dict);
     Py_DECREF(o);
     x->classes = saved;
     return done;
@@ -1399,9 +1402,11 @@ static int px_refresh(ppy_cross *x, px_world *w, Py_ssize_t at) {
    an instance dict, weak references, and no data descriptor named like one
    of `names` anywhere in its MRO. */
 static int px_plain_type(PyTypeObject *type, PyObject *names) {
+    /* A finalizer may bring an object back after its weak references are
+       cleared: its record would then be one the world no longer knows. */
     if (type->tp_getattro != PyObject_GenericGetAttr ||
         type->tp_setattro != PyObject_GenericSetAttr || type->tp_dictoffset == 0 ||
-        type->tp_weaklistoffset == 0) {
+        type->tp_weaklistoffset == 0 || type->tp_finalize != NULL || type->tp_del != NULL) {
         return 0;
     }
     PyObject *mro = type->tp_mro;
@@ -1471,7 +1476,11 @@ static int px_table_plain(px_world *w, px_classes *t) {
                 plain = 0;
             }
             Py_XDECREF(joined);
-            PyUnstable_Type_AssignVersionTag(c->type);
+            /* A class is only watched while it has a version tag: without
+               one, a change to it would not be told. */
+            if (!PyUnstable_Type_AssignVersionTag(c->type)) {
+                plain = 0;
+            }
         }
         Py_DECREF(names);
         if (!plain) {
@@ -1488,10 +1497,10 @@ static int px_types_plain(px_world *w) {
     PyObject *type = NULL, *names = NULL;
     int plain = 1;
     while (PyDict_Next(w->types, &position, &type, &names)) {
-        if (!px_plain_type((PyTypeObject *)type, names)) {
+        if (!px_plain_type((PyTypeObject *)type, names) ||
+            !PyUnstable_Type_AssignVersionTag((PyTypeObject *)type)) {
             plain = 0;
         }
-        PyUnstable_Type_AssignVersionTag((PyTypeObject *)type);
     }
     return plain;
 }
@@ -1551,13 +1560,13 @@ static int px_world_ready(ppy_cross *x, px_world *w) {
             return 0;
         }
     }
-    Py_ssize_t left = 0;
-    int8_t **list = px_touched(&left);
-    if (left > 0) {
+    if (ppy_rt.touched()[1] != 0) {
         /* Records written outside a call this boundary settled. */
+        Py_ssize_t left = 0;
+        int8_t **list = px_touched(&left);
         px_scrap(w, list, left, 0);
+        free(list);
     }
-    free(list);
     if (w->rescan) {
         w->rescan = 0;
         w->stale_count = 0;
@@ -1650,7 +1659,7 @@ static int px_resident_in(ppy_cross *x, PyObject *o, int found, int8_t **out) {
     ((int64_t *)handle)[4] = c->tag;
     ppy_rt.adopt(handle);
     /* The world holds the handle's one reference from here. */
-    at = px_res_add(w, o, dict, handle, x->classes, found);
+    at = px_res_add(w, o, dict, handle, x->classes, found, 1);
     if (at < 0) {
         Py_DECREF(dict);
         ppy_rt.release(handle);
@@ -1674,7 +1683,7 @@ static int px_resident_in(ppy_cross *x, PyObject *o, int found, int8_t **out) {
 }
 
 /* An object native code made, now Python's too: admitted, its fields still
-   to be set. */
+   to be set, and its dict watched once they are (`px_resident_filled`). */
 static int px_resident_made(ppy_cross *x, PyObject *made, int cls, int8_t *handle) {
     px_world *w = px_the_world;
     PyObject *dict = PyObject_GenericGetDict(made, NULL);
@@ -1683,7 +1692,7 @@ static int px_resident_made(ppy_cross *x, PyObject *made, int cls, int8_t *handl
     }
     ppy_rt.adopt(handle);
     ppy_rt.retain(handle);
-    Py_ssize_t at = px_res_add(w, made, dict, handle, x->classes, cls);
+    Py_ssize_t at = px_res_add(w, made, dict, handle, x->classes, cls, 0);
     Py_DECREF(dict);
     if (at < 0) {
         ppy_rt.release(handle);
@@ -1691,6 +1700,16 @@ static int px_resident_made(ppy_cross *x, PyObject *made, int cls, int8_t *handl
     }
     ((int64_t *)handle)[19] = PX_CLEAN;
     return 0;
+}
+
+/* A made object's fields are set: from now on Python's writes to it count. */
+static int px_resident_filled(int8_t *handle) {
+    px_world *w = px_the_world;
+    Py_ssize_t at = px_res_by_handle(w, handle);
+    if (at < 0 || w->entries[at].dict == NULL) {
+        return 0;
+    }
+    return PyDict_Watch(w->watcher, w->entries[at].dict);
 }
 
 /* The Python object of a resident handle, a new reference; NULL where the
@@ -1722,6 +1741,10 @@ static int px_setattr(ppy_cross *x, PyObject *o, PyObject *name, PyObject *value
    Python objects. 0, or -1 with a Python error (the rest let go of). */
 static int px_drain(ppy_cross *x) {
     px_world *w = px_the_world;
+    if (ppy_rt.touched()[1] == 0) {
+        x->settled = 1;
+        return 0;
+    }
     Py_ssize_t count = 0;
     int8_t **list = px_touched(&count);
     px_classes *saved = x->classes;
@@ -1763,7 +1786,7 @@ static void px_resident_end(ppy_cross *x) {
     px_world *w = px_the_world;
     x->resident = 0;
     Py_CLEAR(x->held);
-    if (!x->settled) {
+    if (!x->settled && ppy_rt.touched()[1] != 0) {
         Py_ssize_t count = 0;
         int8_t **list = px_touched(&count);
         px_scrap(w, list, count, 1);
@@ -2654,7 +2677,9 @@ static int px_rewrite_object(ppy_cross *x, PyObject *made, px_class *c, int8_t *
             Py_XDECREF(old);
             return -1;
         }
-        int done = value == old ? 0 : px_setattr(x, made, c->names[f], value);
+        int done = value == old         ? 0
+                   : fresh && x->resident ? PyObject_GenericSetAttr(made, c->names[f], value)
+                                          : px_setattr(x, made, c->names[f], value);
         if (x->resident && old != NULL && value != old && done == 0) {
             /* Kept until the copying back is done (`ppy_cross.held`). */
             if (x->held == NULL) {
@@ -2672,6 +2697,9 @@ static int px_rewrite_object(ppy_cross *x, PyObject *made, px_class *c, int8_t *
     }
     if (x->resident) {
         px_adopt_strings(c, handle);
+        if (fresh && px_resident_filled(handle) < 0) {
+            return -1;
+        }
     }
     return 0;
 }

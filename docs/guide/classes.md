@@ -385,13 +385,54 @@ doing six operations or more on what it reaches. Without `@ppy.native`,
 Python calls it; the directive asks for the crossing whatever it costs.
 Native callers pass objects by handle and copy nothing. `ppy explain` gives the reason for each function.
 
-So a method Python calls on a large structure, such as `tree.insert(key)`
-on a tree of a thousand nodes, usually runs its Python body: the whole tree
-would cross for one descent. Where the structure is built and worked on by
-a native function that Python calls with numbers and that returns numbers,
-nothing but the numbers crosses, and every method it calls runs natively
-([`55_linked_structures`](../howto/55_linked_structures.md)). Unlike
-containers, objects are always copied, also by a call that only reads them.
+### Resident objects
+
+An object that crosses again and again is not copied each time. The second
+time Python passes the same object to a native function, the boundary keeps
+its native copy, and the copies of the objects it reaches, attached to it
+for as long as the Python object lives; later calls hand native code that
+copy as it is. A method Python calls on a large structure, `stack.push(x)`
+or `tree.find(key)` on ten thousand nodes, then costs what its own work
+costs, not a copy of the structure.
+
+Python's objects stay what the program reads. The two sides are kept the
+same this way:
+
+- a field native code stores is set on the Python object when the call
+  returns, as for a copy, and an object native code made and linked in is
+  made in Python then;
+- a write Python makes to such an object, by `obj.x = v`, `del obj.x`,
+  `setattr`, `vars(obj)[...]`, or anything else that changes its
+  `__dict__`, is seen (CPython tells the boundary of every change to a
+  watched dict), and the next native call reads that object again first;
+- a class that gains a property or another data descriptor named like a
+  field ends this for the rest of the run, and every object is copied
+  again;
+- a call that fails or falls back to its Python body leaves no trace: what
+  it wrote natively is read again from Python before the next call.
+
+The boundary holds its copies by weak reference, so an object dies when
+CPython's would, and its native copy goes some calls later. Identity is
+kept: an object native code hands back is the Python object it came from.
+
+This applies to plain classes whose fields hold numbers, strings, tuples of
+numbers, and objects of other such classes. A class with a container field
+(`self.items: list[int]`), a value class field, `__slots__`, a custom
+`__getattribute__`, `__setattr__`, or `__getattr__`, or no `__weakref__`, is
+copied at every call as before, and so is every class of a program that
+assigns `__class__` or `__dict__`, calls `setattr` with a name it computes,
+or calls `exec`: a change of class or of the whole `__dict__` is one
+CPython does not report. The first call with an object copies it; the
+second makes it resident. With `PPY_RESIDENT=0` in the environment, every
+object is copied at every call.
+
+Because a resident object costs a flat price per call (about 60 ns, and
+about 100 ns more when the call writes it), the cost model judges a method
+on it as it judges a function of numbers: a loop is native, and
+straight-line work has to pay for the price (`ppy explain` gives the
+reason). Making an object natively and handing it to Python costs several
+times what CPython pays for it, so a straight-line `push` that makes a node
+stays in Python unless `@ppy.native` asks for the crossing.
 
 A method of a class that crosses this way is bound like a method: `node.f(x)`
 passes `node` to the native code, and a `@staticmethod` stays static.

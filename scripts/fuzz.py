@@ -12,6 +12,7 @@
     uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
     uv run python scripts/fuzz.py --boundary --count 25  # writes through shared containers
     uv run python scripts/fuzz.py --structures --count 25  # linked structures edited in place
+    uv run python scripts/fuzz.py --resident --count 25  # Python writes between native calls
     uv run python scripts/fuzz.py --shapes --count 25  # shapes the corpus kept in Python
 
 Each seed is a program from `ppy_compiler.testing.fuzz.generate_program`. It
@@ -29,6 +30,10 @@ generated wrapper copies in and back; those run on the same paths.
 With `--structures`, classes whose fields have no annotations (a search
 tree with parent links, a doubly linked list) are relinked in place by
 methods Python calls natively, on the same paths and without strict mode.
+With `--resident`, the same structures are edited by native methods called
+again and again, whose objects stay resident between the calls, and written
+to from Python between them: attributes set, deleted, and given another
+type, links cut, nodes linked in, structures made and dropped.
 With `--shapes`, each program also has the shapes the corpus kept in
 Python (returns on every side, list parameters, string constants, tuple
 assignments, `*args`), on every path; with `--state` too, a function that
@@ -99,9 +104,11 @@ def _save(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     structures: bool = False,
     shapes: bool = False,
     bools: bool = False,
+    resident: bool = False,
 ) -> Path:
     REGRESSIONS.mkdir(parents=True, exist_ok=True)
     domain = "_state" if state else "_boundary" if boundary else "_structures" if structures else ""
+    domain = "_resident" if resident else domain
     domain += "_shapes" if shapes else ""
     domain += "_bools" if bools else ""
     target = REGRESSIONS / f"seed{seed}{domain}_{path}.ppy"
@@ -125,6 +132,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     inference: bool = False,
     bools: bool = False,
     decorators: bool = False,
+    resident: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
@@ -142,6 +150,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
             inference=inference,
             bools=bools,
             decorators=decorators,
+            resident=resident,
         )
         results = run_program(source, paths, timeout=60.0)
         mismatches = printed_twice(results) + compare(results)
@@ -161,7 +170,16 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         if shrink and first.reason != "did not build":
             reduced = minimize(source, _still_fails(first.path, first.reason), attempts=60)
         saved = _save(
-            current, first.path, first.reason, reduced, state, boundary, structures, shapes, bools
+            current,
+            first.path,
+            first.reason,
+            reduced,
+            state,
+            boundary,
+            structures,
+            shapes,
+            bools,
+            resident,
         )
         print(f"      saved {saved.relative_to(REGRESSIONS.parent.parent)}", flush=True)
     elapsed = time.monotonic() - started
@@ -198,6 +216,12 @@ def main(argv: list[str] | None = None) -> int:
         "--structures",
         action="store_true",
         help="edit linked structures with unannotated fields in place (paths with Python)",
+    )
+    parser.add_argument(
+        "--resident",
+        action="store_true",
+        help="call native methods on the same structures again and again, and write to them "
+        "from Python between the calls (paths with Python)",
     )
     parser.add_argument(
         "--shapes",
@@ -266,6 +290,7 @@ def main(argv: list[str] | None = None) -> int:
             inference=options.inference,
             bools=options.bools,
             decorators=options.decorators,
+            resident=options.resident,
         )
         print(shown, end="")
         return 0
@@ -278,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         or options.unannotated
         or options.boundary
         or options.structures
+        or options.resident
         or options.bools
     )
     paths = options.paths or ",".join(STATE_PATHS if python_only else ALL_PATHS)
@@ -297,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
         options.inference,
         options.bools,
         options.decorators,
+        options.resident,
     )
 
 

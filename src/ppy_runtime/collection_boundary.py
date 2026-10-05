@@ -469,6 +469,21 @@ def _share_world(wrappers: Any) -> None:
         return
     if found is not None and not _world:
         _world.append(found)
+        if os.environ.get("PPY_RESIDENT_REPORT"):
+            import atexit  # pylint: disable=import-outside-toplevel
+
+            atexit.register(_report_world, wrappers)
+
+
+def _report_world(wrappers: Any) -> None:
+    """`PPY_RESIDENT_REPORT=1`: the world's objects at exit, on stderr."""
+    stats = wrappers.ppy_world_stats()
+    if stats is not None:
+        live, stale, entries, enabled = stats
+        print(
+            f"resident: {live} live, {stale} stale, {entries} entries, enabled {enabled}",
+            file=sys.stderr,
+        )
 
 
 def _format(spec: Spec) -> str:
