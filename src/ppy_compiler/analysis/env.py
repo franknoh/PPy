@@ -77,10 +77,6 @@ class Env:
                 merged[name] = left  # type: ignore[assignment]
                 continue
             if left is None or right is None:
-                if "." in name or "[" in name:
-                    # A field or an element narrowed on one path only
-                    # (`if node.label:`): the other path holds what it was.
-                    continue
                 # Bound on only one path: keep the type but drop all facts.
                 only = left or right
                 assert only is not None

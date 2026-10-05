@@ -2417,6 +2417,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             combined = ast.BinOp(left=read, op=node.op, right=node.value)
             ast.copy_location(read, target)
             ast.copy_location(combined, node)
+            self._augmented_optional(read, combined)
             self._field_store(target, combined)
             return
         if isinstance(target, ast.Attribute) and self._record_place(target) is not None:
@@ -2429,6 +2430,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             combined = ast.BinOp(left=read, op=node.op, right=node.value)
             ast.copy_location(read, target)
             ast.copy_location(combined, node)
+            self._augmented_optional(read, combined)
             self._item(target.value, target.slice, combined)
             return
         if isinstance(target, ast.Subscript) and self._object_of(target.value) is not None:

@@ -2498,6 +2498,9 @@ class CollectionLowering:
             items = [core.tuple_extract(self.b, value, i) for i in range(shape.words)]
             self._store_tuple(target, items)  # type: ignore[attr-defined]
             return
+        if shape.kind == "optional":
+            self._bind_optional(target, shape.parts[0], value)  # type: ignore[attr-defined]
+            return
         self._store(target, value)  # type: ignore[attr-defined]
 
 

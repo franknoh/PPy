@@ -80,10 +80,25 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         return optional_kind(self._type_of(node))  # type: ignore[attr-defined]
 
     def _maybe_none(self, node: ast.expr) -> bool:
-        """Whether `node` is a number that may be `None` here, or `None` itself."""
+        """Whether `node` is a number that may be `None` here, or `None` itself.
+        A field or an element the checker narrowed may be `None` all the same:
+        a call between the test and the read may have set it to `None`."""
         if isinstance(node, ast.Constant) and node.value is None:
             return True
-        return self._optional_kind_of(node) is not None
+        if isinstance(node, ast.Name):
+            # A local's narrowing holds: nothing but its own code binds it.
+            return self._optional_kind_of(node) is not None
+        return self._either_kind(node) is not None
+
+    def _either_kind(self, node: ast.expr) -> str | None:
+        """The kind of number `node` is or `None`, as the checker says it here
+        or as what holds it holds it: a local, a field, an element. The
+        checker's narrowing of a field outlives what can change the field (a
+        call, a branch it was narrowed in), so what tolerates `None` (`is`,
+        `==`, truth, printing) asks the flag whatever the checker says."""
+        if isinstance(node, ast.Name) and node.id in self.optionals:  # type: ignore[attr-defined]
+            return self.optionals[node.id][2]  # type: ignore[attr-defined]
+        return self._optional_kind_of(node) or self._stored_kind(node)
 
     # -- packing ---------------------------------------------------------------------
 
@@ -139,7 +154,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         got = self._optional_get(node)  # type: ignore[attr-defined]
         if got is not None:
             return got[0], self._as_kind(got[1], kind, node)
-        if self._optional_kind_of(node) is not None:
+        if self._either_kind(node) is not None:
             present, value = self._unpack(self._optional_read(node))
             return present, self._as_kind(value, kind, node)
         if T.strip_literal(self._type_of(node)) == T.NONE:  # type: ignore[attr-defined]
@@ -279,7 +294,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
             i
             for i, argument in enumerate(call.args)
             if not (isinstance(argument, ast.Name) and argument.id in self.optionals)  # type: ignore[attr-defined]
-            and self._optional_kind_of(argument) is not None
+            and self._either_kind(argument) is not None
         ]
         if not wanted:
             return None
@@ -288,7 +303,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         args = list(call.args)
         for i in range(wanted[-1] + 1):
             if i in wanted:
-                kind = self._optional_kind_of(args[i])
+                kind = self._either_kind(args[i])
                 assert kind is not None
                 args[i] = self._optional_local(args[i], kind)
             elif not _plain(args[i]):
@@ -317,6 +332,58 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         core.store(self.b, present, present_slot)  # type: ignore[attr-defined]
         core.store(self.b, value, slot)  # type: ignore[attr-defined]
         self.optionals[name] = (present_slot, slot, kind)  # type: ignore[attr-defined]
+
+    def _bind_optional(self, target: ast.expr, kind: str, packed: Value) -> None:
+        """A loop target bound to an element that is a number or `None`."""
+        if not isinstance(target, ast.Name):
+            raise Unsupported("an element that may be `None` is bound to a name")
+        found = self.optionals.get(target.id)  # type: ignore[attr-defined]
+        if found is None:
+            if target.id in self.slots or target.id in self.collections:  # type: ignore[attr-defined]
+                raise Unsupported(f"`{target.id}` is a number here and may be `None` there")
+            present_slot = self._alloca(BOOL, f"{target.id}.present")  # type: ignore[attr-defined]
+            slot = self._alloca(_SCALARS[kind], target.id)  # type: ignore[attr-defined]
+            found = (present_slot, slot, kind)
+            self.optionals[target.id] = found  # type: ignore[attr-defined]
+        present_slot, slot, held = found
+        if held != kind:
+            raise Unsupported(f"`{target.id}` holds a `{held}` or `None`, not a `{kind}`")
+        present, value = self._unpack(packed)
+        core.store(self.b, present, present_slot)  # type: ignore[attr-defined]
+        core.store(self.b, value, slot)  # type: ignore[attr-defined]
+
+    def _augmented_optional(self, read: ast.expr, combined: ast.BinOp) -> None:
+        """`node.label += 1`, `xs[i] += 1` where what is read may be `None`: the
+        read typed so, and the sum a number, so that CPython's `TypeError`
+        for `+=` is raised where it is `None`."""
+        kind = self._stored_kind(read)
+        if kind is None:
+            return
+        self._typed(read, T.union(_TYPES[kind], T.NONE), read)  # type: ignore[attr-defined]
+        self._typed(combined, _TYPES[kind] if kind != "bool" else T.INT, combined)  # type: ignore[attr-defined]
+        combined.ppy_augmented = True  # type: ignore[attr-defined]
+
+    def _optional_formatted(self, builder: Value, node: ast.expr, spec: str) -> bool:
+        """`f"{x}"` and `str(x)` of a number that may be `None`: `None`, or the
+        number as it is written."""
+        kind = self._either_kind(node)
+        if kind is None:
+            return False
+        if spec:
+            raise Unsupported("a format spec over a value that may be `None` stays in Python")
+        present, value = self._optional_pair(node, kind)
+        number = self._block("format.number")  # type: ignore[attr-defined]
+        absent = self._block("format.none")  # type: ignore[attr-defined]
+        done = self._block("format.done")  # type: ignore[attr-defined]
+        core.cond_br(self.b, present, Successor(number), Successor(absent))  # type: ignore[attr-defined]
+        self.b.at_end(number)  # type: ignore[attr-defined]
+        self._add_plain(builder, kind, value)  # type: ignore[attr-defined]
+        core.br(self.b, Successor(done))  # type: ignore[attr-defined]
+        self.b.at_end(absent)  # type: ignore[attr-defined]
+        self._add_text(builder, "None")  # type: ignore[attr-defined]
+        core.br(self.b, Successor(done))  # type: ignore[attr-defined]
+        self.b.at_end(done)  # type: ignore[attr-defined]
+        return True
 
     # -- results -------------------------------------------------------------------
 
@@ -356,7 +423,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
             left, right = right, left
         if not (isinstance(right, ast.Constant) and right.value is None):
             return None
-        kind = self._optional_kind_of(left)
+        kind = self._either_kind(left)
         if kind is None:
             return None
         present, _value = self._optional_pair(left, kind)
@@ -371,7 +438,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         if not isinstance(op, (ast.Eq, ast.NotEq)):
             return None
         left, right = node.left, node.comparators[0]
-        kinds = [self._optional_kind_of(side) for side in (left, right)]
+        kinds = [self._either_kind(side) for side in (left, right)]
         if kinds == [None, None]:
             return None
         b = self.b  # type: ignore[attr-defined]
@@ -399,7 +466,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
     def _optional_test(self, node: ast.expr, *, empty: bool = False) -> Value | None:
         """`if x:` of a value that may be `None`: it holds a number, and the
         number is not zero (`not x`, with `empty`)."""
-        kind = self._optional_kind_of(node)
+        kind = self._either_kind(node)
         if kind is None:
             return None
         present, value = self._optional_pair(node, kind)
@@ -413,7 +480,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
     def _operand_name(self, node: ast.expr) -> str:
         t = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
         if self._maybe_none(node):
-            kind = self._optional_kind_of(node)
+            kind = self._either_kind(node)
             t = _TYPES[kind] if kind is not None else T.NONE
         return _NAMES.get(t, "")
 
@@ -429,7 +496,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         values = []
         flags = []
         for side in (left, right):
-            kind = self._optional_kind_of(side)
+            kind = self._either_kind(side)
             if isinstance(side, ast.Constant) and side.value is None:
                 values.append(None)
                 flags.append(core.const(b, False, BOOL))
@@ -482,6 +549,8 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         symbol = _SYMBOLS.get(type(node.op))
         if symbol is None:
             return None
+        if getattr(node, "ppy_augmented", False):
+            symbol += "="
         found = self._optional_operands(
             node.left,
             node.right,
@@ -514,7 +583,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         spelled = _UNARY.get(type(node.op))
         if spelled is None:
             return None
-        kind = self._optional_kind_of(node.operand)
+        kind = self._either_kind(node.operand)
         if kind is None:
             return None
         present, value = self._optional_pair(node.operand, kind)
@@ -551,7 +620,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
                 value = self._as_kind(self._expr(value_node), kind, value_node)  # type: ignore[attr-defined]
                 core.br(self.b, Successor(done, [value]))  # type: ignore[attr-defined]
                 break
-            inner = self._optional_kind_of(value_node)
+            inner = self._either_kind(value_node)
             if isinstance(value_node, ast.Constant) and value_node.value is None:
                 continue
             if inner is not None:

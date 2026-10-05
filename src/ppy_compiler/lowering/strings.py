@@ -1167,6 +1167,8 @@ class StringLowering:
                 rt("ppy_str_add", (builder, handle), None)
             self._done_with(handle, owned)  # type: ignore[attr-defined]
             return
+        if self._optional_formatted(builder, node, spec):  # type: ignore[attr-defined]
+            return
         value = self._expr(node)  # type: ignore[attr-defined]
         kind = {I64: "int", F64: "float", BOOL: "bool"}.get(value.type)
         if kind is None:
