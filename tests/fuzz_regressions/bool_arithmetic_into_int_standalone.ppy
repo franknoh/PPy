@@ -1,0 +1,17 @@
+# fuzz: path=standalone (arithmetic on `bool`s stored in an `int` stays native and gives an int)
+def stores(flag: bool, n: int) -> int:
+    z: int = flag + n
+    u = flag * 3 - True
+    w: int = int(flag)
+    c = 0
+    c += flag
+    print(z, u, w, c, True + 1 == 2, -flag)
+    return z + u + w + c
+
+
+def main() -> None:
+    print(stores(True, 4))
+    print(stores(False, -1))
+
+
+main()

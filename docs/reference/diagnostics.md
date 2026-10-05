@@ -10,7 +10,8 @@ emit. Each diagnostic has a stable code (spec 29.1).
   value that may be `None` used where one that is not is needed to `W2011`.
   Both name the code they replace. It never downgrades the rest. Without
   strict mode an unannotated parameter is first typed from the project's
-  calls, defaults, and doctests, and only one nothing types is `W2010`
+  calls, defaults, doctests, and the other evidence the subset page lists,
+  and only one nothing types is `W2010`
   ([Types from call sites](../guide/subset.md#types-from-call-sites)).
 
 ## Source and module structure

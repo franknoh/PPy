@@ -17,6 +17,7 @@ from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
 from .collections import HANDLE, Shape
 from .exceptions import ARGS_NONE, ARGS_ONE_TEXT
+from .intness import exact_locals, gives_bool, gives_int
 
 #: The builtin classes `isinstance` is asked of, by the name a program spells.
 _BUILTIN_CLASSES = frozenset(
@@ -391,6 +392,13 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
                 known = self._runtime_classes(declared) if declared is not None else None
                 if known is not None:
                     possible &= known
+                exact = self._exact_parameter(subject.id)
+                if exact is not None:
+                    possible &= {exact}
+                else:
+                    local = self._exact_local(subject.id)
+                    if local is not None:
+                        possible &= {local}
             if wanted is not None and possible is not None:
                 answers = {
                     any(name in T.BUILTIN_MRO.get(runtime, (runtime,)) for name in wanted)
@@ -412,6 +420,63 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
             ):  # type: ignore[attr-defined]
                 return self._is_none_or(node, [n for n in wanted if n != "NoneType"])
         return super()._is_instance(node)  # type: ignore[misc]
+
+    def _exact_local(self, name: str) -> str | None:
+        """`int` or `float` for a name of this function that only ever holds a
+        real one of that class (`lowering.intness.exact_locals`)."""
+        info = self.info  # type: ignore[attr-defined]
+        cache = self.__dict__.setdefault("_exact_local_names", {})
+        found = cache.get(info.qualname)
+        if found is None:
+            node = info.node
+            found = {}
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                params = [p.name for p in info.params]
+                for kind in ("int", "float"):
+                    exact = frozenset(n for n in params if self._exact_parameter(n) == kind)
+                    for local in exact_locals(node, params, exact, kind, self._type_of):  # type: ignore[attr-defined]
+                        found[local] = kind
+            cache[info.qualname] = found
+        return found.get(name)
+
+    def _exact_parameter(self, name: str) -> str | None:
+        """The one class a parameter of a module-level function only ever called
+        by name is when it runs: `int` for an `int` one, which the boundary
+        passes only a real `int` and a native caller never a `bool` once the
+        body shows the difference (`lowering.intness`), and
+        `float` for a `float` one that shows whether it is an `int`; None when
+        the body rebinds it or anything else."""
+        info = self.info  # type: ignore[attr-defined]
+        if f"{self.frontend.analysis.name}.{info.name}" != info.qualname or not (  # type: ignore[attr-defined]
+            self.frontend.called_directly(info.name)  # type: ignore[attr-defined]
+        ):
+            return None  # a method, a nested function, or one called through a value
+        parameter = next((p for p in info.params if p.name == name), None)
+        if parameter is None or parameter.kind in {"var_positional", "var_keyword"}:
+            return None
+        declared = T.strip_literal(parameter.type)
+        if declared == T.INT:
+            exact = "int"
+        elif declared == T.FLOAT and name in self.frontend.exact_params(info.qualname):  # type: ignore[attr-defined]
+            exact = "float"
+        else:
+            return None
+        if parameter.default is not None:
+            default = self._type_of(parameter.default)  # type: ignore[attr-defined]
+            if gives_bool(default) if exact == "int" else gives_int(default):
+                return None
+        augmented = {id(n.target) for n in ast.walk(info.node) if isinstance(n, ast.AugAssign)}
+        for n in ast.walk(info.node):
+            if (
+                isinstance(n, ast.Name)
+                and n.id == name
+                and not isinstance(n.ctx, ast.Load)
+                and id(n) not in augmented
+            ):
+                return None  # rebound: the checker's type at the use decides
+            if isinstance(n, (ast.Global, ast.Nonlocal)) and name in n.names:
+                return None
+        return exact
 
     def _is_none_or(self, node: ast.Call, others: list[str]) -> Value | None:
         """`isinstance(node, (Node, type(None)))` of a `Node | None`."""

@@ -318,9 +318,14 @@ class _Generator:
         structures: bool = False,
         shapes: bool = False,
         inference: bool = False,
+        bools: bool = False,
         decorators: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: Whether the program also stores `bool`s where an `int` is declared
+        #: and prints them (`bools_part`), drawn from a sequence of their own.
+        self.with_bools = bools
+        self.booling = random.Random(seed ^ 0xB001)
         #: With `unannotated`, also project decorators that change what a call
         #: does (`decorators_part`), drawn from a sequence of their own.
         self.with_decorators = decorators and unannotated
@@ -1526,6 +1531,8 @@ class _Generator:
             raw.extend(more)
         if self.with_shapes:
             after.extend(self.shapes_part(w))
+        if self.with_bools:
+            after.extend(self.bools_part(w))
         w.put("def main() -> None:")
         if self.stdlib:
             w.put(f"    random.seed({self.seed})")
@@ -1706,6 +1713,69 @@ def {user}(n: int) -> int:
             f"{work}.__name__, {work}({ints[1]})",
         ]
         return main, later
+
+    def bools_part(self, w: _Writer) -> list[str]:
+        """Functions that store a `bool` where an `int` is declared -- a local,
+        a rebound name, a list, a dict, a tuple, a dataclass field, a return,
+        an argument through a `Callable` -- and print it, beside arithmetic on
+        `bool`s, which gives an `int` everywhere. Native code holds an `int`
+        slot as a word, so these keep their functions in Python."""
+        rng = self.booling
+        box = self.name("BoolBox")
+        w.put("@dataclass")
+        w.put(f"class {box}:")
+        w.put("    v: int")
+        w.put("    w: int = 0")
+        w.put("")
+        w.put("")
+        shown = self.name("bshow")
+        w.put(f"def {shown}(n: int) -> int:")
+        w.put("    print(n, type(n).__name__, repr(n), f'{n}', n is True)")
+        w.put("    return n * 2")
+        w.put("")
+        w.put("")
+        applied = self.name("bapply")
+        w.put(f"def {applied}(f: Callable[[int], int], v: bool) -> int:")
+        w.put("    return f(v)")
+        w.put("")
+        w.put("")
+        returned = self.name("bret")
+        cut = rng.randint(-3, 3)
+        w.put(f"def {returned}(n: int) -> int:")
+        w.put(f"    if n > {cut}:")
+        w.put(f"        return n > {cut + rng.randint(1, 4)}")
+        w.put("    return n")
+        w.put("")
+        w.put("")
+        stores = [
+            ["x: int = flag", "print(x, str(x), isinstance(x, bool))", "total += x"],
+            ["y = n", "y = flag", "print(y, repr(y))", "total += y"],
+            ["xs: list[int] = [n, flag]", f"xs.append(n < {cut})", "print(xs, sum(xs))"],
+            ['d: dict[str, int] = {"a": n}', 'd["b"] = flag', "print(d)"],
+            ["t: tuple[int, int] = (flag, n)", "print(t)"],
+            [f"b = {box}(flag)", f"b.w = n > {cut}", "print(b, b.v + b.w)"],
+            [f"print({applied}({shown}, flag))"],
+            ["z: int = flag + n", "u = flag * 3 - True", "print(z, u, True + 1 == 2, -flag)"],
+        ]
+        lines: list[str] = []
+        for _ in range(rng.randint(2, 4)):
+            name = self.name("bstore")
+            w.put(f"def {name}(flag: bool, n: int) -> int:")
+            w.put("    total = 0")
+            for chosen in rng.sample(stores, rng.randint(1, 3)):
+                for line in chosen:
+                    w.put(f"    {line}")
+            w.put("    return total + n")
+            w.put("")
+            w.put("")
+            lines.extend(
+                f"print({name}({rng.choice(('True', 'False'))}, {rng.randint(-5, 5)}))"
+                for _ in range(rng.randint(1, 2))
+            )
+        value = rng.randint(-5, 5)
+        lines.append(f"print({returned}({value}), isinstance({returned}({value}), bool))")
+        lines.append(f"print({shown}(True), {box}(False))")
+        return lines
 
     def inference_part(self, w: _Writer) -> tuple[list[str], list[str]]:
         """What inference reads beside plain calls: a function behind a
@@ -2429,6 +2499,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     structures: bool = False,
     shapes: bool = False,
     inference: bool = False,
+    bools: bool = False,
     decorators: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
@@ -2455,6 +2526,9 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     `unannotated`), it also has what inference reads beside plain calls: a
     decorator, operators on a value class, a `list` parameter, mixed `int`
     and `float` calls, `argparse`, and functions typed by their body. With
+    `bools`, it also stores `bool`s where an `int` is declared and prints
+    them (`bools_part`; `STATE_PATHS`, since those functions stay in Python). With
+
     `decorators` (and `unannotated`), it also has project decorators that
     change what a call does (`decorators_part`)."""
     return _Generator(
@@ -2468,6 +2542,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
         structures,
         shapes,
         inference,
+        bools,
         decorators,
     ).program()
 

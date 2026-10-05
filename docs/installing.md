@@ -18,7 +18,7 @@ The distribution is `ppy-lang`. It installs three packages:
 
 Before 1.0, a minor release may change the language and the diagnostics.
 The [changelog](changelog.md) says what changed. Pin an exact version
-(`ppy-lang[llvm]==0.6.0`).
+(`ppy-lang[llvm]==0.7.0`).
 
 To install the development tip instead:
 

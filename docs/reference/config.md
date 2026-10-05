@@ -72,7 +72,7 @@ Tables: `[tool.ppy]`.
 | key | default | meaning |
 |---|---|---|
 | `python` | `>=3.12,<3.15` | the CPython versions the project promises to run on. |
-| `strict` | `true` | implicit `Any` and unsound constructs are errors. `false` (or `--no-strict` for one run) infers unannotated parameters from the project's calls, defaults, and doctests, and downgrades the errors with a sound fallback to `W2010` and `W2011`, with the code involved running on CPython ([The subset](../guide/subset.md)). |
+| `strict` | `true` | implicit `Any` and unsound constructs are errors. `false` (or `--no-strict` for one run) infers unannotated parameters from the project's calls, defaults, doctests, and the other evidence [Types from call sites](../guide/subset.md#types-from-call-sites) lists, and unannotated fields from what the program stores into them, and downgrades the errors with a sound fallback to `W2010` and `W2011`, with the code involved running on CPython ([The subset](../guide/subset.md)). |
 | `opt-level` | `2` | project default, overridden per run by `-O` and per function by `@ppy.opt(n)`. |
 | `cache-dir` | `.ppy-cache` | the content-addressed store; relative to the root. The `PPY_CACHE_DIR` environment variable overrides it with a per-project tree underneath. Use it for a repo on a slow filesystem, such as a Windows-mounted drive under WSL. |
 | `native-import` | `true` | whether `import ppy` may serve a `.ppy` module from its native build when the compiler is installed; `false` loads every `.ppy` as source. `PPY_IMPORT=python` does the same for one process. |

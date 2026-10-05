@@ -43,6 +43,7 @@ GROUPS = [
             "51_clinic",
             "53_caches_and_counters",
             "54_objects_and_grids",
+            "55_linked_structures",
         ],
     ),
     ("Accelerators", ["38_cuda", "44_tile", "39_xla", "45_multi_gpu_jax"]),
@@ -72,6 +73,7 @@ GROUPS = [
             "26_project",
             "30_migrate",
             "52_unannotated",
+            "56_options_and_doctests",
         ],
     ),
 ]

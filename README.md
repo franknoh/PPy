@@ -36,15 +36,16 @@ Documentation: **[ppy.franknoh.dev](https://ppy.franknoh.dev/)**
   `operator`, with CPython's results (`random` draw for draw).
 - Collections that compile, with no pointers: `ppy.Vec`, `Deque`, `Heap`,
   `LinkedList`, `HashMap`, `HashSet`, `TreeMap`, and `TreeSet`.
-- A native call with two `int` arguments costs 29 ns from Python, against
-  30 ns for CPython's own call. It is 67 ns with a borrowed buffer of 100
-  ints, and 82 ns when a guard fails and the Python body runs. Lists, dicts,
+- A native call with two `int` arguments costs 32 ns from Python, as
+  CPython's own call does. It is 68 ns with a borrowed buffer of 100 ints,
+  and 83 ns when a guard fails and the Python body runs. Lists, dicts,
   sets, and objects cross in the same generated C wrapper, with no Python
-  frames on the native path.
+  frames on the native path; a call that only reads its lists, dicts, and
+  sets reads them in place instead of copying them.
 - `ppy convert` and `ppy migrate` bring existing Python over one module at a
   time.
-- 2,480 tests on Python 3.12, 3.13, and 3.14, covering 68% of the
-  compiler's 55k statements, plus differential fuzzing of generated
+- 2,570 tests on Python 3.12, 3.13, and 3.14, covering 67% of the
+  compiler's 56k statements, plus differential fuzzing of generated
   programs. 81 diagnostic codes, each documented once.
 
 ## Installation
@@ -54,7 +55,7 @@ uv add "ppy-lang[llvm]"        # or: pip install "ppy-lang[llvm]"
 uv run ppy doctor              # reports what it found
 ```
 
-Pin an exact version before 1.0 (`ppy-lang[llvm]==0.6.0`). A minor release
+Pin an exact version before 1.0 (`ppy-lang[llvm]==0.7.0`). A minor release
 may change the language, and the [changelog](CHANGELOG.md) says what
 changed.
 
@@ -223,8 +224,10 @@ keeps running as Python next to it.
 
 Existing Python can also run as it is. With `strict = false` in
 `[tool.ppy]` (or `--no-strict`), `ppy run` types unannotated parameters
-from the calls the project makes, their default values, and their
-doctests, compiles what that types, and runs the rest on CPython. Code the
+from the calls the project makes (`argparse` options and operators on
+instances included), their default values, and their doctests, types
+unannotated fields from every store into them, compiles what that types,
+and runs the rest on CPython. Code the
 analysis cannot follow (`eval`, a star import, an import that fails) is a
 `W2010` warning, not an error, and runs as CPython runs it. Of 400
 TheAlgorithms/Python scripts run both ways, 387 print the same under

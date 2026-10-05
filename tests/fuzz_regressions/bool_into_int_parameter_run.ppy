@@ -1,0 +1,20 @@
+# fuzz: path=run (a native caller passed `True` to an `int` parameter that prints it, which printed 1)
+def show(n: int) -> int:
+    print(n)
+    return n + 1
+
+
+def total(k: int) -> int:
+    s = 0
+    for i in range(k):
+        s += i * i % 7
+        if i % 50 == 0:
+            s += show(i > 10) + show(True) + show(i)
+    return s
+
+
+def main() -> None:
+    print(total(200))
+
+
+main()

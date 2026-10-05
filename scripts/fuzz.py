@@ -98,10 +98,12 @@ def _save(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     boundary: bool = False,
     structures: bool = False,
     shapes: bool = False,
+    bools: bool = False,
 ) -> Path:
     REGRESSIONS.mkdir(parents=True, exist_ok=True)
     domain = "_state" if state else "_boundary" if boundary else "_structures" if structures else ""
     domain += "_shapes" if shapes else ""
+    domain += "_bools" if bools else ""
     target = REGRESSIONS / f"seed{seed}{domain}_{path}.ppy"
     target.write_text(f"# fuzz: path={path} seed={seed} ({reason})\n{source}", encoding="utf-8")
     return target
@@ -121,6 +123,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     structures: bool = False,
     shapes: bool = False,
     inference: bool = False,
+    bools: bool = False,
     decorators: bool = False,
 ) -> int:
     failures = 0
@@ -137,6 +140,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
             structures=structures,
             shapes=shapes,
             inference=inference,
+            bools=bools,
             decorators=decorators,
         )
         results = run_program(source, paths, timeout=60.0)
@@ -157,7 +161,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         if shrink and first.reason != "did not build":
             reduced = minimize(source, _still_fails(first.path, first.reason), attempts=60)
         saved = _save(
-            current, first.path, first.reason, reduced, state, boundary, structures, shapes
+            current, first.path, first.reason, reduced, state, boundary, structures, shapes, bools
         )
         print(f"      saved {saved.relative_to(REGRESSIONS.parent.parent)}", flush=True)
     elapsed = time.monotonic() - started
@@ -232,6 +236,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--bools",
+        action="store_true",
+        help=(
+            "store bools where an int is declared (locals, lists, dicts, tuples, fields,"
+            " returns, Callable arguments) and print them (paths with Python)"
+        ),
+    )
+    parser.add_argument(
         "--decorators",
         action="store_true",
         help=(
@@ -252,6 +264,7 @@ def main(argv: list[str] | None = None) -> int:
             structures=options.structures,
             shapes=options.shapes,
             inference=options.inference,
+            bools=options.bools,
             decorators=options.decorators,
         )
         print(shown, end="")
@@ -260,7 +273,13 @@ def main(argv: list[str] | None = None) -> int:
         return replay()
     # A program with module state, one Python calls by name, or one that
     # writes through what Python passes runs where there is a Python boundary.
-    python_only = options.state or options.unannotated or options.boundary or options.structures
+    python_only = (
+        options.state
+        or options.unannotated
+        or options.boundary
+        or options.structures
+        or options.bools
+    )
     paths = options.paths or ",".join(STATE_PATHS if python_only else ALL_PATHS)
     return fuzz(
         options.seed,
@@ -276,6 +295,7 @@ def main(argv: list[str] | None = None) -> int:
         options.structures,
         options.shapes,
         options.inference,
+        options.bools,
         options.decorators,
     )
 

@@ -162,6 +162,13 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/closures/",
     ),
     _shape(
+        r"stores a `bool` where an `int` is declared",
+        "a `bool` stored where an `int` is declared (a local, a return, a list or dict, a "
+        "field, an argument through a `Callable`), which native code would hold as 1",
+        "annotate the slot `bool`, or store `int(flag)` where an `int` is meant",
+        "guide/native-lowering/",
+    ),
+    _shape(
         r"`isinstance` of a `[^`]+` depends on the value",
         "`isinstance` whose answer the types do not decide (an `int` that may be a `bool`, a "
         "`float` that may be an `int`)",

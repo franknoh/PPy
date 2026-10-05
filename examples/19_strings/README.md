@@ -41,9 +41,10 @@ index into ASCII text is one step, and the one-character strings the
 comparison reads are static and never allocated.
 
 `word_count` makes one pass over its text. Called from Python, the text
-would first be copied into a native string, which costs about what that
-one pass saves, so the cost model leaves Python's call on the Python body;
-a native caller calls it natively. The
+itself is borrowed, but every word in the `dict` it returns is a string
+made natively and then decoded into a Python string, which costs about
+what that one pass saves, so the cost model leaves Python's call on the
+Python body; a native caller calls it natively. The
 [Strings example](../48_strings/README.md) counts words over 200,000 lines,
 where the work is worth the copy.
 

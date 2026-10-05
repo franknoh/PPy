@@ -13,7 +13,7 @@ These go before the subcommand.
 | `-q`, `--quiet` | only errors |
 | `--color {auto,always,never}` | ANSI colour in diagnostics |
 | `-O`, `--opt-level {0,1,2,3}` | override `[tool.ppy] opt-level` |
-| `--no-strict` | turn strict mode off for this invocation, as `strict = false` does: infer unannotated parameters from the project's calls, defaults, and doctests, and report the strict-mode errors that have a sound fallback as `W2010` (`W2011` for a value that may be `None`) |
+| `--no-strict` | turn strict mode off for this invocation, as `strict = false` does: infer unannotated parameters from the project's calls, defaults, doctests, and the rest of the evidence [Types from call sites](guide/subset.md#types-from-call-sites) lists, and report the strict-mode errors that have a sound fallback as `W2010` (`W2011` for a value that may be `None`) |
 
 `--no-strict` is also accepted after the subcommand (`ppy run --no-strict
 FILE`, `ppy check --no-strict`, `ppy explain --no-strict`).
@@ -776,6 +776,12 @@ inferred (not annotated):
   return: int, from the body's return statements
 ```
 
+Each inferred parameter names where its type came from: calls (an
+`argparse` option or an operator on an instance counts as one), the default
+value, doctest calls, `pytest.mark.parametrize` cases (`count: int, from 2
+parametrize cases (prog.py:33)`), or, with none of those, the body's use
+(`n: int, from its use in \`range\` (prog.py:6)`, `its use as a string`).
+
 For a class (`ppy explain module.Class`, or the class's name) it lists each
 field with its type and where the type came from: an annotation in the
 class body or in `__init__`, a class attribute, or, for a field nothing
@@ -815,11 +821,13 @@ the code goes native and what keeps the rest in Python:
   and calls whose effects are unknown list the calls seen most often
 - for native functions Python does not call natively, why the boundary is
   not used (it costs more than the body saves, it passes objects, and so on)
-- a nested function that shares no variable with the functions around it
-  has an entry of its own and is counted like any function; one that shares
-  a variable runs where the function around it runs, so it is native when
-  that function is, and otherwise names the function around it; its
-  statements count under itself, not twice
+- a nested function that shares no variable with the functions around it,
+  or only reads variables nothing rebinds while it runs, has an entry of
+  its own and is counted like any function
+  ([Functions as values](guide/closures.md)); one that rebinds a shared
+  variable (`nonlocal`) runs where the function around it runs, so it is
+  native when that function is, and otherwise names the function around
+  it; its statements count under itself, not twice
 - files that could not be analyzed or lowered, which are reported and do
   not stop the summary
 

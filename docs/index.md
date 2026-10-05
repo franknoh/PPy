@@ -94,17 +94,18 @@ to a native build in about ten minutes.
   compile to native code, reference counted with cycles collected, and
   give the same answers as CPython.
 - **Existing Python as it is.** Without strict mode, `ppy run` types
-  unannotated parameters from the project's calls, defaults, and doctests,
-  and runs what the analysis cannot follow on CPython
+  unannotated parameters from the project's calls, defaults, doctests,
+  `argparse` options, and operators, types unannotated fields from what the
+  program stores into them, and runs what the analysis cannot follow on CPython
   ([Types from call sites](guide/subset.md#types-from-call-sites)).
 - **Eight library plugins.** NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.
 - **A cheap call boundary.** A native call with two `int` arguments costs
-  29 ns from Python, against 30 ns for CPython's own call. Lists, dicts,
+  32 ns from Python, as CPython's own call does. Lists, dicts,
   sets, and objects cross in the same generated C wrapper, and what a call
   writes comes back into the caller's objects.
 - **Tested.** @@TEST_FUNCTIONS@@ test functions on Python 3.12, 3.13, and
-  3.14, with 68% statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
+  3.14, with 67% statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
   each documented in one place.
 
 </div>

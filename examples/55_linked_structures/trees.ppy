@@ -1,0 +1,148 @@
+import time
+
+
+class Node:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+        self.parent = None
+
+
+class SearchTree:
+    """
+    >>> tree = SearchTree()
+    >>> for key in [5, 3, 8, 1]:
+    ...     tree.insert(key)
+    >>> tree.access(1), tree.root.key, tree.access(4)
+    (True, 1, False)
+    """
+
+    def __init__(self):
+        self.root = None
+        self.size = 0
+
+    def insert(self, key):
+        node = Node(key)
+        self.size += 1
+        if self.root is None:
+            self.root = node
+            return
+        here = self.root
+        while True:
+            if key < here.key:
+                if here.left is None:
+                    here.left = node
+                    break
+                here = here.left
+            else:
+                if here.right is None:
+                    here.right = node
+                    break
+                here = here.right
+        node.parent = here
+
+    def find(self, key):
+        node = self.root
+        while node is not None and node.key != key:
+            node = node.left if key < node.key else node.right
+        return node
+
+    def rotate_up(self, node):
+        parent = node.parent
+        if parent is None:
+            return
+        grand = parent.parent
+        if parent.left is node:
+            parent.left = node.right
+            if node.right is not None:
+                node.right.parent = parent
+            node.right = parent
+        else:
+            parent.right = node.left
+            if node.left is not None:
+                node.left.parent = parent
+            node.left = parent
+        parent.parent = node
+        node.parent = grand
+        if grand is None:
+            self.root = node
+        elif grand.left is parent:
+            grand.left = node
+        else:
+            grand.right = node
+
+    def access(self, key):
+        node = self.find(key)
+        if node is None:
+            return False
+        while node.parent is not None:
+            self.rotate_up(node)
+        return True
+
+    def depth(self, key):
+        steps = 0
+        node = self.root
+        while node is not None and node.key != key:
+            node = node.left if key < node.key else node.right
+            steps += 1
+        return steps
+
+
+class LinkedList:
+    def __init__(self):
+        self.head = None
+        self.length = 0
+
+    def push(self, value):
+        node = Node(value)
+        node.right = self.head
+        self.head = node
+        self.length += 1
+
+    def reverse(self):
+        node = self.head
+        self.head = None
+        while node is not None:
+            following = node.right
+            node.right = self.head
+            self.head = node
+            node = following
+
+    def total(self):
+        result = 0
+        node = self.head
+        while node is not None:
+            result += node.key
+            node = node.right
+        return result
+
+
+def workload(count, seed):
+    tree = SearchTree()
+    state = seed
+    for _ in range(count):
+        state = (state * 1103515245 + 12345) % 2147483648
+        tree.insert(state % (count * 4))
+    found = 0
+    for step in range(count * 20):
+        key = (step * step) % (count // 10)
+        if tree.access(key):
+            found += 1
+    chain = LinkedList()
+    for key in range(count):
+        chain.push(key)
+    for _ in range(100):
+        chain.reverse()
+    return found, tree.depth(0), chain.total()
+
+
+if __name__ == "__main__":
+    start = time.perf_counter()
+    print("found, depth of 0, total:", workload(50_000, 7))
+    print(f"# workload: {time.perf_counter() - start:.2f} s")
+    small = LinkedList()
+    for item in range(5):
+        small.push(item)
+    small.reverse()
+    print("reversed in place:", small.total(), small.length)
