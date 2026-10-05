@@ -7,6 +7,7 @@
     uv run python scripts/fuzz.py --seed 0 --count 25 --calls    # keywords and defaults
     uv run python scripts/fuzz.py --unannotated --count 25   # inferred parameter types
     uv run python scripts/fuzz.py --unannotated --inference --count 25  # decorators, operators
+    uv run python scripts/fuzz.py --unannotated --decorators --count 25  # decorators that act
     uv run python scripts/fuzz.py --replay           # every saved regression
     uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
     uv run python scripts/fuzz.py --boundary --count 25  # writes through shared containers
@@ -39,7 +40,9 @@ Python boundary. `--inference` adds what inference reads beside plain calls:
 a `functools.wraps` decorator, operators on a value class, a parameter
 declared `list`, a function called with an `int` and a `float`, an
 `argparse` option, and functions typed only by how their body uses a
-parameter.
+parameter. `--decorators` adds project decorators that change what a call
+does (scale the result, print, count, cache, swap the arguments, hand back
+another function), called by name from Python and from native loops.
 
 Run it through the shared memory cap in a batch at a time; each program's
 paths run one after another, each under its own timeout and memory cap.
@@ -121,6 +124,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     shapes: bool = False,
     inference: bool = False,
     bools: bool = False,
+    decorators: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
@@ -137,6 +141,7 @@ def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
             shapes=shapes,
             inference=inference,
             bools=bools,
+            decorators=decorators,
         )
         results = run_program(source, paths, timeout=60.0)
         mismatches = printed_twice(results) + compare(results)
@@ -238,6 +243,14 @@ def main(argv: list[str] | None = None) -> int:
             " returns, Callable arguments) and print them (paths with Python)"
         ),
     )
+    parser.add_argument(
+        "--decorators",
+        action="store_true",
+        help=(
+            "with --unannotated: project decorators that scale results, print, count, cache,"
+            " swap arguments, or replace the function, called from native loops too"
+        ),
+    )
     options = parser.parse_args(argv)
     if options.show is not None:
         shown = generate_program(
@@ -252,6 +265,7 @@ def main(argv: list[str] | None = None) -> int:
             shapes=options.shapes,
             inference=options.inference,
             bools=options.bools,
+            decorators=options.decorators,
         )
         print(shown, end="")
         return 0
@@ -282,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         options.shapes,
         options.inference,
         options.bools,
+        options.decorators,
     )
 
 

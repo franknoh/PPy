@@ -19,6 +19,7 @@ __all__ = [
     "DecoratorSemantics",
     "class_construction",
     "definition_time_reorder_safe",
+    "reaches_body",
     "semantics_of",
 ]
 
@@ -111,6 +112,17 @@ def semantics_of(name: str, plugins=None) -> DecoratorSemantics | None:  # type:
             if answer is not None:
                 return answer
     return None
+
+
+def reaches_body(decorators: tuple[str, ...], plugins=None) -> bool:  # type: ignore[no-untyped-def]
+    """Whether a call by the decorated name is a call of the `def`'s body and
+    nothing else: every decorator is known to hand the function back as it
+    is. A wrapper, even a known one, may run more around the body."""
+    for name in decorators:
+        known = semantics_of(name, plugins)
+        if known is None or not known.preserves_identity:
+            return False
+    return True
 
 
 def _simple(node: ast.expr) -> bool:

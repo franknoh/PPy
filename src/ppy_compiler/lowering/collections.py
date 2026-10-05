@@ -1757,6 +1757,13 @@ class CollectionLowering:
             kind = self._reference_of_type(declared)
         if kind is None and name in self.collections:
             kind = self.collections[name].kind
+        if kind is None and isinstance(value, ast.Constant) and value.value is None:
+            # `prev = None`, an object later: the name is `None` here, and
+            # what the function's locals end as says what it holds.
+            analysis = self.frontend.analysis.functions.get(self.info.qualname)  # type: ignore[attr-defined]
+            final = analysis.locals.get(name) if analysis is not None else None
+            if final is not None:
+                kind = self._reference_of_type(final)
         if kind is None:
             return False
         handle, owned = self._handle(value)

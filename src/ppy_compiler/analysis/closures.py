@@ -208,7 +208,19 @@ def captured_names(
     if outer is None:
         return {}
     known = outer.locals
-    return {name: known[name] for name in sorted(free_names(info.node)) if name in known}
+    # A name no function around this one binds is the module's, which the
+    # function's locals as the checker ends them also list.
+    bound: set[str] = set()
+    around: FunctionAnalysis | None = outer
+    while around is not None:
+        bound |= own_names(around.info.node)
+        enclosing = around.info.enclosing
+        around = analyses.get(enclosing) if enclosing else None
+    return {
+        name: known[name]
+        for name in sorted(free_names(info.node))
+        if name in known and name in bound
+    }
 
 
 def is_plain_callable(t: T.Type) -> bool:

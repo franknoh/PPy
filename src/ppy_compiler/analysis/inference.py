@@ -231,7 +231,8 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
     assignment an error. The join only grows, so inference still settles.
     """
     changed = False
-    outside = _outside_evidence(symbols, modules)
+    sites: dict[str, dict[str, list[tuple[T.Type, str]]]] = {}
+    outside = _outside_evidence(symbols, modules, sites)
     for info in symbols.classes.values():
         module_analysis = modules.get(info.module)
         if module_analysis is None or not info.methods:
@@ -240,6 +241,7 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
         # object's life; the join does not depend on it, the remarks might.
         methods = sorted(info.methods.values(), key=lambda m: m.name != "__init__")
         seen: dict[str, T.Type] = {}
+        evidence: dict[str, list[tuple[T.Type, str]]] = {}
         for method in methods:
             for node in method.nodes:
                 if not isinstance(node, ast.Assign):
@@ -256,10 +258,19 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
                         continue
                     name = target.attr  # type: ignore[union-attr]
                     seen[name] = assigned if name not in seen else _merge(seen[name], assigned)
+                    evidence.setdefault(name, []).append(
+                        (assigned, f"{_short(method.path)}:{node.lineno} in `{method.name}`")
+                    )
         for name, assigned in outside.get(info.qualname, {}).items():
             if name in info.annotated_fields:
                 continue
             seen[name] = assigned if name not in seen else _merge(seen[name], assigned)
+            evidence.setdefault(name, []).extend(sites.get(info.qualname, {}).get(name, []))
+        info.field_evidence = {
+            name: found
+            for name, found in evidence.items()
+            if name not in info.declared_fields and name not in info.annotated_fields
+        }
         for name, assigned in seen.items():
             current = info.fields.get(name, T.UNKNOWN)
             if name in info.declared_fields:
@@ -279,7 +290,7 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
 _STORES = {"append": 1, "add": 1, "appendleft": 1, "insert": 2}
 
 
-def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type: ignore[no-untyped-def]
+def _outside_evidence(symbols, modules, sites=None) -> dict[str, dict[str, T.Type]]:  # type: ignore[no-untyped-def]
     """What the whole program stores into each class's fields, beyond what
     its own methods assign to `self.x`.
 
@@ -310,12 +321,16 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
                 return info.qualname
         return None
 
+    where = ""
+
     def note(owner: str, attr: str, value: T.Type) -> None:
         value = T.strip_literal(value)
         if isinstance(value, (T.UnknownType, T.AnyType, T.NeverType)) or _unknown_inside(value):
             return
         fields = found.setdefault(owner, {})
         fields[attr] = _by_bases(value if attr not in fields else _merge(fields[attr], value))
+        if sites is not None:
+            sites.setdefault(owner, {}).setdefault(attr, []).append((value, where))
 
     analysis = None
 
@@ -350,6 +365,7 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
         if module_symbols is None:
             continue
         for node in module_symbols.module.nodes:
+            where = f"{_short(module_symbols.path)}:{getattr(node, 'lineno', 0)}"
             if isinstance(node, ast.Assign):
                 pairs = [
                     pair for each in node.targets for pair in _field_assignments(each, node.value)
@@ -407,6 +423,10 @@ def _outside_evidence(symbols, modules) -> dict[str, dict[str, T.Type]]:  # type
 #: `heapq.heappush` as a module may spell it: its second argument becomes an
 #: element of its first.
 _HEAP_PUSHES = frozenset({"heapq.heappush", "heappush"})
+
+
+def _short(path) -> str:  # type: ignore[no-untyped-def]
+    return getattr(path, "name", str(path))
 
 
 def _spelled(func: ast.expr) -> str:

@@ -26,9 +26,21 @@ if TYPE_CHECKING:
 __all__ = ["cell_scope", "close_settled_globals", "implicit_name", "implicit_parameter_name"]
 
 
+#: Each implicit parameter name made, to the global's own name, so a reason
+#: that mentions one can say the name the program spells (`spelled_global`).
+_SPELLED: dict[str, str] = {}
+
+
 def implicit_name(module: str, name: str) -> str:
     """The parameter a global the function does not read by name is passed as."""
-    return f"__global_{module.replace('.', '_')}_{name}"
+    made = f"__global_{module.replace('.', '_')}_{name}"
+    _SPELLED[made] = name
+    return made
+
+
+def spelled_global(made: str) -> str | None:
+    """The global an `implicit_name` stands for, or None."""
+    return _SPELLED.get(made)
 
 
 def cell_scope(enclosing: str) -> str:
@@ -69,8 +81,10 @@ def _plain(
     only where every call reaches it by name (`_one_method`).
 
     A function defined in another one is, where all it takes are the cells
-    of that one: Python's boundary reads them from the function object it
-    calls, and its one native caller is itself."""
+    of that one and the settled globals of its module: Python's boundary
+    reads the cells from the function object it calls and the globals from
+    the module, and its one native caller is itself, which is passed the
+    same globals."""
     info = analysis.info
     if info.type_params or info.is_generator or info.is_async:
         return False
@@ -79,7 +93,7 @@ def _plain(
     if info.enclosing is None:
         return True
     scope = cell_scope(info.enclosing)
-    return all(module == scope for module, _name in held)
+    return all(module in (scope, info.module) for module, _name in held)
 
 
 def _cells(
@@ -193,6 +207,7 @@ def close_settled_globals(project: ProjectAnalysis) -> None:
                 native[qualname] = False
             else:
                 found[qualname].update(cells)
+    forwarded: dict[str, set[tuple[str, str]]] = {qualname: set() for qualname in functions}
     changed = True
     while changed:
         changed = False
@@ -216,6 +231,7 @@ def close_settled_globals(project: ProjectAnalysis) -> None:
                 for key, wanted in found[callee].items():
                     if key[0] == scope:
                         continue
+                    forwarded[qualname].add(key)
                     held = own.get(key)
                     if held is None or (wanted.written and not held.written):
                         own[key] = ImplicitGlobal(
@@ -233,6 +249,7 @@ def close_settled_globals(project: ProjectAnalysis) -> None:
     for qualname, analysis in functions.items():
         analysis.implicit_globals = tuple(found[qualname][key] for key in sorted(found[qualname]))
         analysis.globals_native = native[qualname]
+        analysis.forwarded_globals = frozenset(forwarded[qualname])
 
 
 def implicit_parameter_name(analysis: FunctionAnalysis, held: ImplicitGlobal) -> str:

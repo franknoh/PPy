@@ -36,6 +36,7 @@ from ..analysis.closures import (
 from ..backend.llvm.lowering import Unsupported, _scalar_name
 from ..ir import I64, PtrType, Successor, Value
 from ..ir.dialects import core
+from .calls import _only_called
 from .collections import HANDLE, Held, Kind, Shape, shape_of
 
 __all__ = ["ClosureLowering"]
@@ -233,6 +234,18 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
         info = self.frontend.analysis.symbols.nested.get(qualname)  # type: ignore[attr-defined]
         if info is None or info.node is not node:
             raise Unsupported(f"`{node.name}` is a nested function the checker did not see")
+        analysis = self.frontend.analysis.functions.get(qualname)  # type: ignore[attr-defined]
+        if (
+            analysis is not None
+            and analysis.implicit_globals
+            and all(not held.module.endswith(".<locals>") for held in analysis.implicit_globals)
+            and qualname in self.frontend.declared  # type: ignore[attr-defined]
+            and _only_called(self.info.node, node.name)  # type: ignore[attr-defined]
+        ):
+            # Only ever called, by its entry, which is passed the module's
+            # globals it reads as this function was (and no cells, which
+            # only a closure value carries): no value to make.
+            return
         typed = T.Callable_(tuple(T.Param(p.name, p.type) for p in info.params), info.ret)
         if not is_plain_callable(typed):
             raise Unsupported(f"`{node.name}` is not a function a closure can hold")

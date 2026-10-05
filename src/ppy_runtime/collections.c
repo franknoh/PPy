@@ -343,14 +343,54 @@ int64_t *ppy_coll_live(int8_t *handle, int64_t index) {
     return record[keys + words + 2] >= 0 ? record + keys : NULL;
 }
 
-void ppy_coll_release(int8_t *handle) {
-    if (handle == NULL) {
-        return;
+/* The handles whose last reference is gone and that are not freed yet.
+
+   Freeing a handle lets go of what it holds, which may free those, and so
+   on: a linked list of a million nodes is a million frees deep, which
+   recursion would take on the C stack until it overflowed. So the first
+   release that frees anything drains a worklist, and a release made while
+   it drains (of a value, a key, the factory of a handle being freed) only
+   adds to it. The list starts in that outermost frame and moves to the
+   heap only for a longer chain.
+
+     [0] the list                [1] how many are on it   [2] its room
+     [3] 1 while a release drains it
+     [4] the outermost frame's own array, where the list starts */
+int64_t *ppy_coll_dying(void) {
+#ifdef __cplusplus
+    static thread_local int64_t dying[5];
+#else
+    static _Thread_local int64_t dying[5];
+#endif
+    return dying;
+}
+
+void ppy_coll_dying_push(int8_t *handle) {
+    int64_t *dying = ppy_coll_dying();
+    if (dying[1] == dying[2]) {
+        int64_t capacity = dying[2] * 2;
+        int8_t **items = (int8_t **)(intptr_t)dying[0];
+        int8_t **room;
+        if (dying[0] == dying[4]) {
+            room = (int8_t **)malloc((size_t)capacity * sizeof(int8_t *));
+            if (room != NULL) {
+                memcpy(room, items, (size_t)dying[1] * sizeof(int8_t *));
+            }
+        } else {
+            room = (int8_t **)realloc(items, (size_t)capacity * sizeof(int8_t *));
+        }
+        if (room == NULL) {
+            ppy_coll_fail();
+        }
+        dying[0] = (int64_t)(intptr_t)room;
+        dying[2] = capacity;
     }
+    ((int8_t **)(intptr_t)dying[0])[dying[1]++] = handle;
+}
+
+/* Let go of what a handle no one holds holds, then of its memory. */
+void ppy_coll_destroy(int8_t *handle) {
     int64_t *header = (int64_t *)handle;
-    if (--header[11] > 0) {
-        return;
-    }
     ppy_coll_release_keys(handle);
     if (header[10] != 0) {
         int64_t count = header[12] == 0 ? header[0] : header[1];
@@ -365,6 +405,38 @@ void ppy_coll_release(int8_t *handle) {
     }
     ppy_coll_release(ppy_coll_extra(header));
     ppy_coll_free(handle);
+}
+
+void ppy_coll_release(int8_t *handle) {
+    if (handle == NULL) {
+        return;
+    }
+    int64_t *header = (int64_t *)handle;
+    if (--header[11] > 0) {
+        return;
+    }
+    int64_t *dying = ppy_coll_dying();
+    if (dying[3]) {
+        ppy_coll_dying_push(handle);
+        return;
+    }
+    int8_t *local[64];
+    dying[0] = (int64_t)(intptr_t)local;
+    dying[4] = dying[0];
+    dying[1] = 0;
+    dying[2] = 64;
+    dying[3] = 1;
+    ppy_coll_destroy(handle);
+    while (dying[1] > 0) {
+        dying[1]--;
+        ppy_coll_destroy(((int8_t **)(intptr_t)dying[0])[dying[1]]);
+    }
+    dying[3] = 0;
+    if (dying[0] != dying[4]) {
+        free((void *)(intptr_t)dying[0]);
+    }
+    dying[0] = 0;
+    dying[4] = 0;
 }
 
 /* What word 25 of a map's header holds: a `defaultdict`'s factory, or null. */

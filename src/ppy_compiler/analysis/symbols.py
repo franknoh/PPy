@@ -227,6 +227,9 @@ class ClassInfo:
     #: in `__init__`. What the program stores elsewhere does not widen them.
     annotated_fields: set[str] = field(default_factory=set)
     class_vars: set[str] = field(default_factory=set)
+    #: Per inferred field, what was stored into it and where (`file:line`):
+    #: the evidence `infer_fields` joined, which `ppy explain` shows.
+    field_evidence: dict[str, list[tuple[T.Type, str]]] = field(default_factory=dict)
     #: Fields with a default, which construction may leave out.
     field_defaults: set[str] = field(default_factory=set)
     #: Fields construction must pass by keyword: `kw_only=True` on the class,
@@ -877,6 +880,12 @@ class ProjectSymbols:
         through it (spec 8.1).
         """
         resolver = self.resolver(symbols)
+        #: Names the module binds more than once: `head = None`, a node later,
+        #: is a variable, whatever its first value spells.
+        stores: dict[str, int] = {}
+        for inner in symbols.module.nodes:
+            if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Store):
+                stores[inner.id] = stores.get(inner.id, 0) + 1
         for node in symbols.module.tree.body:
             if isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
                 symbols.type_aliases[node.name.id] = node.value
@@ -902,6 +911,12 @@ class ProjectSymbols:
             ):
                 target, value = node.target, node.value
             if not isinstance(target, ast.Name) or value is None:
+                continue
+            if isinstance(node, ast.Assign) and (
+                stores.get(target.id, 0) > 1
+                or (isinstance(value, ast.Constant) and value.value is None)
+            ):
+                # `X = None` alone names nothing anyone annotates with.
                 continue
             if self._is_type_expression(symbols, value):
                 symbols.type_aliases[target.id] = value
