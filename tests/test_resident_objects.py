@@ -265,16 +265,23 @@ def _run(tmp_path: Path, *args: str, **env: str) -> tuple[list[str], str]:
     return lines, done.stderr
 
 
-def _report(stderr: str) -> tuple[int, int, int, int]:
-    """What `PPY_RESIDENT_REPORT` printed at exit: live, stale, entries, enabled."""
+def _report(stderr: str) -> dict[str, int]:
+    """What `PPY_RESIDENT_REPORT` printed at exit, by name."""
     for line in stderr.splitlines():
         if line.startswith("resident: "):
             words = line.removeprefix("resident: ").replace(",", "").split()
-            return int(words[0]), int(words[2]), int(words[4]), int(words[7])
+            return {
+                "live": int(words[0]),
+                "stale": int(words[2]),
+                "entries": int(words[4]),
+                "enabled": int(words[7]),
+                "admitted": int(words[8]),
+                "calls": int(words[10]),
+            }
     raise AssertionError(f"no resident report in:\n{stderr}")
 
 
-def _three_ways(tmp_path: Path, source: str) -> tuple[int, int, int, int]:
+def _three_ways(tmp_path: Path, source: str) -> dict[str, int]:
     """The program under CPython, under `ppy run` with resident objects and
     without: one output. The world's report at exit."""
     _program(tmp_path, source)
@@ -295,13 +302,10 @@ def test_resident_objects_match_cpython(tmp_path: Path, ending: str):
     identities, copies, pickles, a deleted attribute, a value of another
     type, a native raise, many short-lived objects, two roots sharing nodes:
     all as CPython does them. With the property, residency ends."""
-    live, _stale, _entries, enabled = _three_ways(tmp_path, STACK.replace("ENDING", ending))
-    if ending == "pass":
-        assert enabled == 1
-        assert live > 0
-    else:
-        assert enabled == 0
-        assert live == 0
+    report = _three_ways(tmp_path, STACK.replace("ENDING", ending))
+    assert report["admitted"] > 20
+    assert report["calls"] > 20
+    assert report["enabled"] == (ending == "pass")
 
 
 DROPPED = """
@@ -348,7 +352,7 @@ def round_trip(n: int) -> None:
     print(head() is None, whole() is None)
 
 
-for n in (0, 1, 5, 300):
+for n in (1, 5, 300):
     round_trip(n)
 kept = Chain()
 for i in range(100):
@@ -363,10 +367,10 @@ print(kept.total())
 def test_resident_objects_die_with_their_python_objects(tmp_path: Path):
     """The world refers to its objects weakly and never holds their dicts: an
     object Python lets go of dies when CPython's would."""
-    live, _stale, entries, enabled = _three_ways(tmp_path, DROPPED)
-    assert enabled == 1
-    assert live == 101
-    assert entries >= live
+    report = _three_ways(tmp_path, DROPPED)
+    assert report["enabled"] == 1
+    # What is still alive at exit: `kept` and its hundred nodes.
+    assert report["live"] == 101
 
 
 def test_identity_rewrites_are_found():

@@ -44,7 +44,11 @@ its own terms.
 A container or an object crosses whole on each call, read in place where
 the call writes through none of its parameters and copied otherwise, so the
 body has to do work in proportion to it
-([Lists, dicts, and sets](containers.md#between-functions)).
+([Lists, dicts, and sets](containers.md#between-functions)). An object of a
+plain class that crosses again and again is the exception: it stays
+resident in native memory between calls
+([Resident objects](classes.md#resident-objects)), and costs a flat price
+per call, about six operations, twelve more where the call writes it.
 
 `ppy explain module.name` (or `FILE.ppy:LINE`) reports the decision and,
 when the answer is no, the first blocking construct.

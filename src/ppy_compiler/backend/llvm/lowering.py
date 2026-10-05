@@ -691,6 +691,8 @@ def _crossing_costs_more(
     # second crossing: what it costs is a flat price (`_crossing_cost`).
     resident = _resident_params(crossing, classes)
     crossing = [(name, native) for name, native in crossing if name not in resident]
+    # A list of such objects is copied, its objects not.
+    kept = _all_resident(classes)
     names = [name for name, _native in crossing]
     if crossing and not _works_through(info.node, names, info.name):
         return "copying the collections in costs more than the body does with them"
@@ -701,7 +703,9 @@ def _crossing_costs_more(
     for name, native in crossing:
         if many:
             break
-        need = _copy_cost(native, classes, name in filled, read_only, _looks_up(info.node, name))
+        need = _copy_cost(
+            native, classes, name in filled, read_only, _looks_up(info.node, name), kept
+        )
         if need and _loop_work(info.node, name, info.name) < need:
             return "copying the collections in costs more than the body does with them"
     # Strings read in place are borrowed; strings written, or made for the
@@ -712,14 +716,19 @@ def _crossing_costs_more(
     return None
 
 
+def _all_resident(classes: tuple[CrossingClass, ...]) -> bool:
+    """Whether a call's objects stay resident between calls (`crossing.c`):
+    every class it crosses is one whose instances may (`CrossingClass.resident`)."""
+    objects = [c for c in classes if c.kind == "object"]
+    return bool(objects) and all(c.resident for c in objects)
+
+
 def _resident_params(
     crossing: list[tuple[str, NativeParam]], classes: tuple[CrossingClass, ...]
 ) -> frozenset[str]:
     """The parameters that are objects the boundary keeps resident between
-    calls (`crossing.c`): every class the call crosses is one whose instances
-    may be (`CrossingClass.resident`)."""
-    objects = [c for c in classes if c.kind == "object"]
-    if not objects or not all(c.resident for c in objects):
+    calls (`crossing.c`)."""
+    if not _all_resident(classes):
         return frozenset()
     described = {c.qualname: c for c in classes}
     return frozenset(
@@ -758,6 +767,7 @@ def _copy_cost(
     written: bool,
     read_only: bool = False,
     looked_up: bool = True,
+    resident: bool = False,
 ) -> int:
     """What crossing one element of a parameter costs, in operations of a
     CPython loop's body (each about what `s += x` costs, 9 ns), in and back.
@@ -771,12 +781,18 @@ def _copy_cost(
     as much again. Copied for a call that writes, a number in a list is
     copied back where it changed; a dict's or a set's entry is hashed and
     put; a list in a list, a string, and an object is a handle made, filled,
-    and let go of."""
+    and let go of. An object that stays resident (`resident`, `crossing.c`)
+    is looked up rather than copied: about two operations, six where the call
+    writes it and its changed fields are set on the Python object."""
     described = {c.qualname: c for c in classes}
     spec = crossing_spec(parameter.element, described)
     if spec is None:
         return 0
     if spec.kind == "object" or (spec.value is not None and spec.value.kind == "object"):
+        if resident:
+            # Found in the world, not copied: a lookup each; a written one has
+            # its changed fields set on its Python object.
+            return 6 if written else 2
         return 8 if written else 6
     if read_only:
         # What reading costs native code counts too: an element that is a

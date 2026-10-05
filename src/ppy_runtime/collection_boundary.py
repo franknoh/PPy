@@ -479,9 +479,10 @@ def _report_world(wrappers: Any) -> None:
     """`PPY_RESIDENT_REPORT=1`: the world's objects at exit, on stderr."""
     stats = wrappers.ppy_world_stats()
     if stats is not None:
-        live, stale, entries, enabled = stats
+        live, stale, entries, enabled, admitted, calls = stats
         print(
-            f"resident: {live} live, {stale} stale, {entries} entries, enabled {enabled}",
+            f"resident: {live} live, {stale} stale, {entries} entries, enabled {enabled}, "
+            f"{admitted} admitted, {calls} calls",
             file=sys.stderr,
         )
 

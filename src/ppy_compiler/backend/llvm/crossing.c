@@ -271,12 +271,18 @@ typedef struct {
     int draining;
     /* Objects stay resident for this call (`px_resident`): found in the
        world, or admitted to it, not copied; `settled` once their writes are
-       copied back (`px_drain`), else `px_end` lets the world go. */
+       copied back (`px_drain`), else `px_end` leaves the records the call
+       wrote stale (`px_scrap`). */
     int resident, settled;
     /* The Python objects a resident call's copying back replaced, held until
        it is done: one the world only refers to weakly may be the value of a
        field set later (`a.next = b`, then `self.head = a`). */
     PyObject *held;
+    /* Objects admitted while a record was being read, whose own records are
+       read after it (`px_fill_admitted`). */
+    int filling;
+    int8_t **fills;
+    Py_ssize_t fill_count, fill_room;
 } ppy_cross;
 
 /* An object made or found for a handle, its fields not yet set. */
@@ -315,6 +321,10 @@ static void px_begin(ppy_cross *x, px_classes *classes, int readonly) {
     x->resident = 0;
     x->settled = 0;
     x->held = NULL;
+    x->filling = 0;
+    x->fills = NULL;
+    x->fill_count = 0;
+    x->fill_room = 0;
 }
 
 static void px_settle(ppy_cross *x);
@@ -893,6 +903,9 @@ typedef struct {
     PyObject *types;
     /* Objects a call copied: crossing again, they are admitted. */
     const void *seen[PX_SEEN];
+    /* How many objects were ever admitted, and how many resident calls
+       made (`ppy_world_stats`). */
+    Py_ssize_t admitted, calls;
 } px_world;
 
 static px_world *px_the_world = NULL;
@@ -1006,6 +1019,9 @@ static int px_res_reindex(px_world *w, Py_ssize_t slots) {
 
 /* Marked stale: read again before native code next runs. */
 static void px_res_stale(px_world *w, Py_ssize_t at) {
+    if (at < 0) {
+        return;
+    }
     px_res *e = &w->entries[at];
     if (e->stale || e->ref == NULL) {
         return;
@@ -1122,8 +1138,9 @@ static PyObject *ppy_world(PyObject *self, PyObject *args) {
 #endif
 }
 
-/* `ppy_world_stats()`: how many objects are resident, and how many of
-   them stale; for tests. */
+/* `ppy_world_stats()`: how many objects are resident, how many of them
+   stale, the entries kept, whether the world is on, how many objects were
+   ever admitted, and how many calls were resident; for tests. */
 static PyObject *ppy_world_stats(PyObject *self, PyObject *args) {
     (void)self;
     (void)args;
@@ -1138,7 +1155,7 @@ static PyObject *ppy_world_stats(PyObject *self, PyObject *args) {
             stale += w->entries[at].stale;
         }
     }
-    return Py_BuildValue("(nnni)", live, stale, w->count, w->enabled);
+    return Py_BuildValue("(nnninn)", live, stale, w->count, w->enabled, w->admitted, w->calls);
 }
 
 /* A record's handle words (objects and strings): which of them, by mask. */
@@ -1317,6 +1334,7 @@ static Py_ssize_t px_res_add(px_world *w, PyObject *o, PyObject *dict, int8_t *h
         (void)was;
     }
     Py_ssize_t at = w->count++;
+    w->admitted++;
     px_res *e = &w->entries[at];
     e->ref = ref;
     e->obj = o;
@@ -1374,6 +1392,8 @@ static int px_fields_in(ppy_cross *x, PyObject *dict, const px_class *c, int8_t 
 
 /* A stale object's record read again from its dict. 0, or not (then the
    world is let go of). */
+static int px_fill_admitted(ppy_cross *x, int done);
+
 static int px_refresh(ppy_cross *x, px_world *w, Py_ssize_t at) {
     px_res *e = &w->entries[at];
     PyObject *o = px_res_object(e);
@@ -1390,7 +1410,10 @@ static int px_refresh(ppy_cross *x, px_world *w, Py_ssize_t at) {
     PyObject *dict = PyObject_GenericGetDict(o, NULL);
     int done = -1;
     if (dict != NULL && dict == watched && Py_TYPE(o) == c->type) {
+        x->filling = 1;
         done = px_fields_in(x, dict, c, handle);
+        done = px_fill_admitted(x, done);
+        x->filling = 0;
     }
     Py_XDECREF(dict);
     Py_DECREF(o);
@@ -1596,6 +1619,21 @@ static int px_world_ready(ppy_cross *x, px_world *w) {
     return w->enabled;
 }
 
+/* The object argument `objects[i]` stands for: the argument, or the first
+   element of a list argument (a negative position, less one); NULL for
+   none. */
+static PyObject *px_resident_arg(PyObject *const *args, int position) {
+    if (position >= 0) {
+        return args[position] == Py_None ? NULL : args[position];
+    }
+    PyObject *listed = args[-position - 1];
+    if (!PyList_CheckExact(listed) || PyList_GET_SIZE(listed) == 0) {
+        return NULL;
+    }
+    PyObject *first = PyList_GET_ITEM(listed, 0);
+    return first == Py_None ? NULL : first;
+}
+
 /* Whether this call's objects stay resident: the world is there, the
    classes are plain, and an object among the arguments crossed before (a
    call that crosses an object once copies it, as before). */
@@ -1614,22 +1652,23 @@ static void px_resident(ppy_cross *x, PyObject *const *args, const int *objects,
     }
     int again = 0;
     for (int i = 0; i < count && !again; i++) {
-        PyObject *o = args[objects[i]];
-        if (o == Py_None) {
+        PyObject *o = px_resident_arg(args, objects[i]);
+        if (o == NULL) {
             continue;
         }
         again = w->seen[px_hash(o, PX_SEEN)] == (const void *)o || px_res_by_obj(w, o) >= 0;
     }
     if (!again) {
         for (int i = 0; i < count; i++) {
-            PyObject *o = args[objects[i]];
-            if (o != Py_None) {
+            PyObject *o = px_resident_arg(args, objects[i]);
+            if (o != NULL) {
                 w->seen[px_hash(o, PX_SEEN)] = o;
             }
         }
         return;
     }
     w->busy++;
+    w->calls++;
     x->resident = 1;
     if (!px_world_ready(x, w)) {
         w->busy--;
@@ -1666,20 +1705,80 @@ static int px_resident_in(ppy_cross *x, PyObject *o, int found, int8_t **out) {
         return -2;
     }
     /* In the world before its fields are read, so a cycle back to it finds it. */
+    if (x->filling) {
+        /* Read once the record being read is done: a chain of ten thousand
+           nodes is not ten thousand C frames deep. */
+        Py_DECREF(dict);
+        if (x->fill_count == x->fill_room) {
+            Py_ssize_t room = x->fill_room > 0 ? x->fill_room * 2 : 64;
+            int8_t **grown =
+                (int8_t **)PyMem_Realloc(x->fills, (size_t)room * sizeof(int8_t *));
+            if (grown == NULL) {
+                px_res_stale(w, at);
+                PyErr_NoMemory();
+                return -2;
+            }
+            x->fills = grown;
+            x->fill_room = room;
+        }
+        x->fills[x->fill_count++] = handle;
+        ppy_rt.retain(handle);
+        *out = handle;
+        return 0;
+    }
+    x->filling = 1;
     int done = px_fields_in(x, dict, c, handle);
     Py_DECREF(dict);
     if (done != 0) {
         /* The call is refused; the record, all zero, is read again first. */
-        at = px_res_by_handle(w, handle);
-        if (at >= 0) {
-            px_res_stale(w, at);
-        }
+        px_res_stale(w, px_res_by_handle(w, handle));
+    }
+    done = px_fill_admitted(x, done);
+    x->filling = 0;
+    if (done != 0) {
         return done;
     }
-    ((int64_t *)handle)[19] = PX_CLEAN;
     ppy_rt.retain(handle);
     *out = handle;
     return 0;
+}
+
+/* The records of the objects admitted while others were read, read in turn
+   (and what they admit). After a failure (`done`), each is left stale: read
+   again before native code next runs. 0, or the first failure. */
+static int px_fill_admitted(ppy_cross *x, int done) {
+    px_world *w = px_the_world;
+    px_classes *saved = x->classes;
+    while (x->fill_count > 0) {
+        int8_t *handle = x->fills[--x->fill_count];
+        Py_ssize_t at = px_res_by_handle(w, handle);
+        if (at < 0) {
+            continue;
+        }
+        if (done != 0) {
+            px_res_stale(w, at);
+            continue;
+        }
+        PyObject *o = px_res_object(&w->entries[at]);
+        if (o == NULL) {
+            continue;
+        }
+        x->classes = w->entries[at].table;
+        const px_class *c = px_res_class(&w->entries[at]);
+        PyObject *dict = PyObject_GenericGetDict(o, NULL);
+        done = dict != NULL ? px_fields_in(x, dict, c, handle) : -2;
+        Py_XDECREF(dict);
+        Py_DECREF(o);
+        x->classes = saved;
+        if (done != 0) {
+            at = px_res_by_handle(w, handle);
+            if (at >= 0) {
+                px_res_stale(w, at);
+            }
+        }
+    }
+    x->classes = saved;
+    return done;
 }
 
 /* An object native code made, now Python's too: admitted, its fields still
@@ -1786,6 +1885,10 @@ static void px_resident_end(ppy_cross *x) {
     px_world *w = px_the_world;
     x->resident = 0;
     Py_CLEAR(x->held);
+    PyMem_Free(x->fills);
+    x->fills = NULL;
+    x->fill_count = 0;
+    x->fill_room = 0;
     if (!x->settled && ppy_rt.touched()[1] != 0) {
         Py_ssize_t count = 0;
         int8_t **list = px_touched(&count);

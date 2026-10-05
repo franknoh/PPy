@@ -957,15 +957,19 @@ ppy_fallback:
 
 
 def _object_positions(signature: NativeSignature, crossing: _Crossing) -> list[int]:
-    """The arguments that are objects of the project's classes, which a call
-    keeps resident (`crossing.c`) where they crossed before."""
-    return [
-        position
-        for position, parameter in enumerate(signature.parameters)
-        if parameter.is_handle
-        and (spec := crossing.specs.get(str(position))) is not None
-        and spec.kind == "object"
-    ]
+    """The arguments that are objects of the project's classes, or lists of
+    them, which a call keeps resident (`crossing.c`) where they crossed
+    before; a list's position is spelled negative, less one."""
+    found = []
+    for position, parameter in enumerate(signature.parameters):
+        spec = crossing.specs.get(str(position)) if parameter.is_handle else None
+        if spec is None:
+            continue
+        if spec.kind == "object":
+            found.append(position)
+        elif spec.kind == "list" and spec.value is not None and spec.value.kind == "object":
+            found.append(-position - 1)
+    return found
 
 
 def _reads_only(signature: NativeSignature, crossing: _Crossing) -> bool:

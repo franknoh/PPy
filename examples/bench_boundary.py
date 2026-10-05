@@ -402,11 +402,11 @@ def main() -> None:
     rate("one element of 100 written", drive_touch, 50000)
     rate("reads 100, writes 1 (None)", drive_tally, 50000)
     rate("draws from random", drive_roll, 200000)
-    rate("push, 10,000-node list", drive_push, 20000)
     rate("find, 10,000-node list", drive_find, 2000)
     rate("len, 10,000-node list", drive_len, 2000)
-    rate("insert, 10,000-node tree", drive_insert, 20000)
-    rate("contains, 10,000-node tree", drive_contains, 20000)
+    rate("contains, 10,000-node tree", drive_contains, 5000)
+    rate("push, 10,000-node list", drive_push, 2000)
+    rate("insert, 10,000-node tree", drive_insert, 2000)
 
 
 main()
