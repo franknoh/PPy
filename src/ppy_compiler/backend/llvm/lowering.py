@@ -1112,6 +1112,8 @@ def should_lower_native(
     refused = _crossing_costs_more(info, layouts, written, classes, frozenset(filled))
     if refused is not None:
         return False, refused
+    if _makes_too_much(info, layouts, written, classes):
+        return False, "the objects it makes cost more to hand to Python than its loops save"
     for param in info.params:
         native = _native_param(param.name, param.type, layouts, param.name in written)
         if native is not None and native.is_buffer:
@@ -1149,15 +1151,19 @@ _CROSSING_GLOBALS = 6
 _CROSSING_DRAWS = 4
 _CROSSING_SLOW = 16
 _CROSSING_HELD = 40
-#: An object kept resident between calls (`crossing.c`) is found in the
-#: world rather than copied: about six operations. One the call writes has
-#: its record's changed fields set on the Python object after the call, and
-#: an object native code makes is made in Python, given a `__dict__` and a
-#: weak reference, and watched, which costs several times what CPython pays
-#: to make it.
-_CROSSING_RESIDENT = 6
-_CROSSING_RESIDENT_WRITTEN = 12
-_CROSSING_RESIDENT_MADE = 40
+#: Objects kept resident between calls (`crossing.c`) are found in the
+#: world rather than copied: about seven operations for the call (deciding,
+#: reading what Python changed, settling) and one per object. One the call
+#: writes has its record's changed fields set on its Python object after the
+#: call, about eight more. An object native code makes is made in Python,
+#: given a `__dict__` and a weak reference, and watched, about a microsecond,
+#: several times what CPython pays to make it; a loop has to save that much
+#: in `_ASSUMED_PASSES` passes.
+_CROSSING_RESIDENT = 7
+_CROSSING_RESIDENT_EACH = 1
+_CROSSING_RESIDENT_WRITTEN = 8
+_CROSSING_RESIDENT_MADE = 100
+_ASSUMED_PASSES = 16
 
 
 def _crossing_cost(
@@ -1208,16 +1214,52 @@ def _resident_cost(
     if not resident:
         return 0
     filled = writes(analysis)
-    cost = sum(
-        _CROSSING_RESIDENT + (_CROSSING_RESIDENT_WRITTEN if name in filled else 0)
+    cost = _CROSSING_RESIDENT + sum(
+        _CROSSING_RESIDENT_EACH + (_CROSSING_RESIDENT_WRITTEN if name in filled else 0)
         for name in resident
     )
+    return cost + _CROSSING_RESIDENT_MADE * _objects_made(info.node, classes)
+
+
+def _objects_made(function: ast.AST, classes: tuple[CrossingClass, ...]) -> int:
+    """How many places in the body make an object of a crossing class."""
     made = {c.name for c in classes if c.kind == "object"}
-    cost += _CROSSING_RESIDENT_MADE * sum(
+    return sum(
         isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in made
-        for node in ast.walk(info.node)
+        for node in ast.walk(function)
     )
-    return cost
+
+
+def _makes_too_much(
+    info: FunctionInfo,
+    layouts: ClassLayouts | None,
+    written: frozenset[str],
+    classes: tuple[CrossingClass, ...],
+) -> bool:
+    """Whether a function Python calls with resident objects makes objects
+    natively that cost more to hand to Python than its loops save: each is
+    `_CROSSING_RESIDENT_MADE` operations, and one made in a loop is made on
+    every pass."""
+    crossing = [
+        (param.name, native)
+        for param in info.params
+        if (native := _native_param(param.name, param.type, layouts, param.name in written))
+        is not None
+        and native.is_handle
+        and native.element != "str"
+        and _crosses(native, classes)
+    ]
+    if not _resident_params(crossing, classes) or not _objects_made(info.node, classes):
+        return False
+    local = _local_names(info.node)
+    heaviest = 0
+    for loop in ast.walk(info.node):
+        if not isinstance(loop, (ast.For, ast.AsyncFor, ast.While)):
+            continue
+        if _objects_made(loop, classes):
+            return True
+        heaviest = max(heaviest, sum(_work_of(statement, "", local) for statement in loop.body))
+    return heaviest * _ASSUMED_PASSES < _CROSSING_RESIDENT_MADE * _objects_made(info.node, classes)
 
 
 #: What a standalone build can allocate for itself, and the element it holds.

@@ -2420,6 +2420,22 @@ static PyObject *px_scalar_value(int64_t word, char kind) {
    `object.__new__(cls)` makes it, with the checks that call makes. */
 static PyObject *px_blank(PyTypeObject *type) {
     static PyObject *make = NULL;
+    static PyObject *nothing = NULL;
+    PyTypeObject *base = type;
+    while (base != NULL && (base->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        base = base->tp_base;
+    }
+    if (base == &PyBaseObject_Type) {
+        /* What `object.__new__(cls)` comes to for a class whose only
+           built-in base is `object`, without the call through Python. */
+        if (nothing == NULL) {
+            nothing = PyTuple_New(0);
+            if (nothing == NULL) {
+                return NULL;
+            }
+        }
+        return PyBaseObject_Type.tp_new(type, nothing, NULL);
+    }
     if (make == NULL) {
         make = PyObject_GetAttrString((PyObject *)&PyBaseObject_Type, "__new__");
         if (make == NULL) {
@@ -2783,7 +2799,8 @@ static int px_rewrite_object(ppy_cross *x, PyObject *made, px_class *c, int8_t *
         int done = value == old         ? 0
                    : fresh && x->resident ? PyObject_GenericSetAttr(made, c->names[f], value)
                                           : px_setattr(x, made, c->names[f], value);
-        if (x->resident && old != NULL && value != old && done == 0) {
+        if (x->resident && field->spec->kind == PX_OBJECT && old != NULL && value != old &&
+            done == 0) {
             /* Kept until the copying back is done (`ppy_cross.held`). */
             if (x->held == NULL) {
                 x->held = PyList_New(0);

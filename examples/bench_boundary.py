@@ -90,10 +90,9 @@ class Cell:
         self.next: Cell | None = None
 
 
+# A linked list whose methods Python calls one at a time: its nodes stay
+# resident in native memory between the calls.
 class Chain:
-    """A linked list whose methods Python calls one at a time: its nodes stay
-    resident in native memory between the calls."""
-
     def __init__(self) -> None:
         self.head: Cell | None = None
         self.size = 0
@@ -162,6 +161,18 @@ class Tree:
                 return True
             node = node.left if key < node.key else node.right
         return False
+
+
+class Spot:
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+        self.near: Spot | None = None
+
+
+@ppy.native
+def turn(o: Spot, a: Spot, b: Spot) -> float:
+    return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
 
 
 @ppy.native
@@ -261,6 +272,7 @@ numbers: set[int] = set(range(0, 200, 2))
 names: dict[str, int] = {w: i for i, w in enumerate(words)}
 flags: list[bool] = [i % 3 == 0 for i in range(100)]
 sink: list[int] = [0]
+spots: list[Spot] = [Spot(0.5, 1.0), Spot(2.0, 3.5), Spot(-1.0, 4.0)]
 chain_list = Chain()
 for i in range(10000):
     chain_list.push(i)
@@ -353,6 +365,10 @@ def drive_roll(i: int) -> None:
     roll(i)
 
 
+def drive_turn(i: int) -> None:
+    turn(spots[0], spots[1], spots[2])
+
+
 def drive_push(i: int) -> None:
     chain_list.push(i)
 
@@ -402,6 +418,7 @@ def main() -> None:
     rate("one element of 100 written", drive_touch, 50000)
     rate("reads 100, writes 1 (None)", drive_tally, 50000)
     rate("draws from random", drive_roll, 200000)
+    rate("straight line on 3 objects", drive_turn, 200000)
     rate("find, 10,000-node list", drive_find, 2000)
     rate("len, 10,000-node list", drive_len, 2000)
     rate("contains, 10,000-node tree", drive_contains, 5000)
