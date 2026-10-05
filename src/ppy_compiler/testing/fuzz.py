@@ -1740,7 +1740,8 @@ def {user}(n: int) -> int:
         and what `main` does with them: parameters and results (`int | None`,
         `float | None`, `bool | None`, `str | None`), fields of an object,
         elements of a list and of a dict, and locals; `is None`, truth, `==`,
-        `or`, `in`, `isinstance`, `d.get(k)`, printing and f-strings; and a
+        `or`, `in`, `isinstance`, `d.get(k)`, `d.get(k, v)` and `d.pop(k, v)`,
+        a grid of `None`s returned as declared, printing and f-strings; and a
         field narrowed by a test that a call sets to `None` before arithmetic
         meets it, which raises CPython's `TypeError`."""
         rng = self.optioning
@@ -1851,6 +1852,20 @@ def {user}(n: int) -> int:
         w.put("    return 0")
         w.put("")
         w.put("")
+        look = self.name("op")
+        w.put(f"def {look}(d: dict[str, int | None], k: str) -> int | None:")
+        w.put(f"    v = d.get(k, {rng.choice(('None', str(rng.randint(-5, 5))))})")
+        w.put("    if v is None:")
+        w.put(f"        return d.pop(k, {rng.choice(('None', str(rng.randint(-5, 5))))})")
+        w.put("    return v + 1")
+        w.put("")
+        w.put("")
+        rows = self.name("op")
+        cell, put = rng.choice((("str", repr("x")), ("int", str(rng.randint(-5, 5)))))
+        w.put(f"def {rows}(w: int, h: int) -> list[list[{cell} | None]]:")
+        w.put("    return [[None] * w for _ in range(h)]")
+        w.put("")
+        w.put("")
 
         def values(none: float, least: int = 0) -> str:
             return ", ".join(
@@ -1890,6 +1905,10 @@ def {user}(n: int) -> int:
                 ]
             )
         after.append("print(o1.label)")
+        after.append(f"print({look}(od, 'a'), {look}(od, 'b'), {look}(od, 'q'), od)")
+        after.append(f"og = {rows}({rng.randint(0, 3)}, {rng.randint(1, 3)})")
+        after.append(f"og[0].append({put})")
+        after.append("print(og, og[0] is og[-1])")
         if self.with_resident:
             after.extend(self.optional_resident(w))
         return after
