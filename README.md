@@ -45,7 +45,7 @@ Documentation: **[ppy.franknoh.dev](https://ppy.franknoh.dev/)**
   passes again and again stays resident in native memory between calls.
 - `ppy convert` and `ppy migrate` bring existing Python over one module at a
   time.
-- 2,570 tests on Python 3.12, 3.13, and 3.14, covering 67% of the
+- 2,580 tests on Python 3.12, 3.13, and 3.14, covering 67% of the
   compiler's 56k statements, plus differential fuzzing of generated
   programs. 81 diagnostic codes, each documented once.
 

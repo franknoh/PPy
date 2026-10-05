@@ -457,7 +457,7 @@ what keeps functions in Python, by statements kept out (a function can count und
   ... 62 more reasons, 73 functions (--limit to see more, --json for all)
 
 native, but Python calls the Python body (why its boundary is not used):
-      6 functions  copying the collections in costs more than the body does with them
+      5 functions  copying the collections in costs more than the body does with them
       1 functions  copying its strings across costs what one pass over them saves
 ```
 
@@ -465,7 +465,8 @@ Read it from the top down:
 
 - The first block counts every function once. "Called from native code"
   means the function compiled but Python calls its Python body, because the
-  crossing costs more than the body saves or it passes objects by handle;
+  crossing costs more than the body saves, the objects it makes cost more
+  to hand to Python than its loops save, or it passes objects by handle;
   the summary lists those reasons last.
 - The reasons are ordered by statements kept out, so the first one is where
   a change moves the most code. A function with several effects counts
