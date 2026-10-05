@@ -48,7 +48,8 @@ body has to do work in proportion to it
 plain class that crosses again and again is the exception: it stays
 resident in native memory between calls
 ([Resident objects](classes.md#resident-objects)), and costs a flat price
-per call, about six operations, twelve more where the call writes it.
+per call: about seven operations, one more per object, eight more for each
+object the call writes, and a hundred for each object the body makes.
 
 `ppy explain module.name` (or `FILE.ppy:LINE`) reports the decision and,
 when the answer is no, the first blocking construct.

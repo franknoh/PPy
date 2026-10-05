@@ -728,7 +728,9 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     readonly = int(copied is not None and _reads_only(signature, copied))
     sync = ""
     objects = _object_positions(signature, copied) if copied is not None else []
-    resident = bool(objects) and classes != "NULL"
+    # A coroutine runs on after its call answers, holding what it was given:
+    # its objects are copied.
+    resident = bool(objects) and classes != "NULL" and not signature.future
     if resident:
         # The fields native code wrote in resident objects, set on them.
         sync = (
