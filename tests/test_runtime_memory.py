@@ -470,3 +470,116 @@ def test_emitted_source_says_what_cpython_raises(tmp_path: Path, language: str, 
             assert native.stderr.strip().splitlines() == said, (case, native.stderr)
         return
     _agree(tmp_path, program, binary)
+
+
+#: A linked list of a million nodes, let go of when the function returns, a
+#: list of lists, and a map whose values are lists: freeing each frees what
+#: it holds, a million handles deep for the list.
+CHAIN = """
+class Node:
+    def __init__(self, value: int) -> None:
+        self.value = value
+        self.next: Node | None = None
+
+
+def build(count: int) -> int:
+    head: Node | None = None
+    for i in range(count):
+        node = Node(i)
+        node.next = head
+        head = node
+    return count
+
+
+def rows(count: int) -> int:
+    grid: list[list[int]] = []
+    by: dict[int, list[int]] = {}
+    for i in range(count):
+        grid.append([i, i])
+        by[i] = [i]
+    return len(grid) + len(by)
+
+
+def main() -> None:
+    print(build(1_000_000))
+    print(rows(1000))
+
+
+main()
+"""
+
+
+@requires_llvm
+def test_a_million_node_chain_is_freed_on_every_path():
+    """Releasing a handle frees what it holds from a worklist, not by
+    recursion: a chain of a million objects no longer overflows the C stack
+    (it did past about 150,000). Emitted C and C++ run under AddressSanitizer
+    with leak detection, so every node is freed, once."""
+    from ppy_compiler.testing.fuzz import ALL_PATHS, compare, run_program
+
+    results = run_program(textwrap.dedent(CHAIN).lstrip("\n"), ALL_PATHS, timeout=300.0)
+    assert results["python"].stdout.split() == ["1000000", "2000"]
+    usable = {p: r for p, r in results.items() if not r.last_error.startswith("no ")}
+    assert not compare(usable), [(p, r.status, r.last_error) for p, r in usable.items()]
+
+
+@requires_llvm
+@pytest.mark.parametrize("language", ["c", "cpp"])
+def test_an_unsafe_emitted_chain_is_freed(tmp_path: Path, language: str):
+    compiler_path = c_compiler() if language == "c" else _CXX
+    if compiler_path is None:
+        pytest.skip(f"no {language} compiler on PATH")
+    program = _write(tmp_path, CHAIN)
+    source = tmp_path / f"prog.{language}"
+    done = _run(
+        tmp_path, "-m", "ppy_compiler", "emit", language, "--standalone", "--unsafe",
+        program.name, "-o", source.name,
+    )  # fmt: skip
+    assert done.returncode == 0, done.stderr
+    standard = "-std=c11" if language == "c" else "-std=c++17"
+    binary = tmp_path / "prog"
+    subprocess.run(
+        [compiler_path, standard, "-O1", str(source), "-lm", "-o", str(binary)], check=True
+    )
+    ran = subprocess.run([str(binary)], capture_output=True, text=True, check=False)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.split() == ["1000000", "2000"]
+
+
+#: A chain a native function makes and returns: Python is handed a million
+#: objects, each one's `next` set without a C frame per node.
+RETURNED = """
+class Node:
+    def __init__(self, value: int) -> None:
+        self.value = value
+        self.next: Node | None = None
+
+
+def build(count: int) -> Node | None:
+    head: Node | None = None
+    for i in range(count):
+        node = Node(i)
+        node.next = head
+        head = node
+    return head
+
+
+head = build(1_000_000)
+seen = 0
+while head is not None:
+    seen += head.value
+    head = head.next
+print(seen)
+"""
+
+
+@requires_llvm
+def test_a_returned_million_node_chain_crosses_to_python(tmp_path: Path):
+    _write(tmp_path, RETURNED)
+    python = _run(tmp_path, "prog.ppy")
+    native = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert python.stdout == "499999500000\n", python.stderr
+    assert native.returncode == 0, native.stderr[-2000:]
+    assert native.stdout.splitlines()[-1] == "499999500000"
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.build")
+    assert "llvm backend: native" in explained.stdout, explained.stdout

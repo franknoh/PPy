@@ -295,12 +295,13 @@ def build_parser() -> argparse.ArgumentParser:
     fmt.add_argument("--check", action="store_true", help="exit non-zero if a file would change")
 
     explain = subparsers.add_parser(
-        "explain", help="explain a location, function, or diagnostic code"
+        "explain", help="explain a location, function, class, or diagnostic code"
     )
     explain.add_argument(
         "location",
         nargs="*",
-        help="FILE:LINE, a function qualname, or a diagnostic code; with --summary, the files "
+        help="FILE:LINE, a function or class qualname, or a diagnostic code; with --summary, "
+        "the files "
         "or directories to summarize (default: the current directory)",
     )
     explain.add_argument(

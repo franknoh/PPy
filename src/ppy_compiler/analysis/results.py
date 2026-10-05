@@ -96,6 +96,10 @@ class FunctionAnalysis:
     #: Whether every global the function reads, itself or through a callee,
     #: can be passed to it that way.
     globals_native: bool = False
+    #: The `implicit_globals` (by module and name) a native callee takes
+    #: too, which this function passes on: held by handle, as a callee may
+    #: take them so.
+    forwarded_globals: frozenset[tuple[str, str]] = frozenset()
     #: Parameters this function hands to a callee that writes through them.
     #: The write lands in the caller's memory just as a direct one would.
     delegated_writes: set[str] = field(default_factory=set)

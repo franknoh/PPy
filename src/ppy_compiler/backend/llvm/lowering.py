@@ -28,6 +28,7 @@ from __future__ import annotations
 import ast
 import builtins
 import dataclasses
+import re
 from dataclasses import dataclass, field
 
 from ppy_runtime._record import replace
@@ -119,8 +120,27 @@ def _declared_bounds(interval) -> tuple[int | None, int | None]:  # type: ignore
     return low, high
 
 
+#: The name a settled global is passed by where the body does not spell it
+#: (`analysis.settled.implicit_name`), which no reason should show.
+_IMPLICIT = re.compile(r"`__global_[A-Za-z0-9_]+`")
+
+
+def _spelled(found: re.Match[str]) -> str:
+    """A global by the name the program spells, where the reason named the
+    parameter native code passes it by."""
+    from ...analysis.settled import spelled_global  # pylint: disable=import-outside-toplevel
+
+    name = spelled_global(found.group(0).strip("`"))
+    return f"`{name}`" if name is not None else "a module global"
+
+
 class Unsupported(Exception):
     """Raised when a construct has no native lowering."""
+
+    def __init__(self, *args: object) -> None:
+        if args and isinstance(args[0], str) and "`__global_" in args[0]:
+            args = (_IMPLICIT.sub(_spelled, args[0]), *args[1:])
+        super().__init__(*args)
 
 
 @dataclass(slots=True)
@@ -276,12 +296,20 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     if analysis is None:
         return frozenset()
     if not writes(analysis):
+        # A global passed on to a callee goes by handle: the callee may take
+        # it so, and a buffer lent to this function cannot become one.
+        passed = {
+            implicit_parameter_name(analysis, held)
+            for held in analysis.implicit_globals
+            if (held.module, held.name) in analysis.forwarded_globals
+        }
         node = analysis.info.node
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            return frozenset()
-        return frozenset(p.name for p in analysis.info.params) & (
-            shared_with_closures(node) | used_whole(node)
-        )
+            return frozenset(passed)
+        return (
+            frozenset(p.name for p in analysis.info.params)
+            & (shared_with_closures(node) | used_whole(node))
+        ) | passed
     return frozenset(p.name for p in analysis.info.params) | {
         implicit_parameter_name(analysis, held) for held in analysis.implicit_globals
     }

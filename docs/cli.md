@@ -782,6 +782,24 @@ value, doctest calls, `pytest.mark.parametrize` cases (`count: int, from 2
 parametrize cases (prog.py:33)`), or, with none of those, the body's use
 (`n: int, from its use in \`range\` (prog.py:6)`, `its use as a string`).
 
+For a class (`ppy explain module.Class`, or the class's name) it lists each
+field with its type and where the type came from: an annotation in the
+class body or in `__init__`, a class attribute, or, for a field nothing
+annotates, each value the program stores into it and the line that stores
+it. The field's type is the join of those values.
+
+```text
+class: Node
+qualname: ll.Node
+fields:
+  next: NoneType | ll.Node, from what the program stores into it:
+    NoneType at ll.py:4 in `__init__`
+    NoneType | ll.Node at ll.py:14
+  value: int, from what the program stores into it:
+    int at ll.py:3 in `__init__`
+methods: __init__
+```
+
 `--no-strict` (before or after `explain`) analyzes as `ppy run --no-strict`
 does.
 

@@ -305,7 +305,92 @@ def test_signature_keeping_decorators_are_inferred(tmp_path: Path):
 def test_decorated_programs_agree(tmp_path: Path):
     source = DECORATED.replace("import pytest\n", "").split("CASES =", maxsplit=1)[0]
     source += "\nprint(tri(5), ways(20))\n"
-    _agrees(tmp_path, source, ["tri"])
+    # Inference types `tri`'s parameter; the name holds `logged`'s wrapper,
+    # which only Python runs.
+    _agrees(tmp_path, source, ["ways"])
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.tri")
+    assert "decorated by `@logged`" in explained.stdout, explained.stdout
+
+
+#: Decorators nobody vouches for that change what a call does: every call by
+#: the name, from Python, from a function that goes native, at module level,
+#: and recursively, reaches the decorator's object.
+ACTING = """
+import functools
+
+
+def doubled(fn):
+    def wrapper(n):
+        return 2 * fn(n)
+
+    return wrapper
+
+
+def logged(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        print("calling", fn.__name__)
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def memo(fn):
+    seen = {}
+
+    def wrapper(n):
+        if n not in seen:
+            print("miss", n)
+            seen[n] = fn(n)
+        return seen[n]
+
+    return wrapper
+
+
+@doubled
+def square(n):
+    return n * n
+
+
+@logged
+def work(n: int) -> int:
+    t = 0
+    for i in range(n):
+        t += i
+    return t
+
+
+@memo
+def fib(n):
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+
+def loop(n: int) -> int:
+    total = 0
+    for i in range(n):
+        total += square(i)
+        work(i)
+    return total
+
+
+def main():
+    print(square(3), work(7), fib(12))
+    print(loop(5))
+
+
+main()
+print(square(4), fib(13))
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_decorators_that_act_run_on_every_call(tmp_path: Path):
+    _agrees(tmp_path, ACTING, [])
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.square")
+    assert "decorated by `@doubled`" in explained.stdout, explained.stdout
 
 
 #: Operators on a class's instances are calls of its dunders.
@@ -732,3 +817,233 @@ def test_an_int_returned_for_a_declared_float_stays_an_int(tmp_path: Path):
     _agrees(tmp_path, FLOAT_RESULT, [])
     explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.merge_cost")
     assert "returns an `int` where `float` is declared" in explained.stdout, explained.stdout
+
+
+#: A local bound to `None` first and to an object later is the object or
+#: `None`: `prev = None` before a loop that relinks a list, `root = None`
+#: before the calls that grow a tree. A module that binds `head = None` and
+#: then a node is not naming a type.
+NONE_FIRST = """
+class Node:
+    def __init__(self, value):
+        self.value = value
+        self.next = None
+        self.left = None
+        self.right = None
+
+
+def reverse(head: Node) -> Node | None:
+    prev = None
+    node = head
+    while node is not None:
+        nxt = node.next
+        node.next = prev
+        prev = node
+        node = nxt
+    return prev
+
+
+def insert(node: Node | None, key: int) -> Node:
+    if node is None:
+        return Node(key)
+    if key < node.value:
+        node.left = insert(node.left, key)
+    else:
+        node.right = insert(node.right, key)
+    return node
+
+
+def build(count: int) -> int:
+    root = None
+    for k in range(count):
+        root = insert(root, (k * 7919) % count)
+    return root.value
+
+
+def main():
+    head = Node(1)
+    head.next = Node(2)
+    head.next.next = Node(3)
+    back = reverse(head)
+    print(back.value, back.next.value, build(200))
+
+
+main()
+chain = None
+for i in range(5):
+    cell = Node(i)
+    cell.next = chain
+    chain = cell
+print(chain.value, chain.next.value)
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_local_bound_to_none_then_an_object_goes_native(tmp_path: Path):
+    _agrees(tmp_path, NONE_FIRST, ["reverse", "build"])
+
+
+#: Settled module globals read by a method a native function calls, by a
+#: nested function, and by a nested function whose enclosing one stays in
+#: Python (its entry reads the global from the module).
+GLOBALS_READ = """
+PRIMES: list[int] = [2, 3, 5, 7, 11, 13]
+
+
+class Counter:
+    def __init__(self) -> None:
+        self.hits = 0
+
+    def count(self, n: int) -> int:
+        total = 0
+        for i in range(n):
+            for p in PRIMES:
+                if i % p == 0:
+                    total += 1
+        self.hits += total
+        return total
+
+
+def outer(n: int) -> int:
+    def inner(k: int) -> int:
+        t = 0
+        for i in range(k):
+            for p in PRIMES:
+                t += i % p
+        return t
+
+    return inner(n) + inner(n // 2)
+
+
+def kept(n: int) -> int:
+    import sys  # stays in Python
+
+    def inner(k: int) -> int:
+        t = 0
+        for p in PRIMES:
+            t += k % p
+        return t
+
+    return inner(n) + len(sys.argv)
+
+
+def main() -> None:
+    c = Counter()
+    print(c.count(1000), outer(100), c.hits)
+
+
+main()
+print(kept(50))
+PRIMES.append(17)
+print(outer(40), kept(51))
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_settled_globals_reach_methods_and_nested_functions(tmp_path: Path):
+    _agrees(
+        tmp_path,
+        GLOBALS_READ,
+        ["main", "outer", "Counter.count", "outer.<locals>.inner", "kept.<locals>.inner"],
+    )
+
+
+def test_a_reason_never_names_an_implicit_global():
+    from ppy_compiler.analysis.settled import implicit_name
+    from ppy_compiler.backend.llvm.lowering import Unsupported
+
+    made = implicit_name("pkg.m", "MAX_SIZE")
+    reason = str(Unsupported(f"parameter `{made}` is `list[Any]`, which has no native ABI"))
+    assert reason == "parameter `MAX_SIZE` is `list[Any]`, which has no native ABI"
+    assert "__global_" not in str(Unsupported("`f` expects a `list[int]`, not `__global_x_Y`"))
+
+
+#: `max(a, b)` and `min(a, b, c)` of objects ordered by `__lt__` or `__gt__`:
+#: the first of equals wins, as in CPython, and the uses type `other`. A
+#: doctest operator whose operand is a constructor call types it too.
+ORDERED = """
+class Vector:
+    \"\"\"
+    >>> a = Vector(1, 2)
+    >>> a < Vector(2, 2)
+    True
+    \"\"\"
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __lt__(self, other):
+        return self.norm() < other.norm()
+
+    def norm(self):
+        return self.x * self.x + self.y * self.y
+
+
+class Ranked:
+    def __init__(self, value, tag):
+        self.value = value
+        self.tag = tag
+
+    def __gt__(self, other):
+        return self.value > other.value
+
+    def __lt__(self, other):
+        return self.value < other.value
+
+
+def walk(steps, seed):
+    farthest = Vector(0, 0)
+    nearest = Vector(100, 100)
+    state = seed
+    for _ in range(steps):
+        state = (state * 1103515245 + 12345) % 2147483648
+        here = Vector(state % 7 - 3, state // 7 % 7 - 3)
+        farthest = max(farthest, here)
+        nearest = min(here, nearest)
+    return farthest.norm() * 1000 + nearest.norm()
+
+
+def pick(n):
+    total = 0
+    for i in range(n):
+        a = Ranked(i % 3, 1)
+        b = Ranked(i % 2, 2)
+        c = Ranked((i * 7) % 4, 3)
+        hi = max(a, b)
+        lo = min(a, b, c)
+        top = max(c, a, b)
+        total += hi.tag * 100 + lo.tag * 10 + top.tag + hi.value
+    return total
+
+
+print(walk(500, 7), pick(60))
+"""
+
+
+def test_a_doctest_operand_made_by_a_constructor_is_evidence(tmp_path: Path):
+    path = _write(tmp_path, ORDERED.split("class Ranked", maxsplit=1)[0])
+    assert _params(path, "prog.Vector.__lt__") == {"other": "prog.Vector"}
+
+
+@requires_llvm
+@requires_cc
+def test_max_and_min_of_objects_go_native(tmp_path: Path):
+    _agrees(tmp_path, ORDERED, ["walk", "pick"])
+
+
+def test_explain_lists_a_class_s_fields_and_their_evidence(tmp_path: Path):
+    _write(tmp_path, NONE_FIRST)
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.Node")
+    assert explained.returncode == 0, explained.stderr
+    lines = explained.stdout.splitlines()
+    assert "class: Node" in lines and "qualname: prog.Node" in lines
+    assert "  next: NoneType | prog.Node, from what the program stores into it:" in lines
+    assert "    NoneType at prog.py:4 in `__init__`" in lines
+    assert "    NoneType | prog.Node at prog.py:14 in `reverse`" not in lines  # not a method
+    assert any(line.startswith("    prog.Node at prog.py:") for line in lines), lines
+    assert "  value: int, from what the program stores into it:" in lines
+    annotated = _run(tmp_path, "-m", "ppy_compiler", "explain", "Node")
+    assert annotated.stdout == explained.stdout

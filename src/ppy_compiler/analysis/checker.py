@@ -912,6 +912,8 @@ class _Checker:
         #: Under `--no-strict`, why the function stays on CPython whatever the
         #: road: code the analysis could not follow, so it cannot be lowered.
         self._python_only: list[str] = []
+        #: Functions a decorator nobody vouches for may replace (`_decorated_away`).
+        self._redecorated: set[str] = set()
         #: Under `--no-strict`, a `from m import *` may rebind any name the
         #: analysis believes it knows, so nothing in the module goes native.
         self._star_blockers: tuple[str, ...] = (
@@ -1124,6 +1126,7 @@ class _Checker:
 
         env = Env()
         self._seed_module_env(env)
+        self._decorated_away(info, env)
         # A parameter shadows a module global of the same name, so reading it
         # is not a global dependency.
         self._function_locals = {param.name for param in info.params}
@@ -1316,6 +1319,9 @@ class _Checker:
         if not info.ret_annotated:
             info.ret = inferred
             info.ret_facts = ret_facts
+        if info.qualname in self._redecorated:
+            # What a call by the name gives is the decorator's object's result.
+            info.ret_facts = Facts()
         return analysis
 
     def _seed_module_env(self, env: Env) -> None:
@@ -1972,9 +1978,7 @@ class _Checker:
         names = [resolver.decorator_identity(d) for d in node.decorator_list]
         if "ppy.dynamic" in names:
             return
-        for decorator, name in zip(node.decorator_list, names, strict=True):
-            if self._decorator_vouched(decorator, name, env, resolver):
-                continue
+        for decorator in self._unvouched_decorators(node, env):
             spelled = ast.unparse(decorator.func if isinstance(decorator, ast.Call) else decorator)
             report = self._dynamic_feature if self.strict else self._strictly
             report(
@@ -1984,6 +1988,44 @@ class _Checker:
                 help="use a vouched decorator, register this one's semantics with a "
                 "plugin, or mark the decorated definition `@ppy.dynamic`",
             )
+
+    def _unvouched_decorators(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, env: Env
+    ) -> list[ast.expr]:
+        """The decorators of `node` nobody vouches for: each may hand back
+        another object than the one the `def` made, which is then what the
+        name holds and what every call reaches."""
+        if not node.decorator_list:
+            return []
+        resolver = self.project.resolver(self.symbols)
+        return [
+            decorator
+            for decorator in node.decorator_list
+            if not self._decorator_vouched(
+                decorator, resolver.decorator_identity(decorator), env, resolver
+            )
+        ]
+
+    def _decorated_away(self, info: FunctionInfo, env: Env) -> None:
+        """A function whose decorator nobody vouches for is called through
+        what the decorator gave back, which may run anything before, after,
+        or instead of the body. Its name is not its body: the body stays in
+        Python, where the decorator's object calls it, and a call by the name
+        has effects no analysis sees, so nothing inlines, folds, or moves it."""
+        unvouched = self._unvouched_decorators(info.node, env)
+        if not unvouched:
+            return
+        self._redecorated.add(info.qualname)
+        first = unvouched[0]
+        spelled = ast.unparse(first.func if isinstance(first, ast.Call) else first)
+        message = (
+            f"decorated by `@{spelled}`, which hands back an object the compiler does not "
+            "know, so calls go to that object in Python"
+        )
+        self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
+        self._native_blockers.append(message)
+        self._python_only.append(message)
+        self._blockers.append(message)
 
     def _decorator_vouched(  # type: ignore[no-untyped-def]
         self, decorator: ast.expr, name: str, env: Env, resolver
@@ -7449,6 +7491,11 @@ class _Checker:
     def _argument_is_safe(self, argument: ast.expr, declared: T.Type | None) -> bool:
         """Could a mutating callee reach anything this function does not own?"""
         if declared is not None and T.is_immutable(declared):
+            return True
+        if T.strip_literal(self.module.node_types.get(id(argument), T.UNKNOWN)) == T.NONE:
+            # `None` here (`root = None` before a loop that binds an object):
+            # nothing to write through. Where the name holds an object later,
+            # the pass that sees it asks again.
             return True
         if (
             isinstance(argument, ast.Name)

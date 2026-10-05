@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis
 from ..analysis.contracts import ContractReport
 from ..analysis.representation import select
-from ..analysis.symbols import FunctionInfo
+from ..analysis.symbols import ClassInfo, FunctionInfo
 from ..diagnostics import Diagnostic, Severity, describe
 from .pipeline import AnalysisBundle, analyze_paths, collect_sources, open_project
 from .reporting import Reporter
@@ -128,8 +129,63 @@ def _explain_qualname(bundle: AnalysisBundle, name: str, reporter: Reporter) -> 
             if analysis is not None:
                 _print_function(bundle, info, analysis, bundle.reports.get(qualname))
                 return 0
-    reporter.emit(Diagnostic("E1002", Severity.ERROR, f"no function named {name!r} was found"))
+    for qualname, cls in bundle.symbols.classes.items():
+        if name in (qualname, cls.name):
+            _print_class(cls)
+            return 0
+    reporter.emit(
+        Diagnostic("E1002", Severity.ERROR, f"no function or class named {name!r} was found")
+    )
     return 2
+
+
+def _print_class(info: ClassInfo) -> None:
+    """A class's fields: each one's type, and where the type came from: an
+    annotation, or what the program stores into it (`analysis.inference.
+    infer_fields`), each value and the line that stores it."""
+    print(f"class: {info.name}")
+    print(f"qualname: {info.qualname}")
+    if info.base_names:
+        print(f"bases: {', '.join(info.base_names)}")
+    if info.is_dataclass:
+        print("dataclass: yes")
+    annotated_in_body = {
+        child.target.id
+        for child in info.node.body
+        if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name)
+    }
+    print("fields:")
+    if not info.fields:
+        print("  (none)")
+    for name, field_type in info.fields.items():
+        if name in info.class_vars:
+            print(f"  {name}: {field_type}, a class attribute")
+            continue
+        if name in annotated_in_body:
+            print(f"  {name}: {field_type}, annotated in the class body")
+            continue
+        if name in info.annotated_fields:
+            print(f"  {name}: {field_type}, annotated where `__init__` sets it")
+            continue
+        if name in info.declared_fields:
+            print(f"  {name}: {field_type}, declared")
+            continue
+        found = info.field_evidence.get(name, [])
+        if not found:
+            print(f"  {name}: {field_type}, nothing stored into it says more")
+            continue
+        print(f"  {name}: {field_type}, from what the program stores into it:")
+        shown: set[tuple[str, str]] = set()
+        for stored, where in found:
+            # A method's `self.x = ...` is seen as a store of the class's
+            # field from both sides; one line is one piece of evidence.
+            key = (str(stored), where.partition(" in ")[0])
+            if key in shown:
+                continue
+            shown.add(key)
+            print(f"    {stored} at {where}")
+    if info.methods:
+        print(f"methods: {', '.join(info.methods)}")
 
 
 def _function_at(
