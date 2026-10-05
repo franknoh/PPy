@@ -179,6 +179,40 @@ The same wrapper carries what used to need Python frames:
     are copied back into the caller's objects. Of a list of numbers only
     the elements whose words changed are set again; an element that did not
     change keeps its Python object.
+  - Objects of a class that may stay resident (`CrossingClass.resident`,
+    decided in `lowering/collections.py`; the wrapper checks the type again
+    in `px_plain_type`) keep their native records between calls from the
+    second crossing on. One world per process (`px_world`), shared by every
+    wrapper module through a capsule (`collection_boundary._share_world`),
+    maps each object, handle, and `__dict__` to its record. The world holds
+    a weak reference to each object, not its dict, and drops the records of
+    dead objects in a purge once half its entries are dead. Handles it holds
+    are taken off their thread's heap list (`ppy_coll_adopt`), so neither
+    the sweep after a failed call nor the cycle collector touches them.
+  - Python writes are seen through `PyDict_Watch` (3.12+) on each resident
+    object's `__dict__`: a change marks the object stale, and the next
+    resident call reads its fields again (`px_refresh`). The boundary's own
+    writes back set an expected dict first, so they mark nothing. Each
+    resident class is watched with `PyType_Watch`; after a change its fields
+    are looked up again, and a data descriptor named like a field ends
+    residency for the process.
+  - Native writes are found by the lowering: after each field store
+    (`_field_store`) it tests a header word that marks a resident record,
+    and the first store puts the record on a runtime list
+    (`ppy_coll_touch`). When the call answers, `px_drain` sets the changed
+    fields of every record on the list on its Python object; an object
+    native code made and linked in is created in Python then (through
+    `object`'s `tp_new` where that is the class's only built-in base) and
+    admitted. A call that falls back or raises leaves what it wrote stale,
+    so the next call reads it from Python. The world is used only with the
+    GIL held, and a call made while it is busy (a finalizer that runs during
+    a crossing) copies. A free-threaded build has no world, and neither does
+    a process with `PPY_RESIDENT=0`.
+  - A number that may be `None` crosses as the number's atom and a byte
+    (`NativeParam.kind = "optional"`, `NativeSignature.optional` for a
+    result); in a field or a container element it is two words, the number
+    then a flag (`PX_OPTIONAL`). A `str | None` is a string handle, null for
+    `None`, and as a text parameter a length of -1.
 - A function that draws from `random` saves the generator's state in the
   wrapper with one `memcpy` and puts it back only where Python runs the call
   again (`binding.attach_random` hands the wrapper the state's address once
@@ -200,8 +234,8 @@ The same wrapper carries what used to need Python frames:
   `TypeError`; a guard that refuses the bound arguments hands Python the
   call as it was spelled.
 
-A two-int call costs 32 ns through the wrapper, as CPython's own call
-does. [What a call costs](../guide/native-lowering.md#what-a-call-costs)
+A two-int call costs 35 ns through the wrapper, against 33 ns for
+CPython's own call. [What a call costs](../guide/native-lowering.md#what-a-call-costs)
 has the measured table for each shape, from `examples/bench_boundary.py`.
 
 Built artifacts ship the compiled wrapper and bind through it at launch. The
@@ -216,7 +250,8 @@ functions scale on threads:
 measured 1.95× on two threads against 0.98× for the same code on plain
 CPython (`examples/28_threads`). A short straight-line body keeps the GIL,
 since dropping and retaking it costs about 20 ns, and so does a function
-that prints, reads, or calls into Python.
+that prints, reads, or calls into Python, and a call whose objects are
+resident (the world of records is not locked; the GIL guards it).
 
 `@ppy.parallel` loops run on a process-wide worker pool sized by
 `[tool.ppy.parallel] threads`.

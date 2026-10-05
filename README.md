@@ -36,15 +36,16 @@ Documentation: **[ppy.franknoh.dev](https://ppy.franknoh.dev/)**
   `operator`, with CPython's results (`random` draw for draw).
 - Collections that compile, with no pointers: `ppy.Vec`, `Deque`, `Heap`,
   `LinkedList`, `HashMap`, `HashSet`, `TreeMap`, and `TreeSet`.
-- A native call with two `int` arguments costs 32 ns from Python, as
-  CPython's own call does. It is 68 ns with a borrowed buffer of 100 ints,
-  and 83 ns when a guard fails and the Python body runs. Lists, dicts,
+- A native call with two `int` arguments costs 35 ns from Python, against
+  33 ns for CPython's own call. It is 75 ns with a borrowed buffer of 100
+  ints, and 99 ns when a guard fails and the Python body runs. Lists, dicts,
   sets, and objects cross in the same generated C wrapper, with no Python
   frames on the native path; a call that only reads its lists, dicts, and
-  sets reads them in place instead of copying them.
+  sets reads them in place instead of copying them, and an object Python
+  passes again and again stays resident in native memory between calls.
 - `ppy convert` and `ppy migrate` bring existing Python over one module at a
   time.
-- 2,570 tests on Python 3.12, 3.13, and 3.14, covering 67% of the
+- 2,580 tests on Python 3.12, 3.13, and 3.14, covering 67% of the
   compiler's 56k statements, plus differential fuzzing of generated
   programs. 81 diagnostic codes, each documented once.
 

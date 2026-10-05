@@ -27,9 +27,11 @@ Python's container behaves like.
 
 ## What lowers
 
-A container's element, or a dict's value, is a number, a string, a tuple of
-numbers, a value class or an object class, or another container:
-`list[list[int]]`, `dict[str, list[int]]`, `list[tuple[int, float]]`. A key
+A container's element, or a dict's value, is a number, a string, a number
+or string that may be `None`, a tuple of numbers, a value class or an
+object class, or another container: `list[list[int]]`,
+`dict[str, list[int]]`, `list[tuple[int, float]]`, `list[int | None]`,
+`dict[str, str | None]`. A key
 of a dict or a set is an `int`, a `str`, a tuple of `int`, or an instance of
 a class Python can hash (see [Collections](collections.md#what-a-collection-holds)).
 
@@ -40,7 +42,7 @@ a class Python can hash (see [Collections](collections.md#what-a-collection-hold
 | comprehensions | `[e for x in xs if c]`, `{k: v for ...}`, `{e for ...}`, nested, with the comprehension's names its own, and a generator given to `sum`, `min`, or `max` |
 | constructors | `list(xs)`, `set(xs)`, `dict(d)` |
 | a list | `xs[i]` and `xs[i] = v` from either end, slices with steps, `append`, `extend`, `insert`, `pop()`, `pop(i)`, `remove`, `index`, `count`, `sort()` with `key=` and `reverse=`, `reverse`, `clear`, `copy`, `del xs[i]`, `+` |
-| a dict | `d[k]`, `d[k] = v`, `del d[k]`, `get(k, default)`, `setdefault`, `pop(k)`, `pop(k, default)`, `keys()`, `values()`, `items()`, `update`, `copy`, `clear` |
+| a dict | `d[k]`, `d[k] = v`, `del d[k]`, `get(k)`, `get(k, default)`, `setdefault`, `pop(k)`, `pop(k, default)`, `keys()`, `values()`, `items()`, `update`, `copy`, `clear` |
 | a set | `add`, `remove`, `discard`, `update`, `copy`, `clear`, `\|`, `&`, `-`, `^` and their methods, `issubset`, `issuperset`, `isdisjoint` |
 | any of them | `len`, `in`, `==`, `if xs:`, `for` loops, `sorted`, `min`, `max`, `sum`, `any`, `all`, `enumerate`, `zip`, `reversed` |
 
@@ -175,13 +177,24 @@ Python.
   one key. A NaN key, which only its own object finds, falls back. An `int`
   key given to a dict of floats (`d[1]` where `d: dict[float, int]`) stays in
   Python, since CPython keeps and prints the key as it came.
-- `v = d.get(k)` with no default, of a dict of numbers, binds `v` as a
-  number or `None`: native code keeps a flag beside the number. `v is None`,
-  `v is not None`, `if v:`, `print(v)`, `v = None`, and `v` as a number
-  (`v += x` included) once a test has shown it holds one are native. The
-  checker reports `v += x` on a `v` that may still be `None` as `E1302`,
-  with or without strict mode. A `d.get(k)` used any other way (passed on, returned, a
-  dict of strings) stays in Python. With a default, `get` is native.
+- `d.get(k)` with no default gives `None` for a missing key, for a dict
+  of numbers, of numbers or strings that may be `None`, of strings, and of
+  objects of an object class (a value class's stays in Python). Bound to
+  a local, passed to an `int | None` parameter, or returned from an
+  `-> int | None` function, it keeps CPython's meaning
+  ([Numbers and strings that may be `None`](native-lowering.md#numbers-and-strings-that-may-be-none)):
+  `v is None`, `if v:`, `print(v)`, and `v or default` are native, and `v`
+  is read as a number once a test has shown it holds one. The checker
+  reports `v += x` on a `v` that may still be `None` as `E1302`, with or
+  without strict mode. With a default, `get` is native for a dict whose
+  values cannot be `None`; `d.get(k, 0)` of a `dict[str, int | None]`
+  stays in Python.
+- Sorting, `min`, and `max` over elements that may be `None`, and keys
+  that may be `None`, stay in Python.
+- `r: list[int | None] = [None] * w` is a checker error (`E1301`: the
+  display is a `list[NoneType]`). Inside a comprehension assigned to an
+  annotated name or field, `[[None] * w for _ in range(h)]` is accepted and
+  lowers; returned directly, it keeps the function in Python.
 - `sort(key=...)`, `sorted(key=...)`, `min(key=...)`, and `max(key=...)`
   natively take a key giving numbers or tuples of them, and `min` and `max`
   with a key pick among numbers. [Functions as values](closures.md) has the

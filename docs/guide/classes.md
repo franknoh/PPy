@@ -142,8 +142,30 @@ make nodes ([types from call sites](subset.md#types-from-call-sites)), and
   settles the field too. An `insert` method that walks down and stores
   `Node(key)`, as above, needs no annotation.
 - A local that starts as `None` and later holds an object
-  (`prev = None` ... `prev = node`) keeps its function in Python; declare
-  it (`prev: Node | None = None`).
+  (`prev = None` ... `prev = node`) takes the type of all its bindings,
+  `Node | None`, so a list reversal written that way lowers.
+
+`ppy explain module.Class` (or the class's name) lists each field with its
+type and where it came from. Here is `ppy explain circ.Node` for a module
+`circ` with the unannotated recursive `insert` of the bullet above: every
+link shows only the `None` from `__init__`, which is how a field that did
+not settle looks:
+
+```text
+class: Node
+qualname: circ.Node
+fields:
+  left: NoneType, from what the program stores into it:
+    NoneType at circ.ppy:4 in `__init__`
+  right: NoneType, from what the program stores into it:
+    NoneType at circ.ppy:5 in `__init__`
+  key: int, from what the program stores into it:
+    int at circ.ppy:3 in `__init__`
+methods: __init__
+```
+
+A field annotated in the class body or in `__init__`, or set as a class
+attribute, says so instead ([`ppy explain`](../cli.md#ppy-explain)).
 
 [`55_linked_structures`](../howto/55_linked_structures.md) is a search tree
 with parent links and a linked list written this way, without annotations,
@@ -337,10 +359,13 @@ leak check passes.
 ## The Python boundary
 
 Under `ppy run`, Python can call a native function that takes or returns
-objects of the project's classes. The object is copied into native memory
-whole, together with the objects and containers its fields hold. An object
-reached twice becomes one native object, so a shared object and a cycle
-stay what they were.
+objects of the project's classes. The first time an object crosses, it is
+copied into native memory whole, together with the objects and containers
+its fields hold. An object reached twice becomes one native object, so a
+shared object and a cycle stay what they were. An object of a plain class
+that crosses again keeps that copy between calls
+([Resident objects](#resident-objects)); an object of any other class is
+copied at every call.
 
 After the call:
 
@@ -378,8 +403,9 @@ one higher. `bump(None)` is native too, since the parameter allows `None`.
 
 The copy costs time in proportion to what crosses, about 80 ns an object
 in and as much back after a write, where CPython reads a field in a few
-nanoseconds. So Python calls the native body only when the function does
-work in proportion to it, and more than a few operations of it per object:
+nanoseconds. So for a class that is copied at every call, Python calls
+the native body only when the function does work in proportion to it, and
+more than a few operations of it per object:
 a loop that follows a field (`head = head.next`), a loop over a container
 of objects, or a call to itself on a field (`height(node.left)`), each
 doing six operations or more on what it reaches. Without `@ppy.native`,
@@ -417,29 +443,63 @@ The boundary holds its copies by weak reference, so an object dies when
 CPython's would, and its native copy goes some calls later. Identity is
 kept: an object native code hands back is the Python object it came from.
 
-This applies to plain classes whose fields hold numbers, strings, tuples of
-numbers, and objects of other such classes. A class with a container field
-(`self.items: list[int]`), a value class field, `__slots__`, a custom
-`__getattribute__`, `__setattr__`, or `__getattr__`, or no `__weakref__`, is
-copied at every call as before, and so is every class of a program that
-assigns `__class__` or `__dict__`, calls `setattr` with a name it computes,
-or calls `exec`: a change of class or of the whole `__dict__` is one
-CPython does not report. The first call with an object copies it; the
-second makes it resident. With `PPY_RESIDENT=0` in the environment, every
-object is copied at every call.
+This applies to plain classes whose fields hold numbers, strings, numbers
+or strings that may be `None`, tuples of numbers, and objects of other such
+classes. A class with a container field (`self.items: list[int]`) or a
+value class field is copied at every call: Python can change a list or a
+dict in place without touching the object's `__dict__`, so the boundary
+would not hear of it. So is a class with `__slots__`, and an enum, a
+protocol, or a pydantic model. At run time the boundary also checks the
+class itself: generic attribute access (no custom `__getattribute__` or
+`__setattr__`), an instance `__dict__`, weak references, no `__del__`, and
+no data descriptor named like a field anywhere in its bases. And every
+class of a program that assigns `__class__` or `__dict__`, calls `setattr`
+or `delattr` with a name it computes, or calls `exec` is copied at every
+call: a change of class or of the whole `__dict__` is one CPython does not
+report.
 
-A resident object costs a flat price per call, about 80 ns, and more when
-the call writes it, so the cost model judges a method on one as it judges a
+The first call with an object copies it; the second makes it resident, so
+an object that crosses once pays nothing extra. A call goes resident when
+every object class in its signature can be, and one of its object
+arguments (or the first element of a list of them) crossed before.
+
+A resident call keeps the GIL while it runs; a call that copies releases
+it where its body loops ([Threads](native-lowering.md#threads)). A
+coroutine's objects are always copied, since it runs on after its call
+answers.
+
+With `PPY_RESIDENT=0` in the environment, and on a free-threaded build of
+CPython, every object is copied at every call. `PPY_RESIDENT_REPORT=1`
+prints the boundary's counts at exit, on stderr:
+
+```text
+resident: 1001 live, 0 stale, 1001 entries, enabled 1, 1001 admitted, 199 calls
+```
+
+That is a module-level stack of 1,000 cells and its `Stack` object, called
+200 times with `stack.find(k)`: the first call copies, and the second
+admits the 1,001 objects, so 199 calls are resident. A class with a
+`__del__` shows `0 admitted, 0 calls`.
+
+A resident object costs a flat price per call, about 80 ns over a plain
+native call, so the cost model judges a method on one as it judges a
 function of numbers: a loop is native, and straight-line work has to pay
-for the price (`ppy explain` gives the reason). An object native code makes
-is made in Python too, with its `__dict__` and its weak reference, about a
-microsecond where CPython makes one in 200 ns, so a function that makes
-objects stays in Python unless its loops do far more than that
-("the objects it makes cost more to hand to Python than its loops save"),
-or `@ppy.native` asks for the crossing. On a 10,000-node linked list,
-`find` takes 38 µs natively against 70 µs in CPython, and took 3 ms when
-the list was copied at every call; `push` takes 1.9 µs against CPython's
-0.19 µs (`examples/bench_boundary.py`).
+for the price. It counts 7 operations for the call, 1 more per resident
+object, 8 more for each one the call writes, and for a list of resident
+objects 2 per element read or 6 per element written. An object native code
+makes is made in Python too, with its `__dict__` and its weak reference,
+about a microsecond where CPython makes one in 200 ns. The cost model
+counts 100 operations for each, and keeps a function that makes objects in
+Python unless its heaviest loop, over 16 passes, does more than that, and
+always where it makes one inside a loop. `ppy explain` gives this reason as
+"the objects it makes cost more to hand to Python than its loops save";
+`@ppy.native` asks for the crossing anyway. So a method with a loop over a
+resident structure (`find`, `__len__`, `contains`) is native when Python
+calls it, while a one-line getter, `is_empty`, or a `push` that makes a
+node runs its Python body. On a 10,000-node linked list, `find` takes 34 µs
+natively against 63 µs in CPython, and took 3 ms when the list was copied
+at every call; `push` takes 1.8 µs against CPython's 0.16 µs
+([What a call costs](native-lowering.md#what-a-call-costs)).
 
 A method of a class that crosses this way is bound like a method: `node.f(x)`
 passes `node` to the native code, and a `@staticmethod` stays static.

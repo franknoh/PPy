@@ -48,7 +48,8 @@ what keeps functions in Python, by statements kept out (a function can count und
       examples/54_objects_and_grids/world.ppy:95 world.main
 
 native, but Python calls the Python body (why its boundary is not used):
-      6 functions  copying the collections in costs more than the body does with them
+      5 functions  the boundary crossing costs more than the body saves
+      1 functions  copying the collections in costs more than the body does with them
 ```
 
 <!-- outputs:end -->
@@ -86,16 +87,23 @@ as native and called from Python, and the rest as native code they call.
 - **An object made natively.** The `Census` that `advance` returns was
   made by native code. It comes back as a new `Census` instance with its
   fields set; `__init__` does not run a second time.
-- **Objects written in place.** `orbit(bodies, ...)` copies each `Body`'s
-  fields in, and after the call sets the fields it wrote on the caller's
-  objects. `first` and `bodies[0]` are still one object, so the last line
-  prints `True` on every path. An object reached twice crosses once.
-- **The cost of the copy.** The wrapper copies in C, from type tables
+- **Objects written in place, then kept.** The first call that takes
+  `bodies`, `energy(bodies)`, copies each `Body`'s fields in. `Body` holds
+  only numbers, so from the second call on the 60 bodies stay resident:
+  native code is handed the records it had, and after each `orbit` the
+  boundary sets the fields native code wrote on the caller's objects.
+  `PPY_RESIDENT_REPORT=1` prints `60 admitted, 10 calls` (five `orbit` and
+  six `energy` calls, the first of them a copy). `first` and `bodies[0]`
+  are still one object, so the last line prints `True` on every path. An
+  object reached twice crosses once. `orbit` writes every body on every
+  call, so residency saves only the copy in; the copy back remains.
+- **The cost of the crossing.** The wrapper copies in C, from type tables
   emitted for each signature. Python calls a function natively only where
   the body does enough with what crosses: here, nine reads per cell and a
   pass over every pair of bodies per step. `kick`, `drift`, `count`, and
-  `neighbours` are too small for that, and Python calling them would run
-  their Python bodies; native callers call them directly.
+  `neighbours` are too small for that, even with the bodies resident, and
+  Python calling them would run their Python bodies; native callers call
+  them directly.
 
 ## Timing
 
@@ -105,16 +113,16 @@ checkout under `/tmp` on one machine (Python 3.14, an Intel Core Ultra 9
 
 | | seconds |
 |---|---:|
-| `python world.ppy` | 2.20 |
-| `ppy run world.ppy`, after the first run built the cache | 0.25 |
+| `python world.ppy` | 2.44 |
+| `ppy run world.ppy`, after the first run built the cache | 0.28 |
 
 Timed inside the program, the mean of five runs:
 
 | part | CPython | `ppy run` |
 |---|---:|---:|
-| five `advance(grid, 40)` calls | 1.51 s | 0.177 s |
-| five `orbit(bodies, 0.0005, 400)` calls | 0.685 s | 0.032 s |
-| one `orbit(bodies, 0.0005, 1)` call, 60 bodies in and out | 346 µs | 29 µs |
+| five `advance(grid, 40)` calls | 1.66 s | 0.225 s |
+| five `orbit(bodies, 0.0005, 400)` calls | 0.762 s | 0.039 s |
+| one `orbit(bodies, 0.0005, 1)` call, 60 resident bodies, their fields set back | 386 µs | 30 µs |
 
 There is no standalone build: `main` stays in Python, and the point of
 the example is the crossing, which a standalone binary does not have.
