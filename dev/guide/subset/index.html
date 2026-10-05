@@ -4785,7 +4785,14 @@ is not compiled once per type its calls pass. More evidence:</p>
 <p>A decorator is looked through when it keeps the function's parameters:
 <code>@staticmethod</code>, <code>@classmethod</code>, <code>@functools.cache</code>, <code>@functools.lru_cache</code>,
 <code>@abc.abstractmethod</code>, a pytest mark, and a project decorator whose wrapper
-is made with <code>functools.wraps(fn)</code> and only calls <code>fn(*args, **kwargs)</code>.</p>
+is made with <code>functools.wraps(fn)</code> and only calls <code>fn(*args, **kwargs)</code>.
+Looking through a decorator gives the parameters their types and nothing
+else. Under <code>--no-strict</code> a function with a decorator nobody vouches for
+stays in Python, and every call by its name, from Python or from native
+code, goes to the object the decorator returned, so a wrapper that prints,
+doubles the result, or caches runs just as it does on CPython. Such a call
+counts as one with unknown effects: it is never inlined, folded, or moved
+out of a loop.</p>
 <p>Nothing is inferred for a function the program uses as a value (<code>key=f</code>,
 <code>map(f, xs)</code>, <code>g = obj.method</code>), one with another decorator, one called with
 <code>*args</code> or <code>**kwargs</code>, a nested function, or a dunder method other than

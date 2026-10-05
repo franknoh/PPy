@@ -4896,6 +4896,10 @@ all numbers, since a copy of its fields would cut a subclass's short.</p>
 <td><code>__lt__</code>, ..., or the reflected method of the right operand; <code>@dataclass(order=True)</code> compares its fields as tuples</td>
 </tr>
 <tr>
+<td><code>max(a, b, ...)</code>, <code>min(a, b, ...)</code> of names of one class</td>
+<td><code>later &gt; best</code> (<code>later &lt; best</code> for <code>min</code>) for each later argument, as above; the first of equals wins</td>
+</tr>
+<tr>
 <td><code>str(a)</code>, <code>repr(a)</code>, <code>print(a)</code>, <code>f"{a}"</code>, <code>f"{a!r}"</code></td>
 <td><code>__str__</code>, <code>__repr__</code>, or a dataclass's generated <code>__repr__</code>, <code>Point(x=1, y=2.5)</code></td>
 </tr>
@@ -5097,8 +5101,9 @@ on CPython.</p>
   depends on CPython's version.</li>
 <li>A dataclass with subclasses keeps its generated methods in Python, since
   they read the instance's own class.</li>
-<li><code>sorted</code>, <code>min</code>, and <code>max</code> of <code>order=True</code> dataclass objects stay in
-  Python; comparing two of them is native.</li>
+<li><code>sorted</code>, and <code>min</code> and <code>max</code> of a collection, of <code>order=True</code> dataclass
+  objects stay in Python; comparing two of them is native, and so is
+  <code>max(a, b)</code> of them.</li>
 <li>A class with neither <code>__str__</code>, <code>__repr__</code>, nor a generated one prints its
   address, which only Python has. A value class with its own <code>__repr__</code> or
   <code>__str__</code> is shown by Python.</li>
