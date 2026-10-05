@@ -259,6 +259,10 @@ class ClassInfo:
     #: project Protocols whose members the class covers. None of them gives
     #: the class a field or a method.
     structural: set[str] = field(default_factory=set)
+    #: The program may give an instance another class or another `__dict__`
+    #: (`x.__class__ = C`, `x.__dict__ = d`, `setattr` of a name it computes,
+    #: `exec`): its objects are copied at every crossing, never kept resident.
+    identity_rewritten: bool = False
 
     def instance(self, args: tuple[T.Type, ...] = ()) -> T.Instance:
         return T.Instance(self.qualname, args, self.mro or (self.qualname, "object"))
@@ -651,7 +655,16 @@ class ProjectSymbols:
             self._resolve_signatures(self.modules[module.name])
         self._mark_constant_globals()
         self._mark_derivatives()
+        self._mark_identity_rewrites()
         return self
+
+    def _mark_identity_rewrites(self) -> None:
+        """Whether anything in the program can change an object's class or
+        replace its `__dict__`, which nothing at run time reports: then no
+        class's instances stay resident at the Python boundary (`crossing.c`)."""
+        if any(_rewrites_identity(symbols.module.tree) for symbols in self.modules.values()):
+            for info in self.classes.values():
+                info.identity_rewritten = True
 
     def _mark_derivatives(self) -> None:
         """`df = ppy.grad(f)` at module level binds a derivative, once and for all.
@@ -1457,6 +1470,53 @@ def class_level(info: ClassInfo, name: str) -> bool:
             and isinstance(child.target, ast.Name)
             and child.target.id == name
         ):
+            return True
+    return False
+
+
+#: The attributes whose assignment changes what an object is, not what it holds.
+_IDENTITY_ATTRIBUTES = frozenset({"__class__", "__dict__"})
+
+
+def _rewrites_identity(tree: ast.Module) -> bool:
+    """`x.__class__ = C`, `x.__dict__ = d` (or `del`), `setattr` or `delattr`
+    (or `__setattr__`) of either name or of a name the program computes, and
+    `exec`, anywhere in the module."""
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+            and node.attr in _IDENTITY_ATTRIBUTES
+        ):
+            return True
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = (
+            func.id
+            if isinstance(func, ast.Name)
+            else func.attr
+            if isinstance(func, ast.Attribute)
+            else ""
+        )
+        if name == "exec":
+            return True
+        if name not in {"setattr", "delattr", "__setattr__", "__delattr__"}:
+            continue
+        if isinstance(func, ast.Attribute) and name in {"setattr", "delattr"}:
+            continue  # `monkeypatch.setattr(...)`: a method of its own
+        # `obj.__setattr__(name, v)` names the attribute first; `setattr(obj,
+        # name, v)` and `object.__setattr__(obj, name, v)` second.
+        bound = isinstance(func, ast.Attribute) and not (
+            isinstance(func.value, ast.Name) and func.value.id in {"object", "type", "super"}
+        )
+        at = 0 if bound else 1
+        if len(node.args) <= at:
+            return True
+        attr = node.args[at]
+        if not (isinstance(attr, ast.Constant) and isinstance(attr.value, str)):
+            return True
+        if attr.value in _IDENTITY_ATTRIBUTES:
             return True
     return False
 

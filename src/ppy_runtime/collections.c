@@ -131,6 +131,11 @@ void ppy_coll_track(int64_t *header) {
 }
 
 void ppy_coll_untrack(int64_t *header) {
+    if (header[18] == 0) {
+        /* Not on a heap list: a literal kept for good (strings.c), or a
+           handle a resident object holds (`ppy_coll_adopt`). */
+        return;
+    }
     int64_t *heap = ppy_coll_seen(header[18]);
     int64_t list = ppy_coll_holds(header) ? 0 : 1;
     int64_t *before = ppy_coll_seen(header[16]);
@@ -193,6 +198,66 @@ void ppy_coll_sweep(void) {
     }
     heap[3] = 0;
     heap[4] = 0;
+}
+
+/* Resident objects (the generated wrapper's `crossing.c`): an object of a
+   project class that crosses the Python boundary again and again keeps one
+   handle for as long as its Python object lives, instead of being copied
+   in and back at every call. Such a handle is on no thread's heap list
+   (`ppy_coll_adopt`): it outlives the call that made it, and neither a
+   sweep after a failed call nor the collector frees it; the wrapper holds a
+   reference to it.
+
+   Header word 19, the collector's own for the handles it tracks, holds
+   `0x7078526573694400` while the record matches its Python object, and one
+   more once native code wrote one of its fields since: the lowering checks
+   the word after every field it stores (`ppy_coll_touch`), and the wrapper
+   copies the fields of every record on the list below back into the Python
+   objects once the call answers.
+
+     [0] the touched handles (malloc'd)   [1] how many   [2] room
+     [3] 1 while a thread adds to it */
+int64_t *ppy_coll_touched(void) {
+    static int64_t touched[4];
+    return touched;
+}
+
+/* A field of `handle` was written: a resident record goes on the list once. */
+void ppy_coll_touch(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    int64_t clean = 0x7078526573694400LL;
+    if (!__atomic_compare_exchange_n(&header[19], &clean, clean + 1, 0, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_RELAXED)) {
+        return;
+    }
+    int64_t *touched = ppy_coll_touched();
+    while (__atomic_exchange_n(&touched[3], 1, __ATOMIC_ACQUIRE)) {
+    }
+    if (touched[1] == touched[2]) {
+        int64_t room = touched[2] > 0 ? touched[2] * 2 : 64;
+        int8_t **grown =
+            (int8_t **)realloc((void *)(intptr_t)touched[0], (size_t)room * sizeof(int8_t *));
+        if (grown == NULL) {
+            ppy_coll_fail();
+        }
+        touched[0] = (int64_t)(intptr_t)grown;
+        touched[2] = room;
+    }
+    ((int8_t **)(intptr_t)touched[0])[touched[1]++] = handle;
+    __atomic_store_n(&touched[3], 0, __ATOMIC_RELEASE);
+}
+
+/* A handle taken off its thread's heap list, to be held past the call that
+   made it: by a resident object, or by a record one holds. */
+void ppy_coll_adopt(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    if (header[18] != 0) {
+        ppy_coll_untrack(header);
+        header[16] = 0;
+        header[17] = 0;
+        header[18] = 0;
+    }
+    header[20] = 0;
 }
 
 /* How many handles this thread holds: what the tests count leaks by. */

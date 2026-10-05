@@ -31,6 +31,7 @@ from __future__ import annotations
 import array
 import contextlib
 import ctypes
+import os
 import re
 import struct
 import sys
@@ -419,6 +420,8 @@ _WRAPPER_FUNCTIONS = (
     "ppy_coll_release",
     "ppy_coll_text_keys",
     "ppy_str_new_many",
+    "ppy_coll_touched",
+    "ppy_coll_adopt",
 )
 
 
@@ -441,9 +444,47 @@ def attach(wrappers: Any, library: Any = None) -> bool:
             taken = bool(hand(*addresses))
         except (AttributeError, TypeError, ValueError, OverflowError):
             taken = False
+    if taken:
+        _share_world(wrappers)
     with contextlib.suppress(AttributeError, TypeError):
         wrappers.__ppy_attached__ = taken
     return taken
+
+
+#: The resident objects' world (`crossing.c`), which the first wrapper module
+#: makes and every other one is handed: an object is resident in one place.
+_world: list[Any] = []
+
+
+def _share_world(wrappers: Any) -> None:
+    """Give a wrapper module the process's world of resident objects; with
+    `PPY_RESIDENT=0` in the environment, none, and objects are copied at
+    every crossing."""
+    share = getattr(wrappers, "ppy_world", None)
+    if share is None or os.environ.get("PPY_RESIDENT", "1") == "0":
+        return
+    try:
+        found = share(_world[0] if _world else None)
+    except (TypeError, ValueError):
+        return
+    if found is not None and not _world:
+        _world.append(found)
+        if os.environ.get("PPY_RESIDENT_REPORT"):
+            import atexit  # pylint: disable=import-outside-toplevel
+
+            atexit.register(_report_world, wrappers)
+
+
+def _report_world(wrappers: Any) -> None:
+    """`PPY_RESIDENT_REPORT=1`: the world's objects at exit, on stderr."""
+    stats = wrappers.ppy_world_stats()
+    if stats is not None:
+        live, stale, entries, enabled, admitted, calls = stats
+        print(
+            f"resident: {live} live, {stale} stale, {entries} entries, enabled {enabled}, "
+            f"{admitted} admitted, {calls} calls",
+            file=sys.stderr,
+        )
 
 
 def _format(spec: Spec) -> str:
