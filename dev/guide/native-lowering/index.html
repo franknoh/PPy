@@ -4969,6 +4969,19 @@ Python to fall back to and refuses such a function.</p>
   side), and that no loop, <code>with</code>, handler, or nested scope rebinds, is
   decided the same way. Object classes are tested by the class tag the
   instance carries.</li>
+<li>A <code>bool</code> stays a <code>bool</code> in Python wherever it is stored: after
+  <code>x: int = flag</code>, <code>x</code> prints <code>True</code>. Native code holds an <code>int</code> as a
+  64-bit word, which keeps only the 1. So a function that stores a <code>bool</code>
+  where an <code>int</code> is declared stays in Python, and a standalone build reports
+  it. That covers a local (also one rebound from an <code>int</code>), a return from an
+  <code>-&gt; int</code> function, an element of a <code>list[int]</code>, <code>dict[..., int]</code>, or
+  <code>tuple[int, ...]</code>, an <code>int</code> field, and an argument through a
+  <code>Callable[[int], ...]</code> or to a class. A call of a module function by name
+  stays in Python only where the callee prints, returns, stores, or tests
+  that parameter. Arithmetic is not a store: <code>flag + n</code>, <code>-flag</code>, and
+  <code>True + 1</code> are <code>int</code>s in Python too and stay native. To keep the function
+  native, annotate the slot <code>bool</code>, or store <code>int(flag)</code> where an <code>int</code> is
+  meant.</li>
 <li>A chained comparison, <code>0 &lt;= i &lt; n</code>, is its comparisons joined by <code>and</code>,
   each operand evaluated once and the ones after a false comparison not at
   all.</li>
