@@ -1,0 +1,60 @@
+# fuzz: path=run (a `bool` stored where an `int` is declared printed 1 natively)
+from collections.abc import Callable
+from dataclasses import dataclass
+
+
+@dataclass
+class Box:
+    v: int
+    w: int = 0
+
+
+def spin(k: int) -> int:
+    s = 0
+    for i in range(k):
+        s += i * i % 7
+    return s
+
+
+def shown(n: int) -> int:
+    print(n, repr(n), f"{n}", n is True)
+    return n * 2
+
+
+def through(f: Callable[[int], int], v: bool) -> int:
+    return f(v) + spin(50)
+
+
+def returned(n: int) -> int:
+    if n > 2:
+        return n > 5
+    return n + spin(50)
+
+
+def stores(flag: bool, n: int) -> int:
+    total = spin(100)
+    x: int = flag
+    y = n
+    y = flag
+    xs: list[int] = [n, flag]
+    xs.append(n < 2)
+    d: dict[str, int] = {"a": n}
+    d["b"] = flag
+    t: tuple[int, int] = (flag, n)
+    b = Box(flag)
+    b.w = n > 2
+    print(x, str(x), isinstance(x, bool), y, xs, d, t, b)
+    z: int = flag + n
+    u = flag * 3 - True
+    print(z, u, True + 1 == 2, -flag)
+    return total + n
+
+
+def main() -> None:
+    print(stores(True, 4))
+    print(stores(False, -1))
+    print(through(shown, True))
+    print(returned(7), returned(1))
+
+
+main()
