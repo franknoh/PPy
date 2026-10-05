@@ -23,26 +23,26 @@ ppy explain --summary puzzles.ppy
 **`python  puzzles.ppy`**
 
 ```text
-# sieve: 0.244 s
+# sieve: 0.327 s
 primes below 5000000 : 348513 the last 4999999
-# mean_gap: 0.010 s
+# mean_gap: 0.012 s
 mean gap: 14.3467
-# partitions: 0.034 s
+# partitions: 0.045 s
 partitions of 400 : 6727090051741041926
-# walk: 0.831 s
+# walk: 0.966 s
 farthest squared distance, times it moved: (7065320, 2681)
 ```
 
 **`ppy run puzzles.ppy`**
 
 ```text
-# sieve: 0.127 s
+# sieve: 0.189 s
 primes below 5000000 : 348513 the last 4999999
 # mean_gap: 0.001 s
 mean gap: 14.3467
-# partitions: 0.029 s
+# partitions: 0.035 s
 partitions of 400 : 6727090051741041926
-# walk: 0.207 s
+# walk: 0.316 s
 farthest squared distance, times it moved: (7065320, 2681)
 ```
 
@@ -96,8 +96,8 @@ refinements: len == 2
 
 ```text
 10 functions, 61 statements
-  native, called from Python              5 functions ( 50%)       29 statements ( 48%)
-  native, called from native code         4 functions ( 40%)       10 statements ( 16%)
+  native, called from Python              3 functions ( 30%)       27 statements ( 44%)
+  native, called from native code         6 functions ( 60%)       12 statements ( 20%)
   Python                                  1 functions ( 10%)       22 statements ( 36%)
 
 what keeps functions in Python, by statements kept out (a function can count under more than one):
@@ -108,7 +108,8 @@ what keeps functions in Python, by statements kept out (a function can count und
 
 native, but Python calls the Python body (why its boundary is not used):
       1 functions  calls itself without a loop; CPython's recursion limit stays in force
-      3 functions  copying the collections in costs more than the body does with them
+      3 functions  the boundary crossing costs more than the body saves
+      2 functions  the objects it makes cost more to hand to Python than its loops save
 ```
 
 <!-- outputs:end -->
@@ -148,8 +149,10 @@ follow from them. With `strict = false`:
   and `farthest < position` is a call of `Vector.__lt__`. A comparison
   method is only typed as taking its own class, since sorting and lookups
   call it with two of the class's objects. Written as
-  `farthest = max(farthest, position)`, the comparison would not count, and
-  `walk` would stay in Python: `max` of two objects has no native form.
+  `farthest = max(farthest, position)`, the comparison counts the same way,
+  and `walk` stays native: `max` of two objects compares them as CPython
+  does, `position > farthest` through the reflected `farthest < position`,
+  and keeps the first of equals.
 - **Decorators.** `lru_cache` keeps the function's parameters, so
   `partitions` is typed from its calls as an undecorated function would
   be. A project decorator counts the same way only when its wrapper is
@@ -160,9 +163,11 @@ follow from them. With `strict = false`:
 - **Doctests.** Here every function is also called from `main`, so the
   doctests only agree with the calls. Without `main`, they would type some
   of the same parameters: `sieve(20)` gives `limit` an `int`, and `a * 3`
-  on the doctest's `a = Vector(1, 2)` gives `__mul__`'s `factor` one. The
-  `Vector(3, 4)` and `Vector(2, 2)` operands of `+` and `<` in the doctest
-  are not counted, so `other` would stay unknown.
+  on the doctest's `a = Vector(1, 2)` gives `__mul__`'s `factor` one, and
+  the `Vector(3, 4)` and `Vector(2, 2)` operands of `+` and `<` give
+  `other` the class: a constructor call of a project class counts as an
+  operand, and so does a name an earlier example bound to one
+  (`other: puzzles.Vector, from 1 doctest call`).
 
 `main` itself stays in Python: the parser is a Python object native code
 has no value for. Everything it calls is native, and `ppy explain

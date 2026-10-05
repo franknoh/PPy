@@ -468,8 +468,8 @@ coroutine's objects are always copied, since it runs on after its call
 answers.
 
 With `PPY_RESIDENT=0` in the environment, and on a free-threaded build of
-CPython, every object is copied at every call. `PPY_RESIDENT_REPORT=1` prints the boundary's counts at exit, on
-stderr:
+CPython, every object is copied at every call. `PPY_RESIDENT_REPORT=1`
+prints the boundary's counts at exit, on stderr:
 
 ```text
 resident: 1001 live, 0 stale, 1001 entries, enabled 1, 1001 admitted, 199 calls
