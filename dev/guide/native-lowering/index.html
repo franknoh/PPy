@@ -1396,6 +1396,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Types that lower">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#numbers-and-strings-that-may-be-none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numbers and strings that may be None
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4583,6 +4600,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Types that lower">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#numbers-and-strings-that-may-be-none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numbers and strings that may be None
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4944,6 +4978,8 @@ The types are:</p>
 <li><code>int</code>, <code>float</code>, <code>bool</code>, <code>None</code>, the fixed-width markers, and tuples of
   these</li>
 <li><code>str</code> (<a href="../strings/">Strings</a>)</li>
+<li><code>int | None</code>, <code>float | None</code>, <code>bool | None</code>, and <code>str | None</code>
+  (<a href="#numbers-and-strings-that-may-be-none">Numbers and strings that may be <code>None</code></a>)</li>
 <li><code>list</code>, <code>dict</code>, and <code>set</code> of any of these, nested too
   (<a href="../containers/">Lists, dicts, and sets</a>), and <code>Sequence</code> of them; a list
   of numbers a function only reads is lent as a buffer</li>
@@ -4972,6 +5008,63 @@ the declared type runs the call as Python.</p>
 <p>A list parameter the function only reads is lent as a buffer, a copy of its
 numbers. One it returns, slices (<code>xs[1:]</code>), or adds to another list is held
 by handle instead, since a buffer is not a list it could hand back.</p>
+<h3 id="numbers-and-strings-that-may-be-none">Numbers and strings that may be <code>None</code><a class="headerlink" href="#numbers-and-strings-that-may-be-none" title="Permanent link">&para;</a></h3>
+<p><code>int | None</code>, <code>float | None</code>, and <code>bool | None</code> are a number and a flag that
+says whether there is one. A local keeps them in two slots, a parameter and
+a result cross the native ABI as the number's atom and a byte, and a field
+or an element of a list or dict takes two words: the number, then the flag.
+<code>None</code> is the flag clear and the number 0. <code>str | None</code> is a string's
+handle, null for <code>None</code>. They can be parameters, results, fields, list and
+dict elements, and locals:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Node</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">key</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">label</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">left</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">right</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">floor_label</span><span class="p">(</span><span class="n">root</span><span class="p">:</span> <span class="n">Node</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">best</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">node</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">root</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="k">while</span> <span class="n">node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">key</span> <span class="o">&lt;=</span> <span class="n">key</span><span class="p">:</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>            <span class="n">best</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">label</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>            <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>            <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">left</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="k">return</span> <span class="n">best</span>
+</code></pre></div>
+<p>Natively, <code>x is None</code> and <code>x == None</code> read the flag; <code>if x:</code> is the flag and
+a nonzero number (a non-empty string); <code>x == 3</code> is false for <code>None</code>;
+<code>x or d</code> gives <code>d</code> for <code>None</code> and for zero; <code>x in (True, None)</code>,
+<code>isinstance(x, int)</code>, <code>print(x)</code>, <code>str(x)</code>, <code>f"{x}"</code>, and the <code>repr</code> of a
+list or dict holding them (<code>[1, None]</code>) write <code>None</code> where it is one.
+<code>d.get(k)</code> with no default gives <code>None</code> for a missing key, <code>None in xs</code> and
+<code>xs.count(None)</code> find it, and <code>any</code>/<code>all</code> count it as false. After a test
+that narrows <code>x</code>, its number is read directly.</p>
+<p>A field the checker narrowed (<code>if node.label is not None:</code>) may still be
+<code>None</code> when a call between the test and the read set it so, which CPython
+then meets: the read checks the flag. Arithmetic, an order comparison, or a
+negation that finds <code>None</code> raises CPython's <code>TypeError</code>, with its text
+(<code>unsupported operand type(s) for +: 'NoneType' and 'int'</code>, <code>'&lt;' not
+supported between instances of 'int' and 'NoneType'</code>); a read where <code>None</code>
+cannot be the answer (passing it on as an <code>int</code>) falls back under <code>ppy run</code>
+and stops a standalone binary.</p>
+<p>At the Python boundary <code>None</code> crosses as a clear flag or a null handle, in
+arguments, results, fields of objects, and elements of lists and dicts, both
+ways. A value of another type keeps the call in Python: a <code>bool</code> for an
+<code>int | None</code>, and an <code>int</code> for a <code>float | None</code> whose int-ness the body
+would show. CPython keeps an <code>int</code> an <code>int</code> in a <code>float | None</code>, so a native
+caller that passes one is not compiled either. An object whose fields may be
+<code>None</code> stays resident between native calls like any other: a field Python
+sets to <code>None</code> (or back) between the calls is read again, and one native
+code sets is set on the Python object when the call answers.</p>
+<p>What stays in Python: sorting, <code>min</code>, and <code>max</code> over elements that may be
+<code>None</code> (CPython raises for them, in an order that depends on the
+comparisons), keys that may be <code>None</code>, a format spec over a value that may
+be <code>None</code> (<code>f"{x:&gt;4}"</code>), unions of numbers with anything but <code>None</code>, and
+tuples holding a value that may be <code>None</code>.</p>
 <h2 id="what-the-body-may-contain">What the body may contain<a class="headerlink" href="#what-the-body-may-contain" title="Permanent link">&para;</a></h2>
 <p>A function declared to return a value may end in an <code>if</code>/<code>elif</code>/<code>else</code> whose
 every side returns or raises: no path reaches the end, so the end needs no
@@ -5089,12 +5182,12 @@ their defaults. The compiler binds the call the way Python would: each
 keyword goes to the parameter it names, including a keyword-only one, and
 each parameter left out takes its default. The call then goes ahead in
 order. This holds for functions, methods, and <code>__init__</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">scale</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">factor</span> <span class="o">+</span> <span class="n">offset</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">use</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="n">scale</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">+</span> <span class="n">scale</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">n</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">scale</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">scale</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">factor</span> <span class="o">+</span> <span class="n">offset</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">use</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">return</span> <span class="n">scale</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">+</span> <span class="n">scale</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">n</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">scale</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
 </code></pre></div>
 <p>Python evaluates arguments in the order they are written. Binding moves a
 keyword argument to its parameter's place, so it may only move where the
@@ -5167,30 +5260,30 @@ the largest or smallest word: Python's integers have no largest.</p>
 much of the code goes native and what keeps the rest in Python. Here it is
 over the <code>sorts</code> folder of TheAlgorithms/Python with <code>--no-strict</code>, trimmed
 to the first two reasons:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>175 functions, 1389 statements
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  native, called from Python              7 functions (  4%)       88 statements (  6%)
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  native, called from native code         7 functions (  4%)       74 statements (  5%)
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  Python                                161 functions ( 92%)     1227 statements ( 88%)
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  (73 of the Python functions are generic: each native caller compiles its own instance)
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>what keeps functions in Python, by statements kept out (a function can count under more than one):
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>       81 statements      3 functions  a parameter of type `(Any) -&gt; Any | NoneType`
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>      take a type native code holds (numbers, str, tuples, lists, dicts, sets, ppy collections, project classes)
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>      see https://ppy.franknoh.dev/latest/guide/native-lowering/
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>      sorts/power_sort.py:34 sorts.power_sort._find_run
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>      sorts/power_sort.py:137 sorts.power_sort._merge
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>      sorts/power_sort.py:199 sorts.power_sort.power_sort
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>       59 statements     12 functions  a parameter or result with no annotation the checker could infer
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>      annotate it, or run `ppy convert` to write the inferred annotations
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>      see https://ppy.franknoh.dev/latest/guide/subset/
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>      sorts/external_sort.py:13 sorts.external_sort.FileSplitter.__init__
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>      sorts/external_sort.py:26 sorts.external_sort.FileSplitter.split
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>      sorts/external_sort.py:48 sorts.external_sort.NWayMerge.select
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>  ... 62 more reasons, 73 functions (--limit to see more, --json for all)
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>native, but Python calls the Python body (why its boundary is not used):
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>      6 functions  copying the collections in costs more than the body does with them
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>      1 functions  copying its strings across costs what one pass over them saves
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>175 functions, 1389 statements
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  native, called from Python              7 functions (  4%)       88 statements (  6%)
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  native, called from native code         7 functions (  4%)       74 statements (  5%)
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  Python                                161 functions ( 92%)     1227 statements ( 88%)
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  (73 of the Python functions are generic: each native caller compiles its own instance)
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>what keeps functions in Python, by statements kept out (a function can count under more than one):
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>       81 statements      3 functions  a parameter of type `(Any) -&gt; Any | NoneType`
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>      take a type native code holds (numbers, str, tuples, lists, dicts, sets, ppy collections, project classes)
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>      see https://ppy.franknoh.dev/latest/guide/native-lowering/
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>      sorts/power_sort.py:34 sorts.power_sort._find_run
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>      sorts/power_sort.py:137 sorts.power_sort._merge
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>      sorts/power_sort.py:199 sorts.power_sort.power_sort
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>       59 statements     12 functions  a parameter or result with no annotation the checker could infer
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>      annotate it, or run `ppy convert` to write the inferred annotations
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>      see https://ppy.franknoh.dev/latest/guide/subset/
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>      sorts/external_sort.py:13 sorts.external_sort.FileSplitter.__init__
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>      sorts/external_sort.py:26 sorts.external_sort.FileSplitter.split
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>      sorts/external_sort.py:48 sorts.external_sort.NWayMerge.select
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>  ... 62 more reasons, 73 functions (--limit to see more, --json for all)
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>native, but Python calls the Python body (why its boundary is not used):
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>      6 functions  copying the collections in costs more than the body does with them
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>      1 functions  copying its strings across costs what one pass over them saves
 </code></pre></div>
 <p>Read it from the top down:</p>
 <ul>

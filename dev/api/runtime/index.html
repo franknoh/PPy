@@ -4261,6 +4261,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.NativeParam.is_optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;is_optional
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5667,6 +5678,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.NativeParam.is_optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;is_optional
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -7024,6 +7046,29 @@ years later.</p>
         <p>A <code>ppy.Buffer[T]</code> is borrowed in place; a list is copied out.</p>
 <p>A Python list holds boxed elements, so there is no contiguous array to
 point at. A buffer-protocol object already has one (spec 6.4, 13.8).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="ppy_runtime.abi.NativeParam.is_optional" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">is_optional</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#ppy_runtime.abi.NativeParam.is_optional" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>A number or <code>None</code> (<code>int | None</code>): the number's atom, then a byte
+that says whether there is one; <code>None</code> crosses as 0 and 0.</p>
 
     </div>
 

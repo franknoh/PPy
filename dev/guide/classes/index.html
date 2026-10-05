@@ -4764,6 +4764,8 @@ native code can represent:</p>
   <code>dict[str, int]</code> or <code>list[list[int]]</code></li>
 <li>a <code>ppy</code> collection: <code>Vec[int]</code>, <code>HashMap[int, Vec[int]]</code></li>
 <li>another object, or <code>None</code> where the field is <code>Node | None</code></li>
+<li>a number or a string that may be <code>None</code> (<code>int | None</code>, <code>str | None</code>;
+  see <a href="../native-lowering/#numbers-and-strings-that-may-be-none">Numbers and strings that may be <code>None</code></a>)</li>
 </ul>
 <p>Native code builds an instance by running the class's <code>__init__</code>, or for a
 dataclass by setting each field from the arguments and the defaults. A
@@ -5165,8 +5167,7 @@ on CPython.</p>
 <ul>
 <li>A class with more than one base, a base from another module or a
   library, or a field native code cannot represent (a NumPy array, a
-  <code>list</code> with no element type, a number or string that may be <code>None</code> such
-  as <code>label: int | None</code>), keeps the functions that use it in Python. A
+  <code>list</code> with no element type), keeps the functions that use it in Python. A
   Protocol the class only satisfies, without naming it as a base, is not a
   base.</li>
 <li>A call through a generic base whose subclass has type parameters the

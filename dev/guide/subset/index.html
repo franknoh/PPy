@@ -4737,9 +4737,9 @@ compiles like an annotated function:</p>
 <code>int</code> on one call and a <code>float</code> on another make a <code>float</code>, as a declared
 <code>float</code> takes an <code>int</code>: where the function's result would show that it was
 given an <code>int</code> (<code>x * 3</code> is <code>12</code> for <code>4</code>, not <code>12.0</code>), the native entry
-refuses the <code>int</code> and the Python body runs. Other mixes, and <code>int | None</code>,
-leave the parameter unknown: <code>int | None</code> has no native form, and a function
-is not compiled once per type its calls pass. More evidence:</p>
+refuses the <code>int</code> and the Python body runs. Other mixes leave the
+parameter unknown: a function is not compiled once per type its calls
+pass. More evidence:</p>
 <ul>
 <li>A value whose type the program states counts as a typed argument:
   <code>int(input())</code>, <code>float(...)</code>, <code>input().split()</code>,
