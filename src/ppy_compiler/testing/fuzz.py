@@ -3010,6 +3010,7 @@ def _execute(
         text=True,
         env=env,
         start_new_session=True,
+        # pylint: disable-next=subprocess-popen-preexec-fn
         preexec_fn=_die_with_parent,  # noqa: PLW1509 - no threads start processes here
     ) as process:
         try:
