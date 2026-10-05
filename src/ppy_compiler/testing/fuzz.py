@@ -1842,16 +1842,16 @@ def {user}(n: int) -> int:
         w.put("")
         w.put("")
 
-        def values(none: float) -> str:
+        def values(none: float, least: int = 0) -> str:
             return ", ".join(
                 "None" if rng.random() < none else str(rng.randint(-5, 9))
-                for _ in range(rng.randint(0, 5))
+                for _ in range(rng.randint(least, 5))
             )
 
         after = [
             f"oxs: list[int | None] = [{values(0.4)}]",
             (
-                f"print({find}([{values(0.0)}], {rng.randint(-3, 5)}), {bump}(None, "
+                f"print({find}([{values(0.0, 1)}], {rng.randint(-3, 5)}), {bump}(None, "
                 f"{rng.randint(-4, 4)}), {bump}({rng.randint(-4, 4)}, {rng.randint(-4, 4)}))"
             ),
             (
