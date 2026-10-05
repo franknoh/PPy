@@ -3002,7 +3002,7 @@ def _execute(
     run killed from outside left a `ppy run` looping for seven hours, in a
     session of its own that no signal to the run reached.
     """
-    with subprocess.Popen(
+    with subprocess.Popen(  # pylint: disable=subprocess-popen-preexec-fn
         _capped(command, "2G"),
         cwd=cwd,
         stdout=subprocess.PIPE,
@@ -3010,7 +3010,6 @@ def _execute(
         text=True,
         env=env,
         start_new_session=True,
-        # pylint: disable-next=subprocess-popen-preexec-fn
         preexec_fn=_die_with_parent,  # noqa: PLW1509 - no threads start processes here
     ) as process:
         try:
