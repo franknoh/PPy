@@ -77,12 +77,12 @@ drifted.
 
 | path | wall |
 |---|---:|
-| plain CPython | 685.2 ± 24.3 ms |
-| `ppy run` | 186.0 ± 169.8 ms |
-| `ppy build --unsafe` | 104.8 ± 0.9 ms |
-| `ppy build --standalone --unsafe` | **41.7 ± 0.7 ms** |
-| C (`gcc -O3`, `scanf`) | 48.6 ± 1.2 ms |
-| C (`clang -O3`, `scanf`) | 48.8 ± 0.5 ms |
+| plain CPython | 1140.0 ± 43.1 ms |
+| `ppy run` | 264.2 ± 242.5 ms |
+| `ppy build --unsafe` | 144.2 ± 5.1 ms |
+| `ppy build --standalone --unsafe` | **52.3 ± 3.4 ms** |
+| C (`gcc -O3`, `scanf`) | 59.5 ± 6.4 ms |
+| C (`clang -O3`, `scanf`) | 55.5 ± 3.3 ms |
 
 - `ppy run` compiles before it runs, which is most of its time. It is the
   development path, not the one to submit.

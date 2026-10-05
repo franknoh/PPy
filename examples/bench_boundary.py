@@ -84,6 +84,97 @@ def chained(head: Link) -> int:
     return s
 
 
+class Cell:
+    def __init__(self, value: int) -> None:
+        self.value = value
+        self.next: Cell | None = None
+
+
+# A linked list whose methods Python calls one at a time: its nodes stay
+# resident in native memory between the calls.
+class Chain:
+    def __init__(self) -> None:
+        self.head: Cell | None = None
+        self.size = 0
+
+    @ppy.native
+    def push(self, value: int) -> None:
+        cell = Cell(value)
+        cell.next = self.head
+        self.head = cell
+        self.size += 1
+
+    @ppy.native
+    def find(self, value: int) -> bool:
+        cell = self.head
+        while cell is not None:
+            if cell.value == value:
+                return True
+            cell = cell.next
+        return False
+
+    @ppy.native
+    def __len__(self) -> int:
+        n = 0
+        cell = self.head
+        while cell is not None:
+            n += 1
+            cell = cell.next
+        return n
+
+
+class Leaf:
+    def __init__(self, key: int) -> None:
+        self.key = key
+        self.left: Leaf | None = None
+        self.right: Leaf | None = None
+
+
+class Tree:
+    def __init__(self) -> None:
+        self.root: Leaf | None = None
+
+    @ppy.native
+    def insert(self, key: int) -> None:
+        made = Leaf(key)
+        node = self.root
+        if node is None:
+            self.root = made
+            return
+        while True:
+            if key < node.key:
+                if node.left is None:
+                    node.left = made
+                    return
+                node = node.left
+            else:
+                if node.right is None:
+                    node.right = made
+                    return
+                node = node.right
+
+    @ppy.native
+    def contains(self, key: int) -> bool:
+        node = self.root
+        while node is not None:
+            if key == node.key:
+                return True
+            node = node.left if key < node.key else node.right
+        return False
+
+
+class Spot:
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+        self.near: Spot | None = None
+
+
+@ppy.native
+def turn(o: Spot, a: Spot, b: Spot) -> float:
+    return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+
+
 @ppy.native
 def filled(xs: list[int]) -> None:
     for i in range(len(xs)):
@@ -181,6 +272,13 @@ numbers: set[int] = set(range(0, 200, 2))
 names: dict[str, int] = {w: i for i, w in enumerate(words)}
 flags: list[bool] = [i % 3 == 0 for i in range(100)]
 sink: list[int] = [0]
+spots: list[Spot] = [Spot(0.5, 1.0), Spot(2.0, 3.5), Spot(-1.0, 4.0)]
+chain_list = Chain()
+for i in range(10000):
+    chain_list.push(i)
+search_tree = Tree()
+for i in range(10000):
+    search_tree.insert(i * 7919 % 10007)
 scale = scaled
 weigh = weighed
 chain = chained
@@ -267,6 +365,30 @@ def drive_roll(i: int) -> None:
     roll(i)
 
 
+def drive_turn(i: int) -> None:
+    turn(spots[0], spots[1], spots[2])
+
+
+def drive_push(i: int) -> None:
+    chain_list.push(i)
+
+
+def drive_find(i: int) -> None:
+    chain_list.find(5000 + i % 7)
+
+
+def drive_len(i: int) -> None:
+    len(chain_list)
+
+
+def drive_insert(i: int) -> None:
+    search_tree.insert(i)
+
+
+def drive_contains(i: int) -> None:
+    search_tree.contains(i % 20000)
+
+
 def rate(label: str, call: Callable[[int], None], rounds: int) -> None:
     started = time.perf_counter()
     for i in range(rounds):
@@ -296,6 +418,12 @@ def main() -> None:
     rate("one element of 100 written", drive_touch, 50000)
     rate("reads 100, writes 1 (None)", drive_tally, 50000)
     rate("draws from random", drive_roll, 200000)
+    rate("straight line on 3 objects", drive_turn, 200000)
+    rate("find, 10,000-node list", drive_find, 2000)
+    rate("len, 10,000-node list", drive_len, 2000)
+    rate("contains, 10,000-node tree", drive_contains, 5000)
+    rate("push, 10,000-node list", drive_push, 2000)
+    rate("insert, 10,000-node tree", drive_insert, 2000)
 
 
 main()

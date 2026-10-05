@@ -44,7 +44,12 @@ its own terms.
 A container or an object crosses whole on each call, read in place where
 the call writes through none of its parameters and copied otherwise, so the
 body has to do work in proportion to it
-([Lists, dicts, and sets](containers.md#between-functions)).
+([Lists, dicts, and sets](containers.md#between-functions)). An object of a
+plain class that crosses again and again is the exception: it stays
+resident in native memory between calls
+([Resident objects](classes.md#resident-objects)), and costs a flat price
+per call: about seven operations, one more per object, eight more for each
+object the call writes, and a hundred for each object the body makes.
 
 `ppy explain module.name` (or `FILE.ppy:LINE`) reports the decision and,
 when the answer is no, the first blocking construct.
@@ -68,7 +73,7 @@ median of three runs, in nanoseconds:
 | a guard that fails, so the Python body runs | 83 | 39 |
 | a `list[int]` of 100 written in place, `@ppy.native` | 1,082 | 2,500 |
 | a `dict[int, int]` of 100 walked, `@ppy.native` | 1,214 | 1,754 |
-| a chain of 10 objects walked, `@ppy.native` | 795 | 145 |
+| a chain of 10 objects walked, `@ppy.native` | 141 | 174 |
 | a function returning `None` that fills a list of 100 | 325 | 578 |
 | a `list[int]` of 100 summed | 230 | 902 |
 | a `list[list[int]]` of 10 by 10 summed, `@ppy.native` | 491 | 949 |
@@ -79,6 +84,21 @@ median of three runs, in nanoseconds:
 | one element of a `list[int]` of 100 written, `@ppy.native` | 250 | 35 |
 | a function returning `None` that reads 100 and writes one | 393 | 1,699 |
 | a `random.randint` and an addition | 53 | 123 |
+| straight-line work on three objects, `@ppy.native` | 115 | 91 |
+| `find` in a 10,000-node linked list, `@ppy.native` | 38,407 | 70,162 |
+| `len` of a 10,000-node linked list, `@ppy.native` | 86,603 | 149,218 |
+| `contains` in a 10,000-node search tree, `@ppy.native` | 537 | 528 |
+| `push` onto a 10,000-node linked list, `@ppy.native` | 1,894 | 190 |
+| `insert` into a 10,000-node search tree, `@ppy.native` | 2,469 | 488 |
+
+The object rows call functions and methods on objects that stay resident
+between calls ([Resident objects](classes.md#resident-objects)): before,
+each call copied the whole structure in and back, 3 to 5 ms for the
+10,000-node ones and 1,058 ns for the chain of 10. A resident object costs
+about 80 ns a call; native code then walks the nodes faster than CPython,
+but an object it makes is made in Python too, with a `__dict__` and a weak
+reference, about a microsecond, so `push` and `insert`, which make a node
+each, stay slower and the cost model keeps them in Python.
 
 The `@ppy.native` `x + y` row is the wrapper alone: parsing the arguments,
 the exact type checks, and boxing the result. A failed guard costs the

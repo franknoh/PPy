@@ -321,6 +321,7 @@ class _Generator:
         bools: bool = False,
         decorators: bool = False,
         optional: bool = False,
+        resident: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
         #: Whether the program also holds numbers and strings that may be
@@ -328,6 +329,11 @@ class _Generator:
         #: sequence of their own.
         self.with_optional = optional
         self.optioning = random.Random(seed ^ 0x0971)
+        #: Whether Python also writes to the structures between the native
+        #: calls that edit them (`resident_part`), drawn from a sequence of
+        #: their own: the objects stay resident between those calls.
+        self.with_resident = resident
+        self.residing = random.Random(seed ^ 0x2E51)
         #: Whether the program also stores `bool`s where an `int` is declared
         #: and prints them (`bools_part`), drawn from a sequence of their own.
         self.with_bools = bools
@@ -372,7 +378,7 @@ class _Generator:
         self.crossing = random.Random(seed ^ 0xB0DE)
         #: Whether the program also edits linked structures in place through
         #: methods Python calls natively, on classes with unannotated fields.
-        self.with_structures = structures
+        self.with_structures = structures or resident
         self.structure = random.Random(seed ^ 0x57C7)
 
     def name(self, prefix: str) -> str:
@@ -1509,6 +1515,8 @@ class _Generator:
         if self.with_boundary:
             w.lines.extend(_BOUNDARY_PRELUDE.splitlines())
         if self.with_structures:
+            if self.with_resident:
+                w.lines.append("import gc")
             w.lines.extend(_STRUCTURES_PRELUDE.splitlines())
         if self.with_shapes:
             w.put(f"SHAPE_WORD = {''.join(self.shaping.sample('ABCDEFGHIJKLMNOP', 9))!r}")
@@ -1525,7 +1533,9 @@ class _Generator:
         after = self.state_part(w) if self.with_state else []
         if self.with_boundary:
             after.extend(self.boundary_part(w))
-        if self.with_structures:
+        if self.with_resident:
+            after.extend(self.resident_part(w))
+        elif self.with_structures:
             after.extend(self.structures_part(w))
         raw: list[str] = []
         if self.with_inference:
@@ -1880,6 +1890,63 @@ def {user}(n: int) -> int:
                 ]
             )
         after.append("print(o1.label)")
+        if self.with_resident:
+            after.extend(self.optional_resident(w))
+        return after
+
+    def optional_resident(self, w: _Writer) -> list[str]:
+        """Objects whose fields may be `None`, edited by native methods Python
+        calls again and again (they stay resident between the calls), and
+        written from Python between the calls: a field set to `None` and back,
+        through an attribute, `vars()`, and `setattr`, and for a while to a
+        value of another type, which keeps the next call in Python."""
+        rng = self.optioning
+        cls = self.name("ORes")
+        w.put(f"class {cls}:")
+        w.put("    def __init__(self, label: int | None, tag: str | None) -> None:")
+        w.put("        self.label = label")
+        w.put("        self.tag = tag")
+        w.put("        self.weight: float | None = None")
+        w.put(f"        self.next: {cls} | None = None")
+        w.put("")
+        w.put("    @ppy.native")
+        w.put("    def step(self, k: int) -> int:")
+        w.put("        total = 0")
+        w.put("        node = self")
+        w.put("        while node is not None:")
+        w.put("            if node.label is None:")
+        w.put(f"                node.label = k {rng.choice(('+', '-', '*'))} {rng.randint(1, 5)}")
+        w.put(f"            elif node.label {rng.choice(('>', '<'))} {rng.randint(-5, 9)}:")
+        w.put("                node.label = None")
+        w.put("            else:")
+        w.put("                total += node.label")
+        w.put("            node.weight = None if node.weight is not None else 0.5 * total")
+        w.put("            if node.tag is None or len(node.tag) > 3:")
+        w.put("                node.tag = 'n'")
+        w.put("            else:")
+        w.put("                node.tag = node.tag + 'x'")
+        w.put("            node = node.next")
+        w.put("        return total")
+        w.put("")
+        w.put("")
+        after = [f"r1 = {cls}({rng.randint(-3, 6)}, None)", f"r2 = {cls}(None, 'a')"]
+        after.append("r1.next = r2")
+        shown = "print(r1.label, r1.tag, r1.weight, r2.label, r2.tag, r2.weight)"
+        writes = (
+            ("r1.label = None",),
+            (f"r2.label = {rng.randint(-5, 9)}",),
+            ('vars(r1)["tag"] = None',),
+            (f'setattr(r2, "weight", {rng.randint(-3, 3)}.25)',),
+            ("r2.tag = 'qq'",),
+            ('vars(r2)["label"] = True', "print(r1.step(1))", 'vars(r2)["label"] = None'),
+            ("r1.weight = 3", "print(r1.step(2))", "r1.weight = None"),
+        )
+        for _ in range(rng.randint(4, 9)):
+            after.append(f"print(r1.step({rng.randint(-4, 6)}))")
+            after.append(shown)
+            if rng.random() < 0.7:
+                after.extend(rng.choice(writes))
+        after.append(shown)
         return after
 
     def bools_part(self, w: _Writer) -> list[str]:
@@ -2602,6 +2669,62 @@ def {opt}(n):
         w.put("")
         return methods
 
+    def resident_part(self, w: _Writer) -> list[str]:
+        """The structure classes, and a `main` that calls their native methods
+        again and again (their objects stay resident between the calls) and,
+        between the calls, writes to the same objects from Python: keys set
+        through attributes, `vars()`, and `setattr`, links cut and nodes
+        linked in, an attribute deleted and a key of another type for a
+        while; and structures made and dropped, collected or not."""
+        rng = self.residing
+        tree = self.tree_class(w)
+        listed = self.dlist_class(w)
+        w.put("")
+        keys = rng.sample(range(-20, 40), rng.randint(4, 10))
+        after = ["n = None", "t = STree()"]
+        after.extend(f"t.insert({key})" for key in keys)
+        after.append("print(sshape(t.root), t.size, slinked(t))")
+        after.append("d = DList()")
+        after.extend(f"d.push({rng.randint(-9, 9)})" for _ in range(rng.randint(2, 7)))
+        after.append("print(dkeys(d), d.count)")
+        for _ in range(rng.randint(8, 18)):
+            roll = rng.random()
+            if roll < 0.4:
+                if rng.random() < 0.5:
+                    method = rng.choice([*tree, "insert", "find"])
+                    if method == "insert":
+                        after.append(f"t.insert({rng.randint(-20, 40)})")
+                        after.append("print(sshape(t.root), t.size, slinked(t))")
+                    elif method == "find":
+                        after.append(f"print(t.find({rng.choice(keys)}) is not None)")
+                    else:
+                        argument = (
+                            rng.choice(keys) if method.startswith("rotate") else rng.randint(-3, 9)
+                        )
+                        after.append(
+                            f"print(t.{method}({argument}), sshape(t.root), t.size, slinked(t))"
+                        )
+                else:
+                    method = rng.choice([*listed, "push"])
+                    after.append(f"print(d.{method}({rng.randint(-3, 9)}), dkeys(d), d.count)")
+            elif roll < 0.85:
+                write = rng.choice(_PYTHON_WRITES)
+                value = rng.randint(-9, 30)
+                after.extend(line.format(k=rng.choice(keys), v=value) for line in write)
+                after.append("print(sshape(t.root), t.size, dkeys(d), d.count)")
+            else:
+                after.append(f"for _ in range({rng.randint(1, 40)}):")
+                after.append("    other = DList()")
+                after.append(f"    other.push({rng.randint(-9, 9)})")
+                after.append(f"    other.push({rng.randint(-9, 9)})")
+                if listed:
+                    after.append(f"    other.{rng.choice(listed)}({rng.randint(0, 5)})")
+                after.append("print(dkeys(other), other.count)")
+                if rng.random() < 0.5:
+                    after.append("gc.collect()")
+        after.append(f"print(t.find({keys[0]}) is t.find({keys[0]}), d.head is d.head)")
+        return after
+
     def structures_part(self, w: _Writer) -> list[str]:
         """The structure classes, and what `main` does with them: builds a tree
         and a list, holds on to nodes, edits them through the methods in a
@@ -2637,6 +2760,63 @@ def {opt}(n):
         return after
 
 
+#: Python's writes to the structures between native calls (`resident_part`):
+#: each a few lines of `main`, `{k}` a key the tree holds, `{v}` a number.
+_PYTHON_WRITES = (
+    ("n = t.find({k})", "if n is not None:", "    n.key = {v}"),
+    ("if t.root is not None:", "    t.root.key += {v}"),
+    ("if t.root is not None:", '    vars(t.root)["key"] = {v}'),
+    ('setattr(t, "size", t.size + {v})',),
+    (
+        "if t.root is not None and t.root.left is not None:",
+        "    t.root.left.parent = None",
+        "    t.root.left = None",
+    ),
+    ("if t.root is not None:", "    t.root.right = SNode({v})"),
+    (
+        "r = t.root",
+        "if r is not None:",
+        "    del r.key",
+        "try:",
+        "    print(t.find({k}) is not None)",
+        "except AttributeError:",
+        '    print("AttributeError")',
+        "if r is not None:",
+        "    r.key = {v}",
+    ),
+    (
+        "r = t.root",
+        "if r is not None:",
+        '    vars(r)["key"] = 0.5',
+        "print(t.find({k}) is not None, sshape(t.root))",
+        "if r is not None:",
+        '    vars(r)["key"] = {v}',
+    ),
+    ("if d.head is not None:", "    d.head.key = {v}"),
+    ("if d.tail is not None:", "    d.tail.key -= {v}"),
+    (
+        "m = DNode({v})",
+        "m.next = d.head",
+        "if d.head is not None:",
+        "    d.head.prev = m",
+        "d.head = m",
+        "if d.tail is None:",
+        "    d.tail = m",
+        "d.count += 1",
+    ),
+    (
+        "if d.head is not None and d.head.next is not None:",
+        "    d.head.next = d.head.next.next",
+        "    if d.head.next is not None:",
+        "        d.head.next.prev = d.head",
+        "    else:",
+        "        d.tail = d.head",
+        "    d.count -= 1",
+    ),
+    ('setattr(d, "count", d.count * 2)',),
+)
+
+
 #: The first line of a program whose functions have no annotations; it runs
 #: without strict mode.
 UNANNOTATED_MARK = "# fuzz: unannotated"
@@ -2670,6 +2850,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     bools: bool = False,
     decorators: bool = False,
     optional: bool = False,
+    resident: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
@@ -2702,7 +2883,10 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     change what a call does (`decorators_part`). With `optional`, it also holds
     numbers and strings that may be `None` in parameters, results, fields,
     elements, and locals, and prints what CPython makes of them, `TypeError`s
-    included (`optional_part`), on every path."""
+    included (`optional_part`), on every path. With `resident`, the
+    structures of `structures` are edited by native methods called again and
+    again, and written to from Python between the calls (`resident_part`;
+    `STATE_PATHS`, without strict mode)."""
     return _Generator(
         seed,
         prints,
@@ -2717,6 +2901,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
         bools,
         decorators,
         optional,
+        resident,
     ).program()
 
 
