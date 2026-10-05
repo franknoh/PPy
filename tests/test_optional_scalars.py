@@ -658,3 +658,101 @@ def test_the_ctypes_binding_takes_and_gives_none(tmp_path: Path):
     assert fill.wrapper(xs) == 2 and xs == [1, 10, 3, 30, None]
     assert first.calls == 2 and triangle.calls == 2 and longest.calls == 2 and fill.calls == 1
     assert fell == ["triangle"]
+
+
+RESIDENT = """
+import ppy
+
+
+class Cell:
+    def __init__(self, label: int | None, tag: str | None) -> None:
+        self.label = label
+        self.tag = tag
+        self.weight: float | None = None
+        self.seen: bool | None = None
+        self.next: Cell | None = None
+
+    @ppy.native
+    def step(self, k: int) -> int:
+        total = 0
+        node = self
+        while node is not None:
+            if node.label is None:
+                node.label = k * 2
+            elif node.label > 20:
+                node.label = None
+            else:
+                total += node.label
+                node.label += k
+            node.weight = None if node.weight is not None else 0.5 * total
+            node.seen = node.label is not None
+            if node.tag is None or len(node.tag) > 3:
+                node.tag = "n"
+            else:
+                node.tag = node.tag + "x"
+            node = node.next
+        return total
+
+
+def show(c: Cell) -> None:
+    print(c.label, c.tag, c.weight, c.seen)
+
+
+a = Cell(3, None)
+b = Cell(None, "q")
+a.next = b
+for i in range(30):
+    print(a.step(i % 5))
+    show(a)
+    show(b)
+    if i % 7 == 1:
+        a.label = None
+    if i % 7 == 2:
+        vars(b)["tag"] = None
+    if i % 7 == 3:
+        setattr(b, "weight", 1.25)
+    if i % 7 == 4:
+        b.label = 9
+    if i % 11 == 5:
+        vars(a)["label"] = True
+        print(a.step(1))
+        vars(a)["label"] = None
+    if i % 13 == 6:
+        a.weight = 3
+        print(a.step(2))
+        a.weight = None
+show(a)
+show(b)
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_resident_objects_keep_fields_that_may_be_none(tmp_path: Path):
+    """Objects whose fields may be `None` stay resident between native calls
+    (`crossing.c`): native code sets a field to `None` and back, Python does
+    too between the calls (an attribute, `vars()`, `setattr`), and a value of
+    another type for a while runs that call in Python. One output, with the
+    world and without it."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "prog.ppy").write_text(RESIDENT.lstrip("\n"), encoding="utf-8")
+    expected = _run(tmp_path, "prog.ppy")
+    assert expected.returncode == 0, expected.stderr
+    env = {k: v for k, v in os.environ.items() if k not in {"PPY_LOWERING", "PPY_RESIDENT"}}
+    for extra in ({"PPY_RESIDENT_REPORT": "1"}, {"PPY_RESIDENT": "0"}):
+        done = subprocess.run(
+            [sys.executable, "-m", "ppy_compiler", "run", "prog.ppy"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**env, **extra},
+        )
+        assert done.returncode == 0, done.stderr
+        assert _output(done).strip() == expected.stdout.strip(), extra
+        if "PPY_RESIDENT_REPORT" in extra:
+            report = next(
+                line for line in done.stderr.splitlines() if line.startswith("resident: ")
+            )
+            words = report.removeprefix("resident: ").replace(",", "").split()
+            assert int(words[7]) == 1 and int(words[8]) > 5 and int(words[10]) > 20, report

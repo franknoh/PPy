@@ -42,7 +42,9 @@ falls off its end and a nested function handed its cells.
 With `--optional`, each program also holds `int | None`, `float | None`,
 `bool | None`, and `str | None` in parameters, results, fields, list and
 dict elements, and locals, prints them, and meets `None` in arithmetic
-through a field a call reset after it was tested, on every path.
+through a field a call reset after it was tested, on every path. With
+`--resident` too, an object whose fields may be `None` is edited by a native
+method called again and again, and written from Python between the calls.
 With `--unannotated`, the functions have no annotations, run
 without strict mode, and are called from Python with arguments of other
 types than the ones their types were inferred from, on the paths with a

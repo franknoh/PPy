@@ -221,7 +221,10 @@ arguments, results, fields of objects, and elements of lists and dicts, both
 ways. A value of another type keeps the call in Python: a `bool` for an
 `int | None`, and an `int` for a `float | None` whose int-ness the body
 would show. CPython keeps an `int` an `int` in a `float | None`, so a native
-caller that passes one is not compiled either.
+caller that passes one is not compiled either. An object whose fields may be
+`None` stays resident between native calls like any other: a field Python
+sets to `None` (or back) between the calls is read again, and one native
+code sets is set on the Python object when the call answers.
 
 What stays in Python: sorting, `min`, and `max` over elements that may be
 `None` (CPython raises for them, in an order that depends on the
