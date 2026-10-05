@@ -114,6 +114,8 @@ The types are:
 - `int`, `float`, `bool`, `None`, the fixed-width markers, and tuples of
   these
 - `str` ([Strings](strings.md))
+- `int | None`, `float | None`, `bool | None`, and `str | None`
+  ([Numbers and strings that may be `None`](#numbers-and-strings-that-may-be-none))
 - `list`, `dict`, and `set` of any of these, nested too
   ([Lists, dicts, and sets](containers.md)), and `Sequence` of them; a list
   of numbers a function only reads is lent as a buffer
@@ -144,6 +146,68 @@ the declared type runs the call as Python.
 A list parameter the function only reads is lent as a buffer, a copy of its
 numbers. One it returns, slices (`xs[1:]`), or adds to another list is held
 by handle instead, since a buffer is not a list it could hand back.
+
+### Numbers and strings that may be `None`
+
+`int | None`, `float | None`, and `bool | None` are a number and a flag that
+says whether there is one. A local keeps them in two slots, a parameter and
+a result cross the native ABI as the number's atom and a byte, and a field
+or an element of a list or dict takes two words: the number, then the flag.
+`None` is the flag clear and the number 0. `str | None` is a string's
+handle, null for `None`. They can be parameters, results, fields, list and
+dict elements, and locals:
+
+```python
+class Node:
+    def __init__(self, key: int, label: int | None = None) -> None:
+        self.key = key
+        self.label = label
+        self.left: Node | None = None
+        self.right: Node | None = None
+
+
+def floor_label(root: Node, key: int) -> int | None:
+    best: int | None = None
+    node: Node | None = root
+    while node is not None:
+        if node.key <= key:
+            best = node.label
+            node = node.right
+        else:
+            node = node.left
+    return best
+```
+
+Natively, `x is None` and `x == None` read the flag; `if x:` is the flag and
+a nonzero number (a non-empty string); `x == 3` is false for `None`;
+`x or d` gives `d` for `None` and for zero; `x in (True, None)`,
+`isinstance(x, int)`, `print(x)`, `str(x)`, `f"{x}"`, and the `repr` of a
+list or dict holding them (`[1, None]`) write `None` where it is one.
+`d.get(k)` with no default gives `None` for a missing key, `None in xs` and
+`xs.count(None)` find it, and `any`/`all` count it as false. After a test
+that narrows `x`, its number is read directly.
+
+A field the checker narrowed (`if node.label is not None:`) may still be
+`None` when a call between the test and the read set it so, which CPython
+then meets: the read checks the flag. Arithmetic, an order comparison, or a
+negation that finds `None` raises CPython's `TypeError`, with its text
+(`unsupported operand type(s) for +: 'NoneType' and 'int'`, `'<' not
+supported between instances of 'int' and 'NoneType'`); a read where `None`
+cannot be the answer (passing it on as an `int`) falls back under `ppy run`
+and stops a standalone binary.
+
+At the Python boundary `None` crosses as a clear flag or a null handle, in
+arguments, results, fields of objects, and elements of lists and dicts, both
+ways. A value of another type keeps the call in Python: a `bool` for an
+`int | None`, and an `int` for a `float | None` whose int-ness the body
+would show. CPython keeps an `int` an `int` in a `float | None`, so a native
+caller that passes one is not compiled either.
+
+What stays in Python: sorting, `min`, and `max` over elements that may be
+`None` (CPython raises for them, in an order that depends on the
+comparisons), keys that may be `None`, a format spec over a value that may
+be `None` (`f"{x:>4}"`), unions of numbers with anything but `None`, and
+tuples holding a value that may be `None`.
 
 ## What the body may contain
 

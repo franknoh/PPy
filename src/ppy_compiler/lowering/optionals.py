@@ -23,7 +23,7 @@ from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported, optional_scalar
 from ..ir import BOOL, F64, I64, IRType, Successor, TupleType, Value
 from ..ir.dialects import core
-from .collections import HANDLE, OPTIONAL_STR, STR
+from .collections import HANDLE, OPTIONAL_STR
 from .intness import gives_bool, gives_int
 
 __all__ = ["OptionalLowering", "optional_ir", "optional_kind"]
@@ -85,9 +85,12 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
     def _optional_kind_of(self, node: ast.expr) -> str | None:
         """The kind of number `node` is or `None`, where the checker says it may
         be `None` there; None where it is a plain number (or anything else)."""
-        if isinstance(node, ast.Name) and node.id in self.optionals:  # type: ignore[attr-defined]
-            if T.strip_literal(self._type_of(node)) == T.NONE:  # type: ignore[attr-defined]
-                return self.optionals[node.id][2]  # type: ignore[attr-defined]
+        if (
+            isinstance(node, ast.Name)
+            and node.id in self.optionals  # type: ignore[attr-defined]
+            and T.strip_literal(self._type_of(node)) == T.NONE  # type: ignore[attr-defined]
+        ):
+            return self.optionals[node.id][2]  # type: ignore[attr-defined]
         return optional_kind(self._type_of(node))  # type: ignore[attr-defined]
 
     def _maybe_none(self, node: ast.expr) -> bool:
@@ -325,7 +328,9 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         """`self.name` where the checker narrowed a field (or an element) that
         may be `None` to its string: the handle, checked, since a call between
         the test and the read may have set it to `None`."""
-        if self.__dict__.get("_reading_raw") or not isinstance(node, (ast.Attribute, ast.Subscript)):
+        if self.__dict__.get("_reading_raw") or not isinstance(
+            node, (ast.Attribute, ast.Subscript)
+        ):
             return None
         if T.strip_literal(self._type_of(node)) != T.STR or not self._maybe_text(node):  # type: ignore[attr-defined]
             return None
@@ -358,7 +363,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
                 if found is not None:
                     self._done_with(*found)  # type: ignore[attr-defined]
             return core.const(b, isinstance(op, ast.NotEq), BOOL)
-        (first, first_owned), (second, second_owned) = handles  # type: ignore[misc]
+        (first, first_owned), (second, second_owned) = handles[0], handles[1]  # type: ignore[misc]
         same = self._rt("ppy_str_equal", (first, second))  # type: ignore[attr-defined]
         self._done_with(first, first_owned)  # type: ignore[attr-defined]
         self._done_with(second, second_owned)  # type: ignore[attr-defined]
@@ -410,7 +415,8 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         if not isinstance(node.op, ast.Or) or T.strip_literal(self._type_of(node)) != T.STR:  # type: ignore[attr-defined]
             return None
         if not all(
-            self._maybe_text(v) or self._string_of(v) is not None  # type: ignore[attr-defined]
+            self._maybe_text(v)
+            or self._string_of(v) is not None  # type: ignore[attr-defined]
             or (isinstance(v, ast.Constant) and v.value is None)
             for v in node.values
         ):
@@ -435,6 +441,11 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
             self._release(handle)  # type: ignore[attr-defined]
         self.b.at_end(done)  # type: ignore[attr-defined]
         return result
+
+    def _formats_maybe_none(self, node: ast.expr) -> bool:
+        """Whether an f-string field may be `None`, which the string builder
+        writes (`_optional_formatted`), not a standalone print's scalar shims."""
+        return self._either_kind(node) is not None or self._maybe_text(node)
 
     def _prints_maybe_none(self, argument: ast.expr) -> bool:
         """A local `print` is handed that may be `None` here."""
@@ -504,7 +515,9 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         if t not in (T.INT, T.FLOAT, T.BOOL):
             kind = self._reference_of(node)  # type: ignore[attr-defined]
             if kind is None:
-                raise Unsupported("a value that may be `None` is printed after one with no native form")
+                raise Unsupported(
+                    "a value that may be `None` is printed after one with no native form"
+                )
             handle, owned = self._handle(node)  # type: ignore[attr-defined]
             self._bind(name, kind, handle, owned)  # type: ignore[attr-defined]
             return self._typed(ast.Name(name, ast.Load()), t, node)  # type: ignore[attr-defined,return-value]
@@ -587,7 +600,9 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         results = self.function.results  # type: ignore[attr-defined]
         if len(results) != 1 or not is_packed(results[0]):
             return None
-        return optional_kind(T.substitute(self.info.ret, self.bindings) if self.bindings else self.info.ret)  # type: ignore[attr-defined]
+        return optional_kind(
+            T.substitute(self.info.ret, self.bindings) if self.bindings else self.info.ret
+        )  # type: ignore[attr-defined]
 
     def _return_optional(self, value: ast.expr | None) -> bool:
         """`return x`, `return None`, or falling off the end of a function that
@@ -652,13 +667,11 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
                 pairs.append(self._optional_pair(side, kind))
             else:
                 pairs.append((core.const(b, True, BOOL), self._expr(side)))  # type: ignore[attr-defined]
-        (lp, lv), (rp, rv) = pairs
+        (lp, lv), (rp, rv) = pairs[0], pairs[1]
         common = self._unify(self._kind(lv), self._kind(rv))  # type: ignore[attr-defined]
         numbers = core.cmp(b, "eq", self._coerce(lv, common), self._coerce(rv, common))  # type: ignore[attr-defined]
         both = core.bitwise(b, "and", lp, rp)
-        neither = core.bitwise(
-            b, "xor", core.bitwise(b, "or", lp, rp), core.const(b, True, BOOL)
-        )
+        neither = core.bitwise(b, "xor", core.bitwise(b, "or", lp, rp), core.const(b, True, BOOL))
         equal = core.bitwise(b, "or", core.bitwise(b, "and", both, numbers), neither)
         if isinstance(op, ast.NotEq):
             return core.bitwise(b, "xor", equal, core.const(b, True, BOOL))
@@ -765,7 +778,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
         # Where both are there, the operation goes on; otherwise the message
         # names what each side turned out to be.
         cases = []
-        lp, rp = flags
+        lp, rp = flags[0], flags[1]
         true = core.const(b, True, BOOL)
         for left_none in (False, True):
             for right_none in (False, True):
@@ -773,7 +786,7 @@ class OptionalLowering:  # pylint: disable=attribute-defined-outside-init
                     continue
                 if (lp is None and left_none) or (rp is None and right_none):
                     continue
-                if values[0] is None and not left_none or values[1] is None and not right_none:
+                if (values[0] is None and not left_none) or (values[1] is None and not right_none):
                     continue
                 conditions = []
                 if lp is not None:

@@ -11,10 +11,10 @@ from __future__ import annotations
 from ._record import record as dataclass
 
 __all__ = [
+    "OPTIONAL",
     "STATUS_FALLBACK",
     "STATUS_OK",
     "STATUS_RAISED",
-    "OPTIONAL",
     "TEXT",
     "VARIADIC",
     "CrossingClass",

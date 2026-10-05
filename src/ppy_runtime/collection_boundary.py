@@ -369,8 +369,8 @@ def _field_spec(spelled: str, classes: dict[str, CrossingClass]) -> Spec | None:
     string that may be `None`, or what `parse` reads."""
     if spelled in _SCALARS or spelled == "str":
         return Spec(spelled)
-    base, bar, rest = spelled.partition("|")
-    if bar and rest.strip() == "NoneType" and base.strip() in {*_SCALARS, "str"}:
+    base, union, rest = spelled.partition("|")
+    if union and rest.strip() == "NoneType" and base.strip() in {*_SCALARS, "str"}:
         return _or_none(Spec(base.strip()))
     if spelled.startswith("tuple["):
         parts = tuple(part.strip() for part in spelled[6:-1].split(","))

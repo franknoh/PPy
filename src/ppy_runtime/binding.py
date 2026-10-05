@@ -1036,7 +1036,6 @@ def _expander_for(
 ) -> Callable[[object, list, list], None]:
     """Build the guard-and-convert step for one source-level parameter."""
     if parameter.is_text:
-
         nullable = parameter.nullable
 
         def expand_text(value: object, atoms: list, borrowed: list) -> None:

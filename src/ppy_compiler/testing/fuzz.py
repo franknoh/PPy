@@ -320,8 +320,14 @@ class _Generator:
         inference: bool = False,
         bools: bool = False,
         decorators: bool = False,
+        optional: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: Whether the program also holds numbers and strings that may be
+        #: `None` everywhere a value lives (`optional_part`), drawn from a
+        #: sequence of their own.
+        self.with_optional = optional
+        self.optioning = random.Random(seed ^ 0x0971)
         #: Whether the program also stores `bool`s where an `int` is declared
         #: and prints them (`bools_part`), drawn from a sequence of their own.
         self.with_bools = bools
@@ -1533,9 +1539,14 @@ class _Generator:
             after.extend(self.shapes_part(w))
         if self.with_bools:
             after.extend(self.bools_part(w))
+        # Ahead of the base calls, whose integers past 64 bits stop a
+        # standalone binary (`OVERFLOW_64`) before it reaches them.
+        first = self.optional_part(w) if self.with_optional else []
         w.put("def main() -> None:")
         if self.stdlib:
             w.put(f"    random.seed({self.seed})")
+        for line in first:
+            w.put(f"    {line}")
         for call in calls:
             w.put(f"    print({call})")
         for line in after:
@@ -1713,6 +1724,163 @@ def {user}(n: int) -> int:
             f"{work}.__name__, {work}({ints[1]})",
         ]
         return main, later
+
+    def optional_part(self, w: _Writer) -> list[str]:
+        """Numbers and strings that may be `None` in every place a value lives,
+        and what `main` does with them: parameters and results (`int | None`,
+        `float | None`, `bool | None`, `str | None`), fields of an object,
+        elements of a list and of a dict, and locals; `is None`, truth, `==`,
+        `or`, `in`, `isinstance`, `d.get(k)`, printing and f-strings; and a
+        field narrowed by a test that a call sets to `None` before arithmetic
+        meets it, which raises CPython's `TypeError`."""
+        rng = self.optioning
+        cls = self.name("Opt")
+        w.put(f"class {cls}:")
+        w.put("    def __init__(self, label: int | None = None, tag: str | None = None) -> None:")
+        w.put("        self.label = label")
+        w.put("        self.tag = tag")
+        w.put("        self.weight: float | None = None")
+        w.put("        self.flag: bool | None = None")
+        w.put("")
+        w.put("    def reset(self) -> None:")
+        w.put("        self.label = None")
+        w.put("")
+        w.put("    def score(self) -> int:")
+        w.put("        if self.label is None:")
+        w.put(f"            return {rng.randint(-9, 9)}")
+        w.put(
+            f"        return self.label * {rng.randint(1, 4)} + (len(self.tag) if self.tag else 0)"
+        )
+        w.put("")
+        w.put("")
+        find = self.name("op")
+        w.put(f"def {find}(xs: list[int], t: int) -> int | None:")
+        w.put("    for i in range(len(xs)):")
+        w.put(f"        if xs[i] {rng.choice(('==', '>=', '<'))} t:")
+        w.put("            return i")
+        w.put("    return None")
+        w.put("")
+        w.put("")
+        bump = self.name("op")
+        w.put(f"def {bump}(x: int | None, d: int) -> int:")
+        w.put("    if x is None:")
+        w.put(f"        return d * {rng.randint(-3, 3)}")
+        w.put(f"    return x {rng.choice(('+', '-', '*'))} d")
+        w.put("")
+        w.put("")
+        scale = self.name("op")
+        w.put(f"def {scale}(x: float | None, k: float) -> float | None:")
+        w.put(f"    if x is None or x {rng.choice(('<', '>'))} {rng.randint(-5, 5)}.0:")
+        w.put("        return None")
+        w.put("    return x * k")
+        w.put("")
+        w.put("")
+        flip = self.name("op")
+        w.put(f"def {flip}(b: bool | None) -> bool | None:")
+        w.put("    if b is None:")
+        w.put(f"        return {rng.choice(('None', 'True', 'False'))}")
+        w.put("    return not b")
+        w.put("")
+        w.put("")
+        text = self.name("op")
+        w.put(f"def {text}(s: str | None, d: str) -> str:")
+        w.put("    if s is None:")
+        w.put("        return d + '?'")
+        w.put(f"    return (s or d) + {rng.choice(('s', 'd', repr('!')))}")
+        w.put("")
+        w.put("")
+        fill = self.name("op")
+        w.put(f"def {fill}(xs: list[int | None], v: int) -> int:")
+        w.put("    count = 0")
+        w.put("    for i in range(len(xs)):")
+        w.put("        x = xs[i]")
+        w.put("        if x is None:")
+        w.put("            xs[i] = v + i")
+        w.put("            count += 1")
+        w.put(f"        elif x {rng.choice(('>', '<', '=='))} {rng.randint(-3, 3)}:")
+        w.put(f"            xs[i] = {rng.choice(('None', 'x * 2', '-x'))}")
+        if rng.random() < 0.6:
+            w.put("    xs.append(None)")
+        w.put("    return count")
+        w.put("")
+        w.put("")
+        table = self.name("op")
+        w.put(f"def {table}(d: dict[str, int | None], keys: list[str]) -> int:")
+        w.put("    t = 0")
+        w.put("    for k in keys:")
+        w.put("        v = d.get(k)")
+        w.put(f"        t += v or {rng.randint(-5, 5)}")
+        w.put("        if k in d and d[k] is None:")
+        w.put(f"            d[k] = {rng.randint(0, 9)}")
+        w.put("    d['z'] = None")
+        w.put("    return t")
+        w.put("")
+        w.put("")
+        walk = self.name("op")
+        w.put(f"def {walk}(o: {cls}, n: int) -> int:")
+        w.put("    total = 0")
+        w.put("    for i in range(n):")
+        w.put("        if o.label is not None:")
+        w.put("            total += o.label * i")
+        w.put("    o.weight = 1.5 * total if o.label else None")
+        w.put("    o.flag = o.label is not None and o.label > 2")
+        w.put(f"    o.tag = {rng.choice(('None', repr('w'), 'o.tag'))}")
+        w.put("    return total + o.score()")
+        w.put("")
+        w.put("")
+        unsound = self.name("op")
+        op = rng.choice(("+", "-", "*", "<"))
+        w.put(f"def {unsound}(o: {cls}, k: int) -> int:")
+        w.put("    if o.label is not None:")
+        w.put(f"        if k {rng.choice(('>', '<'))} {rng.randint(-2, 2)}:")
+        w.put("            o.reset()")
+        if op == "<":
+            w.put(f"        return 1 if o.label < k else {rng.randint(-5, 5)}")
+        else:
+            w.put(f"        return o.label {op} k")
+        w.put("    return 0")
+        w.put("")
+        w.put("")
+
+        def values(none: float) -> str:
+            return ", ".join(
+                "None" if rng.random() < none else str(rng.randint(-5, 9))
+                for _ in range(rng.randint(0, 5))
+            )
+
+        after = [
+            f"oxs: list[int | None] = [{values(0.4)}]",
+            (
+                f"print({find}([{values(0.0)}], {rng.randint(-3, 5)}), {bump}(None, "
+                f"{rng.randint(-4, 4)}), {bump}({rng.randint(-4, 4)}, {rng.randint(-4, 4)}))"
+            ),
+            (
+                f"print({scale}(None, 2.0), {scale}({rng.randint(-6, 6)}.5, 0.5), "
+                f"{flip}(None), {flip}({rng.choice(('True', 'False'))}))"
+            ),
+            f"print({text}(None, 'd'), {text}('', 'e'), {text}('ab', 'f'))",
+            f"print({fill}(oxs, {rng.randint(-5, 5)}), oxs, None in oxs, oxs.count(None))",
+            "print(any(oxs), all(oxs), [x for x in oxs if x is not None])",
+            f"od: dict[str, int | None] = {{'a': {rng.randint(0, 5)}, 'b': None}}",
+            f"print({table}(od, ['a', 'b', 'c']), od, od.get('b'), od.get('q'))",
+            f"o1 = {cls}({rng.randint(-3, 6)}, {rng.choice(('None', repr('t'), repr('')))})",
+            f"o2 = {cls}()",
+            f"print({walk}(o1, {rng.randint(0, 6)}), {walk}(o2, {rng.randint(0, 6)}))",
+            "print(o1.label, o1.weight, o1.flag, o1.tag, o2.label, o2.weight, o2.flag, o2.tag)",
+            "print(f'{o1.label}|{o2.tag}|{o1.weight}', str(o2.label), o1.label == o2.label)",
+            "print(isinstance(o1.label, int), o2.label in (None, 3), o1.tag or 'none')",
+        ]
+        for _ in range(rng.randint(1, 2)):
+            after.extend(
+                [
+                    "try:",
+                    f"    print({unsound}(o1, {rng.randint(-4, 4)}))",
+                    "except TypeError as e:",
+                    "    print('TypeError', e)",
+                ]
+            )
+        after.append("print(o1.label)")
+        return after
 
     def bools_part(self, w: _Writer) -> list[str]:
         """Functions that store a `bool` where an `int` is declared -- a local,
@@ -2501,6 +2669,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     inference: bool = False,
     bools: bool = False,
     decorators: bool = False,
+    optional: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
@@ -2530,7 +2699,10 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     them (`bools_part`; `STATE_PATHS`, since those functions stay in Python). With
 
     `decorators` (and `unannotated`), it also has project decorators that
-    change what a call does (`decorators_part`)."""
+    change what a call does (`decorators_part`). With `optional`, it also holds
+    numbers and strings that may be `None` in parameters, results, fields,
+    elements, and locals, and prints what CPython makes of them, `TypeError`s
+    included (`optional_part`), on every path."""
     return _Generator(
         seed,
         prints,
@@ -2544,6 +2716,7 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
         inference,
         bools,
         decorators,
+        optional,
     ).program()
 
 

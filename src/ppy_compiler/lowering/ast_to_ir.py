@@ -886,7 +886,7 @@ class Frontend:
             if maybe_none:
                 core.br(b, Successor(done, [data, length]))
                 b.at_end(done)
-                data, length = done.arguments
+                data, length = done.arguments[0], done.arguments[1]
             exported = b.create(
                 "core.call_intrinsic",
                 (data, length),
@@ -2968,7 +2968,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
     # -- expressions ------------------------------------------------------
 
     def _expr(self, node: ast.expr) -> Value:
-        if isinstance(node, (ast.Attribute, ast.Subscript, ast.Call, ast.BinOp, ast.UnaryOp, ast.BoolOp)):
+        if isinstance(
+            node, (ast.Attribute, ast.Subscript, ast.Call, ast.BinOp, ast.UnaryOp, ast.BoolOp)
+        ):
             # A number that may be `None` (`lowering/optionals.py`).
             found = self._optional_expr(node)
             if found is not None:
@@ -4959,6 +4961,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 item.conversion == -1
                 and item.format_spec is None
                 and self._string_of(item.value) is None
+                and not self._formats_maybe_none(item.value)
             )
             for item in argument.values
         )

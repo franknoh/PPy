@@ -58,6 +58,8 @@ native code can represent:
   `dict[str, int]` or `list[list[int]]`
 - a `ppy` collection: `Vec[int]`, `HashMap[int, Vec[int]]`
 - another object, or `None` where the field is `Node | None`
+- a number or a string that may be `None` (`int | None`, `str | None`;
+  see [Numbers and strings that may be `None`](native-lowering.md#numbers-and-strings-that-may-be-none))
 
 Native code builds an instance by running the class's `__init__`, or for a
 dataclass by setting each field from the arguments and the defaults. A
@@ -431,8 +433,7 @@ on CPython.
 
 - A class with more than one base, a base from another module or a
   library, or a field native code cannot represent (a NumPy array, a
-  `list` with no element type, a number or string that may be `None` such
-  as `label: int | None`), keeps the functions that use it in Python. A
+  `list` with no element type), keeps the functions that use it in Python. A
   Protocol the class only satisfies, without naming it as a base, is not a
   base.
 - A call through a generic base whose subclass has type parameters the

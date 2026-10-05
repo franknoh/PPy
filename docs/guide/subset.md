@@ -97,9 +97,9 @@ Every call in every file of the project counts, and they must agree. An
 `int` on one call and a `float` on another make a `float`, as a declared
 `float` takes an `int`: where the function's result would show that it was
 given an `int` (`x * 3` is `12` for `4`, not `12.0`), the native entry
-refuses the `int` and the Python body runs. Other mixes, and `int | None`,
-leave the parameter unknown: `int | None` has no native form, and a function
-is not compiled once per type its calls pass. More evidence:
+refuses the `int` and the Python body runs. Other mixes leave the
+parameter unknown: a function is not compiled once per type its calls
+pass. More evidence:
 
 - A value whose type the program states counts as a typed argument:
   `int(input())`, `float(...)`, `input().split()`,

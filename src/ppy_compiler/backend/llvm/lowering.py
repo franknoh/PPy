@@ -33,8 +33,8 @@ from dataclasses import dataclass, field
 
 from ppy_runtime._record import replace
 from ppy_runtime.abi import (
-    STATUS_FALLBACK,
     OPTIONAL,
+    STATUS_FALLBACK,
     STATUS_OK,
     VARIADIC,
     CrossingClass,
