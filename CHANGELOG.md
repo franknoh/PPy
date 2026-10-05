@@ -35,6 +35,31 @@ the other 13 skipped and none differing.
 - `scripts/fuzz.py --structures` fuzzes in-place edits of linked structures
   with unannotated fields.
 
+### Objects kept native between calls
+
+- A project object that Python passes to native code a second time keeps
+  its native record while the Python object lives, so later calls use it
+  instead of copying the object and everything reachable from it. Python
+  stays the source of truth: writes from Python are seen through CPython's
+  dict and type watchers, and native writes are set back on the Python
+  object when the call returns. `find` on a 10,000-node linked list went
+  from 3.1 ms to 38 µs a call (CPython 70 µs). `PPY_RESIDENT=0` turns it
+  off.
+- A function that makes many objects stays in Python when handing them to
+  Python costs more than its loops save, since each new object is created
+  as a Python object.
+- `scripts/fuzz.py --resident` mixes Python writes with repeated native
+  calls on the same objects.
+
+### Numbers and strings that may be `None`
+
+- `int | None`, `float | None`, `bool | None`, and `str | None` run natively
+  as locals, parameters, results, object fields, and list and dict
+  elements, on every path. `is None`, truth tests, `==`, `or`, printing and
+  repr inside containers match CPython, and arithmetic or ordering that
+  meets `None` raises CPython's `TypeError` with its text.
+- `scripts/fuzz.py --optional` fuzzes them.
+
 ### Reading containers in place
 
 - Python calls of native functions that only read their lists, dicts, and
@@ -133,10 +158,10 @@ the other 13 skipped and none differing.
 
 ### Known limitations
 
-- `int | None`, `float | None`, and `str | None` fields and container
-  elements have no native form, so functions that use them stay in Python.
-- An object passed from Python is copied in and back at every call, so many
-  small methods are still called through Python.
+- Sorting, `min`, and `max` over values that may be `None`, `None` as a
+  dict key, and tuples holding such values stay in Python.
+- A class with list or dict fields is still copied at every call from
+  Python, since CPython does not report changes to a list.
 
 ## 0.6.0 — 2026-10-03
 
