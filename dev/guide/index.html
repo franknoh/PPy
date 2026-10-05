@@ -4415,7 +4415,7 @@ path.</p>
 </tr>
 <tr>
 <td><a href="classes/">Classes</a></td>
-<td>Value classes and object classes in native code: trees, linked nodes, <code>class Stack[T]</code>, fields typed from what the program stores into them, and objects edited in place.</td>
+<td>Value classes and object classes in native code: trees, linked nodes, <code>class Stack[T]</code>, fields typed from what the program stores into them, objects edited in place, and objects that stay resident in native memory between calls from Python.</td>
 </tr>
 <tr>
 <td><a href="exceptions-and-generators/">Exceptions and generators</a></td>
@@ -4495,7 +4495,7 @@ path.</p>
 </tr>
 <tr>
 <td><a href="native-lowering/">Native lowering</a></td>
-<td>When a function gets a boundary, what a call costs, what its parameters may be, and how to read <code>ppy explain --summary</code>.</td>
+<td>When a function gets a boundary, what a call costs, what its parameters may be (numbers and strings that may be <code>None</code> included), and how to read <code>ppy explain --summary</code>.</td>
 </tr>
 <tr>
 <td><a href="regex/">Regular expressions</a></td>

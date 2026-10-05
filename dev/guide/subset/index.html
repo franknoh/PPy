@@ -4847,7 +4847,11 @@ unannotated classes typed from the stores into them
   call on CPython (see
   <a href="../native-lowering/#a-float-given-an-int">A <code>float</code> given an <code>int</code></a>).</li>
 <li>A list written in place with narrower elements than declared:
-  <code>m: list[list[float]] = [[0] * n for _ in range(n)]</code>.</li>
+  <code>m: list[list[float]] = [[0] * n for _ in range(n)]</code>, and rows of <code>None</code>
+  where the elements may be <code>None</code>:
+  <code>board: list[list[str | None]] = [[None] * w for _ in range(h)]</code>. The
+  same display outside a comprehension, <code>r: list[int | None] = [None] * w</code>,
+  is still <code>E1301</code> (<code>list[NoneType]</code> against <code>list[int | None]</code>).</li>
 <li>A generator expression where a <code>Generator[T, None, None]</code> is declared.</li>
 </ul>
 <p>The standard library's <code>Queue</code>, <code>LifoQueue</code>, <code>PriorityQueue</code>, <code>deque</code>,

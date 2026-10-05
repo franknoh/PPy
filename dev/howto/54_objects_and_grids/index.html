@@ -4632,7 +4632,8 @@ Python's own lists and objects.</p>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>      examples/54_objects_and_grids/world.ppy:95 world.main
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>native, but Python calls the Python body (why its boundary is not used):
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>      6 functions  copying the collections in costs more than the body does with them
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>      5 functions  the boundary crossing costs more than the body saves
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>      1 functions  copying the collections in costs more than the body does with them
 </code></pre></div>
 <!-- outputs:end -->
 
@@ -4668,16 +4669,23 @@ as native and called from Python, and the rest as native code they call.</p>
 <li><strong>An object made natively.</strong> The <code>Census</code> that <code>advance</code> returns was
   made by native code. It comes back as a new <code>Census</code> instance with its
   fields set; <code>__init__</code> does not run a second time.</li>
-<li><strong>Objects written in place.</strong> <code>orbit(bodies, ...)</code> copies each <code>Body</code>'s
-  fields in, and after the call sets the fields it wrote on the caller's
-  objects. <code>first</code> and <code>bodies[0]</code> are still one object, so the last line
-  prints <code>True</code> on every path. An object reached twice crosses once.</li>
-<li><strong>The cost of the copy.</strong> The wrapper copies in C, from type tables
+<li><strong>Objects written in place, then kept.</strong> The first call that takes
+  <code>bodies</code>, <code>energy(bodies)</code>, copies each <code>Body</code>'s fields in. <code>Body</code> holds
+  only numbers, so from the second call on the 60 bodies stay resident:
+  native code is handed the records it had, and after each <code>orbit</code> the
+  boundary sets the fields native code wrote on the caller's objects.
+  <code>PPY_RESIDENT_REPORT=1</code> prints <code>60 admitted, 10 calls</code> (five <code>orbit</code> and
+  six <code>energy</code> calls, the first of them a copy). <code>first</code> and <code>bodies[0]</code>
+  are still one object, so the last line prints <code>True</code> on every path. An
+  object reached twice crosses once. <code>orbit</code> writes every body on every
+  call, so residency saves only the copy in; the copy back remains.</li>
+<li><strong>The cost of the crossing.</strong> The wrapper copies in C, from type tables
   emitted for each signature. Python calls a function natively only where
   the body does enough with what crosses: here, nine reads per cell and a
   pass over every pair of bodies per step. <code>kick</code>, <code>drift</code>, <code>count</code>, and
-  <code>neighbours</code> are too small for that, and Python calling them would run
-  their Python bodies; native callers call them directly.</li>
+  <code>neighbours</code> are too small for that, even with the bodies resident, and
+  Python calling them would run their Python bodies; native callers call
+  them directly.</li>
 </ul>
 <h2 id="timing">Timing<a class="headerlink" href="#timing" title="Permanent link">&para;</a></h2>
 <p>Wall time for the whole program, the mean of five runs, measured from a
@@ -4693,11 +4701,11 @@ checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultr
 <tbody>
 <tr>
 <td><code>python world.ppy</code></td>
-<td style="text-align: right;">2.20</td>
+<td style="text-align: right;">2.44</td>
 </tr>
 <tr>
 <td><code>ppy run world.ppy</code>, after the first run built the cache</td>
-<td style="text-align: right;">0.25</td>
+<td style="text-align: right;">0.28</td>
 </tr>
 </tbody>
 </table>
@@ -4713,18 +4721,18 @@ checkout under <code>/tmp</code> on one machine (Python 3.14, an Intel Core Ultr
 <tbody>
 <tr>
 <td>five <code>advance(grid, 40)</code> calls</td>
-<td style="text-align: right;">1.51 s</td>
-<td style="text-align: right;">0.177 s</td>
+<td style="text-align: right;">1.66 s</td>
+<td style="text-align: right;">0.225 s</td>
 </tr>
 <tr>
 <td>five <code>orbit(bodies, 0.0005, 400)</code> calls</td>
-<td style="text-align: right;">0.685 s</td>
-<td style="text-align: right;">0.032 s</td>
+<td style="text-align: right;">0.762 s</td>
+<td style="text-align: right;">0.039 s</td>
 </tr>
 <tr>
-<td>one <code>orbit(bodies, 0.0005, 1)</code> call, 60 bodies in and out</td>
-<td style="text-align: right;">346 µs</td>
-<td style="text-align: right;">29 µs</td>
+<td>one <code>orbit(bodies, 0.0005, 1)</code> call, 60 resident bodies, their fields set back</td>
+<td style="text-align: right;">386 µs</td>
+<td style="text-align: right;">30 µs</td>
 </tr>
 </tbody>
 </table>

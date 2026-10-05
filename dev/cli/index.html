@@ -5575,6 +5575,26 @@ Its options:</p>
 </tr>
 </tbody>
 </table>
+<p>Two environment variables change how objects cross the boundary under
+<code>ppy run</code>:</p>
+<table>
+<thead>
+<tr>
+<th>variable</th>
+<th>effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PPY_RESIDENT=0</code></td>
+<td>copy every object at every call instead of keeping objects that cross again resident in native memory (<a href="../guide/classes/#resident-objects">Resident objects</a>)</td>
+</tr>
+<tr>
+<td><code>PPY_RESIDENT_REPORT=1</code></td>
+<td>print the resident objects' counts on stderr at exit: live and stale records, entries, objects admitted, and resident calls</td>
+</tr>
+</tbody>
+</table>
 <h3 id="how-the-run-cache-works">How the run cache works<a class="headerlink" href="#how-the-run-cache-works" title="Permanent link">&para;</a></h3>
 <p>The first <code>ppy run</code> of a program builds into the cache and then starts the
 launcher. The second run is the launcher alone.</p>
@@ -6372,15 +6392,16 @@ cannot read is refused with its line (<code>E1806</code>).</p>
 <p>Explain why a function compiled the way it did.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>ppy<span class="w"> </span>explain<span class="w"> </span>LOCATION
 </code></pre></div>
-<p><code>LOCATION</code> is a <code>FILE:LINE</code>, a function name or qualname, or a diagnostic
-code. For a function it reports:</p>
+<p><code>LOCATION</code> is a <code>FILE:LINE</code>, a function or class name or qualname, or a
+diagnostic code. For a function it reports:</p>
 <ul>
 <li>the semantic type, effects, and purity</li>
 <li>the backend decision: <code>native</code>, or <code>boxed</code> with the first construct that
   kept it in Python. A native function with effects also names the rule it
   runs under (<a href="../guide/native-effects/">Effects in native code</a>), and one
   that Python calls through its Python body says why: the crossing costs
-  more than the body saves, or a barrier follows a copied argument</li>
+  more than the body saves, the objects it makes cost more to hand to
+  Python than its loops save, or a barrier follows a copied argument</li>
 <li>the Python boundary a native function has</li>
 <li>the representation chosen for each parameter</li>
 <li>the types that were inferred rather than annotated, and where each came

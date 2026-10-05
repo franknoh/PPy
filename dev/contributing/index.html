@@ -5224,6 +5224,22 @@ is most likely to break something:</p>
 <td><code>--shapes</code></td>
 <td>the shapes the corpus kept in Python: an <code>if</code>/<code>elif</code>/<code>else</code> that returns on every side, list parameters (<code>if not xs</code>, <code>== []</code>, unpacking, slicing, returning), module string constants, tuple assignment of lists, <code>*args</code> of numbers; with <code>--state</code>, a function that falls off its end and a nested function handed cells</td>
 </tr>
+<tr>
+<td><code>--resident</code></td>
+<td>the <code>--structures</code> classes, edited by native methods called again and again, with Python writing to the same objects between the calls: fields set through attributes, <code>vars()</code>, and <code>setattr</code>, links cut and Python-made nodes linked in, an attribute deleted, a field holding another type for a while, structures made and dropped (paths with Python)</td>
+</tr>
+<tr>
+<td><code>--optional</code></td>
+<td>a class with <code>int \| None</code>, <code>float \| None</code>, <code>bool \| None</code>, and <code>str \| None</code> fields, functions taking and returning each, a list and a dict of <code>int \| None</code> written in place, <code>d.get</code>, <code>or</code>, <code>in</code>, <code>isinstance</code>, <code>any</code>/<code>all</code>, comprehensions, f-strings, and a field narrowed by a test and reset by a call before arithmetic or <code>&lt;</code> meets it; with <code>--resident</code>, a resident object with such fields that Python sets to <code>None</code> and back between native calls</td>
+</tr>
+<tr>
+<td><code>--bools</code></td>
+<td><code>bool</code>s stored where an <code>int</code> is declared (locals, a rebound name, list, dict, and tuple elements, a dataclass field, a return from <code>-&gt; int</code>, an argument through <code>Callable[[int], int]</code>) and printed, plus arithmetic on <code>bool</code>s, which must stay <code>int</code>s (paths with Python)</td>
+</tr>
+<tr>
+<td><code>--decorators</code></td>
+<td>with <code>--unannotated</code>: project decorators that scale results, print, count calls, cache with a print on a miss (a recursive function through its cache included), swap arguments, take arguments, or replace the function, and a counted method, called from native loops that keep and discard the results</td>
+</tr>
 </tbody>
 </table>
 <p><code>--paths python,ppy,run</code> limits a batch to some of the paths. Flags

@@ -4735,9 +4735,9 @@ a function may contain to lower.</p>
 <p>A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit <code>@ppy.native</code>/<code>@ppy.jit</code>/<code>@ppy.specialize</code>/<code>@ppy.parallel</code> gets the
 boundary. Native callers call its native symbol directly, boundary or not.</p>
-<p>The generated wrapper's call costs about what a Python call does: 32 ns for
+<p>The generated wrapper's call costs about what a Python call does: 35 ns for
 <code>def add(x: int, y: int) -&gt; int: return x + y</code> called from Python, against
-32 ns for CPython's own call of it. So straight-line work pays from two
+33 ns for CPython's own call of it. So straight-line work pays from two
 operations (<code>0.5 * base * height</code>), and a one-operation helper stays on the
 Python side (remarked as <code>R3004</code>). The rest costs more:</p>
 <table>
@@ -4791,7 +4791,12 @@ plain class that crosses again and again is the exception: it stays
 resident in native memory between calls
 (<a href="../classes/#resident-objects">Resident objects</a>), and costs a flat price
 per call: about seven operations, one more per object, eight more for each
-object the call writes, and a hundred for each object the body makes.</p>
+object the call writes, and a hundred for each object the body makes. A
+function that makes objects stays in Python when its heaviest loop, over 16
+passes, does less work than those hundreds, and always when it makes one
+inside a loop: an object native code makes is made in Python too when the
+call answers, about a microsecond each. <code>ppy explain</code> gives that reason as
+"the objects it makes cost more to hand to Python than its loops save".</p>
 <p><code>ppy explain module.name</code> (or <code>FILE.ppy:LINE</code>) reports the decision and,
 when the answer is no, the first blocking construct.</p>
 <h3 id="what-a-call-costs">What a call costs<a class="headerlink" href="#what-a-call-costs" title="Permanent link">&para;</a></h3>
@@ -4811,144 +4816,147 @@ median of three runs, in nanoseconds:</p>
 <tbody>
 <tr>
 <td><code>x + y</code> of two ints, kept in Python by the cost model</td>
-<td style="text-align: right;">29</td>
-<td style="text-align: right;">28</td>
-</tr>
-<tr>
-<td><code>x + y</code> of two ints, <code>@ppy.native</code></td>
 <td style="text-align: right;">32</td>
-<td style="text-align: right;">32</td>
-</tr>
-<tr>
-<td>the same, <code>y</code> passed by keyword</td>
-<td style="text-align: right;">36</td>
-<td style="text-align: right;">32</td>
-</tr>
-<tr>
-<td>the same, <code>y</code> left to its default</td>
-<td style="text-align: right;">31</td>
 <td style="text-align: right;">33</td>
 </tr>
 <tr>
+<td><code>x + y</code> of two ints, <code>@ppy.native</code></td>
+<td style="text-align: right;">35</td>
+<td style="text-align: right;">33</td>
+</tr>
+<tr>
+<td>the same, <code>y</code> passed by keyword</td>
+<td style="text-align: right;">39</td>
+<td style="text-align: right;">38</td>
+</tr>
+<tr>
+<td>the same, <code>y</code> left to its default</td>
+<td style="text-align: right;">33</td>
+<td style="text-align: right;">34</td>
+</tr>
+<tr>
 <td>a loop of 100 additions</td>
-<td style="text-align: right;">62</td>
-<td style="text-align: right;">894</td>
+<td style="text-align: right;">70</td>
+<td style="text-align: right;">993</td>
 </tr>
 <tr>
 <td><code>sum</code> of a borrowed buffer of 100 ints</td>
-<td style="text-align: right;">68</td>
-<td style="text-align: right;">279</td>
+<td style="text-align: right;">75</td>
+<td style="text-align: right;">285</td>
 </tr>
 <tr>
 <td>a guard that fails, so the Python body runs</td>
-<td style="text-align: right;">83</td>
-<td style="text-align: right;">39</td>
+<td style="text-align: right;">99</td>
+<td style="text-align: right;">43</td>
 </tr>
 <tr>
 <td>a <code>list[int]</code> of 100 written in place, <code>@ppy.native</code></td>
-<td style="text-align: right;">1,082</td>
-<td style="text-align: right;">2,500</td>
+<td style="text-align: right;">1,208</td>
+<td style="text-align: right;">2,738</td>
 </tr>
 <tr>
 <td>a <code>dict[int, int]</code> of 100 walked, <code>@ppy.native</code></td>
-<td style="text-align: right;">1,214</td>
-<td style="text-align: right;">1,754</td>
+<td style="text-align: right;">1,380</td>
+<td style="text-align: right;">1,900</td>
 </tr>
 <tr>
 <td>a chain of 10 objects walked, <code>@ppy.native</code></td>
-<td style="text-align: right;">141</td>
-<td style="text-align: right;">174</td>
+<td style="text-align: right;">110</td>
+<td style="text-align: right;">160</td>
 </tr>
 <tr>
 <td>a function returning <code>None</code> that fills a list of 100</td>
-<td style="text-align: right;">325</td>
-<td style="text-align: right;">578</td>
+<td style="text-align: right;">350</td>
+<td style="text-align: right;">620</td>
 </tr>
 <tr>
 <td>a <code>list[int]</code> of 100 summed</td>
-<td style="text-align: right;">230</td>
-<td style="text-align: right;">902</td>
+<td style="text-align: right;">274</td>
+<td style="text-align: right;">948</td>
 </tr>
 <tr>
 <td>a <code>list[list[int]]</code> of 10 by 10 summed, <code>@ppy.native</code></td>
-<td style="text-align: right;">491</td>
-<td style="text-align: right;">949</td>
+<td style="text-align: right;">542</td>
+<td style="text-align: right;">1,063</td>
 </tr>
 <tr>
 <td>the lengths of a <code>list[str]</code> of 100 summed, <code>@ppy.native</code></td>
-<td style="text-align: right;">1,758</td>
-<td style="text-align: right;">1,200</td>
+<td style="text-align: right;">2,028</td>
+<td style="text-align: right;">1,313</td>
 </tr>
 <tr>
 <td>100 lookups in a <code>set[int]</code>, <code>@ppy.native</code></td>
-<td style="text-align: right;">2,442</td>
-<td style="text-align: right;">1,004</td>
+<td style="text-align: right;">2,758</td>
+<td style="text-align: right;">1,149</td>
 </tr>
 <tr>
 <td>100 lookups of <code>list[str]</code> keys in a <code>dict[str, int]</code>, <code>@ppy.native</code></td>
-<td style="text-align: right;">9,053</td>
-<td style="text-align: right;">1,468</td>
+<td style="text-align: right;">10,562</td>
+<td style="text-align: right;">1,739</td>
 </tr>
 <tr>
 <td>the trues of a <code>list[bool]</code> of 100 counted</td>
-<td style="text-align: right;">177</td>
-<td style="text-align: right;">640</td>
+<td style="text-align: right;">207</td>
+<td style="text-align: right;">714</td>
 </tr>
 <tr>
 <td>one element of a <code>list[int]</code> of 100 written, <code>@ppy.native</code></td>
-<td style="text-align: right;">250</td>
-<td style="text-align: right;">35</td>
+<td style="text-align: right;">278</td>
+<td style="text-align: right;">36</td>
 </tr>
 <tr>
 <td>a function returning <code>None</code> that reads 100 and writes one</td>
-<td style="text-align: right;">393</td>
-<td style="text-align: right;">1,699</td>
+<td style="text-align: right;">437</td>
+<td style="text-align: right;">1,967</td>
 </tr>
 <tr>
 <td>a <code>random.randint</code> and an addition</td>
-<td style="text-align: right;">53</td>
-<td style="text-align: right;">123</td>
+<td style="text-align: right;">61</td>
+<td style="text-align: right;">135</td>
 </tr>
 <tr>
 <td>straight-line work on three objects, <code>@ppy.native</code></td>
-<td style="text-align: right;">115</td>
-<td style="text-align: right;">91</td>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">78</td>
 </tr>
 <tr>
 <td><code>find</code> in a 10,000-node linked list, <code>@ppy.native</code></td>
-<td style="text-align: right;">38,407</td>
-<td style="text-align: right;">70,162</td>
+<td style="text-align: right;">33,883</td>
+<td style="text-align: right;">62,507</td>
 </tr>
 <tr>
 <td><code>len</code> of a 10,000-node linked list, <code>@ppy.native</code></td>
-<td style="text-align: right;">86,603</td>
-<td style="text-align: right;">149,218</td>
+<td style="text-align: right;">79,835</td>
+<td style="text-align: right;">128,830</td>
 </tr>
 <tr>
 <td><code>contains</code> in a 10,000-node search tree, <code>@ppy.native</code></td>
-<td style="text-align: right;">537</td>
-<td style="text-align: right;">528</td>
+<td style="text-align: right;">410</td>
+<td style="text-align: right;">467</td>
 </tr>
 <tr>
 <td><code>push</code> onto a 10,000-node linked list, <code>@ppy.native</code></td>
-<td style="text-align: right;">1,894</td>
-<td style="text-align: right;">190</td>
+<td style="text-align: right;">1,848</td>
+<td style="text-align: right;">163</td>
 </tr>
 <tr>
 <td><code>insert</code> into a 10,000-node search tree, <code>@ppy.native</code></td>
-<td style="text-align: right;">2,469</td>
-<td style="text-align: right;">488</td>
+<td style="text-align: right;">1,738</td>
+<td style="text-align: right;">448</td>
 </tr>
 </tbody>
 </table>
 <p>The object rows call functions and methods on objects that stay resident
-between calls (<a href="../classes/#resident-objects">Resident objects</a>): before,
-each call copied the whole structure in and back, 3 to 5 ms for the
-10,000-node ones and 1,058 ns for the chain of 10. A resident object costs
-about 80 ns a call; native code then walks the nodes faster than CPython,
-but an object it makes is made in Python too, with a <code>__dict__</code> and a weak
-reference, about a microsecond, so <code>push</code> and <code>insert</code>, which make a node
-each, stay slower and the cost model keeps them in Python.</p>
+between calls (<a href="../classes/#resident-objects">Resident objects</a>). Copied at
+every call, as they were in 0.6, the 10,000-node ones took 3 to 5 ms a call
+and the chain of 10 about 1,060 ns. A resident object costs about 80 ns a
+call; native code then walks the nodes faster than CPython (<code>find</code> and
+<code>len</code> 1.6 to 1.8 times as fast), but an object it makes is made in Python
+too, with a <code>__dict__</code> and a weak reference, about a microsecond, so <code>push</code>
+and <code>insert</code>, which make a node each, stay slower and the cost model keeps
+them in Python. Straight-line work on three objects costs 100 ns against
+CPython's 78, so without <code>@ppy.native</code> such a function runs its Python
+body.</p>
 <p>The <code>@ppy.native</code> <code>x + y</code> row is the wrapper alone: parsing the arguments,
 the exact type checks, and boxing the result. A failed guard costs the
 wrapper plus a Python call. The rows that read a container and write none
@@ -4960,7 +4968,8 @@ key it looks up. Those are the shapes the cost model keeps off the
 boundary, as the CPython column says it should: one operation per string,
 per lookup, or per object does not pay, and without <code>@ppy.native</code> Python
 runs their Python bodies. Measured on Python 3.14 on an Intel Core Ultra 9
-386H under WSL2.</p>
+386H under WSL2; the CPython column is the same program in the same
+session.</p>
 <h2 id="byte-wide-buffers">Byte-wide buffers<a class="headerlink" href="#byte-wide-buffers" title="Permanent link">&para;</a></h2>
 <p>A buffer's element is a machine word unless it says otherwise.
 <code>Buffer[ppy.i8]</code> and <code>Buffer[ppy.u8]</code> are one byte each, which is what text
@@ -5063,8 +5072,10 @@ code sets is set on the Python object when the call answers.</p>
 <p>What stays in Python: sorting, <code>min</code>, and <code>max</code> over elements that may be
 <code>None</code> (CPython raises for them, in an order that depends on the
 comparisons), keys that may be <code>None</code>, a format spec over a value that may
-be <code>None</code> (<code>f"{x:&gt;4}"</code>), unions of numbers with anything but <code>None</code>, and
-tuples holding a value that may be <code>None</code>.</p>
+be <code>None</code> (<code>f"{x:&gt;4}"</code>), <code>x and y</code> used as a value of two such operands,
+<code>repr(s)</code> of a <code>str | None</code>, <code>d.get(k, default)</code> of a dict whose values
+may be <code>None</code>, unions of numbers with anything but <code>None</code>, and tuples
+holding a value that may be <code>None</code> (<code>tuple[int | None, int]</code>).</p>
 <h2 id="what-the-body-may-contain">What the body may contain<a class="headerlink" href="#what-the-body-may-contain" title="Permanent link">&para;</a></h2>
 <p>A function declared to return a value may end in an <code>if</code>/<code>elif</code>/<code>else</code> whose
 every side returns or raises: no path reaches the end, so the end needs no
@@ -5282,14 +5293,15 @@ to the first two reasons:</p>
 <a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>  ... 62 more reasons, 73 functions (--limit to see more, --json for all)
 <a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
 <a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>native, but Python calls the Python body (why its boundary is not used):
-<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>      6 functions  copying the collections in costs more than the body does with them
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>      5 functions  copying the collections in costs more than the body does with them
 <a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>      1 functions  copying its strings across costs what one pass over them saves
 </code></pre></div>
 <p>Read it from the top down:</p>
 <ul>
 <li>The first block counts every function once. "Called from native code"
   means the function compiled but Python calls its Python body, because the
-  crossing costs more than the body saves or it passes objects by handle;
+  crossing costs more than the body saves, the objects it makes cost more
+  to hand to Python than its loops save, or it passes objects by handle;
   the summary lists those reasons last.</li>
 <li>The reasons are ordered by statements kept out, so the first one is where
   a change moves the most code. A function with several effects counts
@@ -5320,7 +5332,10 @@ short straight-line body keeps it: dropping the GIL and taking it back costs
 about 20 ns, what two operations cost. A function that prints, reads, or
 calls into Python keeps the GIL too: its wrapper holds its output until the
 call ends and writes it out then, and the call takes the GIL where it
-reaches Python (<a href="../native-effects/">Effects in native code</a>).</p>
+reaches Python (<a href="../native-effects/">Effects in native code</a>). So does a
+call whose objects are resident
+(<a href="../classes/#resident-objects">Resident objects</a>); the same function
+called with objects that are copied releases it.</p>
 <p>Reading input is its own guide: <a href="../input/">Reading input</a>.</p>
 <p>Examples: <a href="../../howto/15_algorithms/">Algorithms</a>,
 <a href="../../howto/12_buffers_and_jit/">Buffers and JIT</a>.</p>

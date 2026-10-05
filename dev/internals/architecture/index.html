@@ -4872,6 +4872,40 @@ learning which argument shapes repeat).</p>
     are copied back into the caller's objects. Of a list of numbers only
     the elements whose words changed are set again; an element that did not
     change keeps its Python object.</li>
+<li>Objects of a class that may stay resident (<code>CrossingClass.resident</code>,
+    decided in <code>lowering/collections.py</code>; the wrapper checks the type again
+    in <code>px_plain_type</code>) keep their native records between calls from the
+    second crossing on. One world per process (<code>px_world</code>), shared by every
+    wrapper module through a capsule (<code>collection_boundary._share_world</code>),
+    maps each object, handle, and <code>__dict__</code> to its record. The world holds
+    a weak reference to each object, not its dict, and drops the records of
+    dead objects in a purge once half its entries are dead. Handles it holds
+    are taken off their thread's heap list (<code>ppy_coll_adopt</code>), so neither
+    the sweep after a failed call nor the cycle collector touches them.</li>
+<li>Python writes are seen through <code>PyDict_Watch</code> (3.12+) on each resident
+    object's <code>__dict__</code>: a change marks the object stale, and the next
+    resident call reads its fields again (<code>px_refresh</code>). The boundary's own
+    writes back set an expected dict first, so they mark nothing. Each
+    resident class is watched with <code>PyType_Watch</code>; after a change its fields
+    are looked up again, and a data descriptor named like a field ends
+    residency for the process.</li>
+<li>Native writes are found by the lowering: after each field store
+    (<code>_field_store</code>) it tests a header word that marks a resident record,
+    and the first store puts the record on a runtime list
+    (<code>ppy_coll_touch</code>). When the call answers, <code>px_drain</code> sets the changed
+    fields of every record on the list on its Python object; an object
+    native code made and linked in is created in Python then (through
+    <code>object</code>'s <code>tp_new</code> where that is the class's only built-in base) and
+    admitted. A call that falls back or raises leaves what it wrote stale,
+    so the next call reads it from Python. The world is used only with the
+    GIL held, and a call made while it is busy (a finalizer that runs during
+    a crossing) copies. A free-threaded build has no world, and neither does
+    a process with <code>PPY_RESIDENT=0</code>.</li>
+<li>A number that may be <code>None</code> crosses as the number's atom and a byte
+    (<code>NativeParam.kind = "optional"</code>, <code>NativeSignature.optional</code> for a
+    result); in a field or a container element it is two words, the number
+    then a flag (<code>PX_OPTIONAL</code>). A <code>str | None</code> is a string handle, null for
+    <code>None</code>, and as a text parameter a length of -1.</li>
 <li>A function that draws from <code>random</code> saves the generator's state in the
   wrapper with one <code>memcpy</code> and puts it back only where Python runs the call
   again (<code>binding.attach_random</code> hands the wrapper the state's address once
@@ -4893,8 +4927,8 @@ learning which argument shapes repeat).</p>
   <code>TypeError</code>; a guard that refuses the bound arguments hands Python the
   call as it was spelled.</li>
 </ul>
-<p>A two-int call costs 32 ns through the wrapper, as CPython's own call
-does. <a href="../../guide/native-lowering/#what-a-call-costs">What a call costs</a>
+<p>A two-int call costs 35 ns through the wrapper, against 33 ns for
+CPython's own call. <a href="../../guide/native-lowering/#what-a-call-costs">What a call costs</a>
 has the measured table for each shape, from <code>examples/bench_boundary.py</code>.</p>
 <p>Built artifacts ship the compiled wrapper and bind through it at launch. The
 ctypes trampoline remains only as the fallback where no C toolchain exists
@@ -4906,7 +4940,8 @@ functions scale on threads:
 measured 1.95× on two threads against 0.98× for the same code on plain
 CPython (<code>examples/28_threads</code>). A short straight-line body keeps the GIL,
 since dropping and retaking it costs about 20 ns, and so does a function
-that prints, reads, or calls into Python.</p>
+that prints, reads, or calls into Python, and a call whose objects are
+resident (the world of records is not locked; the GIL guards it).</p>
 <p><code>@ppy.parallel</code> loops run on a process-wide worker pool sized by
 <code>[tool.ppy.parallel] threads</code>.</p>
 

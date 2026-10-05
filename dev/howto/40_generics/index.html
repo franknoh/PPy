@@ -4730,7 +4730,7 @@ instances directly from the loop, and the loop is the same code either way.</p>
 </code></pre></div>
 <p><strong><code>ppy emit ir generic.ppy</code></strong></p>
 <details class="note">
-<summary>273 lines</summary>
+<summary>295 lines</summary>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ppyir 1
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>module @generic
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>dialect core 1
@@ -4780,230 +4780,252 @@ instances directly from the loop, and the loop is the same code either way.</p>
 <a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a>    %x_entry = core.load %x_addr : i64
 <a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a>    %27 = core.cast %25 : ptr&lt;i64&gt;
 <a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a>    core.store %26, %27
-<a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a>    %28 = core.load %self_addr : ptr&lt;i8&gt; loc("examples/40_generics/generic.ppy":11:8)
-<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a>    %29 = core.cast %28 : i64
-<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a>    %30 = core.const 0 : i64
-<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a>    %31 = core.cmp.ne %29, %30 : bool
-<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a>    core.guard %31 {kind = "bounds", message = "`None` has no attribute `y`", raises = "AttributeError: 'NoneType' object has no attribute 'y'"}
-<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a>    %32 = core.cast %28 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a>    %33 = core.const 3 : i64
-<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a>    %34 = core.ptr_offset %32, %33 : ptr&lt;i64&gt;
-<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a>    %35 = core.load %34 : i64
-<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>    %36 = core.cast %28 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>    %37 = core.const 1 : i64
-<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a>    %38 = core.ptr_offset %36, %37 : ptr&lt;i64&gt;
-<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a>    %39 = core.load %38 : i64
-<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a>    %40 = core.cast %28 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a>    %41 = core.const 15 : i64
-<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a>    %42 = core.ptr_offset %40, %41 : ptr&lt;i64&gt;
-<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a>    %43 = core.load %42 : i64
-<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a>    %44 = core.cast %28 {ppy.reads = true} : ptr&lt;ptr&lt;i64&gt;&gt;
-<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a>    %45 = core.const 2 : i64
-<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a>    %46 = core.ptr_offset %44, %45 : ptr&lt;ptr&lt;i64&gt;&gt;
-<a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a>    %47 = core.load %46 : ptr&lt;i64&gt;
-<a id="__codelineno-6-71" name="__codelineno-6-71" href="#__codelineno-6-71"></a>    %48 = core.cmp.ge %35, %39 : bool
-<a id="__codelineno-6-72" name="__codelineno-6-72" href="#__codelineno-6-72"></a>    %49 = core.sub %35, %39 {overflow = "wrap"} : i64
-<a id="__codelineno-6-73" name="__codelineno-6-73" href="#__codelineno-6-73"></a>    %50 = core.select %48, %49, %35 : i64
-<a id="__codelineno-6-74" name="__codelineno-6-74" href="#__codelineno-6-74"></a>    %51 = core.mul %50, %43 {overflow = "wrap"} : i64
-<a id="__codelineno-6-75" name="__codelineno-6-75" href="#__codelineno-6-75"></a>    %52 = core.ptr_offset %47, %51 : ptr&lt;i64&gt;
-<a id="__codelineno-6-76" name="__codelineno-6-76" href="#__codelineno-6-76"></a>    %53 = core.cast %52 : ptr&lt;i8&gt;
-<a id="__codelineno-6-77" name="__codelineno-6-77" href="#__codelineno-6-77"></a>    %54 = core.cast %53 : ptr&lt;i64&gt;
-<a id="__codelineno-6-78" name="__codelineno-6-78" href="#__codelineno-6-78"></a>    %55 = core.const 1 : i64
-<a id="__codelineno-6-79" name="__codelineno-6-79" href="#__codelineno-6-79"></a>    %56 = core.ptr_offset %54, %55 : ptr&lt;i64&gt;
-<a id="__codelineno-6-80" name="__codelineno-6-80" href="#__codelineno-6-80"></a>    %57 = core.cast %56 : ptr&lt;i8&gt;
-<a id="__codelineno-6-81" name="__codelineno-6-81" href="#__codelineno-6-81"></a>    %58 = core.load %y_addr : i64
-<a id="__codelineno-6-82" name="__codelineno-6-82" href="#__codelineno-6-82"></a>    %y_entry = core.load %y_addr : i64
-<a id="__codelineno-6-83" name="__codelineno-6-83" href="#__codelineno-6-83"></a>    %59 = core.cast %57 : ptr&lt;i64&gt;
-<a id="__codelineno-6-84" name="__codelineno-6-84" href="#__codelineno-6-84"></a>    core.store %58, %59
-<a id="__codelineno-6-85" name="__codelineno-6-85" href="#__codelineno-6-85"></a>    %60 = core.load %self_addr : ptr&lt;i8&gt;
-<a id="__codelineno-6-86" name="__codelineno-6-86" href="#__codelineno-6-86"></a>    core.call_extern %60 {abi = "c", callee = "ppy_coll_release"}
-<a id="__codelineno-6-87" name="__codelineno-6-87" href="#__codelineno-6-87"></a>    core.ret
-<a id="__codelineno-6-88" name="__codelineno-6-88" href="#__codelineno-6-88"></a>}
-<a id="__codelineno-6-89" name="__codelineno-6-89" href="#__codelineno-6-89"></a>
-<a id="__codelineno-6-90" name="__codelineno-6-90" href="#__codelineno-6-90"></a>func @generic_Point_name(%self: ptr&lt;i8&gt;) -&gt; ptr&lt;i8&gt; attrs {effects = ["alloc", "read_object"], ppy.abi = "ppy", ppy.qualname = "generic.Point.name", ppy.releases_gil = false, ppy.symbol = "ppy_generic_Point_name"} loc("examples/40_generics/generic.ppy":13:4) {
-<a id="__codelineno-6-91" name="__codelineno-6-91" href="#__codelineno-6-91"></a>^entry:
-<a id="__codelineno-6-92" name="__codelineno-6-92" href="#__codelineno-6-92"></a>    %self_addr = core.alloca {ppy.owns = true} : ptr&lt;ptr&lt;i8&gt;, stack&gt; loc("examples/40_generics/generic.ppy":13:4)
-<a id="__codelineno-6-93" name="__codelineno-6-93" href="#__codelineno-6-93"></a>    core.store %self, %self_addr
-<a id="__codelineno-6-94" name="__codelineno-6-94" href="#__codelineno-6-94"></a>    core.call_extern %self {abi = "c", callee = "ppy_coll_retain"}
-<a id="__codelineno-6-95" name="__codelineno-6-95" href="#__codelineno-6-95"></a>    %0 = core.const 0 : i64 loc("examples/40_generics/generic.ppy":14:8)
-<a id="__codelineno-6-96" name="__codelineno-6-96" href="#__codelineno-6-96"></a>    %1 = core.call_extern %0 {abi = "c", callee = "ppy_str_builder"} : ptr&lt;i8&gt;
-<a id="__codelineno-6-97" name="__codelineno-6-97" href="#__codelineno-6-97"></a>    %2 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.0"} : ptr&lt;u8&gt;
-<a id="__codelineno-6-98" name="__codelineno-6-98" href="#__codelineno-6-98"></a>    %3 = core.const 1 : i64
-<a id="__codelineno-6-99" name="__codelineno-6-99" href="#__codelineno-6-99"></a>    core.call_extern %1, %2, %3 {abi = "c", callee = "ppy_str_add_bytes"}
-<a id="__codelineno-6-100" name="__codelineno-6-100" href="#__codelineno-6-100"></a>    %4 = core.load %self_addr : ptr&lt;i8&gt;
-<a id="__codelineno-6-101" name="__codelineno-6-101" href="#__codelineno-6-101"></a>    %5 = core.cast %4 : i64
-<a id="__codelineno-6-102" name="__codelineno-6-102" href="#__codelineno-6-102"></a>    %6 = core.const 0 : i64
-<a id="__codelineno-6-103" name="__codelineno-6-103" href="#__codelineno-6-103"></a>    %7 = core.cmp.ne %5, %6 : bool
-<a id="__codelineno-6-104" name="__codelineno-6-104" href="#__codelineno-6-104"></a>    core.guard %7 {kind = "bounds", message = "`None` has no attribute `x`", raises = "AttributeError: 'NoneType' object has no attribute 'x'"}
-<a id="__codelineno-6-105" name="__codelineno-6-105" href="#__codelineno-6-105"></a>    %8 = core.cast %4 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-106" name="__codelineno-6-106" href="#__codelineno-6-106"></a>    %9 = core.const 3 : i64
-<a id="__codelineno-6-107" name="__codelineno-6-107" href="#__codelineno-6-107"></a>    %10 = core.ptr_offset %8, %9 : ptr&lt;i64&gt;
-<a id="__codelineno-6-108" name="__codelineno-6-108" href="#__codelineno-6-108"></a>    %11 = core.load %10 : i64
-<a id="__codelineno-6-109" name="__codelineno-6-109" href="#__codelineno-6-109"></a>    %12 = core.cast %4 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-110" name="__codelineno-6-110" href="#__codelineno-6-110"></a>    %13 = core.const 1 : i64
-<a id="__codelineno-6-111" name="__codelineno-6-111" href="#__codelineno-6-111"></a>    %14 = core.ptr_offset %12, %13 : ptr&lt;i64&gt;
-<a id="__codelineno-6-112" name="__codelineno-6-112" href="#__codelineno-6-112"></a>    %15 = core.load %14 : i64
-<a id="__codelineno-6-113" name="__codelineno-6-113" href="#__codelineno-6-113"></a>    %16 = core.cast %4 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-114" name="__codelineno-6-114" href="#__codelineno-6-114"></a>    %17 = core.const 15 : i64
-<a id="__codelineno-6-115" name="__codelineno-6-115" href="#__codelineno-6-115"></a>    %18 = core.ptr_offset %16, %17 : ptr&lt;i64&gt;
-<a id="__codelineno-6-116" name="__codelineno-6-116" href="#__codelineno-6-116"></a>    %19 = core.load %18 : i64
-<a id="__codelineno-6-117" name="__codelineno-6-117" href="#__codelineno-6-117"></a>    %20 = core.cast %4 {ppy.reads = true} : ptr&lt;ptr&lt;i64&gt;&gt;
-<a id="__codelineno-6-118" name="__codelineno-6-118" href="#__codelineno-6-118"></a>    %21 = core.const 2 : i64
-<a id="__codelineno-6-119" name="__codelineno-6-119" href="#__codelineno-6-119"></a>    %22 = core.ptr_offset %20, %21 : ptr&lt;ptr&lt;i64&gt;&gt;
-<a id="__codelineno-6-120" name="__codelineno-6-120" href="#__codelineno-6-120"></a>    %23 = core.load %22 : ptr&lt;i64&gt;
-<a id="__codelineno-6-121" name="__codelineno-6-121" href="#__codelineno-6-121"></a>    %24 = core.cmp.ge %11, %15 : bool
-<a id="__codelineno-6-122" name="__codelineno-6-122" href="#__codelineno-6-122"></a>    %25 = core.sub %11, %15 {overflow = "wrap"} : i64
-<a id="__codelineno-6-123" name="__codelineno-6-123" href="#__codelineno-6-123"></a>    %26 = core.select %24, %25, %11 : i64
-<a id="__codelineno-6-124" name="__codelineno-6-124" href="#__codelineno-6-124"></a>    %27 = core.mul %26, %19 {overflow = "wrap"} : i64
-<a id="__codelineno-6-125" name="__codelineno-6-125" href="#__codelineno-6-125"></a>    %28 = core.ptr_offset %23, %27 : ptr&lt;i64&gt;
-<a id="__codelineno-6-126" name="__codelineno-6-126" href="#__codelineno-6-126"></a>    %29 = core.cast %28 : ptr&lt;i8&gt;
-<a id="__codelineno-6-127" name="__codelineno-6-127" href="#__codelineno-6-127"></a>    %30 = core.cast %29 : ptr&lt;i64&gt;
-<a id="__codelineno-6-128" name="__codelineno-6-128" href="#__codelineno-6-128"></a>    %31 = core.load %30 : i64
-<a id="__codelineno-6-129" name="__codelineno-6-129" href="#__codelineno-6-129"></a>    core.call_extern %1, %31 {abi = "c", callee = "ppy_str_add_int"}
-<a id="__codelineno-6-130" name="__codelineno-6-130" href="#__codelineno-6-130"></a>    %32 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.1"} : ptr&lt;u8&gt;
-<a id="__codelineno-6-131" name="__codelineno-6-131" href="#__codelineno-6-131"></a>    %33 = core.const 2 : i64
-<a id="__codelineno-6-132" name="__codelineno-6-132" href="#__codelineno-6-132"></a>    core.call_extern %1, %32, %33 {abi = "c", callee = "ppy_str_add_bytes"}
-<a id="__codelineno-6-133" name="__codelineno-6-133" href="#__codelineno-6-133"></a>    %34 = core.load %self_addr : ptr&lt;i8&gt;
-<a id="__codelineno-6-134" name="__codelineno-6-134" href="#__codelineno-6-134"></a>    %35 = core.cast %34 : i64
-<a id="__codelineno-6-135" name="__codelineno-6-135" href="#__codelineno-6-135"></a>    %36 = core.const 0 : i64
-<a id="__codelineno-6-136" name="__codelineno-6-136" href="#__codelineno-6-136"></a>    %37 = core.cmp.ne %35, %36 : bool
-<a id="__codelineno-6-137" name="__codelineno-6-137" href="#__codelineno-6-137"></a>    core.guard %37 {kind = "bounds", message = "`None` has no attribute `y`", raises = "AttributeError: 'NoneType' object has no attribute 'y'"}
-<a id="__codelineno-6-138" name="__codelineno-6-138" href="#__codelineno-6-138"></a>    %38 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-139" name="__codelineno-6-139" href="#__codelineno-6-139"></a>    %39 = core.const 3 : i64
-<a id="__codelineno-6-140" name="__codelineno-6-140" href="#__codelineno-6-140"></a>    %40 = core.ptr_offset %38, %39 : ptr&lt;i64&gt;
-<a id="__codelineno-6-141" name="__codelineno-6-141" href="#__codelineno-6-141"></a>    %41 = core.load %40 : i64
-<a id="__codelineno-6-142" name="__codelineno-6-142" href="#__codelineno-6-142"></a>    %42 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-143" name="__codelineno-6-143" href="#__codelineno-6-143"></a>    %43 = core.const 1 : i64
-<a id="__codelineno-6-144" name="__codelineno-6-144" href="#__codelineno-6-144"></a>    %44 = core.ptr_offset %42, %43 : ptr&lt;i64&gt;
-<a id="__codelineno-6-145" name="__codelineno-6-145" href="#__codelineno-6-145"></a>    %45 = core.load %44 : i64
-<a id="__codelineno-6-146" name="__codelineno-6-146" href="#__codelineno-6-146"></a>    %46 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
-<a id="__codelineno-6-147" name="__codelineno-6-147" href="#__codelineno-6-147"></a>    %47 = core.const 15 : i64
-<a id="__codelineno-6-148" name="__codelineno-6-148" href="#__codelineno-6-148"></a>    %48 = core.ptr_offset %46, %47 : ptr&lt;i64&gt;
-<a id="__codelineno-6-149" name="__codelineno-6-149" href="#__codelineno-6-149"></a>    %49 = core.load %48 : i64
-<a id="__codelineno-6-150" name="__codelineno-6-150" href="#__codelineno-6-150"></a>    %50 = core.cast %34 {ppy.reads = true} : ptr&lt;ptr&lt;i64&gt;&gt;
-<a id="__codelineno-6-151" name="__codelineno-6-151" href="#__codelineno-6-151"></a>    %51 = core.const 2 : i64
-<a id="__codelineno-6-152" name="__codelineno-6-152" href="#__codelineno-6-152"></a>    %52 = core.ptr_offset %50, %51 : ptr&lt;ptr&lt;i64&gt;&gt;
-<a id="__codelineno-6-153" name="__codelineno-6-153" href="#__codelineno-6-153"></a>    %53 = core.load %52 : ptr&lt;i64&gt;
-<a id="__codelineno-6-154" name="__codelineno-6-154" href="#__codelineno-6-154"></a>    %54 = core.cmp.ge %41, %45 : bool
-<a id="__codelineno-6-155" name="__codelineno-6-155" href="#__codelineno-6-155"></a>    %55 = core.sub %41, %45 {overflow = "wrap"} : i64
-<a id="__codelineno-6-156" name="__codelineno-6-156" href="#__codelineno-6-156"></a>    %56 = core.select %54, %55, %41 : i64
-<a id="__codelineno-6-157" name="__codelineno-6-157" href="#__codelineno-6-157"></a>    %57 = core.mul %56, %49 {overflow = "wrap"} : i64
-<a id="__codelineno-6-158" name="__codelineno-6-158" href="#__codelineno-6-158"></a>    %58 = core.ptr_offset %53, %57 : ptr&lt;i64&gt;
-<a id="__codelineno-6-159" name="__codelineno-6-159" href="#__codelineno-6-159"></a>    %59 = core.cast %58 : ptr&lt;i8&gt;
-<a id="__codelineno-6-160" name="__codelineno-6-160" href="#__codelineno-6-160"></a>    %60 = core.cast %59 : ptr&lt;i64&gt;
-<a id="__codelineno-6-161" name="__codelineno-6-161" href="#__codelineno-6-161"></a>    %61 = core.const 1 : i64
-<a id="__codelineno-6-162" name="__codelineno-6-162" href="#__codelineno-6-162"></a>    %62 = core.ptr_offset %60, %61 : ptr&lt;i64&gt;
-<a id="__codelineno-6-163" name="__codelineno-6-163" href="#__codelineno-6-163"></a>    %63 = core.cast %62 : ptr&lt;i8&gt;
-<a id="__codelineno-6-164" name="__codelineno-6-164" href="#__codelineno-6-164"></a>    %64 = core.cast %63 : ptr&lt;i64&gt;
-<a id="__codelineno-6-165" name="__codelineno-6-165" href="#__codelineno-6-165"></a>    %65 = core.load %64 : i64
-<a id="__codelineno-6-166" name="__codelineno-6-166" href="#__codelineno-6-166"></a>    core.call_extern %1, %65 {abi = "c", callee = "ppy_str_add_int"}
-<a id="__codelineno-6-167" name="__codelineno-6-167" href="#__codelineno-6-167"></a>    %66 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.2"} : ptr&lt;u8&gt;
-<a id="__codelineno-6-168" name="__codelineno-6-168" href="#__codelineno-6-168"></a>    %67 = core.const 1 : i64
-<a id="__codelineno-6-169" name="__codelineno-6-169" href="#__codelineno-6-169"></a>    core.call_extern %1, %66, %67 {abi = "c", callee = "ppy_str_add_bytes"}
-<a id="__codelineno-6-170" name="__codelineno-6-170" href="#__codelineno-6-170"></a>    %68 = core.call_extern %1 {abi = "c", callee = "ppy_str_finish"} : ptr&lt;i8&gt;
-<a id="__codelineno-6-171" name="__codelineno-6-171" href="#__codelineno-6-171"></a>    %69 = core.load %self_addr : ptr&lt;i8&gt;
-<a id="__codelineno-6-172" name="__codelineno-6-172" href="#__codelineno-6-172"></a>    core.call_extern %69 {abi = "c", callee = "ppy_coll_release"}
-<a id="__codelineno-6-173" name="__codelineno-6-173" href="#__codelineno-6-173"></a>    core.ret %68
-<a id="__codelineno-6-174" name="__codelineno-6-174" href="#__codelineno-6-174"></a>}
-<a id="__codelineno-6-175" name="__codelineno-6-175" href="#__codelineno-6-175"></a>
-<a id="__codelineno-6-176" name="__codelineno-6-176" href="#__codelineno-6-176"></a>func @generic_sweep(%n: i64) -&gt; f64 attrs {effects = ["may_raise"], ppy.abi = "ppy", ppy.qualname = "generic.sweep", ppy.releases_gil = true, ppy.symbol = "ppy_generic_sweep"} loc("examples/40_generics/generic.ppy":33:0) {
-<a id="__codelineno-6-177" name="__codelineno-6-177" href="#__codelineno-6-177"></a>^entry:
-<a id="__codelineno-6-178" name="__codelineno-6-178" href="#__codelineno-6-178"></a>    %n_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":33:0)
-<a id="__codelineno-6-179" name="__codelineno-6-179" href="#__codelineno-6-179"></a>    core.store %n, %n_addr
-<a id="__codelineno-6-180" name="__codelineno-6-180" href="#__codelineno-6-180"></a>    %0 = core.const 0.0 : f64 loc("examples/40_generics/generic.ppy":34:4)
-<a id="__codelineno-6-181" name="__codelineno-6-181" href="#__codelineno-6-181"></a>    %total_addr = core.alloca : ptr&lt;f64, stack&gt;
-<a id="__codelineno-6-182" name="__codelineno-6-182" href="#__codelineno-6-182"></a>    core.store %0, %total_addr
-<a id="__codelineno-6-183" name="__codelineno-6-183" href="#__codelineno-6-183"></a>    %1 = core.load %n_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
-<a id="__codelineno-6-184" name="__codelineno-6-184" href="#__codelineno-6-184"></a>    %n_entry = core.load %n_addr : i64
-<a id="__codelineno-6-185" name="__codelineno-6-185" href="#__codelineno-6-185"></a>    %2 = core.const 0 : i64
-<a id="__codelineno-6-186" name="__codelineno-6-186" href="#__codelineno-6-186"></a>    %3 = core.const 1 : i64
-<a id="__codelineno-6-187" name="__codelineno-6-187" href="#__codelineno-6-187"></a>    %i_addr = core.alloca : ptr&lt;i64, stack&gt;
-<a id="__codelineno-6-188" name="__codelineno-6-188" href="#__codelineno-6-188"></a>    %4 = core.const 3 : i64
-<a id="__codelineno-6-189" name="__codelineno-6-189" href="#__codelineno-6-189"></a>    core.store %2, %i_addr loc("examples/40_generics/generic.ppy":35:4)
-<a id="__codelineno-6-190" name="__codelineno-6-190" href="#__codelineno-6-190"></a>    core.br ^for.head3
-<a id="__codelineno-6-191" name="__codelineno-6-191" href="#__codelineno-6-191"></a>^for.head3:
-<a id="__codelineno-6-192" name="__codelineno-6-192" href="#__codelineno-6-192"></a>    %5 = core.load %i_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
-<a id="__codelineno-6-193" name="__codelineno-6-193" href="#__codelineno-6-193"></a>    %6 = core.cmp.lt %5, %1 : bool
-<a id="__codelineno-6-194" name="__codelineno-6-194" href="#__codelineno-6-194"></a>    core.cond_br %6, ^for.body4, ^for.end6
-<a id="__codelineno-6-195" name="__codelineno-6-195" href="#__codelineno-6-195"></a>^for.body4:
-<a id="__codelineno-6-196" name="__codelineno-6-196" href="#__codelineno-6-196"></a>    %7 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":36:8)
-<a id="__codelineno-6-197" name="__codelineno-6-197" href="#__codelineno-6-197"></a>    %8 = core.load %i_addr : i64
-<a id="__codelineno-6-198" name="__codelineno-6-198" href="#__codelineno-6-198"></a>    %9 = core.const 0.25 : f64
-<a id="__codelineno-6-199" name="__codelineno-6-199" href="#__codelineno-6-199"></a>    %10 = core.cast %8 : f64
-<a id="__codelineno-6-200" name="__codelineno-6-200" href="#__codelineno-6-200"></a>    %11 = core.mul %10, %9 : f64
-<a id="__codelineno-6-201" name="__codelineno-6-201" href="#__codelineno-6-201"></a>    %12 = core.const 1.0 : f64
-<a id="__codelineno-6-202" name="__codelineno-6-202" href="#__codelineno-6-202"></a>    %13 = core.const 10.0 : f64
-<a id="__codelineno-6-203" name="__codelineno-6-203" href="#__codelineno-6-203"></a>    %14 = core.call %11, %12, %13 {callee = @generic_clamp__float} : f64
-<a id="__codelineno-6-204" name="__codelineno-6-204" href="#__codelineno-6-204"></a>    %15 = core.load %i_addr : i64
-<a id="__codelineno-6-205" name="__codelineno-6-205" href="#__codelineno-6-205"></a>    %16 = core.call %15, %4 {callee = @generic_largest__int} : i64
-<a id="__codelineno-6-206" name="__codelineno-6-206" href="#__codelineno-6-206"></a>    %17 = core.cast %16 : f64
-<a id="__codelineno-6-207" name="__codelineno-6-207" href="#__codelineno-6-207"></a>    %18 = core.add %14, %17 : f64
-<a id="__codelineno-6-208" name="__codelineno-6-208" href="#__codelineno-6-208"></a>    %19 = core.add %7, %18 : f64
-<a id="__codelineno-6-209" name="__codelineno-6-209" href="#__codelineno-6-209"></a>    core.store %19, %total_addr
-<a id="__codelineno-6-210" name="__codelineno-6-210" href="#__codelineno-6-210"></a>    %20 = core.load %i_addr : i64
-<a id="__codelineno-6-211" name="__codelineno-6-211" href="#__codelineno-6-211"></a>    %21 = core.add %20, %3 {overflow = "proven"} : i64
-<a id="__codelineno-6-212" name="__codelineno-6-212" href="#__codelineno-6-212"></a>    core.store %21, %i_addr
-<a id="__codelineno-6-213" name="__codelineno-6-213" href="#__codelineno-6-213"></a>    core.br ^for.head3
-<a id="__codelineno-6-214" name="__codelineno-6-214" href="#__codelineno-6-214"></a>^for.end6:
-<a id="__codelineno-6-215" name="__codelineno-6-215" href="#__codelineno-6-215"></a>    %22 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":37:4)
-<a id="__codelineno-6-216" name="__codelineno-6-216" href="#__codelineno-6-216"></a>    core.ret %22
-<a id="__codelineno-6-217" name="__codelineno-6-217" href="#__codelineno-6-217"></a>}
-<a id="__codelineno-6-218" name="__codelineno-6-218" href="#__codelineno-6-218"></a>
-<a id="__codelineno-6-219" name="__codelineno-6-219" href="#__codelineno-6-219"></a>func @generic_clamp__float(%x: f64, %lo: f64, %hi: f64) -&gt; f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.clamp", ppy.qualname = "generic.clamp__float", ppy.releases_gil = true, ppy.symbol = "ppy_generic_clamp__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":29:0) {
-<a id="__codelineno-6-220" name="__codelineno-6-220" href="#__codelineno-6-220"></a>^entry:
-<a id="__codelineno-6-221" name="__codelineno-6-221" href="#__codelineno-6-221"></a>    %x_addr = core.alloca : ptr&lt;f64, stack&gt; loc("examples/40_generics/generic.ppy":29:0)
-<a id="__codelineno-6-222" name="__codelineno-6-222" href="#__codelineno-6-222"></a>    core.store %x, %x_addr
-<a id="__codelineno-6-223" name="__codelineno-6-223" href="#__codelineno-6-223"></a>    %lo_addr = core.alloca : ptr&lt;f64, stack&gt;
-<a id="__codelineno-6-224" name="__codelineno-6-224" href="#__codelineno-6-224"></a>    core.store %lo, %lo_addr
-<a id="__codelineno-6-225" name="__codelineno-6-225" href="#__codelineno-6-225"></a>    %hi_addr = core.alloca : ptr&lt;f64, stack&gt;
-<a id="__codelineno-6-226" name="__codelineno-6-226" href="#__codelineno-6-226"></a>    core.store %hi, %hi_addr
-<a id="__codelineno-6-227" name="__codelineno-6-227" href="#__codelineno-6-227"></a>    %0 = core.load %x_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
-<a id="__codelineno-6-228" name="__codelineno-6-228" href="#__codelineno-6-228"></a>    %1 = core.load %hi_addr : f64
-<a id="__codelineno-6-229" name="__codelineno-6-229" href="#__codelineno-6-229"></a>    %2 = core.cmp.lt %0, %1 : bool
-<a id="__codelineno-6-230" name="__codelineno-6-230" href="#__codelineno-6-230"></a>    core.cond_br %2, ^ifexp.then1, ^ifexp.else2
-<a id="__codelineno-6-231" name="__codelineno-6-231" href="#__codelineno-6-231"></a>^ifexp.then1:
-<a id="__codelineno-6-232" name="__codelineno-6-232" href="#__codelineno-6-232"></a>    %3 = core.load %lo_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
-<a id="__codelineno-6-233" name="__codelineno-6-233" href="#__codelineno-6-233"></a>    %4 = core.load %x_addr : f64
-<a id="__codelineno-6-234" name="__codelineno-6-234" href="#__codelineno-6-234"></a>    %5 = core.call %3, %4 {callee = @generic_largest__float} : f64
-<a id="__codelineno-6-235" name="__codelineno-6-235" href="#__codelineno-6-235"></a>    core.br ^ifexp.end3(%5)
-<a id="__codelineno-6-236" name="__codelineno-6-236" href="#__codelineno-6-236"></a>^ifexp.else2:
-<a id="__codelineno-6-237" name="__codelineno-6-237" href="#__codelineno-6-237"></a>    %6 = core.load %hi_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
-<a id="__codelineno-6-238" name="__codelineno-6-238" href="#__codelineno-6-238"></a>    core.br ^ifexp.end3(%6)
-<a id="__codelineno-6-239" name="__codelineno-6-239" href="#__codelineno-6-239"></a>^ifexp.end3(%ifexp: f64):
-<a id="__codelineno-6-240" name="__codelineno-6-240" href="#__codelineno-6-240"></a>    core.ret %ifexp loc("examples/40_generics/generic.ppy":30:4)
-<a id="__codelineno-6-241" name="__codelineno-6-241" href="#__codelineno-6-241"></a>}
-<a id="__codelineno-6-242" name="__codelineno-6-242" href="#__codelineno-6-242"></a>
-<a id="__codelineno-6-243" name="__codelineno-6-243" href="#__codelineno-6-243"></a>func @generic_largest__float(%a: f64, %b: f64) -&gt; f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__float", ppy.releases_gil = false, ppy.symbol = "ppy_generic_largest__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":17:0) {
-<a id="__codelineno-6-244" name="__codelineno-6-244" href="#__codelineno-6-244"></a>^entry:
-<a id="__codelineno-6-245" name="__codelineno-6-245" href="#__codelineno-6-245"></a>    %a_addr = core.alloca : ptr&lt;f64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
-<a id="__codelineno-6-246" name="__codelineno-6-246" href="#__codelineno-6-246"></a>    core.store %a, %a_addr
-<a id="__codelineno-6-247" name="__codelineno-6-247" href="#__codelineno-6-247"></a>    %b_addr = core.alloca : ptr&lt;f64, stack&gt;
-<a id="__codelineno-6-248" name="__codelineno-6-248" href="#__codelineno-6-248"></a>    core.store %b, %b_addr
-<a id="__codelineno-6-249" name="__codelineno-6-249" href="#__codelineno-6-249"></a>    %0 = core.load %a_addr : f64 loc("examples/40_generics/generic.ppy":18:4)
-<a id="__codelineno-6-250" name="__codelineno-6-250" href="#__codelineno-6-250"></a>    %1 = core.load %b_addr : f64
-<a id="__codelineno-6-251" name="__codelineno-6-251" href="#__codelineno-6-251"></a>    %2 = core.cmp.gt %0, %1 : bool
-<a id="__codelineno-6-252" name="__codelineno-6-252" href="#__codelineno-6-252"></a>    %3 = core.load %a_addr : f64
-<a id="__codelineno-6-253" name="__codelineno-6-253" href="#__codelineno-6-253"></a>    %4 = core.load %b_addr : f64
-<a id="__codelineno-6-254" name="__codelineno-6-254" href="#__codelineno-6-254"></a>    %5 = core.select %2, %3, %4 : f64
-<a id="__codelineno-6-255" name="__codelineno-6-255" href="#__codelineno-6-255"></a>    core.ret %5
-<a id="__codelineno-6-256" name="__codelineno-6-256" href="#__codelineno-6-256"></a>}
-<a id="__codelineno-6-257" name="__codelineno-6-257" href="#__codelineno-6-257"></a>
-<a id="__codelineno-6-258" name="__codelineno-6-258" href="#__codelineno-6-258"></a>func @generic_largest__int(%a: i64, %b: i64) -&gt; i64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__int", ppy.releases_gil = false, ppy.symbol = "ppy_generic_largest__int", ppy.type_arguments = ["int"]} loc("examples/40_generics/generic.ppy":17:0) {
-<a id="__codelineno-6-259" name="__codelineno-6-259" href="#__codelineno-6-259"></a>^entry:
-<a id="__codelineno-6-260" name="__codelineno-6-260" href="#__codelineno-6-260"></a>    %a_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
-<a id="__codelineno-6-261" name="__codelineno-6-261" href="#__codelineno-6-261"></a>    core.store %a, %a_addr
-<a id="__codelineno-6-262" name="__codelineno-6-262" href="#__codelineno-6-262"></a>    %b_addr = core.alloca : ptr&lt;i64, stack&gt;
-<a id="__codelineno-6-263" name="__codelineno-6-263" href="#__codelineno-6-263"></a>    core.store %b, %b_addr
-<a id="__codelineno-6-264" name="__codelineno-6-264" href="#__codelineno-6-264"></a>    %0 = core.load %a_addr : i64 loc("examples/40_generics/generic.ppy":18:4)
-<a id="__codelineno-6-265" name="__codelineno-6-265" href="#__codelineno-6-265"></a>    %a_entry = core.load %a_addr : i64
-<a id="__codelineno-6-266" name="__codelineno-6-266" href="#__codelineno-6-266"></a>    %1 = core.load %b_addr : i64
-<a id="__codelineno-6-267" name="__codelineno-6-267" href="#__codelineno-6-267"></a>    %b_entry = core.load %b_addr : i64
-<a id="__codelineno-6-268" name="__codelineno-6-268" href="#__codelineno-6-268"></a>    %2 = core.cmp.gt %0, %1 : bool
-<a id="__codelineno-6-269" name="__codelineno-6-269" href="#__codelineno-6-269"></a>    %3 = core.load %a_addr : i64
-<a id="__codelineno-6-270" name="__codelineno-6-270" href="#__codelineno-6-270"></a>    %4 = core.load %b_addr : i64
-<a id="__codelineno-6-271" name="__codelineno-6-271" href="#__codelineno-6-271"></a>    %5 = core.select %2, %3, %4 : i64
-<a id="__codelineno-6-272" name="__codelineno-6-272" href="#__codelineno-6-272"></a>    core.ret %5
-<a id="__codelineno-6-273" name="__codelineno-6-273" href="#__codelineno-6-273"></a>}
+<a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a>    %28 = core.cast %0 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a>    %29 = core.const 19 : i64
+<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a>    %30 = core.ptr_offset %28, %29 : ptr&lt;i64&gt;
+<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a>    %31 = core.load %30 : i64
+<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a>    %32 = core.const 8104318125134660608 : i64
+<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a>    %33 = core.cmp.eq %31, %32 : bool
+<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a>    %y_entry = core.load %y_addr : i64
+<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a>    core.cond_br %33, ^touch.call1, ^touch.done2 loc("examples/40_generics/generic.ppy":10:8)
+<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a>^touch.call1:
+<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>    core.call_extern %0 {abi = "c", callee = "ppy_coll_touch"} loc("examples/40_generics/generic.ppy":10:8)
+<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>    core.br ^touch.done2
+<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a>^touch.done2:
+<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a>    %34 = core.load %self_addr : ptr&lt;i8&gt; loc("examples/40_generics/generic.ppy":11:8)
+<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a>    %35 = core.cast %34 : i64
+<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a>    %36 = core.const 0 : i64
+<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a>    %37 = core.cmp.ne %35, %36 : bool
+<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a>    core.guard %37 {kind = "bounds", message = "`None` has no attribute `y`", raises = "AttributeError: 'NoneType' object has no attribute 'y'"}
+<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a>    %38 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a>    %39 = core.const 3 : i64
+<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a>    %40 = core.ptr_offset %38, %39 : ptr&lt;i64&gt;
+<a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a>    %41 = core.load %40 : i64
+<a id="__codelineno-6-71" name="__codelineno-6-71" href="#__codelineno-6-71"></a>    %42 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-72" name="__codelineno-6-72" href="#__codelineno-6-72"></a>    %43 = core.const 1 : i64
+<a id="__codelineno-6-73" name="__codelineno-6-73" href="#__codelineno-6-73"></a>    %44 = core.ptr_offset %42, %43 : ptr&lt;i64&gt;
+<a id="__codelineno-6-74" name="__codelineno-6-74" href="#__codelineno-6-74"></a>    %45 = core.load %44 : i64
+<a id="__codelineno-6-75" name="__codelineno-6-75" href="#__codelineno-6-75"></a>    %46 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-76" name="__codelineno-6-76" href="#__codelineno-6-76"></a>    %47 = core.const 15 : i64
+<a id="__codelineno-6-77" name="__codelineno-6-77" href="#__codelineno-6-77"></a>    %48 = core.ptr_offset %46, %47 : ptr&lt;i64&gt;
+<a id="__codelineno-6-78" name="__codelineno-6-78" href="#__codelineno-6-78"></a>    %49 = core.load %48 : i64
+<a id="__codelineno-6-79" name="__codelineno-6-79" href="#__codelineno-6-79"></a>    %50 = core.cast %34 {ppy.reads = true} : ptr&lt;ptr&lt;i64&gt;&gt;
+<a id="__codelineno-6-80" name="__codelineno-6-80" href="#__codelineno-6-80"></a>    %51 = core.const 2 : i64
+<a id="__codelineno-6-81" name="__codelineno-6-81" href="#__codelineno-6-81"></a>    %52 = core.ptr_offset %50, %51 : ptr&lt;ptr&lt;i64&gt;&gt;
+<a id="__codelineno-6-82" name="__codelineno-6-82" href="#__codelineno-6-82"></a>    %53 = core.load %52 : ptr&lt;i64&gt;
+<a id="__codelineno-6-83" name="__codelineno-6-83" href="#__codelineno-6-83"></a>    %54 = core.cmp.ge %41, %45 : bool
+<a id="__codelineno-6-84" name="__codelineno-6-84" href="#__codelineno-6-84"></a>    %55 = core.sub %41, %45 {overflow = "wrap"} : i64
+<a id="__codelineno-6-85" name="__codelineno-6-85" href="#__codelineno-6-85"></a>    %56 = core.select %54, %55, %41 : i64
+<a id="__codelineno-6-86" name="__codelineno-6-86" href="#__codelineno-6-86"></a>    %57 = core.mul %56, %49 {overflow = "wrap"} : i64
+<a id="__codelineno-6-87" name="__codelineno-6-87" href="#__codelineno-6-87"></a>    %58 = core.ptr_offset %53, %57 : ptr&lt;i64&gt;
+<a id="__codelineno-6-88" name="__codelineno-6-88" href="#__codelineno-6-88"></a>    %59 = core.cast %58 : ptr&lt;i8&gt;
+<a id="__codelineno-6-89" name="__codelineno-6-89" href="#__codelineno-6-89"></a>    %60 = core.cast %59 : ptr&lt;i64&gt;
+<a id="__codelineno-6-90" name="__codelineno-6-90" href="#__codelineno-6-90"></a>    %61 = core.const 1 : i64
+<a id="__codelineno-6-91" name="__codelineno-6-91" href="#__codelineno-6-91"></a>    %62 = core.ptr_offset %60, %61 : ptr&lt;i64&gt;
+<a id="__codelineno-6-92" name="__codelineno-6-92" href="#__codelineno-6-92"></a>    %63 = core.cast %62 : ptr&lt;i8&gt;
+<a id="__codelineno-6-93" name="__codelineno-6-93" href="#__codelineno-6-93"></a>    %64 = core.load %y_addr : i64
+<a id="__codelineno-6-94" name="__codelineno-6-94" href="#__codelineno-6-94"></a>    %65 = core.cast %63 : ptr&lt;i64&gt;
+<a id="__codelineno-6-95" name="__codelineno-6-95" href="#__codelineno-6-95"></a>    core.store %64, %65
+<a id="__codelineno-6-96" name="__codelineno-6-96" href="#__codelineno-6-96"></a>    %66 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-97" name="__codelineno-6-97" href="#__codelineno-6-97"></a>    %67 = core.const 19 : i64
+<a id="__codelineno-6-98" name="__codelineno-6-98" href="#__codelineno-6-98"></a>    %68 = core.ptr_offset %66, %67 : ptr&lt;i64&gt;
+<a id="__codelineno-6-99" name="__codelineno-6-99" href="#__codelineno-6-99"></a>    %69 = core.load %68 : i64
+<a id="__codelineno-6-100" name="__codelineno-6-100" href="#__codelineno-6-100"></a>    %70 = core.const 8104318125134660608 : i64
+<a id="__codelineno-6-101" name="__codelineno-6-101" href="#__codelineno-6-101"></a>    %71 = core.cmp.eq %69, %70 : bool
+<a id="__codelineno-6-102" name="__codelineno-6-102" href="#__codelineno-6-102"></a>    core.cond_br %71, ^touch.call3, ^touch.done4
+<a id="__codelineno-6-103" name="__codelineno-6-103" href="#__codelineno-6-103"></a>^touch.call3:
+<a id="__codelineno-6-104" name="__codelineno-6-104" href="#__codelineno-6-104"></a>    core.call_extern %34 {abi = "c", callee = "ppy_coll_touch"} loc("examples/40_generics/generic.ppy":11:8)
+<a id="__codelineno-6-105" name="__codelineno-6-105" href="#__codelineno-6-105"></a>    core.br ^touch.done4
+<a id="__codelineno-6-106" name="__codelineno-6-106" href="#__codelineno-6-106"></a>^touch.done4:
+<a id="__codelineno-6-107" name="__codelineno-6-107" href="#__codelineno-6-107"></a>    %72 = core.load %self_addr : ptr&lt;i8&gt; loc("examples/40_generics/generic.ppy":11:8)
+<a id="__codelineno-6-108" name="__codelineno-6-108" href="#__codelineno-6-108"></a>    core.call_extern %72 {abi = "c", callee = "ppy_coll_release"}
+<a id="__codelineno-6-109" name="__codelineno-6-109" href="#__codelineno-6-109"></a>    core.ret
+<a id="__codelineno-6-110" name="__codelineno-6-110" href="#__codelineno-6-110"></a>}
+<a id="__codelineno-6-111" name="__codelineno-6-111" href="#__codelineno-6-111"></a>
+<a id="__codelineno-6-112" name="__codelineno-6-112" href="#__codelineno-6-112"></a>func @generic_Point_name(%self: ptr&lt;i8&gt;) -&gt; ptr&lt;i8&gt; attrs {effects = ["alloc", "read_object"], ppy.abi = "ppy", ppy.qualname = "generic.Point.name", ppy.releases_gil = false, ppy.symbol = "ppy_generic_Point_name"} loc("examples/40_generics/generic.ppy":13:4) {
+<a id="__codelineno-6-113" name="__codelineno-6-113" href="#__codelineno-6-113"></a>^entry:
+<a id="__codelineno-6-114" name="__codelineno-6-114" href="#__codelineno-6-114"></a>    %self_addr = core.alloca {ppy.owns = true} : ptr&lt;ptr&lt;i8&gt;, stack&gt; loc("examples/40_generics/generic.ppy":13:4)
+<a id="__codelineno-6-115" name="__codelineno-6-115" href="#__codelineno-6-115"></a>    core.store %self, %self_addr
+<a id="__codelineno-6-116" name="__codelineno-6-116" href="#__codelineno-6-116"></a>    core.call_extern %self {abi = "c", callee = "ppy_coll_retain"}
+<a id="__codelineno-6-117" name="__codelineno-6-117" href="#__codelineno-6-117"></a>    %0 = core.const 0 : i64 loc("examples/40_generics/generic.ppy":14:8)
+<a id="__codelineno-6-118" name="__codelineno-6-118" href="#__codelineno-6-118"></a>    %1 = core.call_extern %0 {abi = "c", callee = "ppy_str_builder"} : ptr&lt;i8&gt;
+<a id="__codelineno-6-119" name="__codelineno-6-119" href="#__codelineno-6-119"></a>    %2 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.0"} : ptr&lt;u8&gt;
+<a id="__codelineno-6-120" name="__codelineno-6-120" href="#__codelineno-6-120"></a>    %3 = core.const 1 : i64
+<a id="__codelineno-6-121" name="__codelineno-6-121" href="#__codelineno-6-121"></a>    core.call_extern %1, %2, %3 {abi = "c", callee = "ppy_str_add_bytes"}
+<a id="__codelineno-6-122" name="__codelineno-6-122" href="#__codelineno-6-122"></a>    %4 = core.load %self_addr : ptr&lt;i8&gt;
+<a id="__codelineno-6-123" name="__codelineno-6-123" href="#__codelineno-6-123"></a>    %5 = core.cast %4 : i64
+<a id="__codelineno-6-124" name="__codelineno-6-124" href="#__codelineno-6-124"></a>    %6 = core.const 0 : i64
+<a id="__codelineno-6-125" name="__codelineno-6-125" href="#__codelineno-6-125"></a>    %7 = core.cmp.ne %5, %6 : bool
+<a id="__codelineno-6-126" name="__codelineno-6-126" href="#__codelineno-6-126"></a>    core.guard %7 {kind = "bounds", message = "`None` has no attribute `x`", raises = "AttributeError: 'NoneType' object has no attribute 'x'"}
+<a id="__codelineno-6-127" name="__codelineno-6-127" href="#__codelineno-6-127"></a>    %8 = core.cast %4 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-128" name="__codelineno-6-128" href="#__codelineno-6-128"></a>    %9 = core.const 3 : i64
+<a id="__codelineno-6-129" name="__codelineno-6-129" href="#__codelineno-6-129"></a>    %10 = core.ptr_offset %8, %9 : ptr&lt;i64&gt;
+<a id="__codelineno-6-130" name="__codelineno-6-130" href="#__codelineno-6-130"></a>    %11 = core.load %10 : i64
+<a id="__codelineno-6-131" name="__codelineno-6-131" href="#__codelineno-6-131"></a>    %12 = core.cast %4 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-132" name="__codelineno-6-132" href="#__codelineno-6-132"></a>    %13 = core.const 1 : i64
+<a id="__codelineno-6-133" name="__codelineno-6-133" href="#__codelineno-6-133"></a>    %14 = core.ptr_offset %12, %13 : ptr&lt;i64&gt;
+<a id="__codelineno-6-134" name="__codelineno-6-134" href="#__codelineno-6-134"></a>    %15 = core.load %14 : i64
+<a id="__codelineno-6-135" name="__codelineno-6-135" href="#__codelineno-6-135"></a>    %16 = core.cast %4 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-136" name="__codelineno-6-136" href="#__codelineno-6-136"></a>    %17 = core.const 15 : i64
+<a id="__codelineno-6-137" name="__codelineno-6-137" href="#__codelineno-6-137"></a>    %18 = core.ptr_offset %16, %17 : ptr&lt;i64&gt;
+<a id="__codelineno-6-138" name="__codelineno-6-138" href="#__codelineno-6-138"></a>    %19 = core.load %18 : i64
+<a id="__codelineno-6-139" name="__codelineno-6-139" href="#__codelineno-6-139"></a>    %20 = core.cast %4 {ppy.reads = true} : ptr&lt;ptr&lt;i64&gt;&gt;
+<a id="__codelineno-6-140" name="__codelineno-6-140" href="#__codelineno-6-140"></a>    %21 = core.const 2 : i64
+<a id="__codelineno-6-141" name="__codelineno-6-141" href="#__codelineno-6-141"></a>    %22 = core.ptr_offset %20, %21 : ptr&lt;ptr&lt;i64&gt;&gt;
+<a id="__codelineno-6-142" name="__codelineno-6-142" href="#__codelineno-6-142"></a>    %23 = core.load %22 : ptr&lt;i64&gt;
+<a id="__codelineno-6-143" name="__codelineno-6-143" href="#__codelineno-6-143"></a>    %24 = core.cmp.ge %11, %15 : bool
+<a id="__codelineno-6-144" name="__codelineno-6-144" href="#__codelineno-6-144"></a>    %25 = core.sub %11, %15 {overflow = "wrap"} : i64
+<a id="__codelineno-6-145" name="__codelineno-6-145" href="#__codelineno-6-145"></a>    %26 = core.select %24, %25, %11 : i64
+<a id="__codelineno-6-146" name="__codelineno-6-146" href="#__codelineno-6-146"></a>    %27 = core.mul %26, %19 {overflow = "wrap"} : i64
+<a id="__codelineno-6-147" name="__codelineno-6-147" href="#__codelineno-6-147"></a>    %28 = core.ptr_offset %23, %27 : ptr&lt;i64&gt;
+<a id="__codelineno-6-148" name="__codelineno-6-148" href="#__codelineno-6-148"></a>    %29 = core.cast %28 : ptr&lt;i8&gt;
+<a id="__codelineno-6-149" name="__codelineno-6-149" href="#__codelineno-6-149"></a>    %30 = core.cast %29 : ptr&lt;i64&gt;
+<a id="__codelineno-6-150" name="__codelineno-6-150" href="#__codelineno-6-150"></a>    %31 = core.load %30 : i64
+<a id="__codelineno-6-151" name="__codelineno-6-151" href="#__codelineno-6-151"></a>    core.call_extern %1, %31 {abi = "c", callee = "ppy_str_add_int"}
+<a id="__codelineno-6-152" name="__codelineno-6-152" href="#__codelineno-6-152"></a>    %32 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.1"} : ptr&lt;u8&gt;
+<a id="__codelineno-6-153" name="__codelineno-6-153" href="#__codelineno-6-153"></a>    %33 = core.const 2 : i64
+<a id="__codelineno-6-154" name="__codelineno-6-154" href="#__codelineno-6-154"></a>    core.call_extern %1, %32, %33 {abi = "c", callee = "ppy_str_add_bytes"}
+<a id="__codelineno-6-155" name="__codelineno-6-155" href="#__codelineno-6-155"></a>    %34 = core.load %self_addr : ptr&lt;i8&gt;
+<a id="__codelineno-6-156" name="__codelineno-6-156" href="#__codelineno-6-156"></a>    %35 = core.cast %34 : i64
+<a id="__codelineno-6-157" name="__codelineno-6-157" href="#__codelineno-6-157"></a>    %36 = core.const 0 : i64
+<a id="__codelineno-6-158" name="__codelineno-6-158" href="#__codelineno-6-158"></a>    %37 = core.cmp.ne %35, %36 : bool
+<a id="__codelineno-6-159" name="__codelineno-6-159" href="#__codelineno-6-159"></a>    core.guard %37 {kind = "bounds", message = "`None` has no attribute `y`", raises = "AttributeError: 'NoneType' object has no attribute 'y'"}
+<a id="__codelineno-6-160" name="__codelineno-6-160" href="#__codelineno-6-160"></a>    %38 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-161" name="__codelineno-6-161" href="#__codelineno-6-161"></a>    %39 = core.const 3 : i64
+<a id="__codelineno-6-162" name="__codelineno-6-162" href="#__codelineno-6-162"></a>    %40 = core.ptr_offset %38, %39 : ptr&lt;i64&gt;
+<a id="__codelineno-6-163" name="__codelineno-6-163" href="#__codelineno-6-163"></a>    %41 = core.load %40 : i64
+<a id="__codelineno-6-164" name="__codelineno-6-164" href="#__codelineno-6-164"></a>    %42 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-165" name="__codelineno-6-165" href="#__codelineno-6-165"></a>    %43 = core.const 1 : i64
+<a id="__codelineno-6-166" name="__codelineno-6-166" href="#__codelineno-6-166"></a>    %44 = core.ptr_offset %42, %43 : ptr&lt;i64&gt;
+<a id="__codelineno-6-167" name="__codelineno-6-167" href="#__codelineno-6-167"></a>    %45 = core.load %44 : i64
+<a id="__codelineno-6-168" name="__codelineno-6-168" href="#__codelineno-6-168"></a>    %46 = core.cast %34 {ppy.reads = true} : ptr&lt;i64&gt;
+<a id="__codelineno-6-169" name="__codelineno-6-169" href="#__codelineno-6-169"></a>    %47 = core.const 15 : i64
+<a id="__codelineno-6-170" name="__codelineno-6-170" href="#__codelineno-6-170"></a>    %48 = core.ptr_offset %46, %47 : ptr&lt;i64&gt;
+<a id="__codelineno-6-171" name="__codelineno-6-171" href="#__codelineno-6-171"></a>    %49 = core.load %48 : i64
+<a id="__codelineno-6-172" name="__codelineno-6-172" href="#__codelineno-6-172"></a>    %50 = core.cast %34 {ppy.reads = true} : ptr&lt;ptr&lt;i64&gt;&gt;
+<a id="__codelineno-6-173" name="__codelineno-6-173" href="#__codelineno-6-173"></a>    %51 = core.const 2 : i64
+<a id="__codelineno-6-174" name="__codelineno-6-174" href="#__codelineno-6-174"></a>    %52 = core.ptr_offset %50, %51 : ptr&lt;ptr&lt;i64&gt;&gt;
+<a id="__codelineno-6-175" name="__codelineno-6-175" href="#__codelineno-6-175"></a>    %53 = core.load %52 : ptr&lt;i64&gt;
+<a id="__codelineno-6-176" name="__codelineno-6-176" href="#__codelineno-6-176"></a>    %54 = core.cmp.ge %41, %45 : bool
+<a id="__codelineno-6-177" name="__codelineno-6-177" href="#__codelineno-6-177"></a>    %55 = core.sub %41, %45 {overflow = "wrap"} : i64
+<a id="__codelineno-6-178" name="__codelineno-6-178" href="#__codelineno-6-178"></a>    %56 = core.select %54, %55, %41 : i64
+<a id="__codelineno-6-179" name="__codelineno-6-179" href="#__codelineno-6-179"></a>    %57 = core.mul %56, %49 {overflow = "wrap"} : i64
+<a id="__codelineno-6-180" name="__codelineno-6-180" href="#__codelineno-6-180"></a>    %58 = core.ptr_offset %53, %57 : ptr&lt;i64&gt;
+<a id="__codelineno-6-181" name="__codelineno-6-181" href="#__codelineno-6-181"></a>    %59 = core.cast %58 : ptr&lt;i8&gt;
+<a id="__codelineno-6-182" name="__codelineno-6-182" href="#__codelineno-6-182"></a>    %60 = core.cast %59 : ptr&lt;i64&gt;
+<a id="__codelineno-6-183" name="__codelineno-6-183" href="#__codelineno-6-183"></a>    %61 = core.const 1 : i64
+<a id="__codelineno-6-184" name="__codelineno-6-184" href="#__codelineno-6-184"></a>    %62 = core.ptr_offset %60, %61 : ptr&lt;i64&gt;
+<a id="__codelineno-6-185" name="__codelineno-6-185" href="#__codelineno-6-185"></a>    %63 = core.cast %62 : ptr&lt;i8&gt;
+<a id="__codelineno-6-186" name="__codelineno-6-186" href="#__codelineno-6-186"></a>    %64 = core.cast %63 : ptr&lt;i64&gt;
+<a id="__codelineno-6-187" name="__codelineno-6-187" href="#__codelineno-6-187"></a>    %65 = core.load %64 : i64
+<a id="__codelineno-6-188" name="__codelineno-6-188" href="#__codelineno-6-188"></a>    core.call_extern %1, %65 {abi = "c", callee = "ppy_str_add_int"}
+<a id="__codelineno-6-189" name="__codelineno-6-189" href="#__codelineno-6-189"></a>    %66 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.2"} : ptr&lt;u8&gt;
+<a id="__codelineno-6-190" name="__codelineno-6-190" href="#__codelineno-6-190"></a>    %67 = core.const 1 : i64
+<a id="__codelineno-6-191" name="__codelineno-6-191" href="#__codelineno-6-191"></a>    core.call_extern %1, %66, %67 {abi = "c", callee = "ppy_str_add_bytes"}
+<a id="__codelineno-6-192" name="__codelineno-6-192" href="#__codelineno-6-192"></a>    %68 = core.call_extern %1 {abi = "c", callee = "ppy_str_finish"} : ptr&lt;i8&gt;
+<a id="__codelineno-6-193" name="__codelineno-6-193" href="#__codelineno-6-193"></a>    %69 = core.load %self_addr : ptr&lt;i8&gt;
+<a id="__codelineno-6-194" name="__codelineno-6-194" href="#__codelineno-6-194"></a>    core.call_extern %69 {abi = "c", callee = "ppy_coll_release"}
+<a id="__codelineno-6-195" name="__codelineno-6-195" href="#__codelineno-6-195"></a>    core.ret %68
+<a id="__codelineno-6-196" name="__codelineno-6-196" href="#__codelineno-6-196"></a>}
+<a id="__codelineno-6-197" name="__codelineno-6-197" href="#__codelineno-6-197"></a>
+<a id="__codelineno-6-198" name="__codelineno-6-198" href="#__codelineno-6-198"></a>func @generic_sweep(%n: i64) -&gt; f64 attrs {effects = ["may_raise"], ppy.abi = "ppy", ppy.qualname = "generic.sweep", ppy.releases_gil = true, ppy.symbol = "ppy_generic_sweep"} loc("examples/40_generics/generic.ppy":33:0) {
+<a id="__codelineno-6-199" name="__codelineno-6-199" href="#__codelineno-6-199"></a>^entry:
+<a id="__codelineno-6-200" name="__codelineno-6-200" href="#__codelineno-6-200"></a>    %n_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":33:0)
+<a id="__codelineno-6-201" name="__codelineno-6-201" href="#__codelineno-6-201"></a>    core.store %n, %n_addr
+<a id="__codelineno-6-202" name="__codelineno-6-202" href="#__codelineno-6-202"></a>    %0 = core.const 0.0 : f64 loc("examples/40_generics/generic.ppy":34:4)
+<a id="__codelineno-6-203" name="__codelineno-6-203" href="#__codelineno-6-203"></a>    %total_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-204" name="__codelineno-6-204" href="#__codelineno-6-204"></a>    core.store %0, %total_addr
+<a id="__codelineno-6-205" name="__codelineno-6-205" href="#__codelineno-6-205"></a>    %1 = core.load %n_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
+<a id="__codelineno-6-206" name="__codelineno-6-206" href="#__codelineno-6-206"></a>    %n_entry = core.load %n_addr : i64
+<a id="__codelineno-6-207" name="__codelineno-6-207" href="#__codelineno-6-207"></a>    %2 = core.const 0 : i64
+<a id="__codelineno-6-208" name="__codelineno-6-208" href="#__codelineno-6-208"></a>    %3 = core.const 1 : i64
+<a id="__codelineno-6-209" name="__codelineno-6-209" href="#__codelineno-6-209"></a>    %i_addr = core.alloca : ptr&lt;i64, stack&gt;
+<a id="__codelineno-6-210" name="__codelineno-6-210" href="#__codelineno-6-210"></a>    %4 = core.const 3 : i64
+<a id="__codelineno-6-211" name="__codelineno-6-211" href="#__codelineno-6-211"></a>    core.store %2, %i_addr loc("examples/40_generics/generic.ppy":35:4)
+<a id="__codelineno-6-212" name="__codelineno-6-212" href="#__codelineno-6-212"></a>    core.br ^for.head3
+<a id="__codelineno-6-213" name="__codelineno-6-213" href="#__codelineno-6-213"></a>^for.head3:
+<a id="__codelineno-6-214" name="__codelineno-6-214" href="#__codelineno-6-214"></a>    %5 = core.load %i_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
+<a id="__codelineno-6-215" name="__codelineno-6-215" href="#__codelineno-6-215"></a>    %6 = core.cmp.lt %5, %1 : bool
+<a id="__codelineno-6-216" name="__codelineno-6-216" href="#__codelineno-6-216"></a>    core.cond_br %6, ^for.body4, ^for.end6
+<a id="__codelineno-6-217" name="__codelineno-6-217" href="#__codelineno-6-217"></a>^for.body4:
+<a id="__codelineno-6-218" name="__codelineno-6-218" href="#__codelineno-6-218"></a>    %7 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":36:8)
+<a id="__codelineno-6-219" name="__codelineno-6-219" href="#__codelineno-6-219"></a>    %8 = core.load %i_addr : i64
+<a id="__codelineno-6-220" name="__codelineno-6-220" href="#__codelineno-6-220"></a>    %9 = core.const 0.25 : f64
+<a id="__codelineno-6-221" name="__codelineno-6-221" href="#__codelineno-6-221"></a>    %10 = core.cast %8 : f64
+<a id="__codelineno-6-222" name="__codelineno-6-222" href="#__codelineno-6-222"></a>    %11 = core.mul %10, %9 : f64
+<a id="__codelineno-6-223" name="__codelineno-6-223" href="#__codelineno-6-223"></a>    %12 = core.const 1.0 : f64
+<a id="__codelineno-6-224" name="__codelineno-6-224" href="#__codelineno-6-224"></a>    %13 = core.const 10.0 : f64
+<a id="__codelineno-6-225" name="__codelineno-6-225" href="#__codelineno-6-225"></a>    %14 = core.call %11, %12, %13 {callee = @generic_clamp__float} : f64
+<a id="__codelineno-6-226" name="__codelineno-6-226" href="#__codelineno-6-226"></a>    %15 = core.load %i_addr : i64
+<a id="__codelineno-6-227" name="__codelineno-6-227" href="#__codelineno-6-227"></a>    %16 = core.call %15, %4 {callee = @generic_largest__int} : i64
+<a id="__codelineno-6-228" name="__codelineno-6-228" href="#__codelineno-6-228"></a>    %17 = core.cast %16 : f64
+<a id="__codelineno-6-229" name="__codelineno-6-229" href="#__codelineno-6-229"></a>    %18 = core.add %14, %17 : f64
+<a id="__codelineno-6-230" name="__codelineno-6-230" href="#__codelineno-6-230"></a>    %19 = core.add %7, %18 : f64
+<a id="__codelineno-6-231" name="__codelineno-6-231" href="#__codelineno-6-231"></a>    core.store %19, %total_addr
+<a id="__codelineno-6-232" name="__codelineno-6-232" href="#__codelineno-6-232"></a>    %20 = core.load %i_addr : i64
+<a id="__codelineno-6-233" name="__codelineno-6-233" href="#__codelineno-6-233"></a>    %21 = core.add %20, %3 {overflow = "proven"} : i64
+<a id="__codelineno-6-234" name="__codelineno-6-234" href="#__codelineno-6-234"></a>    core.store %21, %i_addr
+<a id="__codelineno-6-235" name="__codelineno-6-235" href="#__codelineno-6-235"></a>    core.br ^for.head3
+<a id="__codelineno-6-236" name="__codelineno-6-236" href="#__codelineno-6-236"></a>^for.end6:
+<a id="__codelineno-6-237" name="__codelineno-6-237" href="#__codelineno-6-237"></a>    %22 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":37:4)
+<a id="__codelineno-6-238" name="__codelineno-6-238" href="#__codelineno-6-238"></a>    core.ret %22
+<a id="__codelineno-6-239" name="__codelineno-6-239" href="#__codelineno-6-239"></a>}
+<a id="__codelineno-6-240" name="__codelineno-6-240" href="#__codelineno-6-240"></a>
+<a id="__codelineno-6-241" name="__codelineno-6-241" href="#__codelineno-6-241"></a>func @generic_clamp__float(%x: f64, %lo: f64, %hi: f64) -&gt; f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.clamp", ppy.qualname = "generic.clamp__float", ppy.releases_gil = true, ppy.symbol = "ppy_generic_clamp__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":29:0) {
+<a id="__codelineno-6-242" name="__codelineno-6-242" href="#__codelineno-6-242"></a>^entry:
+<a id="__codelineno-6-243" name="__codelineno-6-243" href="#__codelineno-6-243"></a>    %x_addr = core.alloca : ptr&lt;f64, stack&gt; loc("examples/40_generics/generic.ppy":29:0)
+<a id="__codelineno-6-244" name="__codelineno-6-244" href="#__codelineno-6-244"></a>    core.store %x, %x_addr
+<a id="__codelineno-6-245" name="__codelineno-6-245" href="#__codelineno-6-245"></a>    %lo_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-246" name="__codelineno-6-246" href="#__codelineno-6-246"></a>    core.store %lo, %lo_addr
+<a id="__codelineno-6-247" name="__codelineno-6-247" href="#__codelineno-6-247"></a>    %hi_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-248" name="__codelineno-6-248" href="#__codelineno-6-248"></a>    core.store %hi, %hi_addr
+<a id="__codelineno-6-249" name="__codelineno-6-249" href="#__codelineno-6-249"></a>    %0 = core.load %x_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
+<a id="__codelineno-6-250" name="__codelineno-6-250" href="#__codelineno-6-250"></a>    %1 = core.load %hi_addr : f64
+<a id="__codelineno-6-251" name="__codelineno-6-251" href="#__codelineno-6-251"></a>    %2 = core.cmp.lt %0, %1 : bool
+<a id="__codelineno-6-252" name="__codelineno-6-252" href="#__codelineno-6-252"></a>    core.cond_br %2, ^ifexp.then1, ^ifexp.else2
+<a id="__codelineno-6-253" name="__codelineno-6-253" href="#__codelineno-6-253"></a>^ifexp.then1:
+<a id="__codelineno-6-254" name="__codelineno-6-254" href="#__codelineno-6-254"></a>    %3 = core.load %lo_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
+<a id="__codelineno-6-255" name="__codelineno-6-255" href="#__codelineno-6-255"></a>    %4 = core.load %x_addr : f64
+<a id="__codelineno-6-256" name="__codelineno-6-256" href="#__codelineno-6-256"></a>    %5 = core.call %3, %4 {callee = @generic_largest__float} : f64
+<a id="__codelineno-6-257" name="__codelineno-6-257" href="#__codelineno-6-257"></a>    core.br ^ifexp.end3(%5)
+<a id="__codelineno-6-258" name="__codelineno-6-258" href="#__codelineno-6-258"></a>^ifexp.else2:
+<a id="__codelineno-6-259" name="__codelineno-6-259" href="#__codelineno-6-259"></a>    %6 = core.load %hi_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
+<a id="__codelineno-6-260" name="__codelineno-6-260" href="#__codelineno-6-260"></a>    core.br ^ifexp.end3(%6)
+<a id="__codelineno-6-261" name="__codelineno-6-261" href="#__codelineno-6-261"></a>^ifexp.end3(%ifexp: f64):
+<a id="__codelineno-6-262" name="__codelineno-6-262" href="#__codelineno-6-262"></a>    core.ret %ifexp loc("examples/40_generics/generic.ppy":30:4)
+<a id="__codelineno-6-263" name="__codelineno-6-263" href="#__codelineno-6-263"></a>}
+<a id="__codelineno-6-264" name="__codelineno-6-264" href="#__codelineno-6-264"></a>
+<a id="__codelineno-6-265" name="__codelineno-6-265" href="#__codelineno-6-265"></a>func @generic_largest__float(%a: f64, %b: f64) -&gt; f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__float", ppy.releases_gil = false, ppy.symbol = "ppy_generic_largest__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":17:0) {
+<a id="__codelineno-6-266" name="__codelineno-6-266" href="#__codelineno-6-266"></a>^entry:
+<a id="__codelineno-6-267" name="__codelineno-6-267" href="#__codelineno-6-267"></a>    %a_addr = core.alloca : ptr&lt;f64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
+<a id="__codelineno-6-268" name="__codelineno-6-268" href="#__codelineno-6-268"></a>    core.store %a, %a_addr
+<a id="__codelineno-6-269" name="__codelineno-6-269" href="#__codelineno-6-269"></a>    %b_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-270" name="__codelineno-6-270" href="#__codelineno-6-270"></a>    core.store %b, %b_addr
+<a id="__codelineno-6-271" name="__codelineno-6-271" href="#__codelineno-6-271"></a>    %0 = core.load %a_addr : f64 loc("examples/40_generics/generic.ppy":18:4)
+<a id="__codelineno-6-272" name="__codelineno-6-272" href="#__codelineno-6-272"></a>    %1 = core.load %b_addr : f64
+<a id="__codelineno-6-273" name="__codelineno-6-273" href="#__codelineno-6-273"></a>    %2 = core.cmp.gt %0, %1 : bool
+<a id="__codelineno-6-274" name="__codelineno-6-274" href="#__codelineno-6-274"></a>    %3 = core.load %a_addr : f64
+<a id="__codelineno-6-275" name="__codelineno-6-275" href="#__codelineno-6-275"></a>    %4 = core.load %b_addr : f64
+<a id="__codelineno-6-276" name="__codelineno-6-276" href="#__codelineno-6-276"></a>    %5 = core.select %2, %3, %4 : f64
+<a id="__codelineno-6-277" name="__codelineno-6-277" href="#__codelineno-6-277"></a>    core.ret %5
+<a id="__codelineno-6-278" name="__codelineno-6-278" href="#__codelineno-6-278"></a>}
+<a id="__codelineno-6-279" name="__codelineno-6-279" href="#__codelineno-6-279"></a>
+<a id="__codelineno-6-280" name="__codelineno-6-280" href="#__codelineno-6-280"></a>func @generic_largest__int(%a: i64, %b: i64) -&gt; i64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__int", ppy.releases_gil = false, ppy.symbol = "ppy_generic_largest__int", ppy.type_arguments = ["int"]} loc("examples/40_generics/generic.ppy":17:0) {
+<a id="__codelineno-6-281" name="__codelineno-6-281" href="#__codelineno-6-281"></a>^entry:
+<a id="__codelineno-6-282" name="__codelineno-6-282" href="#__codelineno-6-282"></a>    %a_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
+<a id="__codelineno-6-283" name="__codelineno-6-283" href="#__codelineno-6-283"></a>    core.store %a, %a_addr
+<a id="__codelineno-6-284" name="__codelineno-6-284" href="#__codelineno-6-284"></a>    %b_addr = core.alloca : ptr&lt;i64, stack&gt;
+<a id="__codelineno-6-285" name="__codelineno-6-285" href="#__codelineno-6-285"></a>    core.store %b, %b_addr
+<a id="__codelineno-6-286" name="__codelineno-6-286" href="#__codelineno-6-286"></a>    %0 = core.load %a_addr : i64 loc("examples/40_generics/generic.ppy":18:4)
+<a id="__codelineno-6-287" name="__codelineno-6-287" href="#__codelineno-6-287"></a>    %a_entry = core.load %a_addr : i64
+<a id="__codelineno-6-288" name="__codelineno-6-288" href="#__codelineno-6-288"></a>    %1 = core.load %b_addr : i64
+<a id="__codelineno-6-289" name="__codelineno-6-289" href="#__codelineno-6-289"></a>    %b_entry = core.load %b_addr : i64
+<a id="__codelineno-6-290" name="__codelineno-6-290" href="#__codelineno-6-290"></a>    %2 = core.cmp.gt %0, %1 : bool
+<a id="__codelineno-6-291" name="__codelineno-6-291" href="#__codelineno-6-291"></a>    %3 = core.load %a_addr : i64
+<a id="__codelineno-6-292" name="__codelineno-6-292" href="#__codelineno-6-292"></a>    %4 = core.load %b_addr : i64
+<a id="__codelineno-6-293" name="__codelineno-6-293" href="#__codelineno-6-293"></a>    %5 = core.select %2, %3, %4 : i64
+<a id="__codelineno-6-294" name="__codelineno-6-294" href="#__codelineno-6-294"></a>    core.ret %5
+<a id="__codelineno-6-295" name="__codelineno-6-295" href="#__codelineno-6-295"></a>}
 </code></pre></div>
 </details>
 <!-- outputs:end -->

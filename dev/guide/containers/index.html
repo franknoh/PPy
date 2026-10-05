@@ -4577,9 +4577,11 @@ collected, freed when the last reference goes. The <code>ppy</code> types stay t
 explicit way to say which structure you mean; a plain container gets the one
 Python's container behaves like.</p>
 <h2 id="what-lowers">What lowers<a class="headerlink" href="#what-lowers" title="Permanent link">&para;</a></h2>
-<p>A container's element, or a dict's value, is a number, a string, a tuple of
-numbers, a value class or an object class, or another container:
-<code>list[list[int]]</code>, <code>dict[str, list[int]]</code>, <code>list[tuple[int, float]]</code>. A key
+<p>A container's element, or a dict's value, is a number, a string, a number
+or string that may be <code>None</code>, a tuple of numbers, a value class or an
+object class, or another container: <code>list[list[int]]</code>,
+<code>dict[str, list[int]]</code>, <code>list[tuple[int, float]]</code>, <code>list[int | None]</code>,
+<code>dict[str, str | None]</code>. A key
 of a dict or a set is an <code>int</code>, a <code>str</code>, a tuple of <code>int</code>, or an instance of
 a class Python can hash (see <a href="../collections/#what-a-collection-holds">Collections</a>).</p>
 <table>
@@ -4612,7 +4614,7 @@ a class Python can hash (see <a href="../collections/#what-a-collection-holds">C
 </tr>
 <tr>
 <td>a dict</td>
-<td><code>d[k]</code>, <code>d[k] = v</code>, <code>del d[k]</code>, <code>get(k, default)</code>, <code>setdefault</code>, <code>pop(k)</code>, <code>pop(k, default)</code>, <code>keys()</code>, <code>values()</code>, <code>items()</code>, <code>update</code>, <code>copy</code>, <code>clear</code></td>
+<td><code>d[k]</code>, <code>d[k] = v</code>, <code>del d[k]</code>, <code>get(k)</code>, <code>get(k, default)</code>, <code>setdefault</code>, <code>pop(k)</code>, <code>pop(k, default)</code>, <code>keys()</code>, <code>values()</code>, <code>items()</code>, <code>update</code>, <code>copy</code>, <code>clear</code></td>
 </tr>
 <tr>
 <td>a set</td>
@@ -4762,13 +4764,24 @@ Python.</p>
   one key. A NaN key, which only its own object finds, falls back. An <code>int</code>
   key given to a dict of floats (<code>d[1]</code> where <code>d: dict[float, int]</code>) stays in
   Python, since CPython keeps and prints the key as it came.</li>
-<li><code>v = d.get(k)</code> with no default, of a dict of numbers, binds <code>v</code> as a
-  number or <code>None</code>: native code keeps a flag beside the number. <code>v is None</code>,
-  <code>v is not None</code>, <code>if v:</code>, <code>print(v)</code>, <code>v = None</code>, and <code>v</code> as a number
-  (<code>v += x</code> included) once a test has shown it holds one are native. The
-  checker reports <code>v += x</code> on a <code>v</code> that may still be <code>None</code> as <code>E1302</code>,
-  with or without strict mode. A <code>d.get(k)</code> used any other way (passed on, returned, a
-  dict of strings) stays in Python. With a default, <code>get</code> is native.</li>
+<li><code>d.get(k)</code> with no default gives <code>None</code> for a missing key, for a dict
+  of numbers, of numbers or strings that may be <code>None</code>, of strings, and of
+  objects of an object class (a value class's stays in Python). Bound to
+  a local, passed to an <code>int | None</code> parameter, or returned from an
+  <code>-&gt; int | None</code> function, it keeps CPython's meaning
+  (<a href="../native-lowering/#numbers-and-strings-that-may-be-none">Numbers and strings that may be <code>None</code></a>):
+  <code>v is None</code>, <code>if v:</code>, <code>print(v)</code>, and <code>v or default</code> are native, and <code>v</code>
+  is read as a number once a test has shown it holds one. The checker
+  reports <code>v += x</code> on a <code>v</code> that may still be <code>None</code> as <code>E1302</code>, with or
+  without strict mode. With a default, <code>get</code> is native for a dict whose
+  values cannot be <code>None</code>; <code>d.get(k, 0)</code> of a <code>dict[str, int | None]</code>
+  stays in Python.</li>
+<li>Sorting, <code>min</code>, and <code>max</code> over elements that may be <code>None</code>, and keys
+  that may be <code>None</code>, stay in Python.</li>
+<li><code>r: list[int | None] = [None] * w</code> is a checker error (<code>E1301</code>: the
+  display is a <code>list[NoneType]</code>). Inside a comprehension assigned to an
+  annotated name or field, <code>[[None] * w for _ in range(h)]</code> is accepted and
+  lowers; returned directly, it keeps the function in Python.</li>
 <li><code>sort(key=...)</code>, <code>sorted(key=...)</code>, <code>min(key=...)</code>, and <code>max(key=...)</code>
   natively take a key giving numbers or tuples of them, and <code>min</code> and <code>max</code>
   with a key pick among numbers. <a href="../closures/">Functions as values</a> has the

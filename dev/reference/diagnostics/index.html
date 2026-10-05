@@ -5261,7 +5261,7 @@ emit. Each diagnostic has a stable code (spec 29.1).</p>
 </tr>
 <tr>
 <td><code>W2010</code></td>
-<td>Under <code>--no-strict</code>, a strict-mode error with a sound fallback: an untyped value (<code>E1201</code>, <code>E1202</code>, <code>E1204</code>, <code>E1306</code>), an annotation or name the analysis cannot read (<code>E1101</code>, or <code>E1301</code> in an annotation), a value stored into a list or dict element of another type (<code>E1301</code>), a dynamic feature (<code>E1103</code>, <code>E1501</code> to <code>E1504</code>, <code>E1506</code>, <code>E1507</code>), or an operator on a class built on a base the analysis cannot see (<code>E1302</code>). The code involved stays on CPython, which runs it or raises its own error. The message names the code it is under strict mode.</td>
+<td>Under <code>--no-strict</code>, a strict-mode error with a sound fallback: an untyped value (<code>E1201</code>, <code>E1202</code>, <code>E1204</code>, <code>E1306</code>), an annotation or name the analysis cannot read (<code>E1101</code>, or <code>E1301</code> in an annotation), a value stored into a list or dict element of another type (<code>E1301</code>), a dynamic feature (<code>E1103</code>, <code>E1501</code> to <code>E1504</code>, <code>E1506</code>, <code>E1507</code>), or an operator on a class built on a base the analysis cannot see (<code>E1302</code>). The code involved stays on CPython, which runs it or raises its own error; a function under an unvouched decorator (<code>E1204</code>) stays in Python, and every call by its name, native callers' included, goes through the object the decorator returned. The message names the code it is under strict mode.</td>
 </tr>
 <tr>
 <td><code>W2011</code></td>
