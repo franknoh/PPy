@@ -456,6 +456,20 @@ class ContainerLowering(CollectionApiLowering):
             self._rt("ppy_str_add_bool", (builder, core.cast(self.b, value, I64)), None)
         elif shape.kind == "str":
             self._add_repr(builder, value)  # type: ignore[attr-defined]
+        elif shape.kind == "optional":
+            # `None`, or the number.
+            present = core.tuple_extract(self.b, value, 1)
+            number = self._block("repr.number")  # type: ignore[attr-defined]
+            absent = self._block("repr.none")  # type: ignore[attr-defined]
+            shown = self._block("repr.shown")  # type: ignore[attr-defined]
+            core.cond_br(self.b, present, Successor(number), Successor(absent))
+            self.b.at_end(number)  # type: ignore[attr-defined]
+            self._add_item_repr(builder, Shape(shape.parts[0]), core.tuple_extract(self.b, value, 0))
+            core.br(self.b, Successor(shown))
+            self.b.at_end(absent)  # type: ignore[attr-defined]
+            self._add_text(builder, "None")
+            core.br(self.b, Successor(shown))
+            self.b.at_end(shown)  # type: ignore[attr-defined]
         elif shape.kind == "tuple":
             self._add_text(builder, "(")
             for index, part in enumerate(shape.parts):

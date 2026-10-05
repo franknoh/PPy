@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from ppy_runtime._record import replace
 from ppy_runtime.abi import (
     STATUS_FALLBACK,
+    OPTIONAL,
     STATUS_OK,
     VARIADIC,
     CrossingClass,
@@ -188,6 +189,18 @@ def _scalar_name(t: T.Type) -> str | None:
     base = T.strip_literal(t)
     if isinstance(base, T.Instance) and base.name in _SCALARS:
         return base.name
+    return None
+
+
+def optional_scalar(t: T.Type) -> str | None:
+    """ "int", "float", or "bool" for `int | None` and the like: a number or
+    `None`, which native code holds as the number and a flag."""
+    base = T.strip_literal(t)
+    if not (isinstance(base, T.Union_) and T.is_optional(base)):
+        return None
+    present = T.strip_literal(T.remove_none(base))
+    if isinstance(present, T.Instance) and present.name in _SCALARS and not present.args:
+        return present.name if present.name in {"int", "float", "bool"} else None
     return None
 
 
@@ -462,6 +475,9 @@ def _native_param(
     scalar = _scalar_name(t)
     if scalar is not None:
         return NativeParam(name, scalar)
+    optional = optional_scalar(t)
+    if optional is not None:
+        return NativeParam(name, OPTIONAL, optional)
     pointer = _pointer_element(t)
     if pointer is not None:
         return NativeParam(name, pointer[0], pointer[1])
@@ -485,6 +501,10 @@ def _return_atoms(t: T.Type, layouts: ClassLayouts | None = None) -> tuple[str, 
     scalar = _scalar_name(t)
     if scalar is not None:
         return (scalar,)
+    optional = optional_scalar(t)
+    if optional is not None:
+        # The number, and whether there is one.
+        return (optional, "bool")
     return _tuple_elements(t)
 
 
@@ -1202,6 +1222,7 @@ def _signature(
         future=future,
         returned=_returned(info, returned),
         draws=analysis is not None and Effect.RANDOM in analysis.effects,
+        optional=(optional_scalar(info.ret) or "") if not info.is_async else "",
     )
 
 

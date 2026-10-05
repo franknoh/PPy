@@ -96,6 +96,7 @@ def _signature(payload: dict) -> NativeSignature:
         draws=bool(abi.get("draws", False)),
         classes=classes_from_json(abi.get("classes", [])),
         effects=bool(abi.get("effects", False)),
+        optional=str(abi.get("optional", "")),
     )
 
 

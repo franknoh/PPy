@@ -529,6 +529,7 @@ _CROSSING_KINDS = {
     "set": "PX_SET",
     "object": "PX_OBJECT",
     "record": "PX_RECORD",
+    "optional": "PX_OPTIONAL",
 }
 
 _PARTS = {"int": "i", "float": "f", "bool": "b"}
@@ -1013,6 +1014,22 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
                 arguments.append(name)
             continue
 
+        if parameter.is_optional:
+            # `None` is the number 0 with its flag clear; anything else is
+            # the number, checked as a plain parameter of its kind is.
+            name = f"a{position}"
+            declarations.append(f"    {C_TYPES[_abi(parameter.element)]} {name} = 0;")
+            declarations.append(f"    int8_t {name}_present = 0;")
+            lines.append(f"    if ({source} != Py_None) {{")
+            lines.append(f"        {name}_present = 1;")
+            lines.extend(
+                _scalar_lines(parameter.element, source, name, "        ", exact=parameter.exact)
+            )
+            lines.append("    }")
+            arguments.append(name)
+            arguments.append(f"{name}_present")
+            continue
+
         if parameter.is_tuple:
             lines.append(
                 f"    if (!PyTuple_CheckExact({source}) || "
@@ -1184,6 +1201,9 @@ def _scalar_lines(
 
 def _box(signature: NativeSignature) -> str:
     """Build the Python object the wrapper returns."""
+    if signature.optional:
+        # The number where its flag says there is one, else `None`.
+        return f"(ppy_out1 ? {_box_one(signature.returns[0], 'ppy_out0')} : Py_NewRef(Py_None))"
     if len(signature.returns) == 1:
         return _box_one(signature.returns[0], "ppy_out0")
     return (
@@ -1196,7 +1216,7 @@ def _box(signature: NativeSignature) -> str:
 def _result_builder(index: int, signature: NativeSignature) -> str:
     """A tuple result is built element by element, so no format string is
     needed and a failed allocation cannot leak the elements already boxed."""
-    if len(signature.returns) == 1:
+    if len(signature.returns) == 1 or signature.optional:
         return ""
     parameters = ", ".join(
         f"{C_TYPES[atom]} v{position}" for position, atom in enumerate(signature.returns)

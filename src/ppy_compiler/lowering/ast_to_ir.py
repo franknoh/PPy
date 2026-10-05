@@ -109,6 +109,7 @@ from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
 from .intness import ModuleIntness, gives_bool, gives_int
 from .memo import cached_decorator, define_cached
+from .optionals import OptionalLowering
 from .stdlib import StdlibLowering
 from .strings import StringLowering
 from .walks import WalkLowering
@@ -179,6 +180,10 @@ class IRParameter:
         return self.native.is_tuple if self.native is not None else False
 
     @property
+    def is_optional(self) -> bool:
+        return self.native.is_optional if self.native is not None else False
+
+    @property
     def kind(self) -> str:
         return self.native.kind if self.native is not None else str(self.type)
 
@@ -219,6 +224,8 @@ class IRSignature:
 
     @property
     def returns_tuple(self) -> bool:
+        if self.native is not None and self.native.optional:
+            return False  # a number or `None`, packed
         return len(self.results) == 1 and isinstance(self.results[0], TupleType)
 
     def __getattr__(self, name: str):  # type: ignore[no-untyped-def]
@@ -1531,6 +1538,8 @@ def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
         return TupleType(tuple(_scalar_type(e) for e in parameter.elements))
     if parameter.is_object:
         return _struct_type(parameter.class_name, parameter.fields)
+    if parameter.is_optional:
+        return TupleType((_scalar_type(parameter.element), BOOL))
     return _scalar_type(parameter.kind)
 
 
@@ -1580,6 +1589,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
     GeneratorLowering,
     ContainerLowering,
     StringLowering,
+    OptionalLowering,
 ):
     """Lowers one function body."""
 
@@ -1775,6 +1785,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 continue
             if parameter.is_object:
                 self.objects[parameter.name] = argument
+                continue
+            if parameter.is_optional:
+                self._bind_optional_parameter(parameter.name, parameter.element, argument)
                 continue
             if parameter.is_tuple:
                 slot = self._alloca(argument.type, parameter.name)
@@ -1984,6 +1997,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
     def _return(self, node: ast.Return) -> None:
         if self._generator_return(node):
             return
+        if self._return_optional(node.value):
+            return
         if (
             node.value is None
             or (isinstance(node.value, ast.Constant) and node.value.value is None)
@@ -2053,6 +2068,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._leave_for_return()
             self._release_collections()
             core.ret(self.b)
+            return
+        if self._return_optional(None):
             return
         if self.frontend.standalone:
             raise Unsupported("control flow can fall off the end without returning a value")
@@ -2913,6 +2930,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
     # -- expressions ------------------------------------------------------
 
     def _expr(self, node: ast.expr) -> Value:
+        if isinstance(node, (ast.Attribute, ast.Subscript, ast.Call, ast.BinOp, ast.UnaryOp, ast.BoolOp)):
+            # A number that may be `None` (`lowering/optionals.py`).
+            found = self._optional_expr(node)
+            if found is not None:
+                return found
         match node:
             case ast.Constant(value=bool() as value):
                 return core.const(self.b, value, BOOL)
@@ -3151,6 +3173,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             if absent is None:
                 absent = self._optional_truth(node.operand, empty=True)
             if absent is None:
+                absent = self._optional_test(node.operand, empty=True)
+            if absent is None:
                 absent = self._object_truth(node.operand, empty=True)
             if absent is not None:
                 return absent
@@ -3265,6 +3289,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if identity is not None:
             return identity
         identity = self._optional_identity(node)
+        if identity is None:
+            identity = self._optional_compare(node)
         if identity is not None:
             return identity
         folded = self._feature_membership(node)
@@ -4776,6 +4802,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                         raise Unsupported(f"`{argument.id}` has no field `{attr}`")
                 arguments.append(struct)
                 continue
+            if parameter.is_optional:
+                arguments.append(self._optional_packed(argument, parameter.element))
+                continue
             if parameter.is_tuple:
                 values = self._tuple_expr(argument)
                 if values is None or len(values) != len(parameter.elements):
@@ -5639,6 +5668,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         held = self._buffer_truth(node)
         if held is None:
             held = self._optional_truth(node)
+        if held is None:
+            held = self._optional_test(node)
         if held is not None:
             return held
         present = self._object_truth(node)
@@ -5707,24 +5738,10 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         """`v = None`, `v = d.get(k)`, `v = w` of another such local, or `v =` a
         number."""
         present, slot, kind = self.optionals[name]
-        if isinstance(value, ast.Constant) and value.value is None:
-            core.store(self.b, core.const(self.b, False, BOOL), present)
-            return
-        if isinstance(value, ast.Name) and value.id in self.optionals:
-            other_present, other_slot, other_kind = self.optionals[value.id]
-            core.store(self.b, core.load(self.b, other_present), present)
-            loaded = core.load(self.b, other_slot)
-            core.store(self.b, self._coerce(loaded, kind) if other_kind != kind else loaded, slot)
-            return
-        got = self._optional_get(value)
-        if got is not None:
-            found, number = got
-            core.store(self.b, found, present)
-            core.store(self.b, self._coerce(number, kind), slot)
-            return
-        number = self._expr(value)
-        core.store(self.b, core.const(self.b, True, BOOL), present)
-        core.store(self.b, self._coerce(number, kind), slot)
+        # `None` is the flag clear and the number 0 (`lowering/optionals.py`).
+        found, number = self._optional_pair(value, kind)
+        core.store(self.b, found, present)
+        core.store(self.b, number, slot)
 
     def _optional_get(self, node: ast.expr) -> tuple[Value, Value] | None:
         """`d.get(k)` of a dict of numbers: whether `k` is there, and its value
@@ -5821,6 +5838,12 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             and self._resolves_to_builtin(call.func)
         ):
             return False
+        named = self._name_optional_arguments(call)
+        if named is not None:
+            # Each argument that may be `None` is a local now; print those.
+            made = ast.copy_location(ast.Expr(named), node)
+            self.__dict__.setdefault("_made_nodes", []).append(made)
+            return self._print_optional(made)
         index = next(
             (
                 i

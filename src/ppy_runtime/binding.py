@@ -609,12 +609,15 @@ def _bind(
         return _answer(slots)
 
     nothing = signature.returns_none
+    optional = bool(signature.optional)
 
     def _answer(slots: list) -> object:  # type: ignore[type-arg]
         if nothing:
             return None
         if text_result:
             return _text_result(slots[0].value, slots[1].value)
+        if optional:
+            return finalizers[0](slots[0].value) if slots[1].value else None
         if returns_tuple:
             return tuple(
                 finish(slot.value) for finish, slot in zip(finalizers, slots, strict=False)
@@ -991,6 +994,10 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             return None
         if signature.returns == (TEXT,):
             return _text_result(slots[0].value, slots[1].value)
+        if signature.optional:
+            # The number where its flag says there is one, else `None`.
+            first = _result_for(signature.returns[0])(slots[0].value)
+            return first if slots[1].value else None
         if len(slots) > 1:
             return tuple(
                 _result_for(atom)(slot.value)
@@ -1127,6 +1134,20 @@ def _expander_for(
                     raise GuardFailed from exc
 
         return expand_object
+
+    if parameter.is_optional:
+        number = _scalar_guard(parameter.abi[0], parameter.exact)
+
+        def expand_optional(value: object, atoms: list, borrowed: list) -> None:
+            """`None` as 0 with its flag clear; a number as itself, flagged."""
+            if value is None:
+                atoms.append(0)
+                atoms.append(0)
+                return
+            atoms.append(number(value))
+            atoms.append(1)
+
+        return expand_optional
 
     if parameter.is_tuple:
         element_guards = [_scalar_guard(atom, parameter.exact) for atom in parameter.abi]

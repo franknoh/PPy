@@ -104,7 +104,9 @@ class Shape:
 
     #: "int", "float", "bool", "str", "tuple", "record", "collection", "object",
     #: "function" (a closure: its type is `class_args[0]`, spelled in `record`),
-    #: or "generator" (a generator's frame: what it yields is `class_args[0]`).
+    #: "generator" (a generator's frame: what it yields is `class_args[0]`), or
+    #: "optional" (a number or `None`, `parts` its kind: the number's word and
+    #: a word that says whether there is one, `lowering/optionals.py`).
     kind: str
     #: A tuple's items, or a record's fields: scalar kinds.
     parts: tuple[str, ...] = ()
@@ -120,12 +122,13 @@ class Shape:
 
     @property
     def words(self) -> int:
+        if self.kind == "optional":
+            return 2
         return len(self.parts) if self.kind in {"tuple", "record"} else 1
 
     @property
     def floats(self) -> int:
-        kinds = self.parts if self.kind in {"tuple", "record"} else (self.kind,)
-        return sum(1 << i for i, kind in enumerate(kinds) if kind == "float")
+        return sum(1 << i for i, kind in enumerate(_kinds(self)) if kind == "float")
 
     @property
     def handles(self) -> int:
@@ -163,6 +166,9 @@ class Shape:
     def ir_type(self) -> IRType:
         if self.kind in _SCALARS:
             return _SCALARS[self.kind]
+        if self.kind == "optional":
+            # The number, and whether there is one.
+            return TupleType((_SCALARS[self.parts[0]], BOOL))
         if self.kind == "tuple":
             return TupleType(tuple(_SCALARS[part] for part in self.parts))
         if self.kind == "record":
@@ -215,6 +221,8 @@ def spelled(kind: Kind) -> str:
     def shape(item: Shape) -> str:
         if item.kind == "tuple":
             return f"tuple[{', '.join(item.parts)}]"
+        if item.kind == "optional":
+            return f"{item.parts[0]} | NoneType"
         if item.kind in {"record", "object"}:
             return item.spelled if item.kind == "object" else item.record
         if item.kind == "collection":
@@ -270,6 +278,7 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
     """The shape of a value of type `t`, or None where it has none.
 
     `Node | None` is a `Node`: an object's handle may be null, which is `None`.
+    `int | None` is an optional number (`Shape("optional")`).
     """
     base = T.strip_literal(t)
     if isinstance(base, T.Union_):
@@ -277,6 +286,8 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
         if len(members) != 1 or len(members) == len(base.members):
             return None
         found = shape_of(members[0], records)
+        if found is not None and found.kind in {"int", "float", "bool"}:
+            return Shape("optional", (found.kind,))
         return found if found is not None and found.kind == "object" else None
     if base in (T.INT, T.FLOAT, T.BOOL):
         return Shape(str(base))
@@ -1922,7 +1933,7 @@ class CollectionLowering:
         if shape.reference:
             return core.load(self.b, core.cast(self.b, address, _pointer(address, HANDLE)))
         items = [self._read_word(address, i, kind) for i, kind in enumerate(_kinds(shape))]
-        if shape.kind == "tuple":
+        if shape.kind in {"tuple", "optional"}:
             return core.tuple_make(self.b, *items)
         if shape.kind == "record":
             ir_type = shape.ir_type()
@@ -1945,7 +1956,7 @@ class CollectionLowering:
         if shape.reference:
             core.store(self.b, value, core.cast(self.b, address, _pointer(address, HANDLE)))
             return
-        if shape.kind == "tuple":
+        if shape.kind in {"tuple", "optional"}:
             items = [core.tuple_extract(self.b, value, i) for i in range(shape.words)]
         elif shape.kind == "record":
             items = [core.struct_extract(self.b, value, name) for name in shape.names]
@@ -1964,6 +1975,8 @@ class CollectionLowering:
         an owned handle (a collection element only)."""
         if shape.reference:
             return self._handle(node)
+        if shape.kind == "optional":
+            return self._optional_packed(node, shape.parts[0]), False  # type: ignore[attr-defined]
         if shape.kind == "tuple":
             items = self._tuple_expr(node)  # type: ignore[attr-defined]
             if items is None:
@@ -2629,6 +2642,8 @@ def _scalar_name(t: T.Type | None) -> str:
 
 
 def _kinds(shape: Shape) -> tuple[str, ...]:
+    if shape.kind == "optional":
+        return (shape.parts[0], "bool")
     return shape.parts if shape.kind in {"tuple", "record"} else (shape.kind,)
 
 
@@ -2803,6 +2818,8 @@ def crossing_classes(
     def spelled_shape(shape: Shape, nullable: bool = False) -> str:
         if shape.kind == "tuple":
             return f"tuple[{', '.join(shape.parts)}]"
+        if shape.kind == "optional":
+            return f"{shape.parts[0]} | NoneType"
         if shape.kind in {"object", "record"}:
             return shape.record + ("?" if nullable else "")
         if shape.kind == "collection":
