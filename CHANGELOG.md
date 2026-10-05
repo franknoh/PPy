@@ -61,6 +61,10 @@ the other 13 skipped and none differing.
   repr inside containers match CPython, and arithmetic or ordering that
   meets `None` raises CPython's `TypeError` with its text.
 - `scripts/fuzz.py --optional` fuzzes them.
+- `d.get(k, default)` and `d.pop(k, default)` of a dict whose values may be
+  `None` are typed as possibly `None`, and a returned list display or
+  comprehension that has no native form of its own is built as the declared
+  return type.
 
 ### Reading containers in place
 
@@ -143,6 +147,9 @@ the other 13 skipped and none differing.
 - A doctest operand built by a constructor call counts as type evidence.
 - `ppy explain module.Class` lists each field's type and where it came from.
 - Reasons no longer show internal names such as `__global_PRIMES`.
+- The fuzzer kills every process a run starts, on a timeout, on exit, and
+  when the fuzzer itself is killed, and its minimizer no longer produces
+  programs that loop forever.
 
 ### Examples and documentation
 
@@ -162,6 +169,8 @@ the other 13 skipped and none differing.
 
 - Sorting, `min`, and `max` over values that may be `None`, `None` as a
   dict key, and tuples holding such values stay in Python.
+- A value class that may be `None` (`d.get(k)` of a `dict[str, Item]`
+  where `Item` holds only numbers) stays in Python.
 - A class with list or dict fields is still copied at every call from
   Python, since CPython does not report changes to a list.
 
