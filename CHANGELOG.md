@@ -10,8 +10,10 @@ lists, dicts, and sets in place instead of copying them. More shapes lower
 `d.get(k)`), and more parameters take types without annotations. Fuzzing and
 the new examples found wrong answers that 0.6.0 also gave, now fixed: a
 project decorator skipped under `strict = false`, a bool stored as an int
-printing `1`, and writes through a field alias lost. On TheAlgorithms/Python
-the functions Python calls natively went from 806 to 867 (846 to 941 without
+printing `1`, and writes through a field alias lost. Objects Python passes
+to native code keep their native records between calls, and numbers and
+strings that may be `None` run natively. On TheAlgorithms/Python the
+functions Python calls natively went from 806 to 909 (846 to 982 without
 strict mode), and 387 of 400 scripts print the same as under CPython, with
 the other 13 skipped and none differing.
 
@@ -34,6 +36,35 @@ the other 13 skipped and none differing.
   (`node = self.head; node.value += 1`) lost the write under `ppy run`.
 - `scripts/fuzz.py --structures` fuzzes in-place edits of linked structures
   with unannotated fields.
+
+### Objects kept native between calls
+
+- A project object that Python passes to native code a second time keeps
+  its native record while the Python object lives, so later calls use it
+  instead of copying the object and everything reachable from it. Python
+  stays the source of truth: writes from Python are seen through CPython's
+  dict and type watchers, and native writes are set back on the Python
+  object when the call returns. `find` on a 10,000-node linked list went
+  from 3.1 ms to 38 µs a call (CPython 70 µs). `PPY_RESIDENT=0` turns it
+  off.
+- A function that makes many objects stays in Python when handing them to
+  Python costs more than its loops save, since each new object is created
+  as a Python object.
+- `scripts/fuzz.py --resident` mixes Python writes with repeated native
+  calls on the same objects.
+
+### Numbers and strings that may be `None`
+
+- `int | None`, `float | None`, `bool | None`, and `str | None` run natively
+  as locals, parameters, results, object fields, and list and dict
+  elements, on every path. `is None`, truth tests, `==`, `or`, printing and
+  repr inside containers match CPython, and arithmetic or ordering that
+  meets `None` raises CPython's `TypeError` with its text.
+- `scripts/fuzz.py --optional` fuzzes them.
+- `d.get(k, default)` and `d.pop(k, default)` of a dict whose values may be
+  `None` are typed as possibly `None`, and a returned list display or
+  comprehension that has no native form of its own is built as the declared
+  return type.
 
 ### Reading containers in place
 
@@ -116,6 +147,9 @@ the other 13 skipped and none differing.
 - A doctest operand built by a constructor call counts as type evidence.
 - `ppy explain module.Class` lists each field's type and where it came from.
 - Reasons no longer show internal names such as `__global_PRIMES`.
+- The fuzzer kills every process a run starts, on a timeout, on exit, and
+  when the fuzzer itself is killed, and its minimizer no longer produces
+  programs that loop forever.
 
 ### Examples and documentation
 
@@ -133,10 +167,12 @@ the other 13 skipped and none differing.
 
 ### Known limitations
 
-- `int | None`, `float | None`, and `str | None` fields and container
-  elements have no native form, so functions that use them stay in Python.
-- An object passed from Python is copied in and back at every call, so many
-  small methods are still called through Python.
+- Sorting, `min`, and `max` over values that may be `None`, `None` as a
+  dict key, and tuples holding such values stay in Python.
+- A value class that may be `None` (`d.get(k)` of a `dict[str, Item]`
+  where `Item` holds only numbers) stays in Python.
+- A class with list or dict fields is still copied at every call from
+  Python, since CPython does not report changes to a list.
 
 ## 0.6.0 — 2026-10-03
 
