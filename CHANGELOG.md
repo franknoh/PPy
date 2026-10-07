@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0 — unreleased
+## 0.7.0 — 2026-10-07
 
 Classes written without annotations run natively: fields take their types
 from every store in the project, and methods that edit linked lists, trees,
