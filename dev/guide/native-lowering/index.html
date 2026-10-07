@@ -5050,8 +5050,14 @@ a nonzero number (a non-empty string); <code>x == 3</code> is false for <code>No
 <code>isinstance(x, int)</code>, <code>print(x)</code>, <code>str(x)</code>, <code>f"{x}"</code>, and the <code>repr</code> of a
 list or dict holding them (<code>[1, None]</code>) write <code>None</code> where it is one.
 <code>d.get(k)</code> with no default gives <code>None</code> for a missing key, <code>None in xs</code> and
-<code>xs.count(None)</code> find it, and <code>any</code>/<code>all</code> count it as false. After a test
-that narrows <code>x</code>, its number is read directly.</p>
+<code>xs.count(None)</code> find it, and <code>any</code>/<code>all</code> count it as false. Of a
+<code>dict[str, int | None]</code>, <code>d.get(k, 5)</code> and <code>d.pop(k, 5)</code> give the stored
+<code>None</code> where the key holds one and the default only where the key is
+missing, and the checker types them <code>int | None</code> accordingly. A display of
+<code>None</code>s returned in place (<code>return [[None] * w for _ in range(h)]</code> from a
+<code>-&gt; list[list[str | None]]</code>) is made as the declared type, as it is when
+assigned to an annotated local. After a test that narrows <code>x</code>, its number
+is read directly.</p>
 <p>A field the checker narrowed (<code>if node.label is not None:</code>) may still be
 <code>None</code> when a call between the test and the read set it so, which CPython
 then meets: the read checks the flag. Arithmetic, an order comparison, or a
@@ -5073,9 +5079,11 @@ code sets is set on the Python object when the call answers.</p>
 <code>None</code> (CPython raises for them, in an order that depends on the
 comparisons), keys that may be <code>None</code>, a format spec over a value that may
 be <code>None</code> (<code>f"{x:&gt;4}"</code>), <code>x and y</code> used as a value of two such operands,
-<code>repr(s)</code> of a <code>str | None</code>, <code>d.get(k, default)</code> of a dict whose values
-may be <code>None</code>, unions of numbers with anything but <code>None</code>, and tuples
-holding a value that may be <code>None</code> (<code>tuple[int | None, int]</code>).</p>
+<code>repr(s)</code> of a <code>str | None</code>, unions of numbers with anything but <code>None</code>,
+tuples holding a value that may be <code>None</code> (<code>tuple[int | None, int]</code>), and a
+value class that may be <code>None</code> (<code>d.get(k)</code> of a <code>dict[str, Item]</code> where
+<code>Item</code> holds only numbers: the class is its fields' words, with no flag
+beside them).</p>
 <h2 id="what-the-body-may-contain">What the body may contain<a class="headerlink" href="#what-the-body-may-contain" title="Permanent link">&para;</a></h2>
 <p>A function declared to return a value may end in an <code>if</code>/<code>elif</code>/<code>else</code> whose
 every side returns or raises: no path reaches the end, so the end needs no
