@@ -1740,7 +1740,8 @@ def {user}(n: int) -> int:
         and what `main` does with them: parameters and results (`int | None`,
         `float | None`, `bool | None`, `str | None`), fields of an object,
         elements of a list and of a dict, and locals; `is None`, truth, `==`,
-        `or`, `in`, `isinstance`, `d.get(k)`, printing and f-strings; and a
+        `or`, `in`, `isinstance`, `d.get(k)`, `d.get(k, v)` and `d.pop(k, v)`,
+        a grid of `None`s returned as declared, printing and f-strings; and a
         field narrowed by a test that a call sets to `None` before arithmetic
         meets it, which raises CPython's `TypeError`."""
         rng = self.optioning
@@ -1851,6 +1852,20 @@ def {user}(n: int) -> int:
         w.put("    return 0")
         w.put("")
         w.put("")
+        look = self.name("op")
+        w.put(f"def {look}(d: dict[str, int | None], k: str) -> int | None:")
+        w.put(f"    v = d.get(k, {rng.choice(('None', str(rng.randint(-5, 5))))})")
+        w.put("    if v is None:")
+        w.put(f"        return d.pop(k, {rng.choice(('None', str(rng.randint(-5, 5))))})")
+        w.put("    return v + 1")
+        w.put("")
+        w.put("")
+        rows = self.name("op")
+        cell, put = rng.choice((("str", repr("x")), ("int", str(rng.randint(-5, 5)))))
+        w.put(f"def {rows}(w: int, h: int) -> list[list[{cell} | None]]:")
+        w.put("    return [[None] * w for _ in range(h)]")
+        w.put("")
+        w.put("")
 
         def values(none: float, least: int = 0) -> str:
             return ", ".join(
@@ -1890,6 +1905,10 @@ def {user}(n: int) -> int:
                 ]
             )
         after.append("print(o1.label)")
+        after.append(f"print({look}(od, 'a'), {look}(od, 'b'), {look}(od, 'q'), od)")
+        after.append(f"og = {rows}({rng.randint(0, 3)}, {rng.randint(1, 3)})")
+        after.append(f"og[0].append({put})")
+        after.append("print(og, og[0] is og[-1])")
         if self.with_resident:
             after.extend(self.optional_resident(w))
         return after
@@ -2969,14 +2988,21 @@ def _capped(command: list[str], memory: str) -> list[str]:
 def _execute(
     command: list[str], cwd: Path, timeout: float, env: dict[str, str] | None = None
 ) -> tuple[int, str, str]:
-    """Run `command` in a process group of its own; at `timeout`, kill the group.
+    """Run `command` in a process group of its own and kill the group on the
+    way out, whichever way that is.
 
     `subprocess.run(timeout=...)` kills only the process it started and then
     waits for its pipes to close, which a child `ppy run` spawned keeps open:
     a program that loops natively held a run for a day. Killing the whole
-    group ends every process the command made, and the pipes with them.
+    group ends every process the command made, and the pipes with them. The
+    group is killed at the timeout, when the command has exited (a process
+    it left behind goes too), and when this process is interrupted or ends
+    by an exception; and the command itself is killed by the kernel if this
+    process dies without a chance to clean up (`_die_with_parent`): a fuzz
+    run killed from outside left a `ppy run` looping for seven hours, in a
+    session of its own that no signal to the run reached.
     """
-    with subprocess.Popen(
+    with subprocess.Popen(  # pylint: disable=subprocess-popen-preexec-fn
         _capped(command, "2G"),
         cwd=cwd,
         stdout=subprocess.PIPE,
@@ -2984,6 +3010,7 @@ def _execute(
         text=True,
         env=env,
         start_new_session=True,
+        preexec_fn=_die_with_parent,  # noqa: PLW1509 - no threads start processes here
     ) as process:
         try:
             out, err = process.communicate(timeout=timeout)
@@ -2992,13 +3019,30 @@ def _execute(
             with contextlib.suppress(subprocess.TimeoutExpired):
                 process.communicate(timeout=10)
             return TIMED_OUT, "", "timed out"
+        finally:
+            _kill_group(process)
         return process.returncode, out, err
+
+
+def _die_with_parent() -> None:
+    """In the child, before `exec`: ask Linux to SIGKILL it when the process
+    that started it dies (`PR_SET_PDEATHSIG`). It holds across `exec`, so the
+    command (`systemd-run --scope` execs it in place) gets it too."""
+    if not sys.platform.startswith("linux"):
+        return
+    with contextlib.suppress(OSError, AttributeError):
+        import ctypes  # pylint: disable=import-outside-toplevel
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.prctl(1, signal.SIGKILL, 0, 0, 0)  # PR_SET_PDEATHSIG
 
 
 def _kill_group(process: subprocess.Popen[str]) -> None:
     try:
         os.killpg(process.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
+    except ProcessLookupError:
+        pass
+    except PermissionError:
         process.kill()
 
 
@@ -3142,17 +3186,35 @@ def compare(results: dict[str, Result]) -> list[Mismatch]:
 # -- minimizing ---------------------------------------------------------------
 
 
+#: The structure classes whose methods the minimizer keeps whole: a link
+#: assignment taken out of a rotation or a push leaves a cycle, which every
+#: walk of the structure then loops around forever.
+_KEPT_CLASSES = frozenset({"STree", "DList"})
+
+
 def _statements(source: str) -> list[tuple[int, int]]:
     """Line spans (start, end, 1-based inclusive) of every statement inside a
-    function, innermost last, so removing one leaves valid Python."""
+    function, innermost last, so removing one leaves valid Python.
+
+    A deletion must not leave a program that never ends: a statement inside
+    a `while` loop is not offered (the loop may go, but not the step that
+    ends it, as `n -= 2` in `countdown`), nor any in the methods of the
+    structure classes (`_KEPT_CLASSES`)."""
     tree = ast.parse(source)
+    kept: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.While) or (
+            isinstance(node, ast.ClassDef) and node.name in _KEPT_CLASSES
+        ):
+            for part in (*node.body, *getattr(node, "orelse", ())):
+                kept.update(id(child) for child in ast.walk(part))
     spans: list[tuple[int, int]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name not in {"__init__", "bump", "biggest"}:
             spans.extend(
                 (child.lineno, child.end_lineno or child.lineno)
                 for child in ast.walk(node)
-                if child is not node and isinstance(child, ast.stmt)
+                if child is not node and isinstance(child, ast.stmt) and id(child) not in kept
             )
     spans.extend(
         (node.lineno, node.end_lineno or node.lineno)

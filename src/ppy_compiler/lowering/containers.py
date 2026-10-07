@@ -112,6 +112,19 @@ class ContainerLowering(CollectionApiLowering):
                 return self._combined(node), True
         return super()._handle(node)
 
+    def _made_as(self, declared: T.Type, node: ast.expr) -> Value | None:
+        """`return [[None] * w for _ in range(h)]` from a `-> list[list[str | None]]`:
+        a display, a comprehension, or a repeat whose own type has no native
+        kind (`list[list[None]]`) made as the declared type, as it is when
+        assigned to an annotated local. None where it has a kind of its own
+        or is none of those."""
+        if self._builtin_of(node) is not None:
+            return None
+        found = self._reference_of_type(declared)
+        if not isinstance(found, Kind) or found.name not in _ALIASES:
+            return None
+        return self._made(found, node)
+
     def _value(self, node: ast.expr, shape: Shape) -> tuple[Value, bool]:
         # `d[k] = []`, `xs.append({})`: the empty display takes the slot's type.
         collection = shape.collection if shape.kind == "collection" else None

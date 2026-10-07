@@ -2068,7 +2068,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             core.ret(self.b, core.tuple_make(self.b, *items))
             return
         if expected == HANDLE:
-            handle, owned = self._handle(node.value)
+            made = self._made_as(self.info.ret, node.value)
+            handle, owned = (made, True) if made is not None else self._handle(node.value)
             if not owned:
                 self._retain(handle)
             self._leave_for_return()
