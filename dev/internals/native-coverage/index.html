@@ -5050,7 +5050,8 @@ CPython raises <code>RecursionError</code>.</p>
 <h2 id="with-all-of-070">With all of 0.7.0<a class="headerlink" href="#with-all-of-070" title="Permanent link">&para;</a></h2>
 <p>The same summary over the same tree after 0.7.0: fields typed from every
 store, methods that edit objects in place, containers read in place at the
-boundary, the smaller shapes (implicit ends, list shapes, <code>*args</code>, nested
+boundary, objects kept native between calls, numbers and strings that may
+be <code>None</code>, the smaller shapes (implicit ends, list shapes, <code>*args</code>, nested
 functions with cells, <code>d.get(k)</code>), more inference evidence, and the fixes
 found along the way.</p>
 <table>
@@ -5064,32 +5065,37 @@ found along the way.</p>
 <tbody>
 <tr>
 <td>native, called from Python</td>
-<td style="text-align: right;">867 functions (19%), 7,370 statements</td>
-<td style="text-align: right;">941 (20%), 7,973</td>
+<td style="text-align: right;">909 functions (19%), 7,816 statements</td>
+<td style="text-align: right;">982 (21%), 8,424</td>
 </tr>
 <tr>
 <td>native, called from native code</td>
-<td style="text-align: right;">624, 3,204</td>
-<td style="text-align: right;">703, 3,543</td>
+<td style="text-align: right;">642, 3,227</td>
+<td style="text-align: right;">723, 3,570</td>
 </tr>
 <tr>
 <td>Python</td>
-<td style="text-align: right;">3,195 (68%), 26,395</td>
-<td style="text-align: right;">3,042 (65%), 25,453</td>
+<td style="text-align: right;">3,135 (67%), 25,926</td>
+<td style="text-align: right;">2,981 (64%), 24,975</td>
 </tr>
 </tbody>
 </table>
-<p>Against 0.6.0, the functions Python calls natively went from 806 to 867 in
-strict mode and from 846 to 941 with <code>--no-strict</code>, and all compiled
-functions from 1,418 to 1,644 with <code>--no-strict</code>. Writes to a parameter
-native code copies (173 functions) and implicit ends (27) are gone as
-reasons; writes to an object native code does not own fell from 116 to 74,
-bare-<code>list</code> parameters from 80 to 40, and nested functions held back by the
-function around them from 51 to 11.</p>
-<p>Most of what compiles but is not called natively from Python is one reason:
-424 functions read collections that cost more to bring across than the body
-does with them. Two thirds of those are methods, whose <code>self</code> is copied at
-every call. Under <code>--no-strict</code> the top of the Python table is now:</p>
+<p>Against 0.6.0, the functions Python calls natively went from 806 to 909 in
+strict mode and from 846 to 982 with <code>--no-strict</code>, and all compiled
+functions from 1,418 to 1,705 with <code>--no-strict</code>. Writes to a parameter
+native code copies (173 functions), implicit ends (27), and fields that may
+be <code>None</code> (23) are gone as reasons; writes to an object native code does
+not own fell from 116 to 74, bare-<code>list</code> parameters from 80 to 40, and
+nested functions held back by the function around them from 51 to 11.</p>
+<p>Of the 723 compiled functions Python does not call natively, 295 read
+collections that cost more to bring across than the body does with them,
+mostly methods of classes with list or dict fields, which are still copied
+at every call. 175 are too small for the boundary to pay off, among them
+one-line getters that objects kept native made cheap to call but not
+cheaper than CPython. 57 call themselves without a loop, so CPython's
+recursion limit stays in force, and 10 make more objects than the boundary
+can hand back cheaply. Under <code>--no-strict</code> the top of the Python table is
+now:</p>
 <table>
 <thead>
 <tr>
@@ -5100,8 +5106,8 @@ every call. Under <code>--no-strict</code> the top of the Python table is now:</
 </thead>
 <tbody>
 <tr>
-<td style="text-align: right;">2,185</td>
-<td style="text-align: right;">291</td>
+<td style="text-align: right;">2,190</td>
+<td style="text-align: right;">292</td>
 <td>a parameter or result with no annotation the checker could infer</td>
 </tr>
 <tr>
@@ -5140,14 +5146,14 @@ every call. Under <code>--no-strict</code> the top of the Python table is now:</
 <td>a type defined in another module</td>
 </tr>
 <tr>
+<td style="text-align: right;">317</td>
+<td style="text-align: right;">32</td>
+<td>calls a Python function whose result native code cannot take back</td>
+</tr>
+<tr>
 <td style="text-align: right;">314</td>
 <td style="text-align: right;">36</td>
 <td>something that may fall back follows an effect</td>
-</tr>
-<tr>
-<td style="text-align: right;">304</td>
-<td style="text-align: right;">23</td>
-<td>a class field native code cannot hold (<code>int \| None</code> fields)</td>
 </tr>
 </tbody>
 </table>

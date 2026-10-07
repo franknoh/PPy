@@ -4385,6 +4385,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#objects-kept-native-between-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Objects kept native between calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numbers-and-strings-that-may-be-none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numbers and strings that may be None
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#reading-containers-in-place" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5010,6 +5032,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#objects-kept-native-between-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Objects kept native between calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numbers-and-strings-that-may-be-none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numbers and strings that may be None
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#reading-containers-in-place" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5607,8 +5651,10 @@ lists, dicts, and sets in place instead of copying them. More shapes lower
 <code>d.get(k)</code>), and more parameters take types without annotations. Fuzzing and
 the new examples found wrong answers that 0.6.0 also gave, now fixed: a
 project decorator skipped under <code>strict = false</code>, a bool stored as an int
-printing <code>1</code>, and writes through a field alias lost. On TheAlgorithms/Python
-the functions Python calls natively went from 806 to 867 (846 to 941 without
+printing <code>1</code>, and writes through a field alias lost. Objects Python passes
+to native code keep their native records between calls, and numbers and
+strings that may be <code>None</code> run natively. On TheAlgorithms/Python the
+functions Python calls natively went from 806 to 909 (846 to 982 without
 strict mode), and 387 of 400 scripts print the same as under CPython, with
 the other 13 skipped and none differing.</p>
 <h3 id="objects-written-in-place">Objects written in place<a class="headerlink" href="#objects-written-in-place" title="Permanent link">&para;</a></h3>
@@ -5630,6 +5676,35 @@ the other 13 skipped and none differing.</p>
   (<code>node = self.head; node.value += 1</code>) lost the write under <code>ppy run</code>.</li>
 <li><code>scripts/fuzz.py --structures</code> fuzzes in-place edits of linked structures
   with unannotated fields.</li>
+</ul>
+<h3 id="objects-kept-native-between-calls">Objects kept native between calls<a class="headerlink" href="#objects-kept-native-between-calls" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A project object that Python passes to native code a second time keeps
+  its native record while the Python object lives, so later calls use it
+  instead of copying the object and everything reachable from it. Python
+  stays the source of truth: writes from Python are seen through CPython's
+  dict and type watchers, and native writes are set back on the Python
+  object when the call returns. <code>find</code> on a 10,000-node linked list went
+  from 3.1 ms to 38 µs a call (CPython 70 µs). <code>PPY_RESIDENT=0</code> turns it
+  off.</li>
+<li>A function that makes many objects stays in Python when handing them to
+  Python costs more than its loops save, since each new object is created
+  as a Python object.</li>
+<li><code>scripts/fuzz.py --resident</code> mixes Python writes with repeated native
+  calls on the same objects.</li>
+</ul>
+<h3 id="numbers-and-strings-that-may-be-none">Numbers and strings that may be <code>None</code><a class="headerlink" href="#numbers-and-strings-that-may-be-none" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>int | None</code>, <code>float | None</code>, <code>bool | None</code>, and <code>str | None</code> run natively
+  as locals, parameters, results, object fields, and list and dict
+  elements, on every path. <code>is None</code>, truth tests, <code>==</code>, <code>or</code>, printing and
+  repr inside containers match CPython, and arithmetic or ordering that
+  meets <code>None</code> raises CPython's <code>TypeError</code> with its text.</li>
+<li><code>scripts/fuzz.py --optional</code> fuzzes them.</li>
+<li><code>d.get(k, default)</code> and <code>d.pop(k, default)</code> of a dict whose values may be
+  <code>None</code> are typed as possibly <code>None</code>, and a returned list display or
+  comprehension that has no native form of its own is built as the declared
+  return type.</li>
 </ul>
 <h3 id="reading-containers-in-place">Reading containers in place<a class="headerlink" href="#reading-containers-in-place" title="Permanent link">&para;</a></h3>
 <ul>
@@ -5712,6 +5787,9 @@ the other 13 skipped and none differing.</p>
 <li>A doctest operand built by a constructor call counts as type evidence.</li>
 <li><code>ppy explain module.Class</code> lists each field's type and where it came from.</li>
 <li>Reasons no longer show internal names such as <code>__global_PRIMES</code>.</li>
+<li>The fuzzer kills every process a run starts, on a timeout, on exit, and
+  when the fuzzer itself is killed, and its minimizer no longer produces
+  programs that loop forever.</li>
 </ul>
 <h3 id="examples-and-documentation">Examples and documentation<a class="headerlink" href="#examples-and-documentation" title="Permanent link">&para;</a></h3>
 <ul>
@@ -5729,10 +5807,12 @@ the other 13 skipped and none differing.</p>
 </ul>
 <h3 id="known-limitations">Known limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>int | None</code>, <code>float | None</code>, and <code>str | None</code> fields and container
-  elements have no native form, so functions that use them stay in Python.</li>
-<li>An object passed from Python is copied in and back at every call, so many
-  small methods are still called through Python.</li>
+<li>Sorting, <code>min</code>, and <code>max</code> over values that may be <code>None</code>, <code>None</code> as a
+  dict key, and tuples holding such values stay in Python.</li>
+<li>A value class that may be <code>None</code> (<code>d.get(k)</code> of a <code>dict[str, Item]</code>
+  where <code>Item</code> holds only numbers) stays in Python.</li>
+<li>A class with list or dict fields is still copied at every call from
+  Python, since CPython does not report changes to a list.</li>
 </ul>
 <h2 id="060-2026-10-03">0.6.0 — 2026-10-03<a class="headerlink" href="#060-2026-10-03" title="Permanent link">&para;</a></h2>
 <p>More ordinary Python runs natively under <code>ppy run</code>: functions that print,
