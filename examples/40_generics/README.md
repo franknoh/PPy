@@ -125,7 +125,7 @@ Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 **`ppy emit ir generic.ppy`**
 
 <details markdown="1">
-<summary>273 lines</summary>
+<summary>295 lines</summary>
 
 ```text
 ppyir 1
@@ -177,43 +177,65 @@ func @generic_Point___init__(%self: ptr<i8>, %x: i64, %y: i64) -> () attrs {effe
     %x_entry = core.load %x_addr : i64
     %27 = core.cast %25 : ptr<i64>
     core.store %26, %27
-    %28 = core.load %self_addr : ptr<i8> loc("examples/40_generics/generic.ppy":11:8)
-    %29 = core.cast %28 : i64
-    %30 = core.const 0 : i64
-    %31 = core.cmp.ne %29, %30 : bool
-    core.guard %31 {kind = "bounds", message = "`None` has no attribute `y`", raises = "AttributeError: 'NoneType' object has no attribute 'y'"}
-    %32 = core.cast %28 {ppy.reads = true} : ptr<i64>
-    %33 = core.const 3 : i64
-    %34 = core.ptr_offset %32, %33 : ptr<i64>
-    %35 = core.load %34 : i64
-    %36 = core.cast %28 {ppy.reads = true} : ptr<i64>
-    %37 = core.const 1 : i64
-    %38 = core.ptr_offset %36, %37 : ptr<i64>
-    %39 = core.load %38 : i64
-    %40 = core.cast %28 {ppy.reads = true} : ptr<i64>
-    %41 = core.const 15 : i64
-    %42 = core.ptr_offset %40, %41 : ptr<i64>
-    %43 = core.load %42 : i64
-    %44 = core.cast %28 {ppy.reads = true} : ptr<ptr<i64>>
-    %45 = core.const 2 : i64
-    %46 = core.ptr_offset %44, %45 : ptr<ptr<i64>>
-    %47 = core.load %46 : ptr<i64>
-    %48 = core.cmp.ge %35, %39 : bool
-    %49 = core.sub %35, %39 {overflow = "wrap"} : i64
-    %50 = core.select %48, %49, %35 : i64
-    %51 = core.mul %50, %43 {overflow = "wrap"} : i64
-    %52 = core.ptr_offset %47, %51 : ptr<i64>
-    %53 = core.cast %52 : ptr<i8>
-    %54 = core.cast %53 : ptr<i64>
-    %55 = core.const 1 : i64
-    %56 = core.ptr_offset %54, %55 : ptr<i64>
-    %57 = core.cast %56 : ptr<i8>
-    %58 = core.load %y_addr : i64
+    %28 = core.cast %0 {ppy.reads = true} : ptr<i64>
+    %29 = core.const 19 : i64
+    %30 = core.ptr_offset %28, %29 : ptr<i64>
+    %31 = core.load %30 : i64
+    %32 = core.const 8104318125134660608 : i64
+    %33 = core.cmp.eq %31, %32 : bool
     %y_entry = core.load %y_addr : i64
-    %59 = core.cast %57 : ptr<i64>
-    core.store %58, %59
-    %60 = core.load %self_addr : ptr<i8>
-    core.call_extern %60 {abi = "c", callee = "ppy_coll_release"}
+    core.cond_br %33, ^touch.call1, ^touch.done2 loc("examples/40_generics/generic.ppy":10:8)
+^touch.call1:
+    core.call_extern %0 {abi = "c", callee = "ppy_coll_touch"} loc("examples/40_generics/generic.ppy":10:8)
+    core.br ^touch.done2
+^touch.done2:
+    %34 = core.load %self_addr : ptr<i8> loc("examples/40_generics/generic.ppy":11:8)
+    %35 = core.cast %34 : i64
+    %36 = core.const 0 : i64
+    %37 = core.cmp.ne %35, %36 : bool
+    core.guard %37 {kind = "bounds", message = "`None` has no attribute `y`", raises = "AttributeError: 'NoneType' object has no attribute 'y'"}
+    %38 = core.cast %34 {ppy.reads = true} : ptr<i64>
+    %39 = core.const 3 : i64
+    %40 = core.ptr_offset %38, %39 : ptr<i64>
+    %41 = core.load %40 : i64
+    %42 = core.cast %34 {ppy.reads = true} : ptr<i64>
+    %43 = core.const 1 : i64
+    %44 = core.ptr_offset %42, %43 : ptr<i64>
+    %45 = core.load %44 : i64
+    %46 = core.cast %34 {ppy.reads = true} : ptr<i64>
+    %47 = core.const 15 : i64
+    %48 = core.ptr_offset %46, %47 : ptr<i64>
+    %49 = core.load %48 : i64
+    %50 = core.cast %34 {ppy.reads = true} : ptr<ptr<i64>>
+    %51 = core.const 2 : i64
+    %52 = core.ptr_offset %50, %51 : ptr<ptr<i64>>
+    %53 = core.load %52 : ptr<i64>
+    %54 = core.cmp.ge %41, %45 : bool
+    %55 = core.sub %41, %45 {overflow = "wrap"} : i64
+    %56 = core.select %54, %55, %41 : i64
+    %57 = core.mul %56, %49 {overflow = "wrap"} : i64
+    %58 = core.ptr_offset %53, %57 : ptr<i64>
+    %59 = core.cast %58 : ptr<i8>
+    %60 = core.cast %59 : ptr<i64>
+    %61 = core.const 1 : i64
+    %62 = core.ptr_offset %60, %61 : ptr<i64>
+    %63 = core.cast %62 : ptr<i8>
+    %64 = core.load %y_addr : i64
+    %65 = core.cast %63 : ptr<i64>
+    core.store %64, %65
+    %66 = core.cast %34 {ppy.reads = true} : ptr<i64>
+    %67 = core.const 19 : i64
+    %68 = core.ptr_offset %66, %67 : ptr<i64>
+    %69 = core.load %68 : i64
+    %70 = core.const 8104318125134660608 : i64
+    %71 = core.cmp.eq %69, %70 : bool
+    core.cond_br %71, ^touch.call3, ^touch.done4
+^touch.call3:
+    core.call_extern %34 {abi = "c", callee = "ppy_coll_touch"} loc("examples/40_generics/generic.ppy":11:8)
+    core.br ^touch.done4
+^touch.done4:
+    %72 = core.load %self_addr : ptr<i8> loc("examples/40_generics/generic.ppy":11:8)
+    core.call_extern %72 {abi = "c", callee = "ppy_coll_release"}
     core.ret
 }
 

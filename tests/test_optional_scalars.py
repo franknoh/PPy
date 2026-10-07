@@ -397,6 +397,46 @@ except TypeError as e:
     print("TypeError", e)
 """
 
+LOOKUPS = """
+def got(d: dict[str, int | None], k: str) -> int | None:
+    return d.get(k, 5)
+
+
+def got_or(d: dict[str, int | None], k: str) -> int:
+    v = d.get(k, 5)
+    if v is None:
+        return -1
+    return v + 1
+
+
+def popped(d: dict[str, int | None], k: str) -> int | None:
+    return d.pop(k, 7)
+
+
+def grid(w: int, h: int) -> list[list[str | None]]:
+    return [[None] * w for _ in range(h)]
+
+
+def blanks(w: int, h: int) -> list[list[int | None]]:
+    return [[None] * w for _ in range(h)]
+
+
+def unset(w: int) -> list[float | None]:
+    return [None for _ in range(w)]
+
+
+def main() -> None:
+    e: dict[str, int | None] = {"a": 1, "b": None}
+    print(got(e, "a"), got(e, "b"), got(e, "c"), got_or(e, "a"), got_or(e, "b"), got_or(e, "c"))
+    print(popped(e, "b"), popped(e, "z"), len(e))
+    m = grid(2, 3)
+    m[1][0] = "x"
+    print(m, blanks(3, 1), unset(2), grid(0, 2), grid(2, 0))
+
+
+main()
+"""
+
 PROGRAMS = {
     "numbers": (
         NUMBERS,
@@ -432,6 +472,10 @@ PROGRAMS = {
             "parents",
             "main",
         ],
+    ),
+    "lookups": (
+        LOOKUPS,
+        ["got", "got_or", "popped", "grid", "blanks", "unset", "main"],
     ),
 }
 

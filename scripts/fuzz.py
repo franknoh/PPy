@@ -57,12 +57,18 @@ does (scale the result, print, count, cache, swap the arguments, hand back
 another function), called by name from Python and from native loops.
 
 Run it through the shared memory cap in a batch at a time; each program's
-paths run one after another, each under its own timeout and memory cap.
+paths run one after another, each under its own timeout and memory cap. A
+path runs in a process group of its own, which is killed at the timeout,
+when the path exits, and when this run ends by an exception, SIGTERM, or
+SIGHUP; a run killed outright takes the path's process with it. The
+minimizer keeps every statement inside a `while` and the structure classes'
+methods whole, so a reduced program ends whenever the original did.
 """
 
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 import time
 from pathlib import Path
@@ -70,6 +76,7 @@ from pathlib import Path
 from ppy_compiler.testing.fuzz import (
     ALL_PATHS,
     STATE_PATHS,
+    TIMED_OUT,
     compare,
     generate_program,
     minimize,
@@ -90,11 +97,15 @@ def _paths(text: str) -> tuple[str, ...]:
 
 def _still_fails(path: str, reason: str):  # type: ignore[no-untyped-def]
     def check(source: str) -> bool:
-        # A hang is found again well inside the fuzzing timeout.
-        results = run_program(source, ("python", path), timeout=30.0)
-        reference = results["python"]
+        # A hang is found again well inside the fuzzing timeout. CPython
+        # runs first, alone: a candidate it does not finish is no reduction,
+        # and the path is not run on it.
+        reference = run_program(source, ("python",), timeout=30.0)["python"]
+        if reference.status == TIMED_OUT:
+            return False
         if "NameError" in reference.last_error or "SyntaxError" in reference.last_error:
             return False
+        results = {"python": reference, **run_program(source, (path,), timeout=30.0)}
         found = printed_twice(results) + compare(results)
         return any(m.path == path and m.reason == reason for m in found)
 
@@ -211,6 +222,12 @@ def replay() -> int:
     return 1 if failures else 0
 
 
+def _exit_on_signal(signum: int, _frame: object) -> None:
+    """SIGTERM or SIGHUP ends the run as an exception would, so the path
+    running then has its process group killed on the way out."""
+    raise SystemExit(128 + signum)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--seed", type=int, default=0)
@@ -294,6 +311,8 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     options = parser.parse_args(argv)
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, _exit_on_signal)
     if options.show is not None:
         shown = generate_program(
             options.show,

@@ -3447,6 +3447,8 @@ class _Checker:
             fits = T.is_assignable(argument.type, param.type)
             if not fits and signature.qualname in _LOOKUPS and index == 0:
                 fits = T.is_assignable(param.type, argument.type)
+            if signature.qualname in _LOOKUPS and index == 1:
+                fits = True  # a default of any type
             if not fits:
                 self._mismatch(
                     "E1301",
@@ -4092,6 +4094,16 @@ class _Checker:
                 (
                     T.Param(
                         "key", base.args[0] if isinstance(base, T.Instance) and base.args else T.ANY
+                    ),
+                    # Any default is taken; the parameter carries the value
+                    # type, which `None` added to the result would hide when
+                    # it holds `None` itself (`_refine_builtin_method`).
+                    T.Param(
+                        "default",
+                        base.args[1]
+                        if isinstance(base, T.Instance) and len(base.args) == 2
+                        else T.UNKNOWN,
+                        True,
                     ),
                 ),
                 T.union(base.args[1], T.NONE)
@@ -7570,8 +7582,17 @@ class _Checker:
     def _refine_builtin_method(self, signature: T.Callable_, args: list[Binding]) -> Binding | None:
         """Some builtin methods have a result the argument count decides."""
         if signature.qualname in {"dict.get", "dict.pop"} and len(args) == 2:
+            # The value where the key is, the default where it is not: a
+            # value type that holds `None` keeps it (`dict[str, int | None]`).
             self._effects = self._effects.add(Effect.READ_OBJECT)
-            return Binding(T.join(T.remove_none(signature.ret), args[1].type))
+            value = signature.ret
+            if signature.qualname == "dict.get":
+                value = (
+                    signature.params[1].type
+                    if len(signature.params) == 2
+                    else T.remove_none(signature.ret)
+                )
+            return Binding(T.join(value, args[1].type))
         return None
 
     def _plugin_qualname(self, func: ast.expr, env: Env) -> str | None:

@@ -919,6 +919,33 @@ def test_dict_get_with_a_default_cannot_be_none(write, analyze):
     assert codes.count("E1303") == 1
 
 
+def test_dict_get_and_pop_with_a_default_keep_a_value_that_may_be_none(write, analyze):
+    path = write(
+        "getnone.ppy",
+        """
+        def got(values: dict[str, int | None]) -> int | None:
+            return values.get("a", 0)
+
+
+        def popped(values: dict[str, int | None]) -> int | None:
+            return values.pop("a", 0)
+
+
+        def unguarded(values: dict[str, int | None]) -> int:
+            return values.get("a", 0)
+
+
+        def taken(values: dict[str, int | None]) -> int:
+            return values.pop("a", 0)
+        """,
+    )
+    bundle = analyze(path)
+    codes = [d.code for d in bundle.diagnostics]
+    # A stored `None` comes back whatever the default: only the `-> int`s fail.
+    assert codes.count("E1303") == 2, [d.message for d in bundle.diagnostics]
+    assert str(bundle.symbols.functions["getnone.got"].ret) == "int | NoneType"
+
+
 def test_awaitable_annotations_are_resolved(write, analyze):
     path = write(
         "awaitable.ppy",

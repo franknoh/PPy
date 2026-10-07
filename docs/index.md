@@ -101,9 +101,10 @@ to a native build in about ten minutes.
 - **Eight library plugins.** NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.
 - **A cheap call boundary.** A native call with two `int` arguments costs
-  32 ns from Python, as CPython's own call does. Lists, dicts,
-  sets, and objects cross in the same generated C wrapper, and what a call
-  writes comes back into the caller's objects.
+  35 ns from Python, against 33 ns for CPython's own call. Lists, dicts,
+  sets, and objects cross in the same generated C wrapper, what a call
+  writes comes back into the caller's objects, and objects Python passes
+  again and again stay resident in native memory between calls.
 - **Tested.** @@TEST_FUNCTIONS@@ test functions on Python 3.12, 3.13, and
   3.14, with 67% statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
   each documented in one place.
