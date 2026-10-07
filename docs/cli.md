@@ -50,6 +50,14 @@ Its options:
 | `--sanitize KINDS` | see [Sanitizers](#sanitizers-sanitize) |
 | `--profile`, `--profile-out FILE`, `--pgo FILE` | see [Profile-guided optimization](#profile-guided-optimization-profile-pgo) |
 
+Two environment variables change how objects cross the boundary under
+`ppy run`:
+
+| variable | effect |
+|---|---|
+| `PPY_RESIDENT=0` | copy every object at every call instead of keeping objects that cross again resident in native memory ([Resident objects](guide/classes.md#resident-objects)) |
+| `PPY_RESIDENT_REPORT=1` | print the resident objects' counts on stderr at exit: live and stale records, entries, objects admitted, and resident calls |
+
 ### How the run cache works
 
 The first `ppy run` of a program builds into the cache and then starts the
@@ -753,15 +761,16 @@ Explain why a function compiled the way it did.
 ppy explain LOCATION
 ```
 
-`LOCATION` is a `FILE:LINE`, a function name or qualname, or a diagnostic
-code. For a function it reports:
+`LOCATION` is a `FILE:LINE`, a function or class name or qualname, or a
+diagnostic code. For a function it reports:
 
 - the semantic type, effects, and purity
 - the backend decision: `native`, or `boxed` with the first construct that
   kept it in Python. A native function with effects also names the rule it
   runs under ([Effects in native code](guide/native-effects.md)), and one
   that Python calls through its Python body says why: the crossing costs
-  more than the body saves, or a barrier follows a copied argument
+  more than the body saves, the objects it makes cost more to hand to
+  Python than its loops save, or a barrier follows a copied argument
 - the Python boundary a native function has
 - the representation chosen for each parameter
 - the types that were inferred rather than annotated, and where each came
