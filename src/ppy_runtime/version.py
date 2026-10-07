@@ -6,4 +6,4 @@ the compiler, and a built artifact may run where the compiler is not
 installed. A test holds the two together.
 """
 
-VERSION = "0.7.0"
+VERSION = "0.8.0a1"
