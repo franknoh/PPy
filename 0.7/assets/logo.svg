@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>PPy</title>
+  <rect x="2" y="2" width="60" height="60" rx="6" fill="#0b0d10" stroke="#23272e" stroke-width="2"/>
+  <g fill="none" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M11 45V18h9v11h-9" stroke="#4b8bbe"/>
+    <path d="M27 45V18h9v11h-9" stroke="#4b8bbe"/>
+    <path d="M43 27v9h9M52 27v19h-9" stroke="#ffd43b"/>
+  </g>
+</svg>
