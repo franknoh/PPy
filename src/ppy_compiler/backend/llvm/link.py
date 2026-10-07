@@ -304,7 +304,7 @@ def c_prototype(name: str, signature: NativeSignature) -> str:
         elif parameter.is_pointer:
             const = "const " if parameter.kind == "const_ptr" else ""
             parameters.append(f"{const}{_C_TYPES[_abi_of(parameter.element)]} *{parameter.name}")
-        elif parameter.is_tuple or parameter.is_object:
+        elif parameter.is_tuple or parameter.is_object or parameter.is_optional:
             for index, atom in enumerate(parameter.abi):
                 parameters.append(f"{_C_TYPES[atom]} {parameter.name}_{index}")
         else:
@@ -425,6 +425,7 @@ def write_manifest(
                     "draws": signature.draws,
                     "classes": classes_to_json(signature.classes),
                     "effects": signature.effects,
+                    "optional": signature.optional,
                 },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)

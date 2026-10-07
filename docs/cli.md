@@ -13,7 +13,7 @@ These go before the subcommand.
 | `-q`, `--quiet` | only errors |
 | `--color {auto,always,never}` | ANSI colour in diagnostics |
 | `-O`, `--opt-level {0,1,2,3}` | override `[tool.ppy] opt-level` |
-| `--no-strict` | turn strict mode off for this invocation, as `strict = false` does: infer unannotated parameters from the project's calls, defaults, and doctests, and report the strict-mode errors that have a sound fallback as `W2010` (`W2011` for a value that may be `None`) |
+| `--no-strict` | turn strict mode off for this invocation, as `strict = false` does: infer unannotated parameters from the project's calls, defaults, doctests, and the rest of the evidence [Types from call sites](guide/subset.md#types-from-call-sites) lists, and report the strict-mode errors that have a sound fallback as `W2010` (`W2011` for a value that may be `None`) |
 
 `--no-strict` is also accepted after the subcommand (`ppy run --no-strict
 FILE`, `ppy check --no-strict`, `ppy explain --no-strict`).
@@ -49,6 +49,14 @@ Its options:
 | `--prebuilt MANIFEST` | run a built artifact (see [The launcher](#the-launcher)) |
 | `--sanitize KINDS` | see [Sanitizers](#sanitizers-sanitize) |
 | `--profile`, `--profile-out FILE`, `--pgo FILE` | see [Profile-guided optimization](#profile-guided-optimization-profile-pgo) |
+
+Two environment variables change how objects cross the boundary under
+`ppy run`:
+
+| variable | effect |
+|---|---|
+| `PPY_RESIDENT=0` | copy every object at every call instead of keeping objects that cross again resident in native memory ([Resident objects](guide/classes.md#resident-objects)) |
+| `PPY_RESIDENT_REPORT=1` | print the resident objects' counts on stderr at exit: live and stale records, entries, objects admitted, and resident calls |
 
 ### How the run cache works
 
@@ -753,15 +761,16 @@ Explain why a function compiled the way it did.
 ppy explain LOCATION
 ```
 
-`LOCATION` is a `FILE:LINE`, a function name or qualname, or a diagnostic
-code. For a function it reports:
+`LOCATION` is a `FILE:LINE`, a function or class name or qualname, or a
+diagnostic code. For a function it reports:
 
 - the semantic type, effects, and purity
 - the backend decision: `native`, or `boxed` with the first construct that
   kept it in Python. A native function with effects also names the rule it
   runs under ([Effects in native code](guide/native-effects.md)), and one
   that Python calls through its Python body says why: the crossing costs
-  more than the body saves, or a barrier follows a copied argument
+  more than the body saves, the objects it makes cost more to hand to
+  Python than its loops save, or a barrier follows a copied argument
 - the Python boundary a native function has
 - the representation chosen for each parameter
 - the types that were inferred rather than annotated, and where each came
@@ -774,6 +783,30 @@ inferred (not annotated):
   base: int, from 1 call (numbers.ppy:72) and the default value
   (the Python boundary checks these at each call, and runs the Python body otherwise)
   return: int, from the body's return statements
+```
+
+Each inferred parameter names where its type came from: calls (an
+`argparse` option or an operator on an instance counts as one), the default
+value, doctest calls, `pytest.mark.parametrize` cases (`count: int, from 2
+parametrize cases (prog.py:33)`), or, with none of those, the body's use
+(`n: int, from its use in \`range\` (prog.py:6)`, `its use as a string`).
+
+For a class (`ppy explain module.Class`, or the class's name) it lists each
+field with its type and where the type came from: an annotation in the
+class body or in `__init__`, a class attribute, or, for a field nothing
+annotates, each value the program stores into it and the line that stores
+it. The field's type is the join of those values.
+
+```text
+class: Node
+qualname: ll.Node
+fields:
+  next: NoneType | ll.Node, from what the program stores into it:
+    NoneType at ll.py:4 in `__init__`
+    NoneType | ll.Node at ll.py:14
+  value: int, from what the program stores into it:
+    int at ll.py:3 in `__init__`
+methods: __init__
 ```
 
 `--no-strict` (before or after `explain`) analyzes as `ppy run --no-strict`
@@ -797,11 +830,13 @@ the code goes native and what keeps the rest in Python:
   and calls whose effects are unknown list the calls seen most often
 - for native functions Python does not call natively, why the boundary is
   not used (it costs more than the body saves, it passes objects, and so on)
-- a nested function that shares no variable with the functions around it
-  has an entry of its own and is counted like any function; one that shares
-  a variable runs where the function around it runs, so it is native when
-  that function is, and otherwise names the function around it; its
-  statements count under itself, not twice
+- a nested function that shares no variable with the functions around it,
+  or only reads variables nothing rebinds while it runs, has an entry of
+  its own and is counted like any function
+  ([Functions as values](guide/closures.md)); one that rebinds a shared
+  variable (`nonlocal`) runs where the function around it runs, so it is
+  native when that function is, and otherwise names the function around
+  it; its statements count under itself, not twice
 - files that could not be analyzed or lowered, which are reported and do
   not stop the summary
 

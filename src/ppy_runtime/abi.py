@@ -11,10 +11,12 @@ from __future__ import annotations
 from ._record import record as dataclass
 
 __all__ = [
+    "OPTIONAL",
     "STATUS_FALLBACK",
     "STATUS_OK",
     "STATUS_RAISED",
     "TEXT",
+    "VARIADIC",
     "CrossingClass",
     "NativeParam",
     "NativeSignature",
@@ -47,6 +49,17 @@ _ABI_NAMES = {
 #: A string at the Python boundary: its UTF-8 bytes and how many. As a
 #: result, the bytes are a copy the boundary frees once it has read them.
 TEXT = "text"
+
+
+#: The `kind` of a parameter that is a number or `None` (`int | None`,
+#: `float | None`, `bool | None`); its `element` is the number's kind.
+OPTIONAL = "optional"
+
+
+#: The `source` of a parameter that is a function's `*args` of numbers: the
+#: positions Python spells after the named ones, which the boundary packs into
+#: the list the native entry takes.
+VARIADIC = "*"
 
 
 def _abi_name(scalar: str) -> str:
@@ -114,6 +127,12 @@ class NativeParam:
         return self.kind == "tuple"
 
     @property
+    def is_optional(self) -> bool:
+        """A number or `None` (`int | None`): the number's atom, then a byte
+        that says whether there is one; `None` crosses as 0 and 0."""
+        return self.kind == OPTIONAL
+
+    @property
     def abi(self) -> tuple[str, ...]:
         if self.is_buffer:
             return (f"{_abi_name(self.element)}*", "i64")
@@ -125,6 +144,8 @@ class NativeParam:
             return ("i8*", "i64")
         if self.is_tuple:
             return tuple(_abi_name(element) for element in self.elements)
+        if self.is_optional:
+            return (_abi_name(self.element), "i8")
         if self.is_object:
             return tuple(_abi_name(scalar) for _field, scalar in self.fields)
         return (_abi_name(self.kind),)
@@ -146,6 +167,8 @@ class NativeParam:
                 f"{_abi_name(element)} {self.name}{index}"
                 for index, element in enumerate(self.elements)
             )
+        if self.is_optional:
+            return f"{_abi_name(self.element)} {self.name}, i8 {self.name}_present"
         if self.is_object:
             return ", ".join(
                 f"{_abi_name(scalar)} {self.name}_{field}" for field, scalar in self.fields
@@ -180,6 +203,10 @@ class CrossingClass:
     tag: int = 0
     #: The classes an instance of this one is an instance of, itself first.
     bases: tuple[str, ...] = ()
+    #: Whether an instance keeps its native record between calls (`crossing.c`):
+    #: every field a number, a string, a tuple of numbers, or an object of a
+    #: class that is resident too.
+    resident: bool = False
 
 
 def classes_to_json(classes: tuple[CrossingClass, ...]) -> list[dict]:
@@ -196,6 +223,7 @@ def classes_to_json(classes: tuple[CrossingClass, ...]) -> list[dict]:
             "handles": c.handles,
             "tag": c.tag,
             "bases": list(c.bases),
+            "resident": c.resident,
         }
         for c in classes
     ]
@@ -214,6 +242,7 @@ def classes_from_json(raw: list[dict]) -> tuple[CrossingClass, ...]:
             handles=int(c["handles"]),
             tag=int(c["tag"]),
             bases=tuple(str(b) for b in c["bases"]),
+            resident=bool(c.get("resident", False)),
         )
         for c in raw
     )
@@ -250,6 +279,9 @@ class NativeSignature:
     #: the boundary holds its output until it answers, and raises what it
     #: raised after an effect it cannot take back.
     effects: bool = False
+    #: The result is a number of this kind or `None` (`int | None`): its two
+    #: atoms are the number and a byte that says whether there is one.
+    optional: str = ""
 
     @property
     def crosses_collections(self) -> bool:
@@ -276,7 +308,7 @@ class NativeSignature:
 
     @property
     def returns_tuple(self) -> bool:
-        return len(self.returns) > 1
+        return len(self.returns) > 1 and not self.optional
 
     @property
     def params(self) -> tuple[str, ...]:

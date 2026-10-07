@@ -982,11 +982,23 @@ class CollectionApiLowering(CollectionLowering):
         """`get`, `setdefault`, and `pop` with a default: the value where the key is,
         the default where it is not. A collection handed out is the caller's."""
         family = kind.family
-        if len(arguments) != 2:
+        if len(arguments) == 1 and attr == "get" and shape.kind in {"object", "str", "optional"}:
+            # `d.get(k)` of a map of objects or strings: `None`, the null
+            # handle, where the key is not there.
+            default, default_owned = self._rt("ppy_coll_none", (), HANDLE), False
+        elif len(arguments) == 1 and attr == "get" and shape.kind == "record":
+            # A value class is its fields' words, in a local as in the map;
+            # `Item | None` would need a flag beside them, which no local has.
+            raise Unsupported(
+                f"`get` without a default answers `{shape.record.rsplit('.', 1)[-1]} | None`,"
+                " and a value class that may be `None` has no native form"
+            )
+        elif len(arguments) != 2:
             # `d.get(k)` and `d.setdefault(k)` answer `None` for a missing key,
             # which a value of this shape has no word for.
             raise Unsupported(f"`{attr}` without a default has no native lowering")
-        default, default_owned = self._value(arguments[1], shape)
+        else:
+            default, default_owned = self._value(arguments[1], shape)
         key = self._key(kind, arguments[0])
         entry = self._rt(f"ppy_{family}_find", (handle, key))
         present = self._found(entry)

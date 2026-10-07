@@ -58,6 +58,8 @@ native code can represent:
   `dict[str, int]` or `list[list[int]]`
 - a `ppy` collection: `Vec[int]`, `HashMap[int, Vec[int]]`
 - another object, or `None` where the field is `Node | None`
+- a number or a string that may be `None` (`int | None`, `str | None`;
+  see [Numbers and strings that may be `None`](native-lowering.md#numbers-and-strings-that-may-be-none))
 
 Native code builds an instance by running the class's `__init__`, or for a
 dataclass by setting each field from the arguments and the defaults. A
@@ -68,6 +70,111 @@ for each instance.
 
 Reading a field of `None` is Python's `AttributeError`. Under `ppy run` it
 falls back to Python, which raises it; a standalone binary stops.
+
+Fields are assigned as Python assigns them, tuple assignment included:
+`node.left, node.right = node.right, node.left` evaluates both values
+before it stores either. A conditional expression chooses an object as it
+chooses a number, evaluating only the side the test picks:
+`node = node.left if key < node.key else node.right`.
+
+## Fields without annotations
+
+A field the class does not annotate has the type of everything the program
+stores into it. That is the class's own `self.x = ...` in any method, and an
+assignment to the field of an instance anywhere in the project:
+
+```python
+class Node:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+
+
+class Tree:
+    def __init__(self):
+        self.root = None
+
+    def insert(self, key: int) -> None:
+        if self.root is None:
+            self.root = Node(key)
+            return
+        node = self.root
+        while True:
+            if key < node.key:
+                if node.left is None:
+                    node.left = Node(key)
+                    return
+                node = node.left
+            else:
+                if node.right is None:
+                    node.right = Node(key)
+                    return
+                node = node.right
+```
+
+`self.left = None` in `__init__` and `node.left = Node(key)` in
+`Tree.insert` make `Node.left` a `Node | None`, and `Tree.root` is one too.
+Without strict mode, `Node.__init__`'s `key` is an `int` from the calls that
+make nodes ([types from call sites](subset.md#types-from-call-sites)), and
+`insert` lowers like the annotated `Tree` above.
+
+- Values of several classes join. A subclass's instance where the base's is
+  stored gives the base: `Shape | None` for a field set to `None`, a
+  `Shape`, and a `Square`.
+- An empty container a field starts as takes its element type from what is
+  stored into it: `append`, `insert`, `add`, `heapq.heappush`, and
+  `d[key] = value`, also one level in (`self.adj[u].append(v)` for
+  `self.adj = [[] for _ in range(n)]`). `self.queue = []` and
+  `self.queue.append(job)` make a `list` of what `job` is.
+- A value the checker cannot type says nothing. A field stored only from
+  unannotated parameters no call types stays unknown, and the functions that
+  use it stay in Python.
+- A field annotated anywhere (`self.count: int = 0` in `__init__`, or in the
+  class body) keeps its annotation.
+- A store that would add a field the class never sets itself is not
+  counted, so such a field stays Python's.
+- Evidence that goes round in a circle settles nothing. In
+  `node.left = insert(node.left, key)` with an unannotated recursive
+  `insert`, the field's type waits on `insert`'s result, and `insert`'s
+  parameter on the field, so both stay unknown and the functions run on
+  CPython. Annotating `insert` (`node: Node | None, key: int -> Node`)
+  settles the field too. An `insert` method that walks down and stores
+  `Node(key)`, as above, needs no annotation.
+- A local that starts as `None` and later holds an object
+  (`prev = None` ... `prev = node`) takes the type of all its bindings,
+  `Node | None`, so a list reversal written that way lowers.
+
+`ppy explain module.Class` (or the class's name) lists each field with its
+type and where it came from. Here is `ppy explain circ.Node` for a module
+`circ` with the unannotated recursive `insert` of the bullet above: every
+link shows only the `None` from `__init__`, which is how a field that did
+not settle looks:
+
+```text
+class: Node
+qualname: circ.Node
+fields:
+  left: NoneType, from what the program stores into it:
+    NoneType at circ.ppy:4 in `__init__`
+  right: NoneType, from what the program stores into it:
+    NoneType at circ.ppy:5 in `__init__`
+  key: int, from what the program stores into it:
+    int at circ.ppy:3 in `__init__`
+methods: __init__
+```
+
+A field annotated in the class body or in `__init__`, or set as a class
+attribute, says so instead ([`ppy explain`](../cli.md#ppy-explain)).
+
+[`55_linked_structures`](../howto/55_linked_structures.md) is a search tree
+with parent links and a linked list written this way, without annotations,
+edited in place by native code.
+
+The type is what the program shows, not a promise about every caller. Code
+outside the project can store anything. When an object crosses into native
+code, its fields are checked against these types, and a field holding
+something else makes Python run the function's body instead.
 
 Methods lower like functions, with `self` as a handle. `len(obj)` calls
 `__len__`, and `if obj:` calls `__bool__` or `__len__` where the class has
@@ -138,6 +245,7 @@ An object class's operator methods lower as calls:
 | `-a`, `+a`, `~a` | `__neg__`, `__pos__`, `__invert__` |
 | `a == b`, `a != b` | `__eq__`, `__ne__` (or `not __eq__`); a dataclass compares its fields; any other class compares identity |
 | `a < b`, `a <= b`, `a > b`, `a >= b` | `__lt__`, ..., or the reflected method of the right operand; `@dataclass(order=True)` compares its fields as tuples |
+| `max(a, b, ...)`, `min(a, b, ...)` of names of one class | `later > best` (`later < best` for `min`) for each later argument, as above; the first of equals wins |
 | `str(a)`, `repr(a)`, `print(a)`, `f"{a}"`, `f"{a!r}"` | `__str__`, `__repr__`, or a dataclass's generated `__repr__`, `Point(x=1, y=2.5)` |
 | `obj[key]`, `obj[key] = value` | `__getitem__`, `__setitem__` |
 | `x in obj` | `__contains__` |
@@ -251,15 +359,22 @@ leak check passes.
 ## The Python boundary
 
 Under `ppy run`, Python can call a native function that takes or returns
-objects of the project's classes. The object is copied into native memory
-whole, together with the objects and containers its fields hold. An object
-reached twice becomes one native object, so a shared object and a cycle
-stay what they were.
+objects of the project's classes. The first time an object crosses, it is
+copied into native memory whole, together with the objects and containers
+its fields hold. An object reached twice becomes one native object, so a
+shared object and a cycle stay what they were. An object of a plain class
+that crosses again keeps that copy between calls
+([Resident objects](#resident-objects)); an object of any other class is
+copied at every call.
 
 After the call:
 
-- if the function writes a field, the new values are set on the caller's
-  objects, which stay the same objects;
+- if the function writes a field of any object that crossed, the new values
+  are set on the caller's objects, which stay the same objects. A write
+  through a local that holds a field (`node = self.head`, then
+  `node.value = 0`), or through an object a call hands back
+  (`self.last().value += 1`, `tail(head).next = Node(k)`), counts as a write
+  through the parameter it was reached from;
 - an object the function returns is the caller's own object when it came
   from one;
 - an object native code made becomes a new instance of its class, with its
@@ -286,16 +401,105 @@ def bump(head: Node | None) -> None:
 Called from Python, `bump(a)` runs natively and leaves each node's `value`
 one higher. `bump(None)` is native too, since the parameter allows `None`.
 
-The copy costs time in proportion to what crosses, about 100 ns an object
+The copy costs time in proportion to what crosses, about 80 ns an object
 in and as much back after a write, where CPython reads a field in a few
-nanoseconds. So Python calls the native body only when the function does
-work in proportion to it, and more than a few operations of it per object:
+nanoseconds. So for a class that is copied at every call, Python calls
+the native body only when the function does work in proportion to it, and
+more than a few operations of it per object:
 a loop that follows a field (`head = head.next`), a loop over a container
 of objects, or a call to itself on a field (`height(node.left)`), each
 doing six operations or more on what it reaches. Without `@ppy.native`,
 `bump` above, which adds one to each node, would run its Python body when
 Python calls it; the directive asks for the crossing whatever it costs.
 Native callers pass objects by handle and copy nothing. `ppy explain` gives the reason for each function.
+
+### Resident objects
+
+An object that crosses again and again is not copied each time. The second
+time Python passes the same object to a native function, the boundary keeps
+its native copy, and the copies of the objects it reaches, attached to it
+for as long as the Python object lives; later calls hand native code that
+copy as it is. A method Python calls on a large structure, `stack.push(x)`
+or `tree.find(key)` on ten thousand nodes, then costs what its own work
+costs, not a copy of the structure.
+
+Python's objects stay what the program reads. The two sides are kept the
+same this way:
+
+- a field native code stores is set on the Python object when the call
+  returns, as for a copy, and an object native code made and linked in is
+  made in Python then;
+- a write Python makes to such an object, by `obj.x = v`, `del obj.x`,
+  `setattr`, `vars(obj)[...]`, or anything else that changes its
+  `__dict__`, is seen (CPython tells the boundary of every change to a
+  watched dict), and the next native call reads that object again first;
+- a class that gains a property or another data descriptor named like a
+  field ends this for the rest of the run, and every object is copied
+  again;
+- a call that fails or falls back to its Python body leaves no trace: what
+  it wrote natively is read again from Python before the next call.
+
+The boundary holds its copies by weak reference, so an object dies when
+CPython's would, and its native copy goes some calls later. Identity is
+kept: an object native code hands back is the Python object it came from.
+
+This applies to plain classes whose fields hold numbers, strings, numbers
+or strings that may be `None`, tuples of numbers, and objects of other such
+classes. A class with a container field (`self.items: list[int]`) or a
+value class field is copied at every call: Python can change a list or a
+dict in place without touching the object's `__dict__`, so the boundary
+would not hear of it. So is a class with `__slots__`, and an enum, a
+protocol, or a pydantic model. At run time the boundary also checks the
+class itself: generic attribute access (no custom `__getattribute__` or
+`__setattr__`), an instance `__dict__`, weak references, no `__del__`, and
+no data descriptor named like a field anywhere in its bases. And every
+class of a program that assigns `__class__` or `__dict__`, calls `setattr`
+or `delattr` with a name it computes, or calls `exec` is copied at every
+call: a change of class or of the whole `__dict__` is one CPython does not
+report.
+
+The first call with an object copies it; the second makes it resident, so
+an object that crosses once pays nothing extra. A call goes resident when
+every object class in its signature can be, and one of its object
+arguments (or the first element of a list of them) crossed before.
+
+A resident call keeps the GIL while it runs; a call that copies releases
+it where its body loops ([Threads](native-lowering.md#threads)). A
+coroutine's objects are always copied, since it runs on after its call
+answers.
+
+With `PPY_RESIDENT=0` in the environment, and on a free-threaded build of
+CPython, every object is copied at every call. `PPY_RESIDENT_REPORT=1`
+prints the boundary's counts at exit, on stderr:
+
+```text
+resident: 1001 live, 0 stale, 1001 entries, enabled 1, 1001 admitted, 199 calls
+```
+
+That is a module-level stack of 1,000 cells and its `Stack` object, called
+200 times with `stack.find(k)`: the first call copies, and the second
+admits the 1,001 objects, so 199 calls are resident. A class with a
+`__del__` shows `0 admitted, 0 calls`.
+
+A resident object costs a flat price per call, about 80 ns over a plain
+native call, so the cost model judges a method on one as it judges a
+function of numbers: a loop is native, and straight-line work has to pay
+for the price. It counts 7 operations for the call, 1 more per resident
+object, 8 more for each one the call writes, and for a list of resident
+objects 2 per element read or 6 per element written. An object native code
+makes is made in Python too, with its `__dict__` and its weak reference,
+about a microsecond where CPython makes one in 200 ns. The cost model
+counts 100 operations for each, and keeps a function that makes objects in
+Python unless its heaviest loop, over 16 passes, does more than that, and
+always where it makes one inside a loop. `ppy explain` gives this reason as
+"the objects it makes cost more to hand to Python than its loops save";
+`@ppy.native` asks for the crossing anyway. So a method with a loop over a
+resident structure (`find`, `__len__`, `contains`) is native when Python
+calls it, while a one-line getter, `is_empty`, or a `push` that makes a
+node runs its Python body. On a 10,000-node linked list, `find` takes 34 µs
+natively against 63 µs in CPython, and took 3 ms when the list was copied
+at every call; `push` takes 1.8 µs against CPython's 0.16 µs
+([What a call costs](native-lowering.md#what-a-call-costs)).
 
 A method of a class that crosses this way is bound like a method: `node.f(x)`
 passes `node` to the native code, and a `@staticmethod` stays static.
@@ -335,7 +539,9 @@ on CPython.
 
 - A class with more than one base, a base from another module or a
   library, or a field native code cannot represent (a NumPy array, a
-  `list` with no element type), keeps the functions that use it in Python.
+  `list` with no element type), keeps the functions that use it in Python. A
+  Protocol the class only satisfies, without naming it as a base, is not a
+  base.
 - A call through a generic base whose subclass has type parameters the
   base's arguments do not decide stays in Python, as above.
 - A dataclass's generated `==` and order compare fields that are numbers,
@@ -344,8 +550,9 @@ on CPython.
   depends on CPython's version.
 - A dataclass with subclasses keeps its generated methods in Python, since
   they read the instance's own class.
-- `sorted`, `min`, and `max` of `order=True` dataclass objects stay in
-  Python; comparing two of them is native.
+- `sorted`, and `min` and `max` of a collection, of `order=True` dataclass
+  objects stay in Python; comparing two of them is native, and so is
+  `max(a, b)` of them.
 - A class with neither `__str__`, `__repr__`, nor a generated one prints its
   address, which only Python has. A value class with its own `__repr__` or
   `__str__` is shown by Python.

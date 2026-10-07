@@ -8,6 +8,7 @@ and its machinery is imported only when it is actually used.
 from __future__ import annotations
 
 import array
+import contextlib
 import ctypes
 import sys
 from collections.abc import Callable
@@ -22,6 +23,7 @@ from .abi import (
     STATUS_RAISED,
     STATUS_SANITIZER_BASE,
     TEXT,
+    VARIADIC,
     NativeParam,
     NativeSignature,
 )
@@ -340,6 +342,32 @@ class _SharedGenerator:
 _generators: dict[int, _SharedGenerator | None] = {}
 
 
+def attach_random(wrappers: object, owner: object = None) -> bool:
+    """Hand a generated wrapper module `random._inst`'s state and the runtime's
+    `ppy_random_reseeded`, for the wrappers of functions that draw to save and
+    put back the state in C (`wrapper._DRAWS`); whether it took them. Asked
+    once per module."""
+    hand = getattr(wrappers, "ppy_random", None)
+    if hand is None:
+        return False
+    attached = getattr(wrappers, "__ppy_random__", None)
+    if attached is not None:
+        return bool(attached)
+    taken = False
+    generator = _shared_generator(owner)
+    if generator is not None:
+        import random  # pylint: disable=import-outside-toplevel
+
+        try:
+            reseeded = ctypes.cast(generator.reseeded, ctypes.c_void_p).value or 0
+            taken = bool(hand(generator.address, reseeded, random._inst))  # type: ignore[attr-defined]
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            taken = False
+    with contextlib.suppress(AttributeError, TypeError):
+        wrappers.__ppy_random__ = taken  # type: ignore[attr-defined]
+    return taken
+
+
 def _shared_generator(owner: object) -> _SharedGenerator | None:
     """The runtime whose native code draws, bound to `random._inst`'s state:
     the library's own where it carries the runtime, else the one `ppy run`
@@ -581,12 +609,15 @@ def _bind(
         return _answer(slots)
 
     nothing = signature.returns_none
+    optional = bool(signature.optional)
 
     def _answer(slots: list) -> object:  # type: ignore[type-arg]
         if nothing:
             return None
         if text_result:
             return _text_result(slots[0].value, slots[1].value)
+        if optional:
+            return finalizers[0](slots[0].value) if slots[1].value else None
         if returns_tuple:
             return tuple(
                 finish(slot.value) for finish, slot in zip(finalizers, slots, strict=False)
@@ -708,10 +739,15 @@ def _bind_globals(  # type: ignore[no-untyped-def]
     for parameter in signature.parameters[count:]:
         module, _, name = parameter.source.rpartition(":")
         places.append((module, name))
+    # `*args`: the positions after the named ones, which the native entry
+    # takes as one list, before any global.
+    variadic = any(p.source == VARIADIC for p in signature.parameters)
 
     def spelled(*args: object, **keywords: object) -> object:
         # The Python function takes the arguments Python spelled; the globals
         # the native entry takes after them are left off.
+        if variadic:
+            return fallback(*args[:count], *args[count], **keywords)  # type: ignore[misc]
         return fallback(*args[:count], **keywords)
 
     spelled.__ppy_globals__ = namespace  # type: ignore[attr-defined]
@@ -732,19 +768,36 @@ def _bind_globals(  # type: ignore[no-untyped-def]
     native = inner.wrapper
 
     def read(module: str, name: str) -> object:
+        if module.endswith(".<locals>"):
+            # A variable of the function the Python function was defined in:
+            # what its cell holds now. An empty cell raises `ValueError`, and
+            # the Python body raises CPython's `NameError` for it.
+            function = fallback
+            while getattr(function, "__wrapped__", None) is not None:
+                function = function.__wrapped__  # type: ignore[attr-defined]
+            code = getattr(function, "__code__", None)
+            cells = getattr(function, "__closure__", None) or ()
+            if code is None or name not in code.co_freevars:
+                raise KeyError(name)
+            return cells[code.co_freevars.index(name)].cell_contents
         if module == own and namespace is not None:
             return namespace[name]
         return sys.modules[module].__dict__[name]
 
     def wrapper(*args: object, **keywords: object) -> object:
-        if keywords or len(args) != count:
+        if variadic and (keywords or len(args) < count):
+            return fallback(*args, **keywords)
+        if not variadic and (keywords or len(args) != count):
             return _keyword_call(fallback, wrapper, count, args, keywords)
         try:
-            values = [read(module, name) for module, name in places]
-        except KeyError:
+            values = [
+                list(args[count:]) if module == "" and name == VARIADIC else read(module, name)
+                for module, name in places
+            ]
+        except (KeyError, ValueError):
             inner.fallbacks += 1
             return fallback(*args)
-        return native(*args, *values)
+        return native(*args[:count], *values)
 
     _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
@@ -782,8 +835,11 @@ def _dress(wrapper, signature, fallback) -> None:  # type: ignore[no-untyped-def
     wrapper.__module__ = getattr(fallback, "__module__", wrapper.__module__)
 
 
-def _text_result(address: int | None, length: int) -> str:
-    """A string the native code returned: its UTF-8 copy read, then freed."""
+def _text_result(address: int | None, length: int) -> str | None:
+    """A string the native code returned: its UTF-8 copy read, then freed.
+    A length of -1 is `None`, from a string that may be `None`."""
+    if length < 0:
+        return None
     try:
         return ctypes.string_at(address or 0, length).decode("utf-8") if length else ""
     finally:
@@ -941,6 +997,10 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             return None
         if signature.returns == (TEXT,):
             return _text_result(slots[0].value, slots[1].value)
+        if signature.optional:
+            # The number where its flag says there is one, else `None`.
+            first = _result_for(signature.returns[0])(slots[0].value)
+            return first if slots[1].value else None
         if len(slots) > 1:
             return tuple(
                 _result_for(atom)(slot.value)
@@ -976,9 +1036,15 @@ def _expander_for(
 ) -> Callable[[object, list, list], None]:
     """Build the guard-and-convert step for one source-level parameter."""
     if parameter.is_text:
+        nullable = parameter.nullable
 
         def expand_text(value: object, atoms: list, borrowed: list) -> None:
-            """A `str` as its UTF-8 bytes; one with a lone surrogate has none."""
+            """A `str` as its UTF-8 bytes; one with a lone surrogate has none.
+            `None`, where the string may be `None`, is no bytes and -1."""
+            if value is None and nullable:
+                atoms.append(None)
+                atoms.append(-1)
+                return
             if type(value) is not str:
                 raise GuardFailed
             try:
@@ -1077,6 +1143,20 @@ def _expander_for(
                     raise GuardFailed from exc
 
         return expand_object
+
+    if parameter.is_optional:
+        number = _scalar_guard(parameter.abi[0], parameter.exact)
+
+        def expand_optional(value: object, atoms: list, borrowed: list) -> None:
+            """`None` as 0 with its flag clear; a number as itself, flagged."""
+            if value is None:
+                atoms.append(0)
+                atoms.append(0)
+                return
+            atoms.append(number(value))
+            atoms.append(1)
+
+        return expand_optional
 
     if parameter.is_tuple:
         element_guards = [_scalar_guard(atom, parameter.exact) for atom in parameter.abi]

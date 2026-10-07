@@ -14,7 +14,7 @@ __all__ = ["COMPILER_VERSION", "compiler_fingerprint"]
 #: The released version. The packaging build reads this literal;
 #: `ppy_runtime.version` carries the runtime's copy, `ppy.__version__` reads
 #: that, and a test holds them together.
-COMPILER_VERSION = "0.6.0"
+COMPILER_VERSION = "0.7.0"
 
 
 #: The fingerprint once worked out; one per process.
@@ -81,7 +81,7 @@ def _fingerprint() -> str:
 
 
 def _sources(package: str):  # type: ignore[no-untyped-def]
-    """Every `.py` under the package with its size and mtime, in one walk.
+    """Every `.py` and `.c` under the package with its size and mtime, in one walk.
 
     `scandir` hands back the stat with the entry on most filesystems, which
     is what makes this cheap; `rglob` followed by `stat` asks twice.
@@ -98,7 +98,9 @@ def _sources(package: str):  # type: ignore[no-untyped-def]
             if entry.is_dir(follow_symlinks=False):
                 if entry.name != "__pycache__":
                     pending.append(entry.path)
-            elif entry.name.endswith(".py"):
+            elif entry.name.endswith((".py", ".c")):
+                # The C a wrapper is generated with (`backend/llvm/crossing.c`)
+                # is the compiler too.
                 try:
                     stat = entry.stat()
                 except OSError:

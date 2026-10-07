@@ -15,9 +15,9 @@ A function with a loop, a buffer parameter, enough straight-line work, or an
 explicit `@ppy.native`/`@ppy.jit`/`@ppy.specialize`/`@ppy.parallel` gets the
 boundary. Native callers call its native symbol directly, boundary or not.
 
-The generated wrapper's call costs about what a Python call does: 29 ns for
+The generated wrapper's call costs about what a Python call does: 35 ns for
 `def add(x: int, y: int) -> int: return x + y` called from Python, against
-30 ns for CPython's own call of it. So straight-line work pays from two
+33 ns for CPython's own call of it. So straight-line work pays from two
 operations (`0.5 * base * height`), and a one-operation helper stays on the
 Python side (remarked as `R3004`). The rest costs more:
 
@@ -28,20 +28,33 @@ Python side (remarked as `R3004`). The rest costs more:
 | a value class | 1 more per field |
 | output held while the call runs (a `print`) | a loop: one line written through Python costs more than CPython's `print`, many cost much less |
 | a module global the function reads | 6 more: a Python frame reads it for the wrapper |
-| a call that draws from `random` | 16: the Python-level binding saves its state |
+| a call that draws from `random` | 4: the wrapper saves its state (2.5 KB) and puts it back where the call falls back; 16 where the function also reads module globals, since the Python-level binding saves the state then |
 
 A straight-line function that calls itself, as `power(b, e - 1)` does,
 stays off the boundary: how deep it goes is the argument's to decide, and
 CPython raises `RecursionError` where native code has no limit to stop at.
 
 A function that returns nothing gets the boundary where it loops over what
-it is given, or fills a container the caller passed. A function that only
+it is given, or reads or fills a container the caller passed, and the work
+pays for it as for any other function. A function that only
 checks its arguments and raises stays a native caller's, and so does a
 `main()` that takes nothing: it runs once, and what it calls goes native on
 its own terms.
 
-A container or an object is copied whole on each call, so the body has to
-do work in proportion to it ([Lists, dicts, and sets](containers.md#between-functions)).
+A container or an object crosses whole on each call, read in place where
+the call writes through none of its parameters and copied otherwise, so the
+body has to do work in proportion to it
+([Lists, dicts, and sets](containers.md#between-functions)). An object of a
+plain class that crosses again and again is the exception: it stays
+resident in native memory between calls
+([Resident objects](classes.md#resident-objects)), and costs a flat price
+per call: about seven operations, one more per object, eight more for each
+object the call writes, and a hundred for each object the body makes. A
+function that makes objects stays in Python when its heaviest loop, over 16
+passes, does less work than those hundreds, and always when it makes one
+inside a loop: an object native code makes is made in Python too when the
+call answers, about a microsecond each. `ppy explain` gives that reason as
+"the objects it makes cost more to hand to Python than its loops save".
 
 `ppy explain module.name` (or `FILE.ppy:LINE`) reports the decision and,
 when the answer is no, the first blocking construct.
@@ -51,32 +64,63 @@ when the answer is no, the first blocking construct.
 `examples/bench_boundary.py` calls each shape below many times from a
 Python loop and prints the time per call. The `ppy run` column is the
 program as `ppy run` runs it; the CPython column is the same program under
-`python`. The median of three runs, in nanoseconds:
+`python` (`python examples/bench_boundary.py --python` prints both). The
+median of three runs, in nanoseconds:
 
 | call | `ppy run` | CPython |
 |---|---:|---:|
-| `x + y` of two ints, kept in Python by the cost model | 29 | 30 |
-| `x + y` of two ints, `@ppy.native` | 29 | 30 |
-| the same, `y` passed by keyword | 38 | 34 |
-| the same, `y` left to its default | 32 | 32 |
-| a loop of 100 additions | 65 | 886 |
-| `sum` of a borrowed buffer of 100 ints | 67 | 254 |
-| a guard that fails, so the Python body runs | 82 | 36 |
-| a `list[int]` of 100 written in place, `@ppy.native` | 1,496 | 2,538 |
-| a `dict[int, int]` of 100 read, `@ppy.native` | 2,109 | 1,742 |
-| a chain of 10 objects walked, `@ppy.native` | 831 | 141 |
-| a function returning `None` that fills a list of 100 | 553 | 553 |
+| `x + y` of two ints, kept in Python by the cost model | 32 | 33 |
+| `x + y` of two ints, `@ppy.native` | 35 | 33 |
+| the same, `y` passed by keyword | 39 | 38 |
+| the same, `y` left to its default | 33 | 34 |
+| a loop of 100 additions | 70 | 993 |
+| `sum` of a borrowed buffer of 100 ints | 75 | 285 |
+| a guard that fails, so the Python body runs | 99 | 43 |
+| a `list[int]` of 100 written in place, `@ppy.native` | 1,208 | 2,738 |
+| a `dict[int, int]` of 100 walked, `@ppy.native` | 1,380 | 1,900 |
+| a chain of 10 objects walked, `@ppy.native` | 110 | 160 |
+| a function returning `None` that fills a list of 100 | 350 | 620 |
+| a `list[int]` of 100 summed | 274 | 948 |
+| a `list[list[int]]` of 10 by 10 summed, `@ppy.native` | 542 | 1,063 |
+| the lengths of a `list[str]` of 100 summed, `@ppy.native` | 2,028 | 1,313 |
+| 100 lookups in a `set[int]`, `@ppy.native` | 2,758 | 1,149 |
+| 100 lookups of `list[str]` keys in a `dict[str, int]`, `@ppy.native` | 10,562 | 1,739 |
+| the trues of a `list[bool]` of 100 counted | 207 | 714 |
+| one element of a `list[int]` of 100 written, `@ppy.native` | 278 | 36 |
+| a function returning `None` that reads 100 and writes one | 437 | 1,967 |
+| a `random.randint` and an addition | 61 | 135 |
+| straight-line work on three objects, `@ppy.native` | 100 | 78 |
+| `find` in a 10,000-node linked list, `@ppy.native` | 33,883 | 62,507 |
+| `len` of a 10,000-node linked list, `@ppy.native` | 79,835 | 128,830 |
+| `contains` in a 10,000-node search tree, `@ppy.native` | 410 | 467 |
+| `push` onto a 10,000-node linked list, `@ppy.native` | 1,848 | 163 |
+| `insert` into a 10,000-node search tree, `@ppy.native` | 1,738 | 448 |
+
+The object rows call functions and methods on objects that stay resident
+between calls ([Resident objects](classes.md#resident-objects)). Copied at
+every call, as they were in 0.6, the 10,000-node ones took 3 to 5 ms a call
+and the chain of 10 about 1,060 ns. A resident object costs about 80 ns a
+call; native code then walks the nodes faster than CPython (`find` and
+`len` 1.6 to 1.8 times as fast), but an object it makes is made in Python
+too, with a `__dict__` and a weak reference, about a microsecond, so `push`
+and `insert`, which make a node each, stay slower and the cost model keeps
+them in Python. Straight-line work on three objects costs 100 ns against
+CPython's 78, so without `@ppy.native` such a function runs its Python
+body.
 
 The `@ppy.native` `x + y` row is the wrapper alone: parsing the arguments,
 the exact type checks, and boxing the result. A failed guard costs the
-wrapper plus a Python call. The written list copies 100 ints in and back
-and still wins, because the body does a multiplication and a remainder per
-element; filling a list of 100 costs the same both ways, since copying it
-back takes what the native loop saves. The dict and object rows are
-the shapes the cost model keeps off the boundary: one addition per entry or
-per object does not pay for copying it, and without `@ppy.native` Python
+wrapper plus a Python call. The rows that read a container and write none
+read it in place: the list of lists is laid out in the call's arena, the
+strings are borrowed, the dict is walked without being hashed. The written
+list copies 100 ints in and sets back only those that changed. What is left
+in the slower rows is native code's own: holding each string, hashing each
+key it looks up. Those are the shapes the cost model keeps off the
+boundary, as the CPython column says it should: one operation per string,
+per lookup, or per object does not pay, and without `@ppy.native` Python
 runs their Python bodies. Measured on Python 3.14 on an Intel Core Ultra 9
-386H under WSL2.
+386H under WSL2; the CPython column is the same program in the same
+session.
 
 ## Byte-wide buffers
 
@@ -99,6 +143,8 @@ The types are:
 - `int`, `float`, `bool`, `None`, the fixed-width markers, and tuples of
   these
 - `str` ([Strings](strings.md))
+- `int | None`, `float | None`, `bool | None`, and `str | None`
+  ([Numbers and strings that may be `None`](#numbers-and-strings-that-may-be-none))
 - `list`, `dict`, and `set` of any of these, nested too
   ([Lists, dicts, and sets](containers.md)), and `Sequence` of them; a list
   of numbers a function only reads is lent as a buffer
@@ -114,9 +160,105 @@ The types are:
 A parameter has to be annotated, or under `--no-strict` inferred from the
 calls the project makes ([Types from call sites](subset.md#types-from-call-sites)).
 `list[Any]`, a bare `list`, and NumPy arrays have no native form, and a
-function that takes one runs as Python.
+function that takes one runs as Python. Under `--no-strict`, a parameter
+declared as a bare `list` takes the element type its calls agree on, and a local written
+`out: list = []` (or `dict`, `set` with an empty display) is typed as
+`out = []` would be, by what the function puts in it.
+
+A `*args: int` or `*args: float`, with no keyword-only parameters or
+`**kwargs` after it, is a list of numbers to the native entry. When Python
+calls the function, the boundary packs the positions after the named
+parameters into that list. A native caller packs them the same way, or
+passes a list it was given whole as `f(k, *xs)`. A position that is not of
+the declared type runs the call as Python.
+
+A list parameter the function only reads is lent as a buffer, a copy of its
+numbers. One it returns, slices (`xs[1:]`), or adds to another list is held
+by handle instead, since a buffer is not a list it could hand back.
+
+### Numbers and strings that may be `None`
+
+`int | None`, `float | None`, and `bool | None` are a number and a flag that
+says whether there is one. A local keeps them in two slots, a parameter and
+a result cross the native ABI as the number's atom and a byte, and a field
+or an element of a list or dict takes two words: the number, then the flag.
+`None` is the flag clear and the number 0. `str | None` is a string's
+handle, null for `None`. They can be parameters, results, fields, list and
+dict elements, and locals:
+
+```python
+class Node:
+    def __init__(self, key: int, label: int | None = None) -> None:
+        self.key = key
+        self.label = label
+        self.left: Node | None = None
+        self.right: Node | None = None
+
+
+def floor_label(root: Node, key: int) -> int | None:
+    best: int | None = None
+    node: Node | None = root
+    while node is not None:
+        if node.key <= key:
+            best = node.label
+            node = node.right
+        else:
+            node = node.left
+    return best
+```
+
+Natively, `x is None` and `x == None` read the flag; `if x:` is the flag and
+a nonzero number (a non-empty string); `x == 3` is false for `None`;
+`x or d` gives `d` for `None` and for zero; `x in (True, None)`,
+`isinstance(x, int)`, `print(x)`, `str(x)`, `f"{x}"`, and the `repr` of a
+list or dict holding them (`[1, None]`) write `None` where it is one.
+`d.get(k)` with no default gives `None` for a missing key, `None in xs` and
+`xs.count(None)` find it, and `any`/`all` count it as false. Of a
+`dict[str, int | None]`, `d.get(k, 5)` and `d.pop(k, 5)` give the stored
+`None` where the key holds one and the default only where the key is
+missing, and the checker types them `int | None` accordingly. A display of
+`None`s returned in place (`return [[None] * w for _ in range(h)]` from a
+`-> list[list[str | None]]`) is made as the declared type, as it is when
+assigned to an annotated local. After a test that narrows `x`, its number
+is read directly.
+
+A field the checker narrowed (`if node.label is not None:`) may still be
+`None` when a call between the test and the read set it so, which CPython
+then meets: the read checks the flag. Arithmetic, an order comparison, or a
+negation that finds `None` raises CPython's `TypeError`, with its text
+(`unsupported operand type(s) for +: 'NoneType' and 'int'`, `'<' not
+supported between instances of 'int' and 'NoneType'`); a read where `None`
+cannot be the answer (passing it on as an `int`) falls back under `ppy run`
+and stops a standalone binary.
+
+At the Python boundary `None` crosses as a clear flag or a null handle, in
+arguments, results, fields of objects, and elements of lists and dicts, both
+ways. A value of another type keeps the call in Python: a `bool` for an
+`int | None`, and an `int` for a `float | None` whose int-ness the body
+would show. CPython keeps an `int` an `int` in a `float | None`, so a native
+caller that passes one is not compiled either. An object whose fields may be
+`None` stays resident between native calls like any other: a field Python
+sets to `None` (or back) between the calls is read again, and one native
+code sets is set on the Python object when the call answers.
+
+What stays in Python: sorting, `min`, and `max` over elements that may be
+`None` (CPython raises for them, in an order that depends on the
+comparisons), keys that may be `None`, a format spec over a value that may
+be `None` (`f"{x:>4}"`), `x and y` used as a value of two such operands,
+`repr(s)` of a `str | None`, unions of numbers with anything but `None`,
+tuples holding a value that may be `None` (`tuple[int | None, int]`), and a
+value class that may be `None` (`d.get(k)` of a `dict[str, Item]` where
+`Item` holds only numbers: the class is its fields' words, with no flag
+beside them).
 
 ## What the body may contain
+
+A function declared to return a value may end in an `if`/`elif`/`else` whose
+every side returns or raises: no path reaches the end, so the end needs no
+value. Where a path does reach the end, CPython returns `None`, which an
+`int` or a `float` result cannot hold, so the native call falls back there
+and Python runs it and returns that `None`. A standalone build has no
+Python to fall back to and refuses such a function.
 
 The subset includes what a loop is normally made of:
 
@@ -138,8 +280,33 @@ The subset includes what a loop is normally made of:
   (`int`, `float`, `bool`, `str`, `list`, `dict`, `set`, `tuple`,
   `type(None)`) fold to a constant where the checker's type of `x` decides
   the answer. An `int` may be a `bool` and a `float` may be an `int`, so
-  `isinstance(n, bool)` of an `n: int` stays in Python. Object classes are
-  tested by the class tag the instance carries.
+  `isinstance(n, bool)` of an `n: int` local stays in Python. A parameter of
+  a module-level function that is only called by name and never rebound in
+  its body is the exception: Python's calls reach it only with a real `int`
+  (the boundary refuses a `bool`), and a native call that passes a `bool` to
+  an `int` parameter whose body shows the difference (prints it, formats
+  it, asks its class, returns it) stays in Python, so `isinstance(n, bool)`
+  of that parameter is `False` natively. A `float` parameter that shows
+  whether it is an `int` is likewise always a `float`. A local that every
+  assignment gives a real `int` (an int literal, `len(...)`, `int(...)`, or
+  arithmetic other than `&`, `|`, `^` on ints and bools) or a real `float`
+  (a float literal, `float(...)`, or arithmetic with a real float on one
+  side), and that no loop, `with`, handler, or nested scope rebinds, is
+  decided the same way. Object classes are tested by the class tag the
+  instance carries.
+- A `bool` stays a `bool` in Python wherever it is stored: after
+  `x: int = flag`, `x` prints `True`. Native code holds an `int` as a
+  64-bit word, which keeps only the 1. So a function that stores a `bool`
+  where an `int` is declared stays in Python, and a standalone build reports
+  it. That covers a local (also one rebound from an `int`), a return from an
+  `-> int` function, an element of a `list[int]`, `dict[..., int]`, or
+  `tuple[int, ...]`, an `int` field, and an argument through a
+  `Callable[[int], ...]` or to a class. A call of a module function by name
+  stays in Python only where the callee prints, returns, stores, or tests
+  that parameter. Arithmetic is not a store: `flag + n`, `-flag`, and
+  `True + 1` are `int`s in Python too and stay native. To keep the function
+  native, annotate the slot `bool`, or store `int(flag)` where an `int` is
+  meant.
 - A chained comparison, `0 <= i < n`, is its comparisons joined by `and`,
   each operand evaluated once and the ones after a false comparison not at
   all.
@@ -153,6 +320,15 @@ The subset includes what a loop is normally made of:
   `ValueError`.
 - `a = b = value` evaluates the value once and binds each name.
   `r, c = (x, y) if flag else (y, x)` makes and unpacks only the chosen side.
+- `holes, seen = [0] * n, []` binds each list in turn, and `a, b = b, a`
+  of two lists takes both before it binds either, as Python does.
+- `a, b, c = xs` of a list checks its length first and raises CPython's
+  `ValueError` (`not enough values to unpack (expected 3, got 2)`) when it
+  differs.
+- `if not xs:` and `xs == []` of a list test its length.
+- A module-level string bound once to a literal, such as `LETTERS =
+  "ABC..."`, is read as that literal: `LETTERS.find(c)`, `LETTERS[:6]`,
+  `c in LETTERS`.
 
 ### Loops
 
@@ -218,8 +394,9 @@ places runs any code, and the rest are names, constants, or attributes.
 Python evaluates a default once, when the `def` runs, so the compiler puts a
 default into the call only where it is a constant: a number, a string,
 `None`, or a tuple of those. A call that leaves out a parameter whose
-default is anything else (`xs: list[int] = []`), a call with `*args` or
-`**kwargs`, and a method call bound by keyword where a subclass overrides
+default is anything else (`xs: list[int] = []`), a call that spreads
+`*args` (other than a list passed whole to a `*args` parameter, as in
+[Types that lower](#types-that-lower)) or `**kwargs`, and a method call bound by keyword where a subclass overrides
 the method stay in Python.
 
 When Python calls a native function with keywords or with defaults left
@@ -267,36 +444,37 @@ to the first two reasons:
 
 ```text
 175 functions, 1389 statements
-  native, called from Python              2 functions (  1%)       24 statements (  2%)
-  native, called from native code         2 functions (  1%)       18 statements (  1%)
-  Python                                171 functions ( 98%)     1347 statements ( 97%)
+  native, called from Python              7 functions (  4%)       88 statements (  6%)
+  native, called from native code         7 functions (  4%)       74 statements (  5%)
+  Python                                161 functions ( 92%)     1227 statements ( 88%)
   (73 of the Python functions are generic: each native caller compiles its own instance)
 
 what keeps functions in Python, by statements kept out (a function can count under more than one):
-      143 statements     10 functions  writes to a parameter native code copies
-      return the new value, or take a `Buffer`, a list, or a ppy collection
-      see https://ppy.franknoh.dev/latest/guide/native/
-      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
-      sorts/circle_sort.py:50 sorts.circle_sort.circle_sort.<locals>.circle_sort_util
-      sorts/dutch_national_flag_sort.py:33 sorts.dutch_national_flag_sort.dutch_national_flag_sort
-       53 statements     10 functions  a parameter or result with no annotation the checker could infer
+       81 statements      3 functions  a parameter of type `(Any) -> Any | NoneType`
+      take a type native code holds (numbers, str, tuples, lists, dicts, sets, ppy collections, project classes)
+      see https://ppy.franknoh.dev/latest/guide/native-lowering/
+      sorts/power_sort.py:34 sorts.power_sort._find_run
+      sorts/power_sort.py:137 sorts.power_sort._merge
+      sorts/power_sort.py:199 sorts.power_sort.power_sort
+       59 statements     12 functions  a parameter or result with no annotation the checker could infer
       annotate it, or run `ppy convert` to write the inferred annotations
       see https://ppy.franknoh.dev/latest/guide/subset/
       sorts/external_sort.py:13 sorts.external_sort.FileSplitter.__init__
       sorts/external_sort.py:26 sorts.external_sort.FileSplitter.split
       sorts/external_sort.py:48 sorts.external_sort.NWayMerge.select
-  ... 60 more reasons, 70 functions (--limit to see more, --json for all)
+  ... 62 more reasons, 73 functions (--limit to see more, --json for all)
 
 native, but Python calls the Python body (why its boundary is not used):
+      5 functions  copying the collections in costs more than the body does with them
       1 functions  copying its strings across costs what one pass over them saves
-      1 functions  copying the collections in costs more than the body does with them
 ```
 
 Read it from the top down:
 
 - The first block counts every function once. "Called from native code"
   means the function compiled but Python calls its Python body, because the
-  crossing costs more than the body saves or it passes objects by handle;
+  crossing costs more than the body saves, the objects it makes cost more
+  to hand to Python than its loops save, or it passes objects by handle;
   the summary lists those reasons last.
 - The reasons are ordered by statements kept out, so the first one is where
   a change moves the most code. A function with several effects counts
@@ -304,13 +482,14 @@ Read it from the top down:
 - A generic function is not a blocker: it has no entry point of its own and
   is compiled for each native caller that names its types. Most of `sorts`
   is generic sorts that nothing calls natively.
-- A nested function that shares no variable with the functions around it
-  is counted on its own, since it has an entry of its own
+- A nested function that shares no variable with the functions around it,
+  or only reads variables nothing rebinds while it runs, is counted on its
+  own, since it has an entry of its own
   ([Functions as values](closures.md#a-nested-function-in-a-python-function)).
-  One that shares a variable lowers with the function around it: it counts
-  as native and called from native code when that function is native, and
-  otherwise says that the function around it stays in Python, which is the
-  reason to fix.
+  One that rebinds a shared variable lowers with the function around it: it
+  counts as native and called from native code when that function is
+  native, and otherwise says that the function around it stays in Python,
+  which is the reason to fix.
 - Each reason says what to do and links the page that explains it. The
   first places it occurs are listed with their line.
 
@@ -328,7 +507,10 @@ short straight-line body keeps it: dropping the GIL and taking it back costs
 about 20 ns, what two operations cost. A function that prints, reads, or
 calls into Python keeps the GIL too: its wrapper holds its output until the
 call ends and writes it out then, and the call takes the GIL where it
-reaches Python ([Effects in native code](native-effects.md)).
+reaches Python ([Effects in native code](native-effects.md)). So does a
+call whose objects are resident
+([Resident objects](classes.md#resident-objects)); the same function
+called with objects that are copied releases it.
 
 Reading input is its own guide: [Reading input](input.md).
 

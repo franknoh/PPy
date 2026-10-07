@@ -603,9 +603,10 @@ def test_python_calls_container_functions_natively(tmp_path: Path):
     assert counted == {"x": 2, "y": 1, "é": 1} and type(counted) is dict
     assert histogram.calls == 1
     assert native("top").wrapper({"q": 3, "r": 5, "": 4}) == "r"
-    # One pass over a list of strings is cheaper in Python than copying them in.
+    # One pass over a list of strings is cheaper in Python: borrowing each
+    # string is cheap, holding it natively costs what `len` saves.
     once = module.functions["prog.once"]
-    assert not once.exposed and "strings" in once.exposure_reason
+    assert not once.exposed and "copying the collections" in once.exposure_reason
     xs = [1, 2]
     grow = native("grow")
     assert grow.wrapper(xs, 2) is None and xs == [1, 2, 0, 1] and grow.calls == 1
@@ -664,10 +665,11 @@ def test_a_set_of_strings_walked_where_its_order_shows_stays_in_python(tmp_path:
 
 @requires_llvm
 @requires_cc
-def test_get_without_a_default_stays_in_python(tmp_path: Path):
-    """`d.get(k)` is `None` on a miss, which a number has no native form for:
-    the function stays in Python, with a reason, and the rest of the module
-    lowers (it raised `IndexError` in the lowering before)."""
+def test_get_without_a_default_binds_a_number_or_none(tmp_path: Path):
+    """`v = d.get(k)` of a dict of numbers binds `v` as a number or `None`,
+    natively; `d.get(k)` of a dict of strings is a string or `None` (a null
+    handle), and `or` picks the default for `None` (it raised `IndexError` in
+    the lowering before)."""
     source = """
     def look(d: dict[int, int], k: int) -> int:
         v = d.get(k)
@@ -700,9 +702,10 @@ def test_get_without_a_default_stays_in_python(tmp_path: Path):
         assert done.returncode == 0, done.stderr
         assert _output(done).strip() == expected, args
     look = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.look")
-    assert "without a default can return `None`" in look.stdout, look.stdout
+    assert "llvm backend: native" in look.stdout, look.stdout
+    named = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.named")
+    assert "llvm backend: native" in named.stdout, named.stdout
     total = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.total")
     assert "llvm backend: native" in total.stdout, total.stdout
     summary = _run(tmp_path, "-m", "ppy_compiler", "explain", "--summary")
     assert summary.returncode == 0, summary.stderr
-    assert "without a default can return" in summary.stdout, summary.stdout

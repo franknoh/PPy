@@ -31,6 +31,7 @@ from __future__ import annotations
 import array
 import contextlib
 import ctypes
+import os
 import re
 import struct
 import sys
@@ -97,8 +98,9 @@ class Spec:
     """One type as the boundary sees it: a scalar, a tuple of scalars, or a collection."""
 
     #: "int", "float", "bool", "tuple", "str", a collection's short name,
-    #: "object" (a handle to a project class's instance), or "record" (a value
-    #: class's fields in place).
+    #: "object" (a handle to a project class's instance), "record" (a value
+    #: class's fields in place), or "optional" (a number or `None`: the number's
+    #: word, then a word that says whether there is one; `parts` is its kind).
     kind: str
     #: A tuple's or a record's words: scalar kinds.
     parts: tuple[str, ...] = ()
@@ -106,7 +108,7 @@ class Spec:
     value: Spec | None = None
     #: An object's or a record's class.
     record: str = ""
-    #: An object that may be `None`, the null handle.
+    #: An object or a string that may be `None`, the null handle.
     nullable: bool = False
 
     @property
@@ -115,11 +117,15 @@ class Spec:
 
     @property
     def words(self) -> int:
+        if self.kind == "optional":
+            return 2
         return len(self.parts) if self.kind in {"tuple", "record"} else 1
 
     def _kinds(self) -> tuple[str, ...]:
         if self.kind in {"tuple", "record"}:
             return self.parts
+        if self.kind == "optional":
+            return (self.parts[0], "bool")
         return ("handle",) if self.reference else (self.kind,)
 
     @property
@@ -163,7 +169,16 @@ class Spec:
         return base[self.value.python()]
 
 
-_TOKEN = re.compile(r"\s*([A-Za-z_][A-Za-z_0-9.]*|\[|\]|,|\?)")
+_TOKEN = re.compile(r"\s*([A-Za-z_][A-Za-z_0-9.]*|\[|\]|,|\?|\|)")
+
+
+def _or_none(found: Spec) -> Spec | None:
+    """`X | NoneType`: a number as an optional, a string or an object nullable."""
+    if found.kind in _SCALARS:
+        return Spec("optional", (found.kind,))
+    if found.kind in {"str", "object"}:
+        return Spec(found.kind, found.parts, record=found.record, nullable=True)
+    return None
 
 
 def parse(spelled: str, classes: dict[str, CrossingClass] | None = None) -> Spec | None:
@@ -177,6 +192,14 @@ def parse(spelled: str, classes: dict[str, CrossingClass] | None = None) -> Spec
     position = 0
 
     def one() -> Spec | None:
+        nonlocal position
+        found = atom()
+        if found is not None and tokens[position : position + 2] == ["|", "NoneType"]:
+            position += 2
+            return _or_none(found)
+        return found
+
+    def atom() -> Spec | None:
         nonlocal position
         if position >= len(tokens):
             return None
@@ -343,9 +366,13 @@ def _finder(function: Any) -> Any:
 
 
 def _field_spec(spelled: str, classes: dict[str, CrossingClass]) -> Spec | None:
-    """A field's type: a scalar, a string, a tuple of scalars, or what `parse` reads."""
+    """A field's type: a scalar, a string, a tuple of scalars, a number or a
+    string that may be `None`, or what `parse` reads."""
     if spelled in _SCALARS or spelled == "str":
         return Spec(spelled)
+    base, union, rest = spelled.partition("|")
+    if union and rest.strip() == "NoneType" and base.strip() in {*_SCALARS, "str"}:
+        return _or_none(Spec(base.strip()))
     if spelled.startswith("tuple["):
         parts = tuple(part.strip() for part in spelled[6:-1].split(","))
         if not parts or any(part not in _SCALARS for part in parts):
@@ -419,6 +446,8 @@ _WRAPPER_FUNCTIONS = (
     "ppy_coll_release",
     "ppy_coll_text_keys",
     "ppy_str_new_many",
+    "ppy_coll_touched",
+    "ppy_coll_adopt",
 )
 
 
@@ -441,14 +470,54 @@ def attach(wrappers: Any, library: Any = None) -> bool:
             taken = bool(hand(*addresses))
         except (AttributeError, TypeError, ValueError, OverflowError):
             taken = False
+    if taken:
+        _share_world(wrappers)
     with contextlib.suppress(AttributeError, TypeError):
         wrappers.__ppy_attached__ = taken
     return taken
 
 
+#: The resident objects' world (`crossing.c`), which the first wrapper module
+#: makes and every other one is handed: an object is resident in one place.
+_world: list[Any] = []
+
+
+def _share_world(wrappers: Any) -> None:
+    """Give a wrapper module the process's world of resident objects; with
+    `PPY_RESIDENT=0` in the environment, none, and objects are copied at
+    every crossing."""
+    share = getattr(wrappers, "ppy_world", None)
+    if share is None or os.environ.get("PPY_RESIDENT", "1") == "0":
+        return
+    try:
+        found = share(_world[0] if _world else None)
+    except (TypeError, ValueError):
+        return
+    if found is not None and not _world:
+        _world.append(found)
+        if os.environ.get("PPY_RESIDENT_REPORT"):
+            import atexit  # pylint: disable=import-outside-toplevel
+
+            atexit.register(_report_world, wrappers)
+
+
+def _report_world(wrappers: Any) -> None:
+    """`PPY_RESIDENT_REPORT=1`: the world's objects at exit, on stderr."""
+    stats = wrappers.ppy_world_stats()
+    if stats is not None:
+        live, stale, entries, enabled, admitted, calls = stats
+        print(
+            f"resident: {live} live, {stale} stale, {entries} entries, enabled {enabled}, "
+            f"{admitted} admitted, {calls} calls",
+            file=sys.stderr,
+        )
+
+
 def _format(spec: Spec) -> str:
     """One element's words as `struct` spells them: `q` an integer or a handle, `d` a double."""
-    kinds = spec.parts if spec.kind in {"tuple", "record"} else (spec.kind,)
+    kinds = spec._kinds() if spec.kind == "optional" else None  # pylint: disable=protected-access
+    if kinds is None:
+        kinds = spec.parts if spec.kind in {"tuple", "record"} else (spec.kind,)
     return "".join("d" if kind == "float" else "q" for kind in kinds)
 
 
@@ -581,6 +650,14 @@ class Boundary:
         if spec.kind in _SCALARS:
             _check(spec.kind, item)
             words[offset] = item
+        elif spec.kind == "optional":
+            # `None` is the number 0 with its flag clear.
+            if item is not None:
+                _check(spec.parts[0], item)
+            words[offset] = 0 if item is None else item
+            words[offset + 1] = 0 if item is None else 1
+        elif spec.kind == "str" and item is None and spec.nullable:
+            words[offset] = 0
         elif spec.kind == "str":
             strings = self._strings([item])
             made.append(strings[0])
@@ -645,6 +722,15 @@ class Boundary:
         strings made for them are added to `made` where it is given."""
         if not items:
             return b""
+        if spec.kind == "str" and spec.nullable and None in items:
+            # `None` is the null handle; the strings are made as ever.
+            given = [item for item in items if item is not None]
+            strings = list(self._strings(given)) if given else []
+            if made is not None:
+                made.extend(strings)
+            taken = iter(strings)
+            handles = [0 if item is None else next(taken) for item in items]
+            return struct.pack(f"<{len(handles)}q", *handles)
         if spec.kind == "str":
             strings = self._strings(items)
             if made is not None:
@@ -663,6 +749,14 @@ class Boundary:
                 raise
         elif spec.kind == "record":
             words = [part for item in items for part in self._record_words(item, spec)]
+        elif spec.kind == "optional":
+            words = []
+            for item in items:
+                if item is None:
+                    words.extend((0.0 if spec.parts[0] == "float" else 0, 0))
+                else:
+                    _check(spec.parts[0], item)
+                    words.extend((item, 1))
         elif spec.kind == "tuple":
             kinds = spec.parts
             for item in items:
@@ -796,7 +890,13 @@ class Boundary:
             return words[offset] != 0
         if spec.kind in _SCALARS:
             return words[offset]
+        if spec.kind == "optional":
+            if not words[offset + 1]:
+                return None
+            return words[offset] != 0 if spec.parts[0] == "bool" else words[offset]
         if spec.kind == "str":
+            if not words[offset] and spec.nullable:
+                return None
             return self._texts((words[offset],))[0]
         if spec.kind == "tuple":
             parts = words[offset : offset + len(spec.parts)]
@@ -849,8 +949,17 @@ class Boundary:
                 self._record(spec, words[start : start + width])
                 for start in range(0, len(words), width)
             ]
+        if spec.kind == "str" and spec.nullable and 0 in words:
+            texts = iter(self._texts(tuple(word for word in words if word)))
+            return [next(texts) if word else None for word in words]
         if spec.kind == "str":
             return self._texts(words)
+        if spec.kind == "optional":
+            boolean = spec.parts[0] == "bool"
+            return [
+                (number != 0 if boolean else number) if flag else None
+                for number, flag in zip(words[0::2], words[1::2], strict=True)
+            ]
         if spec.kind == "tuple":
             width = len(spec.parts)
             bools = [i for i, kind in enumerate(spec.parts) if kind == "bool"]

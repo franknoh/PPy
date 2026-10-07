@@ -58,6 +58,10 @@ static PyObject *ppy_sanitizer_failed(int status, const char *qualname) {
 
 /* A string result: the UTF-8 copy the native code made, read and freed. */
 static PyObject *ppy_text_result(char *data, long long length) {
+    if (length < 0) {
+        /* A string that may be `None`, and is. */
+        return Py_NewRef(Py_None);
+    }
     PyObject *made = PyUnicode_DecodeUTF8(data, (Py_ssize_t)length, NULL);
     free(data);
     return made;
@@ -393,7 +397,61 @@ def _support(signatures, *, managed: bool = True) -> list[str]:  # type: ignore[
         parts.append(_CROSSING.read_text(encoding="utf-8"))
     if managed and any(s.effects for s in found):
         parts.append(_EFFECTS.read_text(encoding="utf-8"))
+    if managed and any(s.draws for s in found):
+        parts.append(_DRAWS)
     return parts
+
+
+#: A function that draws from `random` draws in `random._inst`'s own state,
+#: which the binder hands over (`ppy_random`): the wrapper saves it before the
+#: call and puts it back where the call falls back, so the Python body draws
+#: what native code drew, and forgets `gauss_next` where native code seeded,
+#: as `random.seed` does. `binding._SharedGenerator` does the same in Python.
+_DRAWS = r"""
+#include <string.h>
+#define PPY_DRAW_BYTES (4 + 624 * 4)
+static unsigned char *ppy_draw_state = NULL;
+static int64_t (*ppy_draw_reseeded)(void) = NULL;
+static PyObject *ppy_draw_inst = NULL;
+
+/* `ppy_random(state address, reseeded address, random._inst)`. */
+static PyObject *ppy_random(PyObject *self, PyObject *args) {
+    unsigned long long state, reseeded;
+    PyObject *inst;
+    (void)self;
+    if (!PyArg_ParseTuple(args, "KKO", &state, &reseeded, &inst)) {
+        return NULL;
+    }
+    if (state == 0 || reseeded == 0) {
+        Py_RETURN_FALSE;
+    }
+    Py_INCREF(inst);
+    Py_XDECREF(ppy_draw_inst);
+    ppy_draw_inst = inst;
+    *(void **)(&ppy_draw_reseeded) = (void *)(uintptr_t)reseeded;
+    ppy_draw_state = (unsigned char *)(uintptr_t)state;
+    Py_RETURN_TRUE;
+}
+
+/* The state as the call found it, before Python runs the call again. */
+static void ppy_draw_restore(const unsigned char *saved) {
+    if (ppy_draw_state == NULL) {
+        return;
+    }
+    memcpy(ppy_draw_state, saved, PPY_DRAW_BYTES);
+    ppy_draw_reseeded();
+}
+
+/* After a call that answered: `gauss_next` forgotten where it seeded. */
+static void ppy_draw_settle(void) {
+    if (ppy_draw_state == NULL || !ppy_draw_reseeded()) {
+        return;
+    }
+    if (PyObject_SetAttrString(ppy_draw_inst, "gauss_next", Py_None) < 0) {
+        PyErr_Clear();
+    }
+}
+"""
 
 
 _FOOTER = """
@@ -441,8 +499,12 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
     parts.extend(_support(signatures.values()))
     if any(s.crosses_collections for s in signatures.values()):
         methods.append('    {"ppy_runtime", ppy_runtime, METH_VARARGS, NULL},')
+        methods.append('    {"ppy_world", ppy_world, METH_VARARGS, NULL},')
+        methods.append('    {"ppy_world_stats", ppy_world_stats, METH_NOARGS, NULL},')
     if any(s.effects for s in signatures.values()):
         methods.append('    {"ppy_effects", ppy_effects, METH_VARARGS, NULL},')
+    if any(s.draws for s in signatures.values()):
+        methods.append('    {"ppy_random", ppy_random, METH_VARARGS, NULL},')
     for index, (qualname, signature) in enumerate(sorted(signatures.items())):
         entries[qualname] = index
         parts.append(_function(index, signature))
@@ -473,6 +535,7 @@ _CROSSING_KINDS = {
     "set": "PX_SET",
     "object": "PX_OBJECT",
     "record": "PX_RECORD",
+    "optional": "PX_OPTIONAL",
 }
 
 _PARTS = {"int": "i", "float": "f", "bool": "b"}
@@ -592,7 +655,7 @@ def _crossing_structs(index: int, crossing: _Crossing) -> str:
         entries.append(
             f'    {{"{c.qualname}", {int(c.kind == "record")}, {c.tag}LL, {c.words}, {c.floats}LL, '
             f"{c.handles}LL, {len(c.fields)}, ppy_fields_{index}_{number}, {len(bases)}, "
-            f"ppy_bases_{index}_{number}, NULL, NULL}},"
+            f"ppy_bases_{index}_{number}, NULL, NULL, {int(c.resident)}}},"
         )
     lines.append(f"static px_class ppy_classlist_{index}[] = {{\n" + "\n".join(entries) + "\n};")
     lines.append(
@@ -652,23 +715,50 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     # without the GIL (spec 16.6). A borrowed buffer stays pinned across it.
     release = "    Py_BEGIN_ALLOW_THREADS" if signature.releases_gil else ""
     acquire = "    Py_END_ALLOW_THREADS" if signature.releases_gil else ""
+    if signature.releases_gil and crossing:
+        # Resident objects (`crossing.c`) are only touched with the GIL held.
+        release = "    PyThreadState *ppy_saved = ppy_x.resident ? NULL : PyEval_SaveThread();"
+        acquire = "    if (ppy_saved != NULL) PyEval_RestoreThread(ppy_saved);"
 
     builder = _result_builder(index, signature)
     # A container crossing: the arguments copied in as the guards run, every
     # container that came in copied back after a call that writes, and the
     # handles the call held let go of on every way out, before a sweep.
     end = "    px_end(&ppy_x);\n" if crossing else ""
+    # The arena of a call that writes through no parameter (`crossing.c`):
+    # given back once nothing can read it any more, the last thing before
+    # each way out; an answered call keeps what escaped it.
+    close = "    px_close(&ppy_x);\n" if crossing else ""
+    keep = "    px_keep(&ppy_x);\n" if crossing else ""
+    readonly = int(copied is not None and _reads_only(signature, copied))
     sync = ""
-    if crossing and any(p.is_handle and p.written for p in signature.parameters):
+    objects = _object_positions(signature, copied) if copied is not None else []
+    # A coroutine runs on after its call answers, holding what it was given:
+    # its objects are copied.
+    resident = bool(objects) and classes != "NULL" and not signature.future
+    if resident:
+        # The fields native code wrote in resident objects, set on them.
         sync = (
-            "    if (px_sync(&ppy_x) < 0) {\n        px_end(&ppy_x);\n        return NULL;\n    }\n"
+            "    if (ppy_x.resident && px_drain(&ppy_x) < 0) {\n        px_end(&ppy_x);\n"
+            "        px_close(&ppy_x);\n        return NULL;\n    }\n"
+        )
+    if crossing and any(p.is_handle and p.written for p in signature.parameters):
+        sync += (
+            "    if (px_sync(&ppy_x) < 0) {\n        px_end(&ppy_x);\n        px_close(&ppy_x);\n"
+            "        return NULL;\n    }\n"
         )
     if crossing:
         # Every variable is declared before the first jump to the cleanup.
         declarations = "    ppy_cross ppy_x;\n" + declarations
         body = (
-            f"    px_begin(&ppy_x, {classes});\n    if (!ppy_rt_ready) goto ppy_fallback;\n"
+            f"    px_begin(&ppy_x, {classes}, {readonly});\n"
+            "    if (!ppy_rt_ready) goto ppy_fallback;\n"
             + (f"    if (!px_resolve({classes})) goto ppy_fallback;\n" if classes != "NULL" else "")
+            + (
+                f"    px_resident(&ppy_x, args, ppy_objects_{index}, {len(objects)});\n"
+                if resident
+                else ""
+            )
             + body
         )
     boxed = _box(signature).replace("ppy_build_result(", f"ppy_build_result_{index}(")
@@ -677,6 +767,8 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     elif crossing and specs is not None and "r" in specs:
         boxed = f"px_result(&ppy_x, (int8_t *)ppy_out0, &ppy_xs_{index}_r)"
     structs = _crossing_structs(index, copied) if copied is not None else ""
+    if resident:
+        structs += f"\nstatic const int ppy_objects_{index}[] = {{{', '.join(map(str, objects))}}};"
     resolver = ""
     if classes != "NULL":
         # The classes' Python classes are found at the first call, by this.
@@ -690,12 +782,16 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
     held = managed and signature.effects
     qualname = signature.qualname
     enter = leave = ""
-    sanitized = f'{end}        return ppy_sanitizer_failed(status, "{qualname}");\n'
+    sanitized = f'{end}{close}        return ppy_sanitizer_failed(status, "{qualname}");\n'
     failed = (
         f"{end}        if (status == -1) {{\n            ppy_raised((void *)chosen);\n        }}\n"
+        f"{close}"
         f"        return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);\n"
     )
-    answered = f"{sync}    PyObject *ppy_result = {boxed};\n{end}    return ppy_result;\n"
+    made = "    px_resident_result(&ppy_x, ppy_result);\n" if resident else ""
+    answered = (
+        f"{sync}    PyObject *ppy_result = {boxed};\n{made}{end}{keep}    return ppy_result;\n"
+    )
     if held:
         # Output held while the call runs: written out once it answers,
         # dropped where it falls back, and a call that raised after a
@@ -704,22 +800,42 @@ def _function(index: int, signature: NativeSignature, *, managed: bool = True) -
         enter = "    int64_t ppy_outer = ppy_io.enter();\n"
         leave = "    int64_t ppy_crossed = ppy_io.leave(ppy_outer);\n"
         sanitized = (
-            f"{end}        ppy_io.discard();\n        ppy_io_settle();\n"
+            f"{end}{close}        ppy_io.discard();\n        ppy_io_settle();\n"
             f'        return ppy_sanitizer_failed(status, "{qualname}");\n'
         )
+        crossed = f'ppy_io_crossed(status, "{qualname}")'
+        if crossing:
+            crossed = f'ppy_closed(ppy_io_crossed(status, "{qualname}"), &ppy_x)'
         failed = (
             f"{end}        if (ppy_crossed) {{\n"
-            f'            return ppy_io_crossed(status, "{qualname}");\n        }}\n'
+            f"            return {crossed};\n        }}\n"
             "        ppy_io.discard();\n"
             "        if (status == -1) {\n            ppy_raised((void *)chosen);\n        }\n"
+            f"{close}"
             "        ppy_io_settle();\n"
             f"        return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);\n"
         )
         synced = sync.replace("return NULL;", "return ppy_io_commit_result(NULL);")
         answered = (
-            f"{synced}    PyObject *ppy_result = {boxed};\n"
-            f"{end}    return ppy_io_commit_result(ppy_result);\n"
+            f"{synced}    PyObject *ppy_result = {boxed};\n{made}"
+            f"{end}    ppy_result = ppy_io_commit_result(ppy_result);\n"
+            f"{keep}    return ppy_result;\n"
         )
+    draws = managed and signature.draws
+    if draws:
+        # `random`'s state as the call found it (`_DRAWS`).
+        declarations = "    unsigned char ppy_drawn[PPY_DRAW_BYTES];\n" + declarations
+        # Without the state's address, the Python-side binding saves it.
+        body = (
+            "    if (ppy_draw_state != NULL) memcpy(ppy_drawn, ppy_draw_state, PPY_DRAW_BYTES);\n"
+            + body
+        )
+        # Put back only where Python runs the call again: not after a barrier.
+        failed = failed.replace(
+            "        return ppy_handoff_as(",
+            "        ppy_draw_restore(ppy_drawn);\n        return ppy_handoff_as(",
+        )
+        answered = "    ppy_draw_settle();\n" + answered
     return f"""
 /* {signature.qualname}: {signature} */
 {structs}
@@ -842,9 +958,42 @@ ppy_bound_call:;
 {answered}
 ppy_fallback:
 {cleanup}
-{end}    return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);
+{end}{close}    return ppy_handoff_as(ppy_fallback_{index}, ppy_given, ppy_count, kwnames);
 }}
 """
+
+
+def _object_positions(signature: NativeSignature, crossing: _Crossing) -> list[int]:
+    """The arguments that are objects of the project's classes, or lists of
+    them, which a call keeps resident (`crossing.c`) where they crossed
+    before; a list's position is spelled negative, less one."""
+    found = []
+    for position, parameter in enumerate(signature.parameters):
+        spec = crossing.specs.get(str(position)) if parameter.is_handle else None
+        if spec is None:
+            continue
+        if spec.kind == "object":
+            found.append(position)
+        elif spec.kind == "list" and spec.value is not None and spec.value.kind == "object":
+            found.append(-position - 1)
+    return found
+
+
+def _reads_only(signature: NativeSignature, crossing: _Crossing) -> bool:
+    """Whether a call's containers may be laid out in its arena (`crossing.c`):
+    it writes through no parameter, and none holds an object, whose fields
+    `getattr` reads and which may be in a cycle with what holds it."""
+
+    def plain(spec: Spec | None) -> bool:
+        if spec is None:
+            return True
+        if spec.kind in {"object", "record"}:
+            return False
+        return plain(spec.key) and plain(spec.value)
+
+    if any(p.is_handle and p.written for p in signature.parameters):
+        return False
+    return all(plain(spec) for tag, spec in crossing.specs.items() if tag != "r")
 
 
 def _type_assignments(index: int, object_params: list[NativeParam]) -> str:
@@ -880,6 +1029,8 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
             # does not match its type runs the Python body.
             handle = f"h{position}"
             declarations.append(f"    int8_t *{handle} = NULL;")
+            # Only what a written parameter brings in is copied back.
+            lines.append(f"    ppy_x.writing = {int(parameter.written)};")
             lines.append(
                 f"    if (px_argument(&ppy_x, {source}, &ppy_xs_{index}_{position}, &{handle})"
                 " != 0) PPY_GUARD_FAIL();"
@@ -909,6 +1060,22 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
                 arguments.append(name)
             continue
 
+        if parameter.is_optional:
+            # `None` is the number 0 with its flag clear; anything else is
+            # the number, checked as a plain parameter of its kind is.
+            name = f"a{position}"
+            declarations.append(f"    {C_TYPES[_abi(parameter.element)]} {name} = 0;")
+            declarations.append(f"    int8_t {name}_present = 0;")
+            lines.append(f"    if ({source} != Py_None) {{")
+            lines.append(f"        {name}_present = 1;")
+            lines.extend(
+                _scalar_lines(parameter.element, source, name, "        ", exact=parameter.exact)
+            )
+            lines.append("    }")
+            arguments.append(name)
+            arguments.append(f"{name}_present")
+            continue
+
         if parameter.is_tuple:
             lines.append(
                 f"    if (!PyTuple_CheckExact({source}) || "
@@ -936,9 +1103,16 @@ def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, 
             size = f"text{position}_len"
             declarations.append(f"    const char *{data} = NULL;")
             declarations.append(f"    Py_ssize_t {size} = 0;")
+            if parameter.nullable:
+                # `None` is no bytes and a length of -1.
+                lines.append(f"    if ({source} == Py_None) {{")
+                lines.append(f"        {size} = -1;")
+                lines.append("    } else {")
             lines.append(f"    if (!PyUnicode_CheckExact({source})) PPY_GUARD_FAIL();")
             lines.append(f"    {data} = PyUnicode_AsUTF8AndSize({source}, &{size});")
             lines.append(f"    if ({data} == NULL) PPY_GUARD_FAIL();")
+            if parameter.nullable:
+                lines.append("    }")
             arguments.append(f"(char *){data}")
             arguments.append(f"(long long){size}")
             continue
@@ -1080,6 +1254,9 @@ def _scalar_lines(
 
 def _box(signature: NativeSignature) -> str:
     """Build the Python object the wrapper returns."""
+    if signature.optional:
+        # The number where its flag says there is one, else `None`.
+        return f"(ppy_out1 ? {_box_one(signature.returns[0], 'ppy_out0')} : Py_NewRef(Py_None))"
     if len(signature.returns) == 1:
         return _box_one(signature.returns[0], "ppy_out0")
     return (
@@ -1092,7 +1269,7 @@ def _box(signature: NativeSignature) -> str:
 def _result_builder(index: int, signature: NativeSignature) -> str:
     """A tuple result is built element by element, so no format string is
     needed and a failed allocation cannot leak the elements already boxed."""
-    if len(signature.returns) == 1:
+    if len(signature.returns) == 1 or signature.optional:
         return ""
     parameters = ", ".join(
         f"{C_TYPES[atom]} v{position}" for position, atom in enumerate(signature.returns)

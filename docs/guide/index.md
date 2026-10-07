@@ -18,9 +18,9 @@ path.
 |---|---|
 | [The subset](subset.md) | What the compiler accepts, what `--no-strict` downgrades and infers, the compatibility policy, and the three absences of a type: unknown, `Any`, and `Dynamic`. |
 | [Directives and markers](directives.md) | `@ppy.pure`, `@ppy.native`, `@ppy.jit`, `@ppy.dynamic` and the rest; fixed-width integers, `Buffer[T]`, `Range`, ownership. |
-| [Classes](classes.md) | Value classes and object classes in native code: trees, linked nodes, `class Stack[T]`. |
+| [Classes](classes.md) | Value classes and object classes in native code: trees, linked nodes, `class Stack[T]`, fields typed from what the program stores into them, objects edited in place, and objects that stay resident in native memory between calls from Python. |
 | [Exceptions and generators](exceptions-and-generators.md) | `raise`, `try`, `assert`, and generators in native code, and what stays in Python. |
-| [Functions as values](closures.md) | Nested functions, `lambda`, `nonlocal`, `Callable` values, keys, `map` and `filter` in native code. |
+| [Functions as values](closures.md) | Nested functions (with entries of their own when they only read the variables they share), `lambda`, `nonlocal`, `Callable` values, keys, `map` and `filter` in native code. |
 | [Strings](strings.md) | `str` in native code: methods, f-strings and format specs, parsing numbers, strings as keys. |
 | [Lists, dicts, and sets](containers.md) | Python's own containers in native code, with no rewrite: displays, comprehensions, methods, and the Python boundary. |
 | [The standard library](stdlib.md) | `random` and `random.Random`, `math`, `heapq`, `bisect`, `itertools`, `deque`, `Counter`, `defaultdict`, `OrderedDict`, `functools`, `operator`, and `string` in native code, draw for draw with CPython. |
@@ -38,5 +38,5 @@ path.
 | [Effects and the three paths](effects.md) | The effect vocabulary, purity, and why three ways of running agree. |
 | [Effects in native code](native-effects.md) | `print`, `input`, text files, and calls into Python from native code, and why nothing prints twice. |
 | [Reading input](input.md) | `ppy.input` reads lines, `ppy.scan` reads tokens, `ppy.read_*` fill a buffer. |
-| [Native lowering](native-lowering.md) | When a function gets a boundary, what a call costs, what its parameters may be, and how to read `ppy explain --summary`. |
+| [Native lowering](native-lowering.md) | When a function gets a boundary, what a call costs, what its parameters may be (numbers and strings that may be `None` included), and how to read `ppy explain --summary`. |
 | [Regular expressions](regex.md) | A pattern compiled from a bytes literal, matched natively over a byte buffer. |

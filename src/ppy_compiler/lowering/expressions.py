@@ -17,6 +17,7 @@ from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
 from .collections import HANDLE, Shape
 from .exceptions import ARGS_NONE, ARGS_ONE_TEXT
+from .intness import exact_locals, gives_bool, gives_int
 
 #: The builtin classes `isinstance` is asked of, by the name a program spells.
 _BUILTIN_CLASSES = frozenset(
@@ -194,6 +195,9 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
             if not _cheap(item):
                 self._expr(item)  # type: ignore[attr-defined]
             return core.const(self.b, False, BOOL)  # type: ignore[attr-defined]
+        optional = self._optional_in_display(item, elements, like)  # type: ignore[attr-defined]
+        if optional is not None:
+            return optional
         item_type = self._plain_type(item)
         kinds = {self._plain_type(e) for e in elements} | {item_type}
         if not kinds <= {T.INT, T.FLOAT, T.BOOL, T.STR}:
@@ -391,6 +395,13 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
                 known = self._runtime_classes(declared) if declared is not None else None
                 if known is not None:
                     possible &= known
+                exact = self._exact_parameter(subject.id)
+                if exact is not None:
+                    possible &= {exact}
+                else:
+                    local = self._exact_local(subject.id)
+                    if local is not None:
+                        possible &= {local}
             if wanted is not None and possible is not None:
                 answers = {
                     any(name in T.BUILTIN_MRO.get(runtime, (runtime,)) for name in wanted)
@@ -402,6 +413,9 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
                     if not _cheap(node.args[0]):
                         self._expr(node.args[0])  # type: ignore[attr-defined]
                     return core.const(self.b, answers.pop(), BOOL)  # type: ignore[attr-defined]
+                decided = self._optional_isinstance(subject, wanted, possible)  # type: ignore[attr-defined]
+                if decided is not None:
+                    return decided
                 raise Unsupported(
                     f"`isinstance` of a `{self._type_of(node.args[0])}` depends on the value"  # type: ignore[attr-defined]
                 )
@@ -412,6 +426,63 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
             ):  # type: ignore[attr-defined]
                 return self._is_none_or(node, [n for n in wanted if n != "NoneType"])
         return super()._is_instance(node)  # type: ignore[misc]
+
+    def _exact_local(self, name: str) -> str | None:
+        """`int` or `float` for a name of this function that only ever holds a
+        real one of that class (`lowering.intness.exact_locals`)."""
+        info = self.info  # type: ignore[attr-defined]
+        cache = self.__dict__.setdefault("_exact_local_names", {})
+        found = cache.get(info.qualname)
+        if found is None:
+            node = info.node
+            found = {}
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                params = [p.name for p in info.params]
+                for kind in ("int", "float"):
+                    exact = frozenset(n for n in params if self._exact_parameter(n) == kind)
+                    for local in exact_locals(node, params, exact, kind, self._type_of):  # type: ignore[attr-defined]
+                        found[local] = kind
+            cache[info.qualname] = found
+        return found.get(name)
+
+    def _exact_parameter(self, name: str) -> str | None:
+        """The one class a parameter of a module-level function only ever called
+        by name is when it runs: `int` for an `int` one, which the boundary
+        passes only a real `int` and a native caller never a `bool` once the
+        body shows the difference (`lowering.intness`), and
+        `float` for a `float` one that shows whether it is an `int`; None when
+        the body rebinds it or anything else."""
+        info = self.info  # type: ignore[attr-defined]
+        if f"{self.frontend.analysis.name}.{info.name}" != info.qualname or not (  # type: ignore[attr-defined]
+            self.frontend.called_directly(info.name)  # type: ignore[attr-defined]
+        ):
+            return None  # a method, a nested function, or one called through a value
+        parameter = next((p for p in info.params if p.name == name), None)
+        if parameter is None or parameter.kind in {"var_positional", "var_keyword"}:
+            return None
+        declared = T.strip_literal(parameter.type)
+        if declared == T.INT:
+            exact = "int"
+        elif declared == T.FLOAT and name in self.frontend.exact_params(info.qualname):  # type: ignore[attr-defined]
+            exact = "float"
+        else:
+            return None
+        if parameter.default is not None:
+            default = self._type_of(parameter.default)  # type: ignore[attr-defined]
+            if gives_bool(default) if exact == "int" else gives_int(default):
+                return None
+        augmented = {id(n.target) for n in ast.walk(info.node) if isinstance(n, ast.AugAssign)}
+        for n in ast.walk(info.node):
+            if (
+                isinstance(n, ast.Name)
+                and n.id == name
+                and not isinstance(n.ctx, ast.Load)
+                and id(n) not in augmented
+            ):
+                return None  # rebound: the checker's type at the use decides
+            if isinstance(n, (ast.Global, ast.Nonlocal)) and name in n.names:
+                return None
+        return exact
 
     def _is_none_or(self, node: ast.Call, others: list[str]) -> Value | None:
         """`isinstance(node, (Node, type(None)))` of a `Node | None`."""
@@ -573,6 +644,36 @@ class ExpressionLowering:  # pylint: disable=attribute-defined-outside-init
             following = ast.copy_location(ast.Assign([target], read), node)
             self.__dict__.setdefault("_made_nodes", []).append(following)
             self._assign(following)  # type: ignore[attr-defined]
+
+    def _unpack_into_places(self, target: ast.expr, node: ast.Assign) -> bool:
+        """`node.left, node.right = node.right, node.left`: a tuple display
+        unpacked into fields or elements. Every value is made first, each into
+        a hidden local, and then bound to its target from left to right, as
+        Python evaluates the right side before it assigns."""
+        value = node.value
+        if not (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, (ast.Tuple, ast.List))
+            and len(target.elts) == len(value.elts)
+            and not any(isinstance(e, ast.Starred) for e in [*target.elts, *value.elts])
+            and any(isinstance(e, (ast.Attribute, ast.Subscript)) for e in target.elts)
+        ):
+            return False
+        held: list[ast.expr] = []
+        for element in value.elts:
+            t = self._type_of(element)  # type: ignore[attr-defined]
+            self._hidden_count += 1
+            name = f".u{self._hidden_count}"
+            made = self._typed(ast.Name(name, ast.Store()), t, element)
+            first = ast.copy_location(ast.Assign([made], element), node)
+            self.__dict__.setdefault("_made_nodes", []).append(first)
+            self._assign(first)  # type: ignore[attr-defined]
+            held.append(self._typed(ast.Name(name, ast.Load()), t, element))
+        for place, read in zip(target.elts, held, strict=True):
+            each = ast.copy_location(ast.Assign([place], read), node)
+            self.__dict__.setdefault("_made_nodes", []).append(each)
+            self._assign(each)  # type: ignore[attr-defined]
+        return True
 
     def _assign_choice(self, target: ast.expr, node: ast.Assign) -> bool:
         """`r, c = (a, b) if flag else (b, a)`: the choice as an `if` statement,

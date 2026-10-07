@@ -283,8 +283,10 @@ def test_every_path_agrees_and_each_function_goes_native(tmp_path: Path, name: s
 @requires_cc
 def test_python_around_and_calls_into_python(tmp_path: Path):
     _agrees_and_goes_native(tmp_path, PYTHON_AROUND, PYTHON_AROUND_NATIVE)
+    # `scaled` reads `scale`, which nothing rebinds while it runs: Python hands
+    # it the cell's value at each call, and it has a native entry of its own.
     explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.solve.<locals>.scaled")
-    assert "shares `scale` with the function around it" in explained.stdout, explained.stdout
+    assert "llvm backend: native" in explained.stdout, explained.stdout
 
 
 @requires_standalone

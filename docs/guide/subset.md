@@ -95,27 +95,71 @@ print(count_divisors(28), count_divisors(36))
 
 Every call in every file of the project counts, and they must agree. An
 `int` on one call and a `float` on another make a `float`, as a declared
-`float` takes an `int`. Other mixes, and `int | None`, leave the parameter
-unknown. More evidence:
+`float` takes an `int`: where the function's result would show that it was
+given an `int` (`x * 3` is `12` for `4`, not `12.0`), the native entry
+refuses the `int` and the Python body runs. Other mixes leave the
+parameter unknown: a function is not compiled once per type its calls
+pass. More evidence:
 
+- A value whose type the program states counts as a typed argument:
+  `int(input())`, `float(...)`, `input().split()`,
+  `list(map(int, input().split()))`, and `args.k` from an
+  `argparse.ArgumentParser` with `add_argument("--k", type=int, default=3)`.
+  An option that may be `None` (no default, not required), a parser
+  reconfigured with `set_defaults` or groups, or one passed elsewhere does
+  not count.
 - A default value is a call that passes it: `def f(xs, lo=0)` with
-  `f(ys, 2)` has `lo: int`.
+  `f(ys, 2)` has `lo: int`. So is a default that is a module constant
+  written as a literal (`tol=EPSILON`), or `int(...)`, `float(...)`,
+  `str(...)`, `bool(...)`, or `len(...)` (`seed=int(time())`).
 - A method takes the calls made to it through any class of its family:
   `shape.area(2)` with `shape: Shape` may run `Square.area`, so both take an
   `int`.
+- An operator on an instance is a call of its method: `a + b` with `a: Vec`
+  calls `Vec.__add__` (or `b`'s `__radd__`), and so do `a < b`, `a[k]`,
+  `a[k] = v`, `del a[k]`, and `x in a` for theirs. A comparison method
+  (`__eq__`, `__lt__`, ...) is only typed as taking its own class, because
+  the runtime also calls it with two of the class's objects to sort a list
+  or look one up.
+- A parameter declared with an open element type (`xs: list`,
+  `dict[str, Any]`) takes the element type its calls agree on, as
+  `list[int]`; with no agreement it keeps the declaration.
 - A parameter no call in the project types takes the type its doctests
   pass as literals: `>>> digit_sum(1234)` gives `n: int`, and
-  `>>> s = Stack()` then `>>> s.push(3)` gives `value: int`. An example
-  that expects an exception is not counted.
+  `>>> s = Stack()` then `>>> s.push(3)` gives `value: int`. Arithmetic on
+  literals (`2 << 31`), an empty display beside filled ones
+  (`{1: [2], 2: []}` is a `dict[int, list[int]]`), a loop over a literal or
+  a `range` (`for v in [3, 4]: f(v)`), and operators on a name the doctest
+  bound (`>>> heap["B"]`) count too. An example that expects an exception
+  is not counted. The cases of `@pytest.mark.parametrize`, as literals or a
+  module constant written as one, count the same way.
+- A parameter nothing calls with a type, with no default, takes the type
+  its body's use admits when that is one builtin: `range(n)` makes `n` an
+  `int`, and a parameter whose only attribute uses are string methods
+  (`s.split()`, `s.upper()`) is a `str`. A test against `None`, another
+  attribute, a subscript of an `int`, a new binding, or a nested function
+  leaves it unknown.
 - A result takes the type of the body's `return` statements, a recursive
   function's too (`fib(n - 1) + fib(n - 2)`).
 
+A decorator is looked through when it keeps the function's parameters:
+`@staticmethod`, `@classmethod`, `@functools.cache`, `@functools.lru_cache`,
+`@abc.abstractmethod`, a pytest mark, and a project decorator whose wrapper
+is made with `functools.wraps(fn)` and only calls `fn(*args, **kwargs)`.
+Looking through a decorator gives the parameters their types and nothing
+else. Under `--no-strict` a function with a decorator nobody vouches for
+stays in Python, and every call by its name, from Python or from native
+code, goes to the object the decorator returned, so a wrapper that prints,
+doubles the result, or caches runs just as it does on CPython. Such a call
+counts as one with unknown effects: it is never inlined, folded, or moved
+out of a loop.
+
 Nothing is inferred for a function the program uses as a value (`key=f`,
-`map(f, xs)`, `g = obj.method`), one with a decorator, one called with
+`map(f, xs)`, `g = obj.method`), one with another decorator, one called with
 `*args` or `**kwargs`, a nested function, or a dunder method other than
-`__init__`. An inferred type that makes the checker report an error
-(`x + y` on a path the program never takes, with `y` now an `int`) is taken
-back, and the function runs on CPython as before.
+`__init__` and the operator methods above. An inferred type that makes the
+checker report an error (`x + y` on a path the program never takes, with
+`y` now an `int`) is taken back, and the function runs on CPython as before.
 
 An inferred type is guarded like a declared one. A Python caller (a doctest,
 another program that imports the module, a call through `getattr`) goes
@@ -136,7 +180,12 @@ Strict mode does not infer: an unannotated parameter is still `E1201`.
 [An unannotated module](../howto/52_unannotated.md) is a worked example:
 seven functions with no annotations, each typed from its calls and
 defaults, and the boundary running the Python body for an argument that
-does not fit.
+does not fit. [Options and doctests](../howto/56_options_and_doctests.md)
+types a script from its `argparse` options, operators on a class, an
+`lru_cache` function, and a constant default.
+[Linked structures](../howto/55_linked_structures.md) shows the fields of
+unannotated classes typed from the stores into them
+([Classes](classes.md#fields-without-annotations)).
 
 ## Accepted forms of ordinary Python
 
@@ -166,7 +215,11 @@ These are valid Python that the checker accepts and types:
   call on CPython (see
   [A `float` given an `int`](native-lowering.md#a-float-given-an-int)).
 - A list written in place with narrower elements than declared:
-  `m: list[list[float]] = [[0] * n for _ in range(n)]`.
+  `m: list[list[float]] = [[0] * n for _ in range(n)]`, and rows of `None`
+  where the elements may be `None`:
+  `board: list[list[str | None]] = [[None] * w for _ in range(h)]`. The
+  same display outside a comprehension, `r: list[int | None] = [None] * w`,
+  is still `E1301` (`list[NoneType]` against `list[int | None]`).
 - A generator expression where a `Generator[T, None, None]` is declared.
 
 The standard library's `Queue`, `LifoQueue`, `PriorityQueue`, `deque`,

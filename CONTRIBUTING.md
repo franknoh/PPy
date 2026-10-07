@@ -252,6 +252,13 @@ is most likely to break something:
 | `--stdlib` | seeded `random` and `random.Random` draws, `math`, `heapq`, `bisect`, `itertools`, `functools`, `operator`, and the `collections` containers |
 | `--calls` | constant defaults and keyword-only parameters, called by keyword with defaults left out |
 | `--unannotated` | functions with no annotations, run with `strict = false` and called afterwards from Python with arguments of other types (paths with Python by default) |
+| `--inference` | with `--unannotated`: a `functools.wraps` decorator, a value class used through operators and sorted, a `list`-annotated parameter, a function called with an `int` and a `float`, an `argparse` option, and parameters typed only by `range(n)` or string methods |
+| `--structures` | a search tree with parent links and a doubly linked list, fields unannotated, relinked in place by `@ppy.native` methods (inserts through a field alias, rotations through a call's result, mirroring by tuple assignment, unlinking, reversal); `main` prints shapes and identities after each call (paths with Python) |
+| `--shapes` | the shapes the corpus kept in Python: an `if`/`elif`/`else` that returns on every side, list parameters (`if not xs`, `== []`, unpacking, slicing, returning), module string constants, tuple assignment of lists, `*args` of numbers; with `--state`, a function that falls off its end and a nested function handed cells |
+| `--resident` | the `--structures` classes, edited by native methods called again and again, with Python writing to the same objects between the calls: fields set through attributes, `vars()`, and `setattr`, links cut and Python-made nodes linked in, an attribute deleted, a field holding another type for a while, structures made and dropped (paths with Python) |
+| `--optional` | a class with `int \| None`, `float \| None`, `bool \| None`, and `str \| None` fields, functions taking and returning each, a list and a dict of `int \| None` written in place, `d.get`, `or`, `in`, `isinstance`, `any`/`all`, comprehensions, f-strings, and a field narrowed by a test and reset by a call before arithmetic or `<` meets it; with `--resident`, a resident object with such fields that Python sets to `None` and back between native calls |
+| `--bools` | `bool`s stored where an `int` is declared (locals, a rebound name, list, dict, and tuple elements, a dataclass field, a return from `-> int`, an argument through `Callable[[int], int]`) and printed, plus arithmetic on `bool`s, which must stay `int`s (paths with Python) |
+| `--decorators` | with `--unannotated`: project decorators that scale results, print, count calls, cache with a print on a miss (a recursive function through its cache included), swap arguments, take arguments, or replace the function, and a counted method, called from native loops that keep and discard the results |
 
 `--paths python,ppy,run` limits a batch to some of the paths. Flags
 combine (`--unannotated --calls`).
@@ -354,6 +361,9 @@ to `dev`.
 A hosted runner has none of that, which is why `benchmark.yml` only reports
 on a schedule.
 
+The runner lives in `~/actions-runner` on that machine and stops with it.
+`~/actions-runner/start.sh` brings it back.
+
 ### Tables the runner does not refresh
 
 Three kinds of number are measured by hand, from a `/tmp` checkout with
@@ -365,13 +375,12 @@ nothing else running, and committed with the change that moved them:
   it. It flags a warm run slower than `python` beyond the margin. Run it in
   the default environment (`uv sync`): an example whose libraries are not
   installed is left out, as are the device examples.
-- `python examples/bench_boundary.py` prints the cost of a call for each
-  shape that crosses the boundary. The table in the native lowering guide
-  ("What a call costs") is its output under `ppy run` beside the same
-  program under `python`.
+- `python examples/bench_boundary.py --python` prints the cost of a call
+  for each shape that crosses the boundary, under `ppy run` and under
+  `python`. The table in the native lowering guide ("What a call costs") is
+  its output.
 - An example README's own timing table (`51_clinic` and later) is the mean
-  of five runs of each command. The runner lives in `~/actions-runner` on that machine and
-stops with it. `~/actions-runner/start.sh` brings it back.
+  of five runs of each command.
 
 A change that touches only prose (the docs, a README, the changelog, a
 recorded measurement) skips the test matrix. `ci.yml` sorts the changed

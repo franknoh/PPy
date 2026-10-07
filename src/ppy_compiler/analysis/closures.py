@@ -26,6 +26,7 @@ __all__ = [
     "Scope",
     "callable_spelled",
     "captured_names",
+    "cell_captures",
     "closure_nodes",
     "free_names",
     "is_plain_callable",
@@ -171,6 +172,23 @@ def shared_with_closures(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[st
     return shared & own_names(node)
 
 
+def cell_captures(node: Scope, outer: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """The variables of `outer` that `node`, a function defined directly in it,
+    reads and that no one rebinds while `node` runs: `node` does not, no
+    function nested in `outer` declares them `nonlocal`, and they are not a
+    function or class `outer` defines. A call of `node` may be handed each one
+    as it is in its cell when the call starts, and see what reading the cell
+    would have shown for the whole call: the frame of `outer` is waiting on
+    the call, and nothing else binds the name."""
+    shared = free_names(node) & own_names(outer)
+    defined = {
+        child.name
+        for child in _scope_nodes(outer)
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
+    return shared - defined - rebound_by_closures(outer)
+
+
 def rebound_by_closures(node: Scope) -> set[str]:
     """The names of `node` a function nested in it rebinds with `nonlocal`: a
     call can change them, so what `node` knows of their values does not last."""
@@ -190,7 +208,19 @@ def captured_names(
     if outer is None:
         return {}
     known = outer.locals
-    return {name: known[name] for name in sorted(free_names(info.node)) if name in known}
+    # A name no function around this one binds is the module's, which the
+    # function's locals as the checker ends them also list.
+    bound: set[str] = set()
+    around: FunctionAnalysis | None = outer
+    while around is not None:
+        bound |= own_names(around.info.node)
+        enclosing = around.info.enclosing
+        around = analyses.get(enclosing) if enclosing else None
+    return {
+        name: known[name]
+        for name in sorted(free_names(info.node))
+        if name in known and name in bound
+    }
 
 
 def is_plain_callable(t: T.Type) -> bool:

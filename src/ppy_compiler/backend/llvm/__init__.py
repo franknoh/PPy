@@ -41,11 +41,13 @@ from .link import (
     write_manifest,
 )
 from .lowering import (
+    VARIADIC,
     LoweredFunction,
     LoweringResult,
     NativeSignature,
     should_lower_native,
     with_implicit_globals,
+    with_variadic,
 )
 from .specialize import SpecializationPolicy, Specializer
 from .wrapper_build import build_wrappers
@@ -313,8 +315,10 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
             # The cached module no longer matches the source in front of us.
             return NativeModule(name=name)
         info, _analysis, node = entry
-        if signature.reads_globals:
-            # Lowered with the globals it reads as parameters, as it was then.
+        # Lowered with `*args` as a list and the globals it reads as
+        # parameters, as it was then.
+        info = with_variadic(info)
+        if any(p.source and p.source != VARIADIC for p in signature.parameters):
             info = with_implicit_globals(info, _analysis)
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
@@ -1265,9 +1269,9 @@ class _Binder(LibraryBinder):
                 register_function(signature.qualname, fallback)
             if types is not None:
                 register = wrappers.registrar(qualname)
-                # A function that draws needs `random`'s state saved around it,
-                # which only the Python-side wrapper does.
-                if not signature.draws and not (
+                # A function that draws has `random`'s state saved around it
+                # by the wrapper, once it holds the state's address.
+                if (not signature.draws or wrappers.attach_random()) and not (
                     observation_wanted(specializer, policy, info) and register is not None
                 ):
                     # Nothing to watch for: the wrapper holds the fallback in C

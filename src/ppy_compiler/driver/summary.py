@@ -72,6 +72,13 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/native-lowering/",
     ),
     _shape(
+        r"decorated by `[^`]+`, which hands back an object the compiler does not know",
+        "a decorator nobody vouches for",
+        "calls go to what the decorator returned, in Python; register the decorator's "
+        "semantics with a plugin, or keep the hot loop in an undecorated function",
+        "guide/subset/",
+    ),
+    _shape(
         r"calls `([^`]+)` with unknown effects|`([^`]+)` has no native lowering",
         "a call to `{0}`",
         "a library or builtin with no native form keeps its caller in Python; call it outside "
@@ -153,6 +160,13 @@ _SHAPES: tuple[_Shape, ...] = (
         "pass it what it reads of the function around it as arguments, or see that "
         "function's reason",
         "guide/closures/",
+    ),
+    _shape(
+        r"stores a `bool` where an `int` is declared",
+        "a `bool` stored where an `int` is declared (a local, a return, a list or dict, a "
+        "field, an argument through a `Callable`), which native code would hold as 1",
+        "annotate the slot `bool`, or store `int(flag)` where an `int` is meant",
+        "guide/native-lowering/",
     ),
     _shape(
         r"`isinstance` of a `[^`]+` depends on the value",

@@ -27,9 +27,11 @@ Python's container behaves like.
 
 ## What lowers
 
-A container's element, or a dict's value, is a number, a string, a tuple of
-numbers, a value class or an object class, or another container:
-`list[list[int]]`, `dict[str, list[int]]`, `list[tuple[int, float]]`. A key
+A container's element, or a dict's value, is a number, a string, a number
+or string that may be `None`, a tuple of numbers, a value class or an
+object class, or another container: `list[list[int]]`,
+`dict[str, list[int]]`, `list[tuple[int, float]]`, `list[int | None]`,
+`dict[str, str | None]`. A key
 of a dict or a set is an `int`, a `str`, a tuple of `int`, or an instance of
 a class Python can hash (see [Collections](collections.md#what-a-collection-holds)).
 
@@ -40,7 +42,7 @@ a class Python can hash (see [Collections](collections.md#what-a-collection-hold
 | comprehensions | `[e for x in xs if c]`, `{k: v for ...}`, `{e for ...}`, nested, with the comprehension's names its own, and a generator given to `sum`, `min`, or `max` |
 | constructors | `list(xs)`, `set(xs)`, `dict(d)` |
 | a list | `xs[i]` and `xs[i] = v` from either end, slices with steps, `append`, `extend`, `insert`, `pop()`, `pop(i)`, `remove`, `index`, `count`, `sort()` with `key=` and `reverse=`, `reverse`, `clear`, `copy`, `del xs[i]`, `+` |
-| a dict | `d[k]`, `d[k] = v`, `del d[k]`, `get(k, default)`, `setdefault`, `pop(k)`, `pop(k, default)`, `keys()`, `values()`, `items()`, `update`, `copy`, `clear` |
+| a dict | `d[k]`, `d[k] = v`, `del d[k]`, `get(k)`, `get(k, default)`, `setdefault`, `pop(k)`, `pop(k, default)`, `keys()`, `values()`, `items()`, `update`, `copy`, `clear` |
 | a set | `add`, `remove`, `discard`, `update`, `copy`, `clear`, `\|`, `&`, `-`, `^` and their methods, `issubset`, `issuperset`, `isdisjoint` |
 | any of them | `len`, `in`, `==`, `if xs:`, `for` loops, `sorted`, `min`, `max`, `sum`, `any`, `all`, `enumerate`, `zip`, `reversed` |
 
@@ -99,36 +101,53 @@ buffer, which native code and Python both pass without copying the
 elements; a list it writes, and every other container, goes by handle.
 
 When Python calls such a function, the generated wrapper copies each
-container argument into native memory (strings as their UTF-8 bytes) and
-copies the result out as a new `list`, `dict`, or `set`. After a call that
-writes through a parameter, every container that came in is copied back
-into the caller's object, which stays the same object. That includes one
-the call took out of its parent: after `row = g[0]; row.append(1); g.pop(0)`
-the caller's row has the 1, as in CPython. An element the call left as it
-was keeps its identity. An argument whose contents do not match the
-declared type runs the Python body instead.
+container argument into native memory and copies the result out as a new
+`list`, `dict`, or `set`. After a call that writes through a parameter,
+every container that came in with a parameter it writes is copied back into
+the caller's object, which stays the same object. That includes one the call
+took out of its parent: after `row = g[0]; row.append(1); g.pop(0)` the
+caller's row has the 1, as in CPython. Of a list of numbers, only the
+elements the call changed are set again; the others keep their identity, as
+does any element the call left as it was. An argument whose contents do not
+match the declared type runs the Python body instead.
 
 Each object is copied once however often it is reached, and comes back as
 one object: `f(xs, xs)` writes one list, the rows of `[[0] * n] * m` stay
-one row, and a list in two dict values stays one list.
+one row, and a list in two dict values stays one list. A container a
+written parameter shares with a parameter the call only reads is copied
+back too.
 
-The copy costs time in proportion to what crosses. Measured on the
+A call that writes through none of its parameters, and takes no objects,
+reads its containers in place of copies. Its lists, inner lists included,
+are laid out in one block of memory the call owns rather than allocated one
+by one; a string in them is the Python string's own UTF-8 bytes, borrowed
+for the call, not a copy; a dict or a set is filled without hashing, and its
+index is made at the first lookup, so a walk over it never hashes. What the
+call hands back that it read (a row, a string) is the caller's object. The
+values are those the arguments held when the call began, as with a copy, so
+another thread may run while the call does. A string a cached callee keeps
+past the call is copied then.
+
+What crosses costs time in proportion to its size. Measured on the
 generated wrapper:
 
-| element | copied in | and back, after a write |
-|---|---|---|
-| a number in a list | about 1 ns | about 2 ns, more where it changed |
-| a dict's or a set's entry | about 20 ns | about the same again |
-| a list inside a list | about 80 ns, plus its elements | its elements |
-| a string | a native string, about 30 ns | a Python string |
+| element | read in place | copied in, for a call that writes | and back, after a write |
+|---|---|---|---|
+| a number in a list | about 1 ns | about 1 ns | where it changed |
+| a dict's or a set's entry | about 10 ns, and again at the first lookup | about 15 ns | about the same again |
+| a list inside a list | about 20 ns, plus its elements | about 60 ns, plus its elements | its elements |
+| a string | about 10 ns, borrowed | a native string, about 40 ns | a Python string |
 
-A Python loop's pass costs 10 to 30 ns. So Python calls a function natively
-only where the body does that much with each element: a loop over a list
-of numbers; three or more operations per entry of a dict (`s += k * v + v`,
-not `s += d[k]`); two or more per element of a list of lists; and, for a
-container of strings, more than one pass, a loop inside its loop, as
-`for w in words: for ch in w:` does. Otherwise Python calls its Python body,
-and native callers still call it natively. `ppy explain` gives the reason.
+Native code pays to read an element too: a string or an inner list is held
+and let go of, a key is hashed and looked up. A Python loop's pass costs 10
+to 30 ns. So Python calls a function natively only where the body does
+enough with each element: a loop over a list of numbers or of bools; three
+or more operations per entry of a dict it walks (`s += k * v + v`), more
+where it looks keys up (`s += d[k]` stays in Python); a loop over each
+inner list of a list of lists, or over each string's characters, rather
+than one operation per row or per string. Otherwise Python calls its Python
+body, and native callers still call it natively. `ppy explain` gives the
+reason.
 
 ```python
 def grow(xs: list[int], n: int) -> None:
@@ -158,8 +177,24 @@ Python.
   one key. A NaN key, which only its own object finds, falls back. An `int`
   key given to a dict of floats (`d[1]` where `d: dict[float, int]`) stays in
   Python, since CPython keeps and prints the key as it came.
-- `d.get(k)` with no default, which may give `None`, stays in Python; with a
-  default it is native.
+- `d.get(k)` with no default gives `None` for a missing key, for a dict
+  of numbers, of numbers or strings that may be `None`, of strings, and of
+  objects of an object class (a value class's stays in Python). Bound to
+  a local, passed to an `int | None` parameter, or returned from an
+  `-> int | None` function, it keeps CPython's meaning
+  ([Numbers and strings that may be `None`](native-lowering.md#numbers-and-strings-that-may-be-none)):
+  `v is None`, `if v:`, `print(v)`, and `v or default` are native, and `v`
+  is read as a number once a test has shown it holds one. The checker
+  reports `v += x` on a `v` that may still be `None` as `E1302`, with or
+  without strict mode. With a default, `get` is native for a dict whose
+  values cannot be `None`; `d.get(k, 0)` of a `dict[str, int | None]`
+  stays in Python.
+- Sorting, `min`, and `max` over elements that may be `None`, and keys
+  that may be `None`, stay in Python.
+- `r: list[int | None] = [None] * w` is a checker error (`E1301`: the
+  display is a `list[NoneType]`). Inside a comprehension assigned to an
+  annotated name or field, `[[None] * w for _ in range(h)]` is accepted and
+  lowers; returned directly, it keeps the function in Python.
 - `sort(key=...)`, `sorted(key=...)`, `min(key=...)`, and `max(key=...)`
   natively take a key giving numbers or tuples of them, and `min` and `max`
   with a key pick among numbers. [Functions as values](closures.md) has the

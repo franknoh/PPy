@@ -374,3 +374,48 @@ def test_the_checker_types_generic_classes(tmp_path: Path):
         "error[E1301]: cannot assign `int` to a variable declared `str`",
         "error[E1301]: `Box` takes 1 type argument(s), not 2",
     ]
+
+
+#: `max` and `min` of objects ordered by `__lt__`: the best so far is a
+#: handle the function holds, let go of when it returns.
+EXTREMES = """
+class Score:
+    def __init__(self, value: int, tag: int) -> None:
+        self.value = value
+        self.tag = tag
+
+    def __lt__(self, other: "Score") -> bool:
+        return self.value < other.value
+
+
+def pick(n: int) -> int:
+    total = 0
+    tags = 0
+    for i in range(n):
+        a = Score(i % 3, 1)
+        b = Score(i % 2, 2)
+        c = Score((i * 7) % 4, 3)
+        hi = max(a, b)
+        lo = min(a, b, c)
+        top = max(c, a, b)
+        total += hi.value * 100 + lo.value * 10 + top.value
+        tags += hi.tag * 100 + lo.tag * 10 + top.tag
+    return total * 1000 + tags
+
+
+def main() -> None:
+    print(pick(50))
+
+
+main()
+"""
+
+
+@requires_llvm
+def test_max_and_min_of_objects_agree_on_every_path():
+    from ppy_compiler.testing.fuzz import ALL_PATHS, compare, run_program
+
+    results = run_program(textwrap.dedent(EXTREMES).lstrip("\n"), ALL_PATHS)
+    assert results["python"].stdout.strip() == "5967666"
+    usable = {p: r for p, r in results.items() if not r.last_error.startswith("no ")}
+    assert not compare(usable), [(p, r.status, r.last_error) for p, r in usable.items()]

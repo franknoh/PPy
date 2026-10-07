@@ -42,6 +42,7 @@ from pathlib import Path
 __all__ = [
     "ALL_PATHS",
     "OVERFLOW_64",
+    "STRUCTURES_MARK",
     "TIMED_OUT",
     "UNANNOTATED_MARK",
     "Mismatch",
@@ -215,6 +216,64 @@ class Box:
 
 """
 
+#: What a program with structure edits adds: classes whose fields have no
+#: annotations, typed from what the program stores into them (`None` at
+#: first, then objects), and helpers that read a structure back.
+_STRUCTURES_PRELUDE = """\
+import ppy
+
+
+class SNode:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+        self.parent = None
+
+
+class DNode:
+    def __init__(self, key):
+        self.key = key
+        self.prev = None
+        self.next = None
+
+
+def sshape(n):
+    if n is None:
+        return "."
+    return "(" + sshape(n.left) + str(n.key) + sshape(n.right) + ")"
+
+
+def slinked(t):
+    ok = t.root is None or t.root.parent is None
+    pending = [t.root]
+    while pending:
+        n = pending.pop()
+        if n is None:
+            continue
+        for c in (n.left, n.right):
+            if c is not None:
+                ok = ok and c.parent is n
+                pending.append(c)
+    return ok
+
+
+def dkeys(d):
+    ahead = []
+    n = d.head
+    while n is not None and len(ahead) < 50:
+        ahead.append(n.key)
+        n = n.next
+    back = []
+    n = d.tail
+    while n is not None and len(back) < 50:
+        back.append(n.key)
+        n = n.prev
+    return ahead, back == ahead[::-1]
+
+
+"""
+
 _BIG = (2**62, -(2**62), 2**63 - 1, -(2**63), 3037000499, 4611686018427387903)
 _FLOATS = ("0.5", "-0.0", "1e308", "-2.5", "3.0", "1e-300", "7.25")
 _SPECIAL_FLOATS = ('float("inf")', 'float("-inf")', 'float("nan")')
@@ -256,8 +315,41 @@ class _Generator:
         calls: bool = False,
         unannotated: bool = False,
         boundary: bool = False,
+        structures: bool = False,
+        shapes: bool = False,
+        inference: bool = False,
+        bools: bool = False,
+        decorators: bool = False,
+        optional: bool = False,
+        resident: bool = False,
     ) -> None:
         self.rng = random.Random(seed)
+        #: Whether the program also holds numbers and strings that may be
+        #: `None` everywhere a value lives (`optional_part`), drawn from a
+        #: sequence of their own.
+        self.with_optional = optional
+        self.optioning = random.Random(seed ^ 0x0971)
+        #: Whether Python also writes to the structures between the native
+        #: calls that edit them (`resident_part`), drawn from a sequence of
+        #: their own: the objects stay resident between those calls.
+        self.with_resident = resident
+        self.residing = random.Random(seed ^ 0x2E51)
+        #: Whether the program also stores `bool`s where an `int` is declared
+        #: and prints them (`bools_part`), drawn from a sequence of their own.
+        self.with_bools = bools
+        self.booling = random.Random(seed ^ 0xB001)
+        #: With `unannotated`, also project decorators that change what a call
+        #: does (`decorators_part`), drawn from a sequence of their own.
+        self.with_decorators = decorators and unannotated
+        self.decorating = random.Random(seed ^ 0xDEC0)
+        #: Whether the program also has the shapes the corpus kept in Python
+        #: (`shapes_part`), drawn from a sequence of their own.
+        self.with_shapes = shapes
+        self.shaping = random.Random(seed ^ 0x5A9E)
+        #: With `unannotated`, also what inference reads beyond plain calls
+        #: (`inference_part`), drawn from a sequence of their own.
+        self.with_inference = inference and unannotated
+        self.inferring = random.Random(seed ^ 0x1F3E)
         #: Whether functions take defaults and keyword-only parameters, and
         #: `main` calls them by keyword and leaves defaults out, drawn from a
         #: sequence of their own so the rest of the program stays the same.
@@ -284,6 +376,10 @@ class _Generator:
         #: Python passes, shared and nested, drawn from a sequence of their own.
         self.with_boundary = boundary
         self.crossing = random.Random(seed ^ 0xB0DE)
+        #: Whether the program also edits linked structures in place through
+        #: methods Python calls natively, on classes with unannotated fields.
+        self.with_structures = structures or resident
+        self.structure = random.Random(seed ^ 0x57C7)
 
     def name(self, prefix: str) -> str:
         self.fresh += 1
@@ -1402,7 +1498,9 @@ class _Generator:
 
     def program(self) -> str:
         w = _Writer()
-        if self.unannotated:
+        if self.with_structures:
+            w.lines.append(STRUCTURES_MARK)
+        elif self.unannotated:
             w.lines.append(UNANNOTATED_MARK)
         if self.stdlib:
             w.lines.extend(["import bisect", "import heapq", "import itertools", "import random"])
@@ -1416,6 +1514,14 @@ class _Generator:
             self.state_globals(w)
         if self.with_boundary:
             w.lines.extend(_BOUNDARY_PRELUDE.splitlines())
+        if self.with_structures:
+            if self.with_resident:
+                w.lines.append("import gc")
+            w.lines.extend(_STRUCTURES_PRELUDE.splitlines())
+        if self.with_shapes:
+            w.put(f"SHAPE_WORD = {''.join(self.shaping.sample('ABCDEFGHIJKLMNOP', 9))!r}")
+            w.put("")
+            w.put("")
         calls: list[str] = []
         foreign: list[tuple[str, str]] = []
         for _ in range(self.rng.randint(3, 6)):
@@ -1427,9 +1533,30 @@ class _Generator:
         after = self.state_part(w) if self.with_state else []
         if self.with_boundary:
             after.extend(self.boundary_part(w))
+        if self.with_resident:
+            after.extend(self.resident_part(w))
+        elif self.with_structures:
+            after.extend(self.structures_part(w))
+        raw: list[str] = []
+        if self.with_inference:
+            inferred, raw = self.inference_part(w)
+            after.extend(inferred)
+        if self.with_decorators:
+            decorated, more = self.decorators_part(w)
+            after.extend(decorated)
+            raw.extend(more)
+        if self.with_shapes:
+            after.extend(self.shapes_part(w))
+        if self.with_bools:
+            after.extend(self.bools_part(w))
+        # Ahead of the base calls, whose integers past 64 bits stop a
+        # standalone binary (`OVERFLOW_64`) before it reaches them.
+        first = self.optional_part(w) if self.with_optional else []
         w.put("def main() -> None:")
         if self.stdlib:
             w.put(f"    random.seed({self.seed})")
+        for line in first:
+            w.put(f"    {line}")
         for call in calls:
             w.put(f"    print({call})")
         for line in after:
@@ -1437,7 +1564,7 @@ class _Generator:
         w.put("")
         w.put("")
         w.put("main()")
-        if foreign:
+        if foreign or raw:
             # Python calls each function by a name the analysis cannot follow,
             # with other types: the native entry must refuse them and run the
             # Python body, which prints what CPython prints.
@@ -1450,7 +1577,583 @@ class _Generator:
                 w.put(f"        print(getattr(here, {call[0]!r})({call[1]}))")
                 w.put("    except Exception as e:")
                 w.put("        print(type(e).__name__)")
+            for line in raw:
+                w.put("    try:")
+                w.put(f"        print({line})")
+                w.put("    except Exception as e:")
+                w.put("        print(type(e).__name__)")
         return "\n".join(w.lines) + "\n"
+
+    def decorators_part(self, w: _Writer) -> tuple[list[str], list[str]]:
+        """Project decorators nobody vouches for, which change what a call by
+        the name does: one scales the result, one prints around the call (with
+        `functools.wraps`), one counts calls on the wrapper, one caches and
+        prints on a miss (a recursive function calls itself through it), one
+        swaps the arguments, one takes arguments of its own, one hands back
+        another function, and one wraps a method. Functions that would go
+        native call them in loops, keep and drop their results. Returns
+        `main`'s lines and expressions Python evaluates after `main`."""
+        rng = self.decorating
+        k = [rng.randint(-3, 7) for _ in range(8)]
+        scale, shout, count, memo, swap, times, swapped_out = (
+            self.name(p) for p in ("scale", "shout", "count", "memo", "swap", "times", "other")
+        )
+        sq, work, fib, diff, cube, gone, user, cls = (
+            self.name(p) for p in ("sq", "work", "fib", "diff", "cube", "gone", "use", "Acc")
+        )
+        w.lines.extend(
+            f"""import functools
+
+
+def {scale}(fn):
+    def wrapper(n):
+        return {k[0]} * fn(n) + {k[1]}
+
+    return wrapper
+
+
+def {shout}(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        print("call", fn.__name__, args)
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def {count}(fn):
+    def wrapper(*args):
+        wrapper.calls += 1
+        return fn(*args)
+
+    wrapper.calls = 0
+    return wrapper
+
+
+def {memo}(fn):
+    seen = {{}}
+
+    def wrapper(n):
+        if n not in seen:
+            print("miss", n)
+            seen[n] = fn(n)
+        return seen[n]
+
+    return wrapper
+
+
+def {swap}(fn):
+    def wrapper(a, b):
+        return fn(b, a)
+
+    return wrapper
+
+
+def {times}(k):
+    def outer(fn):
+        def wrapper(n):
+            return [fn(n) for _ in range(k)]
+
+        return wrapper
+
+    return outer
+
+
+def {swapped_out}(fn):
+    return lambda n: n * {k[2]} - 1
+
+
+@{scale}
+def {sq}(n):
+    return n * n
+
+
+@{shout}
+def {work}(n: int) -> int:
+    t = 0
+    for i in range(n):
+        t += i * {k[3]}
+    return t
+
+
+@{memo}
+def {fib}(n):
+    if n < 2:
+        return n
+    return {fib}(n - 1) + {fib}(n - 2)
+
+
+@{count}
+@{swap}
+def {diff}(a: int, b: int) -> int:
+    return a - b
+
+
+@{times}({rng.randint(1, 3)})
+def {cube}(n):
+    return n * n * n
+
+
+@{swapped_out}
+def {gone}(n):
+    return n + 100
+
+
+class {cls}:
+    def __init__(self):
+        self.total = 0
+
+    @{count}
+    def add(self, n):
+        self.total += n
+        return self.total
+
+
+def {user}(n: int) -> int:
+    total = 0
+    for i in range(n):
+        total += {sq}(i) + {diff}(i, {k[4]}) + {gone}(i)
+        {work}(i % 3)
+    return total + {fib}(n)
+
+""".splitlines()
+        )
+        ints = [rng.randint(0, 9) for _ in range(6)]
+        main = [
+            f"print({sq}({ints[0]}), {sq}({ints[1]}), {gone}({ints[2]}))",
+            f"print({work}({ints[3]}), {diff}({ints[4]}, {ints[5]}), {cube}({ints[0]}))",
+            f"print({fib}({ints[1] + 5}), {fib}({ints[1] + 3}))",
+            f"print({user}({ints[2] + 2}), {diff}.calls)",
+            f"acc = {cls}()",
+            f"print(acc.add({ints[3]}), acc.add({ints[4]}), acc.total, {cls}.add.calls)",
+            f"{work}({ints[5]})",
+        ]
+        later = [
+            f"getattr(here, {sq!r})(2.5)",
+            f"{sq}({ints[5]}), {diff}({ints[0]}, 1), {diff}.calls",
+            f"{work}.__name__, {work}({ints[1]})",
+        ]
+        return main, later
+
+    def optional_part(self, w: _Writer) -> list[str]:
+        """Numbers and strings that may be `None` in every place a value lives,
+        and what `main` does with them: parameters and results (`int | None`,
+        `float | None`, `bool | None`, `str | None`), fields of an object,
+        elements of a list and of a dict, and locals; `is None`, truth, `==`,
+        `or`, `in`, `isinstance`, `d.get(k)`, `d.get(k, v)` and `d.pop(k, v)`,
+        a grid of `None`s returned as declared, printing and f-strings; and a
+        field narrowed by a test that a call sets to `None` before arithmetic
+        meets it, which raises CPython's `TypeError`."""
+        rng = self.optioning
+        cls = self.name("Opt")
+        w.put(f"class {cls}:")
+        w.put("    def __init__(self, label: int | None = None, tag: str | None = None) -> None:")
+        w.put("        self.label = label")
+        w.put("        self.tag = tag")
+        w.put("        self.weight: float | None = None")
+        w.put("        self.flag: bool | None = None")
+        w.put("")
+        w.put("    def reset(self) -> None:")
+        w.put("        self.label = None")
+        w.put("")
+        w.put("    def score(self) -> int:")
+        w.put("        if self.label is None:")
+        w.put(f"            return {rng.randint(-9, 9)}")
+        w.put(
+            f"        return self.label * {rng.randint(1, 4)} + (len(self.tag) if self.tag else 0)"
+        )
+        w.put("")
+        w.put("")
+        find = self.name("op")
+        w.put(f"def {find}(xs: list[int], t: int) -> int | None:")
+        w.put("    for i in range(len(xs)):")
+        w.put(f"        if xs[i] {rng.choice(('==', '>=', '<'))} t:")
+        w.put("            return i")
+        w.put("    return None")
+        w.put("")
+        w.put("")
+        bump = self.name("op")
+        w.put(f"def {bump}(x: int | None, d: int) -> int:")
+        w.put("    if x is None:")
+        w.put(f"        return d * {rng.randint(-3, 3)}")
+        w.put(f"    return x {rng.choice(('+', '-', '*'))} d")
+        w.put("")
+        w.put("")
+        scale = self.name("op")
+        w.put(f"def {scale}(x: float | None, k: float) -> float | None:")
+        w.put(f"    if x is None or x {rng.choice(('<', '>'))} {rng.randint(-5, 5)}.0:")
+        w.put("        return None")
+        w.put("    return x * k")
+        w.put("")
+        w.put("")
+        flip = self.name("op")
+        w.put(f"def {flip}(b: bool | None) -> bool | None:")
+        w.put("    if b is None:")
+        w.put(f"        return {rng.choice(('None', 'True', 'False'))}")
+        w.put("    return not b")
+        w.put("")
+        w.put("")
+        text = self.name("op")
+        w.put(f"def {text}(s: str | None, d: str) -> str:")
+        w.put("    if s is None:")
+        w.put("        return d + '?'")
+        w.put(f"    return (s or d) + {rng.choice(('s', 'd', repr('!')))}")
+        w.put("")
+        w.put("")
+        fill = self.name("op")
+        w.put(f"def {fill}(xs: list[int | None], v: int) -> int:")
+        w.put("    count = 0")
+        w.put("    for i in range(len(xs)):")
+        w.put("        x = xs[i]")
+        w.put("        if x is None:")
+        w.put("            xs[i] = v + i")
+        w.put("            count += 1")
+        w.put(f"        elif x {rng.choice(('>', '<', '=='))} {rng.randint(-3, 3)}:")
+        w.put(f"            xs[i] = {rng.choice(('None', 'x * 2', '-x'))}")
+        if rng.random() < 0.6:
+            w.put("    xs.append(None)")
+        w.put("    return count")
+        w.put("")
+        w.put("")
+        table = self.name("op")
+        w.put(f"def {table}(d: dict[str, int | None], keys: list[str]) -> int:")
+        w.put("    t = 0")
+        w.put("    for k in keys:")
+        w.put("        v = d.get(k)")
+        w.put(f"        t += v or {rng.randint(-5, 5)}")
+        w.put("        if k in d and d[k] is None:")
+        w.put(f"            d[k] = {rng.randint(0, 9)}")
+        w.put("    d['z'] = None")
+        w.put("    return t")
+        w.put("")
+        w.put("")
+        walk = self.name("op")
+        w.put(f"def {walk}(o: {cls}, n: int) -> int:")
+        w.put("    total = 0")
+        w.put("    for i in range(n):")
+        w.put("        if o.label is not None:")
+        w.put("            total += o.label * i")
+        w.put("    o.weight = 1.5 * total if o.label else None")
+        w.put("    o.flag = o.label is not None and o.label > 2")
+        w.put(f"    o.tag = {rng.choice(('None', repr('w'), 'o.tag'))}")
+        w.put("    return total + o.score()")
+        w.put("")
+        w.put("")
+        unsound = self.name("op")
+        op = rng.choice(("+", "-", "*", "<"))
+        w.put(f"def {unsound}(o: {cls}, k: int) -> int:")
+        w.put("    if o.label is not None:")
+        w.put(f"        if k {rng.choice(('>', '<'))} {rng.randint(-2, 2)}:")
+        w.put("            o.reset()")
+        if op == "<":
+            w.put(f"        return 1 if o.label < k else {rng.randint(-5, 5)}")
+        else:
+            w.put(f"        return o.label {op} k")
+        w.put("    return 0")
+        w.put("")
+        w.put("")
+        look = self.name("op")
+        w.put(f"def {look}(d: dict[str, int | None], k: str) -> int | None:")
+        w.put(f"    v = d.get(k, {rng.choice(('None', str(rng.randint(-5, 5))))})")
+        w.put("    if v is None:")
+        w.put(f"        return d.pop(k, {rng.choice(('None', str(rng.randint(-5, 5))))})")
+        w.put("    return v + 1")
+        w.put("")
+        w.put("")
+        rows = self.name("op")
+        cell, put = rng.choice((("str", repr("x")), ("int", str(rng.randint(-5, 5)))))
+        w.put(f"def {rows}(w: int, h: int) -> list[list[{cell} | None]]:")
+        w.put("    return [[None] * w for _ in range(h)]")
+        w.put("")
+        w.put("")
+
+        def values(none: float, least: int = 0) -> str:
+            return ", ".join(
+                "None" if rng.random() < none else str(rng.randint(-5, 9))
+                for _ in range(rng.randint(least, 5))
+            )
+
+        after = [
+            f"oxs: list[int | None] = [{values(0.4)}]",
+            (
+                f"print({find}([{values(0.0, 1)}], {rng.randint(-3, 5)}), {bump}(None, "
+                f"{rng.randint(-4, 4)}), {bump}({rng.randint(-4, 4)}, {rng.randint(-4, 4)}))"
+            ),
+            (
+                f"print({scale}(None, 2.0), {scale}({rng.randint(-6, 6)}.5, 0.5), "
+                f"{flip}(None), {flip}({rng.choice(('True', 'False'))}))"
+            ),
+            f"print({text}(None, 'd'), {text}('', 'e'), {text}('ab', 'f'))",
+            f"print({fill}(oxs, {rng.randint(-5, 5)}), oxs, None in oxs, oxs.count(None))",
+            "print(any(oxs), all(oxs), [x for x in oxs if x is not None])",
+            f"od: dict[str, int | None] = {{'a': {rng.randint(0, 5)}, 'b': None}}",
+            f"print({table}(od, ['a', 'b', 'c']), od, od.get('b'), od.get('q'))",
+            f"o1 = {cls}({rng.randint(-3, 6)}, {rng.choice(('None', repr('t'), repr('')))})",
+            f"o2 = {cls}()",
+            f"print({walk}(o1, {rng.randint(0, 6)}), {walk}(o2, {rng.randint(0, 6)}))",
+            "print(o1.label, o1.weight, o1.flag, o1.tag, o2.label, o2.weight, o2.flag, o2.tag)",
+            "print(f'{o1.label}|{o2.tag}|{o1.weight}', str(o2.label), o1.label == o2.label)",
+            "print(isinstance(o1.label, int), o2.label in (None, 3), o1.tag or 'none')",
+        ]
+        for _ in range(rng.randint(1, 2)):
+            after.extend(
+                [
+                    "try:",
+                    f"    print({unsound}(o1, {rng.randint(-4, 4)}))",
+                    "except TypeError as e:",
+                    "    print('TypeError', e)",
+                ]
+            )
+        after.append("print(o1.label)")
+        after.append(f"print({look}(od, 'a'), {look}(od, 'b'), {look}(od, 'q'), od)")
+        after.append(f"og = {rows}({rng.randint(0, 3)}, {rng.randint(1, 3)})")
+        after.append(f"og[0].append({put})")
+        after.append("print(og, og[0] is og[-1])")
+        if self.with_resident:
+            after.extend(self.optional_resident(w))
+        return after
+
+    def optional_resident(self, w: _Writer) -> list[str]:
+        """Objects whose fields may be `None`, edited by native methods Python
+        calls again and again (they stay resident between the calls), and
+        written from Python between the calls: a field set to `None` and back,
+        through an attribute, `vars()`, and `setattr`, and for a while to a
+        value of another type, which keeps the next call in Python."""
+        rng = self.optioning
+        cls = self.name("ORes")
+        w.put(f"class {cls}:")
+        w.put("    def __init__(self, label: int | None, tag: str | None) -> None:")
+        w.put("        self.label = label")
+        w.put("        self.tag = tag")
+        w.put("        self.weight: float | None = None")
+        w.put(f"        self.next: {cls} | None = None")
+        w.put("")
+        w.put("    @ppy.native")
+        w.put("    def step(self, k: int) -> int:")
+        w.put("        total = 0")
+        w.put("        node = self")
+        w.put("        while node is not None:")
+        w.put("            if node.label is None:")
+        w.put(f"                node.label = k {rng.choice(('+', '-', '*'))} {rng.randint(1, 5)}")
+        w.put(f"            elif node.label {rng.choice(('>', '<'))} {rng.randint(-5, 9)}:")
+        w.put("                node.label = None")
+        w.put("            else:")
+        w.put("                total += node.label")
+        w.put("            node.weight = None if node.weight is not None else 0.5 * total")
+        w.put("            if node.tag is None or len(node.tag) > 3:")
+        w.put("                node.tag = 'n'")
+        w.put("            else:")
+        w.put("                node.tag = node.tag + 'x'")
+        w.put("            node = node.next")
+        w.put("        return total")
+        w.put("")
+        w.put("")
+        after = [f"r1 = {cls}({rng.randint(-3, 6)}, None)", f"r2 = {cls}(None, 'a')"]
+        after.append("r1.next = r2")
+        shown = "print(r1.label, r1.tag, r1.weight, r2.label, r2.tag, r2.weight)"
+        writes = (
+            ("r1.label = None",),
+            (f"r2.label = {rng.randint(-5, 9)}",),
+            ('vars(r1)["tag"] = None',),
+            (f'setattr(r2, "weight", {rng.randint(-3, 3)}.25)',),
+            ("r2.tag = 'qq'",),
+            ('vars(r2)["label"] = True', "print(r1.step(1))", 'vars(r2)["label"] = None'),
+            ("r1.weight = 3", "print(r1.step(2))", "r1.weight = None"),
+        )
+        for _ in range(rng.randint(4, 9)):
+            after.append(f"print(r1.step({rng.randint(-4, 6)}))")
+            after.append(shown)
+            if rng.random() < 0.7:
+                after.extend(rng.choice(writes))
+        after.append(shown)
+        return after
+
+    def bools_part(self, w: _Writer) -> list[str]:
+        """Functions that store a `bool` where an `int` is declared -- a local,
+        a rebound name, a list, a dict, a tuple, a dataclass field, a return,
+        an argument through a `Callable` -- and print it, beside arithmetic on
+        `bool`s, which gives an `int` everywhere. Native code holds an `int`
+        slot as a word, so these keep their functions in Python."""
+        rng = self.booling
+        box = self.name("BoolBox")
+        w.put("@dataclass")
+        w.put(f"class {box}:")
+        w.put("    v: int")
+        w.put("    w: int = 0")
+        w.put("")
+        w.put("")
+        shown = self.name("bshow")
+        w.put(f"def {shown}(n: int) -> int:")
+        w.put("    print(n, type(n).__name__, repr(n), f'{n}', n is True)")
+        w.put("    return n * 2")
+        w.put("")
+        w.put("")
+        applied = self.name("bapply")
+        w.put(f"def {applied}(f: Callable[[int], int], v: bool) -> int:")
+        w.put("    return f(v)")
+        w.put("")
+        w.put("")
+        returned = self.name("bret")
+        cut = rng.randint(-3, 3)
+        w.put(f"def {returned}(n: int) -> int:")
+        w.put(f"    if n > {cut}:")
+        w.put(f"        return n > {cut + rng.randint(1, 4)}")
+        w.put("    return n")
+        w.put("")
+        w.put("")
+        stores = [
+            ["x: int = flag", "print(x, str(x), isinstance(x, bool))", "total += x"],
+            ["y = n", "y = flag", "print(y, repr(y))", "total += y"],
+            ["xs: list[int] = [n, flag]", f"xs.append(n < {cut})", "print(xs, sum(xs))"],
+            ['d: dict[str, int] = {"a": n}', 'd["b"] = flag', "print(d)"],
+            ["t: tuple[int, int] = (flag, n)", "print(t)"],
+            [f"b = {box}(flag)", f"b.w = n > {cut}", "print(b, b.v + b.w)"],
+            [f"print({applied}({shown}, flag))"],
+            ["z: int = flag + n", "u = flag * 3 - True", "print(z, u, True + 1 == 2, -flag)"],
+        ]
+        lines: list[str] = []
+        for _ in range(rng.randint(2, 4)):
+            name = self.name("bstore")
+            w.put(f"def {name}(flag: bool, n: int) -> int:")
+            w.put("    total = 0")
+            for chosen in rng.sample(stores, rng.randint(1, 3)):
+                for line in chosen:
+                    w.put(f"    {line}")
+            w.put("    return total + n")
+            w.put("")
+            w.put("")
+            lines.extend(
+                f"print({name}({rng.choice(('True', 'False'))}, {rng.randint(-5, 5)}))"
+                for _ in range(rng.randint(1, 2))
+            )
+        value = rng.randint(-5, 5)
+        lines.append(f"print({returned}({value}), isinstance({returned}({value}), bool))")
+        lines.append(f"print({shown}(True), {box}(False))")
+        return lines
+
+    def inference_part(self, w: _Writer) -> tuple[list[str], list[str]]:
+        """What inference reads beside plain calls: a function behind a
+        `functools.wraps` decorator, a value class used through operators, a
+        parameter declared `list`, one function called with an `int` and a
+        `float`, an `argparse` option with `type=int`, and functions nothing
+        calls with a type, typed by `range(n)` or a string method. Returns
+        `main`'s lines, and the expressions Python evaluates after `main`
+        with other types, through names the analysis cannot follow."""
+        rng = self.inferring
+        k = [rng.randint(-4, 9) for _ in range(8)]
+        cls, keep, decorated = self.name("Pt"), self.name("keep"), self.name("dec")
+        listed, mixed, tally, caps, opt = (
+            self.name(p) for p in ("lsum", "mix", "tally", "caps", "opt")
+        )
+        w.lines.extend(
+            f"""\
+import argparse
+import functools
+
+
+def {keep}(fn):
+    @functools.wraps(fn)
+    def inner(*args, **kwargs):
+        return fn(*args, **kwargs)
+
+    return inner
+
+
+@{keep}
+def {decorated}(a, b):
+    total = 0
+    for i in range(a):
+        total += (i * b) % 7
+    return total
+
+
+class {cls}:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other):
+        return {cls}(self.x + other.x, self.y + other.y)
+
+    def __mul__(self, k):
+        return {cls}(self.x * k, self.y - k)
+
+    def __lt__(self, other):
+        return self.x < other.x or (self.x == other.x and self.y < other.y)
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+    def __getitem__(self, i):
+        return self.x if i % 2 == 0 else self.y
+
+
+def {listed}(xs: list, k):
+    total = 0
+    for v in xs:
+        total += v * k
+    return total
+
+
+def {mixed}(x, y):
+    return x * {k[0]} + y
+
+
+def {tally}(n):
+    total = 0
+    for i in range(n):
+        total += i * {k[1]}
+    return total
+
+
+def {caps}(s):
+    return s.upper() + s.strip()
+
+
+def {opt}(n):
+    return n * {k[2]} - 1
+
+""".splitlines()
+        )
+        ints = [rng.randint(-6, 12) for _ in range(12)]
+        floats = [round(rng.uniform(-5, 5), 2) for _ in range(2)]
+        main = [
+            "parser = argparse.ArgumentParser()",
+            f'parser.add_argument("--n", type=int, default={rng.randint(0, 9)})',
+            "args = parser.parse_args()",
+            f"print({opt}(args.n))",
+            (
+                f"print({decorated}({abs(ints[0])}, {ints[1]}),"
+                f" {decorated}({abs(ints[2])}, {ints[3]}))"
+            ),
+            f"p, q = {cls}({ints[4]}, {ints[5]}), {cls}({ints[6]}, {ints[7]})",
+            f"r = p + q * {ints[8]}",
+            (
+                f"print(r.x, r.y, r[{ints[9]}], p < q, q < p, p == q,"
+                f" p == {cls}({ints[4]}, {ints[5]}))"
+            ),
+            f"ps = [{cls}({ints[10]}, 1), p, q, {cls}({ints[10]}, 0)]",
+            "ps.sort()",
+            "print([(t.x, t.y) for t in ps])",
+            f"print({listed}([{ints[0]}, {ints[1]}, {ints[2]}], {ints[3]}), {listed}([], 2))",
+            f"print({mixed}({ints[4]}, {ints[5]}), {mixed}({floats[0]}, {ints[6]}))",
+        ]
+        later = [
+            f"getattr(here, {decorated!r})({floats[1]}, 2)",
+            f"getattr(here, {cls!r})(1, 2) * 2.5 == getattr(here, {cls!r})(2.5, -0.5)",
+            f"getattr(here, {cls!r})(1, 2)[True]",
+            f"getattr(here, {cls!r})(1, 2) == 3",
+            f"getattr(here, {listed!r})([1.5, 2], 2)",
+            f"getattr(here, {listed!r})(['a'], 2)",
+            f"getattr(here, {mixed!r})('a', 'b')",
+            f"getattr(here, {mixed!r})(True, 1)",
+            f"getattr(here, {tally!r})({abs(ints[11])}), getattr(here, {tally!r})(True)",
+            f"getattr(here, {tally!r})(2.5)",
+            f"getattr(here, {caps!r})(' ab '), getattr(here, {caps!r})(b'x ')",
+            f"getattr(here, {caps!r})(3)",
+            f"getattr(here, {opt!r})('ab')",
+        ]
+        return main, later
 
     def foreign_call(self, name: str, kinds: list[str]) -> tuple[str, str]:
         """A call of `name` with arguments of other types than `main` passes."""
@@ -1564,6 +2267,173 @@ class _Generator:
         w.put("")
         w.put("")
 
+    def shapes_part(self, w: _Writer) -> list[str]:
+        """Functions in the shapes the corpus kept in Python, and what `main`
+        does with them: an `if`/`elif`/`else` that returns on every side, a
+        list parameter tested, compared with `[]`, unpacked, sliced, and
+        returned, a module string constant, a tuple assignment of lists, and
+        `*args` of ints. With module state (the paths with Python), also a
+        function that falls off its end and a nested function handed cells."""
+        rng = self.shaping
+        signs = self.name("sh")
+        cut = rng.randint(-3, 3)
+        w.put(f"def {signs}(n: int) -> int:")
+        w.put(f"    if n > {cut}:")
+        w.put(f"        return n * {rng.randint(1, 5)}")
+        w.put(f"    elif n < {cut - rng.randint(1, 4)}:")
+        if rng.random() < 0.3:
+            w.put('        raise ValueError("below")')
+        else:
+            w.put(f"        return -n - {rng.randint(0, 3)}")
+        w.put("    else:")
+        w.put(f"        return {rng.randint(-9, 9)}")
+        w.put("")
+        w.put("")
+        listed = self.name("sh")
+        w.put(f"def {listed}(xs: list[int], k: int) -> list[int]:")
+        w.put("    if not xs:")
+        w.put("        return xs")
+        w.put("    if xs == []:")
+        w.put("        return [k]")
+        w.put("    if len(xs) == 3:")
+        w.put("        a, b, c = xs")
+        w.put("        return [c, b, a + k]")
+        w.put(f"    return xs[{rng.randint(0, 2)} : len(xs) - {rng.randint(0, 1)}]")
+        w.put("")
+        w.put("")
+        worded = self.name("sh")
+        w.put(f"def {worded}(text: str, key: int) -> str:")
+        w.put("    out = ''")
+        w.put("    for ch in text:")
+        w.put("        found = SHAPE_WORD.find(ch.upper())")
+        w.put("        out += ch if found == -1 else SHAPE_WORD[(found + key) % len(SHAPE_WORD)]")
+        w.put(f"    return out + SHAPE_WORD[:{rng.randint(0, 5)}]")
+        w.put("")
+        w.put("")
+        paired = self.name("sh")
+        w.put(f"def {paired}(n: int) -> int:")
+        w.put(f"    counts, seen = [0] * (n % 5 + 1), [{rng.randint(0, 9)}] * 2")
+        w.put("    a = [1, 2]")
+        w.put("    b = [3]")
+        w.put("    for _ in range(n % 4):")
+        w.put("        a, b = b, a")
+        w.put("    return sum(counts) + sum(seen) + a[0] * 10 + len(b)")
+        w.put("")
+        w.put("")
+        star = self.name("sh")
+        w.put(f"def {star}(k: int, *xs: int) -> int:")
+        w.put("    t = 0")
+        w.put("    for x in xs:")
+        w.put("        t += x * k")
+        w.put("    return t + len(xs)")
+        w.put("")
+        w.put("")
+        spread = self.name("sh")
+        w.put(f"def {spread}(n: int) -> int:")
+        w.put(f"    return {star}(n) + {star}(n, n + 1) + {star}(2, n, -n, {rng.randint(-5, 5)})")
+        w.put("")
+        w.put("")
+
+        def numbers() -> str:
+            return ", ".join(str(rng.randint(-5, 9)) for _ in range(rng.randint(0, 5)))
+
+        after = []
+        for _ in range(rng.randint(1, 3)):
+            n = rng.randint(-8, 8)
+            after.extend(
+                [
+                    "try:",
+                    f"    print({signs}({n}))",
+                    "except ValueError as e:",
+                    "    print('ValueError', e)",
+                ]
+            )
+        after.append("items: list[int] = []")
+        for _ in range(rng.randint(1, 3)):
+            after.append(f"items = [{numbers()}]")
+            after.append(f"print({listed}(items, {rng.randint(-3, 3)}))")
+        word = repr(rng.choice(("abc", "Hello, World", "pqz", "")))
+        after.append(
+            f"print({worded}({word}, {rng.randint(-4, 9)}), {paired}({rng.randint(0, 9)}))"
+        )
+        after.append(
+            f"print({star}({rng.randint(-3, 3)}, {numbers()}), {spread}({rng.randint(-4, 9)}))"
+        )
+        if self.with_state:
+            after.extend(self.python_shapes(w))
+        return after
+
+    def python_shapes(self, w: _Writer) -> list[str]:
+        """A function that falls off its end, which falls back to Python's
+        `None`, and nested functions handed the cells they share by a function
+        that stays in Python (it reads `sys.argv`)."""
+        rng = self.shaping
+        falls = self.name("sh")
+        w.put(f"def {falls}(n: int) -> int:")
+        w.put(f"    if n % {rng.randint(2, 4)} == 0:")
+        w.put("        return n // 2")
+        w.put("")
+        w.put("")
+        outer = self.name("sh")
+        w.put(f"def {outer}(n: int, k: int) -> int:")
+        w.put("    import sys")
+        w.put(f"    scale = k * {rng.randint(1, 4)}")
+        w.put(f"    seen = [0] * (n % 7 + {rng.randint(1, 5)})")
+        w.put("")
+        w.put("    def sweep(m: int) -> int:")
+        w.put("        t = 0")
+        w.put("        for i in range(len(seen)):")
+        w.put("            seen[i] = seen[i] + i * scale + m")
+        w.put("            t += seen[i]")
+        w.put("        return t")
+        w.put("")
+        w.put("    first = sweep(n)")
+        w.put(f"    scale = {rng.randint(-9, 9)}")
+        w.put("    return first + sweep(k) + sum(seen) + len(sys.argv) * 0")
+        w.put("")
+        w.put("")
+        after = []
+        for _ in range(rng.randint(1, 2)):
+            after.append(f"print({falls}({rng.randint(-6, 9)}))")
+            after.append(f"print({outer}({rng.randint(0, 9)}, {rng.randint(-3, 5)}))")
+        return after
+
+    def reader_function(self, w: _Writer, name: str) -> None:
+        """A function Python calls natively with containers it only reads, which
+        the generated wrapper reads in place (its lists in an arena, its strings
+        borrowed), and a row of them it hands back."""
+        rng = self.crossing
+        w.put("@ppy.native")
+        w.put(
+            f"def {name}(g: list[list[int]], words: list[str], d: dict[str, int], "
+            "s: set[int], k: int) -> list[int]:"
+        )
+        w.depth += 1
+        w.put("total = k")
+        w.put("best = g[0] if len(g) > 0 else []")
+        menu = [
+            "for row in g:\n    for x in row:\n        total += x * (k + 1)",
+            (
+                "for row in g:\n"
+                f"    if len(row) > len(best) or sum(row) % {rng.randint(2, 5)} == 1:\n"
+                "        best = row"
+            ),
+            "for w in words:\n    total += len(w)\n    if w in d:\n        total += d[w]",
+            'for w in words:\n    for c in w:\n        if c in "ae\u00e9":\n            total += 1',
+            "for key, v in d.items():\n    total += v * len(key)",
+            "for x in s:\n    total += x % 5",
+            f"for i in range({rng.randint(1, 9)}):\n    if i in s:\n        total += i",
+        ]
+        for statement in rng.sample(menu, rng.randint(2, 5)):
+            for line in statement.split("\n"):
+                w.put(line)
+        w.put("if total % 3 == 0 or len(best) == 0:")
+        w.put("    return [total]")
+        w.put("return best")
+        w.depth -= 1
+        w.put("")
+        w.put("")
+
     def boundary_part(self, w: _Writer) -> list[str]:
         """The functions with boundary writes, and what `main` does with them:
         arguments that share rows, a row both in the list and in the dict, the
@@ -1585,6 +2455,16 @@ class _Generator:
             rng.choice(("boxes = [b1, b2, b1]", "boxes = [b2]", "boxes = []")),
         ]
         after.append(f"print({lent}(row, {rng.randint(-3, 9)}), {lent}([], 1), row)")
+        reader = self.name("rd")
+        self.reader_function(w, reader)
+        after.append(
+            "words = "
+            + rng.choice(('["ab", "é", ""]', '["x", "x", "naïve", "日本"]', "[]", '["bad\\ud800"]'))
+        )
+        after.append(rng.choice(('wd = {"ab": 2, "x": 5}', "wd = {}", 'wd = {"é": -1}')))
+        for _ in range(rng.randint(1, 2)):
+            after.append(f"got = {reader}(g, words, wd, s, {rng.randint(-3, 9)})")
+            after.append("print(got, got is row, any(got is r for r in g))")
         for _ in range(rng.randint(1, 3)):
             after.append(f"print({name}(g, d, s, boxes, {rng.randint(-3, 9)}))")
             after.append(
@@ -1593,10 +2473,375 @@ class _Generator:
             )
         return after
 
+    # -- linked structures edited in place ---------------------------------------
+
+    def tree_class(self, w: _Writer) -> list[str]:
+        """A search tree with parent links, its fields unannotated, and methods
+        Python calls natively that relink it: inserts, rotations, mirroring by
+        tuple assignment, unlinking, and a new root grafted on top. Each walks
+        it through a local alias of a field (`node = self.root`). The names
+        of the methods it has, which `main` may call."""
+        rng = self.structure
+        w.put("class STree:")
+        w.depth += 1
+        w.put("def __init__(self):")
+        w.put("    self.root = None")
+        w.put("    self.size = 0")
+        w.put("")
+        w.put("@ppy.native")
+        w.put("def insert(self, key: int) -> None:")
+        w.put("    self.size += 1")
+        w.put("    made = SNode(key)")
+        w.put("    if self.root is None:")
+        w.put("        self.root = made")
+        w.put("        return")
+        w.put("    node = self.root")
+        w.put("    while True:")
+        w.put("        if key < node.key:")
+        w.put("            if node.left is None:")
+        w.put("                node.left = made")
+        w.put("                made.parent = node")
+        w.put("                return")
+        w.put("            node = node.left")
+        w.put("        else:")
+        w.put("            if node.right is None:")
+        w.put("                node.right = made")
+        w.put("                made.parent = node")
+        w.put("                return")
+        w.put("            node = node.right")
+        w.put("")
+        w.put("def find(self, key: int):")
+        w.put("    node = self.root")
+        w.put("    while node is not None and node.key != key:")
+        w.put("        node = node.left if key < node.key else node.right")
+        w.put("    return node")
+        w.put("")
+        methods: list[str] = []
+        for side, other in (("left", "right"), ("right", "left")):
+            if rng.random() < 0.8:
+                methods.append(f"rotate_{side}")
+                w.put("@ppy.native")
+                w.put(f"def rotate_{side}(self, key: int) -> int:")
+                w.put("    x = self.find(key)")
+                w.put(f"    if x is None or x.{other} is None:")
+                w.put("        return 0")
+                w.put(f"    y = x.{other}")
+                w.put(f"    x.{other} = y.{side}")
+                w.put(f"    if y.{side} is not None:")
+                w.put(f"        y.{side}.parent = x")
+                w.put("    y.parent = x.parent")
+                w.put("    if x.parent is None:")
+                w.put("        self.root = y")
+                w.put("    elif x is x.parent.left:")
+                w.put("        x.parent.left = y")
+                w.put("    else:")
+                w.put("        x.parent.right = y")
+                w.put(f"    y.{side} = x")
+                w.put("    x.parent = y")
+                w.put("    return 1")
+                w.put("")
+        if rng.random() < 0.6:
+            methods.append("mirror")
+            w.put("@ppy.native")
+            w.put("def mirror(self, k: int) -> int:")
+            w.put("    count = 0")
+            w.put("    pending = [self.root]")
+            w.put("    while len(pending) > 0:")
+            w.put("        node = pending.pop()")
+            w.put("        if node is None:")
+            w.put("            continue")
+            w.put("        node.left, node.right = node.right, node.left")
+            if rng.random() < 0.5:
+                w.put(f"        node.key = node.key * {rng.randint(-2, 3)} + k")
+            w.put("        count += 1")
+            w.put("        pending.append(node.left)")
+            w.put("        pending.append(node.right)")
+            w.put("    return count")
+            w.put("")
+        if rng.random() < 0.6:
+            methods.append("pop_min")
+            w.put("@ppy.native")
+            w.put("def pop_min(self, k: int) -> int:")
+            w.put("    node = self.root")
+            w.put("    if node is None:")
+            w.put("        return k")
+            w.put("    while node.left is not None:")
+            w.put("        node = node.left")
+            w.put("    if node.parent is None:")
+            w.put("        self.root = node.right")
+            w.put("    else:")
+            w.put("        node.parent.left = node.right")
+            w.put("    if node.right is not None:")
+            w.put("        node.right.parent = node.parent")
+            w.put("    node.parent = None")
+            w.put("    node.right = None")
+            w.put("    self.size -= 1")
+            w.put("    return node.key")
+            w.put("")
+        if rng.random() < 0.5:
+            methods.append("graft")
+            w.put("@ppy.native")
+            w.put("def graft(self, k: int) -> int:")
+            w.put("    made = SNode(k)")
+            w.put(f"    made.{rng.choice(('left', 'right'))} = self.root")
+            w.put("    if self.root is not None:")
+            w.put("        self.root.parent = made")
+            w.put("    self.root = made")
+            w.put("    self.size += 1")
+            w.put("    return self.size")
+            w.put("")
+        w.depth -= 1
+        w.put("")
+        return methods
+
+    def dlist_class(self, w: _Writer) -> list[str]:
+        """A doubly linked list, unannotated, edited in place natively: pushes
+        at both ends, reversal by tuple assignment, rotation, and dropping
+        nodes by key. Its links make cycles every crossing has to keep."""
+        rng = self.structure
+        w.put("class DList:")
+        w.depth += 1
+        w.put("def __init__(self):")
+        w.put("    self.head = None")
+        w.put("    self.tail = None")
+        w.put("    self.count = 0")
+        w.put("")
+        w.put("@ppy.native")
+        w.put("def push(self, key: int) -> None:")
+        w.put("    made = DNode(key)")
+        w.put("    made.prev = self.tail")
+        w.put("    if self.tail is None:")
+        w.put("        self.head = made")
+        w.put("    else:")
+        w.put("        self.tail.next = made")
+        w.put("    self.tail = made")
+        w.put("    self.count += 1")
+        w.put("")
+        methods: list[str] = []
+        if rng.random() < 0.7:
+            methods.append("push_front")
+            w.put("@ppy.native")
+            w.put("def push_front(self, key: int) -> int:")
+            w.put("    made = DNode(key)")
+            w.put("    made.next = self.head")
+            w.put("    if self.head is None:")
+            w.put("        self.tail = made")
+            w.put("    else:")
+            w.put("        self.head.prev = made")
+            w.put("    self.head = made")
+            w.put("    self.count += 1")
+            w.put("    return self.count")
+            w.put("")
+        if rng.random() < 0.7:
+            methods.append("reverse")
+            w.put("@ppy.native")
+            w.put("def reverse(self, k: int) -> int:")
+            w.put("    node = self.head")
+            w.put("    self.head, self.tail = self.tail, self.head")
+            w.put("    while node is not None:")
+            w.put("        node.prev, node.next = node.next, node.prev")
+            if rng.random() < 0.5:
+                w.put(f"        node.key += k * {rng.randint(1, 3)}")
+            w.put("        node = node.prev")
+            w.put("    return self.count")
+            w.put("")
+        if rng.random() < 0.6:
+            methods.append("rotate")
+            w.put("@ppy.native")
+            w.put("def rotate(self, k: int) -> int:")
+            w.put("    moved = 0")
+            w.put(f"    while moved < k % {rng.randint(2, 5)} and self.head is not self.tail:")
+            w.put("        first = self.head")
+            w.put("        self.head = first.next")
+            w.put("        self.head.prev = None")
+            w.put("        first.next = None")
+            w.put("        first.prev = self.tail")
+            w.put("        self.tail.next = first")
+            w.put("        self.tail = first")
+            w.put("        moved += 1")
+            w.put("    return moved")
+            w.put("")
+        if rng.random() < 0.6:
+            modulus = rng.randint(2, 4)
+            methods.append("drop")
+            w.put("@ppy.native")
+            w.put("def drop(self, k: int) -> int:")
+            w.put("    node = self.head")
+            w.put("    gone = 0")
+            w.put("    while node is not None:")
+            w.put("        after = node.next")
+            w.put(f"        if (node.key + k) % {modulus} == 0:")
+            w.put("            if node.prev is None:")
+            w.put("                self.head = after")
+            w.put("            else:")
+            w.put("                node.prev.next = after")
+            w.put("            if after is None:")
+            w.put("                self.tail = node.prev")
+            w.put("            else:")
+            w.put("                after.prev = node.prev")
+            w.put("            gone += 1")
+            w.put("            self.count -= 1")
+            w.put("        node = after")
+            w.put("    return gone")
+            w.put("")
+        w.depth -= 1
+        w.put("")
+        return methods
+
+    def resident_part(self, w: _Writer) -> list[str]:
+        """The structure classes, and a `main` that calls their native methods
+        again and again (their objects stay resident between the calls) and,
+        between the calls, writes to the same objects from Python: keys set
+        through attributes, `vars()`, and `setattr`, links cut and nodes
+        linked in, an attribute deleted and a key of another type for a
+        while; and structures made and dropped, collected or not."""
+        rng = self.residing
+        tree = self.tree_class(w)
+        listed = self.dlist_class(w)
+        w.put("")
+        keys = rng.sample(range(-20, 40), rng.randint(4, 10))
+        after = ["n = None", "t = STree()"]
+        after.extend(f"t.insert({key})" for key in keys)
+        after.append("print(sshape(t.root), t.size, slinked(t))")
+        after.append("d = DList()")
+        after.extend(f"d.push({rng.randint(-9, 9)})" for _ in range(rng.randint(2, 7)))
+        after.append("print(dkeys(d), d.count)")
+        for _ in range(rng.randint(8, 18)):
+            roll = rng.random()
+            if roll < 0.4:
+                if rng.random() < 0.5:
+                    method = rng.choice([*tree, "insert", "find"])
+                    if method == "insert":
+                        after.append(f"t.insert({rng.randint(-20, 40)})")
+                        after.append("print(sshape(t.root), t.size, slinked(t))")
+                    elif method == "find":
+                        after.append(f"print(t.find({rng.choice(keys)}) is not None)")
+                    else:
+                        argument = (
+                            rng.choice(keys) if method.startswith("rotate") else rng.randint(-3, 9)
+                        )
+                        after.append(
+                            f"print(t.{method}({argument}), sshape(t.root), t.size, slinked(t))"
+                        )
+                else:
+                    method = rng.choice([*listed, "push"])
+                    after.append(f"print(d.{method}({rng.randint(-3, 9)}), dkeys(d), d.count)")
+            elif roll < 0.85:
+                write = rng.choice(_PYTHON_WRITES)
+                value = rng.randint(-9, 30)
+                after.extend(line.format(k=rng.choice(keys), v=value) for line in write)
+                after.append("print(sshape(t.root), t.size, dkeys(d), d.count)")
+            else:
+                after.append(f"for _ in range({rng.randint(1, 40)}):")
+                after.append("    other = DList()")
+                after.append(f"    other.push({rng.randint(-9, 9)})")
+                after.append(f"    other.push({rng.randint(-9, 9)})")
+                if listed:
+                    after.append(f"    other.{rng.choice(listed)}({rng.randint(0, 5)})")
+                after.append("print(dkeys(other), other.count)")
+                if rng.random() < 0.5:
+                    after.append("gc.collect()")
+        after.append(f"print(t.find({keys[0]}) is t.find({keys[0]}), d.head is d.head)")
+        return after
+
+    def structures_part(self, w: _Writer) -> list[str]:
+        """The structure classes, and what `main` does with them: builds a tree
+        and a list, holds on to nodes, edits them through the methods in a
+        drawn order, and prints shapes, links, and identities after each."""
+        rng = self.structure
+        tree = self.tree_class(w)
+        listed = self.dlist_class(w)
+        w.put("")
+        keys = rng.sample(range(-20, 40), rng.randint(3, 9))
+        after = ["t = STree()"]
+        after.extend(f"t.insert({key})" for key in keys)
+        after.append("first = t.root")
+        after.append("print(sshape(t.root), t.size, slinked(t))")
+        for _ in range(rng.randint(2, 6)):
+            if not tree:
+                break
+            method = rng.choice(tree)
+            argument = rng.choice(keys) if method.startswith("rotate") else rng.randint(-3, 9)
+            after.append(f"print(t.{method}({argument}), sshape(t.root), t.size, slinked(t))")
+        after.append(
+            "print(first is t.root, first.parent is None, t.find(" + str(keys[0]) + ") is not None)"
+        )
+        after.append("d = DList()")
+        after.extend(f"d.push({rng.randint(-9, 9)})" for _ in range(rng.randint(0, 6)))
+        after.append("ends = (d.head, d.tail)")
+        after.append("print(dkeys(d), d.count)")
+        for _ in range(rng.randint(2, 6)):
+            if not listed:
+                break
+            method = rng.choice(listed)
+            after.append(f"print(d.{method}({rng.randint(-3, 9)}), dkeys(d), d.count)")
+        after.append("print(ends[0] is d.head, ends[1] is d.tail, ends[0] is d.tail)")
+        return after
+
+
+#: Python's writes to the structures between native calls (`resident_part`):
+#: each a few lines of `main`, `{k}` a key the tree holds, `{v}` a number.
+_PYTHON_WRITES = (
+    ("n = t.find({k})", "if n is not None:", "    n.key = {v}"),
+    ("if t.root is not None:", "    t.root.key += {v}"),
+    ("if t.root is not None:", '    vars(t.root)["key"] = {v}'),
+    ('setattr(t, "size", t.size + {v})',),
+    (
+        "if t.root is not None and t.root.left is not None:",
+        "    t.root.left.parent = None",
+        "    t.root.left = None",
+    ),
+    ("if t.root is not None:", "    t.root.right = SNode({v})"),
+    (
+        "r = t.root",
+        "if r is not None:",
+        "    del r.key",
+        "try:",
+        "    print(t.find({k}) is not None)",
+        "except AttributeError:",
+        '    print("AttributeError")',
+        "if r is not None:",
+        "    r.key = {v}",
+    ),
+    (
+        "r = t.root",
+        "if r is not None:",
+        '    vars(r)["key"] = 0.5',
+        "print(t.find({k}) is not None, sshape(t.root))",
+        "if r is not None:",
+        '    vars(r)["key"] = {v}',
+    ),
+    ("if d.head is not None:", "    d.head.key = {v}"),
+    ("if d.tail is not None:", "    d.tail.key -= {v}"),
+    (
+        "m = DNode({v})",
+        "m.next = d.head",
+        "if d.head is not None:",
+        "    d.head.prev = m",
+        "d.head = m",
+        "if d.tail is None:",
+        "    d.tail = m",
+        "d.count += 1",
+    ),
+    (
+        "if d.head is not None and d.head.next is not None:",
+        "    d.head.next = d.head.next.next",
+        "    if d.head.next is not None:",
+        "        d.head.next.prev = d.head",
+        "    else:",
+        "        d.tail = d.head",
+        "    d.count -= 1",
+    ),
+    ('setattr(d, "count", d.count * 2)',),
+)
+
 
 #: The first line of a program whose functions have no annotations; it runs
 #: without strict mode.
 UNANNOTATED_MARK = "# fuzz: unannotated"
+#: The first line of a program whose structure classes have no annotations on
+#: their fields; it runs without strict mode too (it starts with the mark above).
+STRUCTURES_MARK = "# fuzz: unannotated fields"
 
 
 def _unannotated(signature: str) -> str:
@@ -1618,6 +2863,13 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     unannotated: bool = False,
     *,
     boundary: bool = False,
+    structures: bool = False,
+    shapes: bool = False,
+    inference: bool = False,
+    bools: bool = False,
+    decorators: bool = False,
+    optional: bool = False,
+    resident: bool = False,
 ) -> str:
     """The program for `seed`: identical on every machine and every run. With
     `prints`, functions print between checks that may fall back. With `state`,
@@ -1633,8 +2885,43 @@ def generate_program(  # pylint: disable=too-many-arguments,too-many-positional-
     with arguments of other types, which the native entry must hand to the
     Python body. With `boundary`, a function Python calls natively writes
     through lists of lists, a dict of lists, a set, and objects that share
-    rows and point at each other (`STATE_PATHS` too)."""
-    return _Generator(seed, prints, state, stdlib, calls, unannotated, boundary).program()
+    rows and point at each other (`STATE_PATHS` too). With `structures`,
+    classes with unannotated fields (a search tree with parent links, a
+    doubly linked list) are edited in place by methods Python calls natively:
+    rotations, unlinking, tuple-assigned swaps, new nodes linked in
+    (`STATE_PATHS`, without strict mode). With `shapes`, the program also has
+    the shapes the corpus kept in Python (`shapes_part`), on every path, and
+    with `state` too, the ones only Python's boundary runs. With `inference` (and
+    `unannotated`), it also has what inference reads beside plain calls: a
+    decorator, operators on a value class, a `list` parameter, mixed `int`
+    and `float` calls, `argparse`, and functions typed by their body. With
+    `bools`, it also stores `bool`s where an `int` is declared and prints
+    them (`bools_part`; `STATE_PATHS`, since those functions stay in Python). With
+
+    `decorators` (and `unannotated`), it also has project decorators that
+    change what a call does (`decorators_part`). With `optional`, it also holds
+    numbers and strings that may be `None` in parameters, results, fields,
+    elements, and locals, and prints what CPython makes of them, `TypeError`s
+    included (`optional_part`), on every path. With `resident`, the
+    structures of `structures` are edited by native methods called again and
+    again, and written to from Python between the calls (`resident_part`;
+    `STATE_PATHS`, without strict mode)."""
+    return _Generator(
+        seed,
+        prints,
+        state,
+        stdlib,
+        calls,
+        unannotated,
+        boundary,
+        structures,
+        shapes,
+        inference,
+        bools,
+        decorators,
+        optional,
+        resident,
+    ).program()
 
 
 def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
@@ -1701,14 +2988,21 @@ def _capped(command: list[str], memory: str) -> list[str]:
 def _execute(
     command: list[str], cwd: Path, timeout: float, env: dict[str, str] | None = None
 ) -> tuple[int, str, str]:
-    """Run `command` in a process group of its own; at `timeout`, kill the group.
+    """Run `command` in a process group of its own and kill the group on the
+    way out, whichever way that is.
 
     `subprocess.run(timeout=...)` kills only the process it started and then
     waits for its pipes to close, which a child `ppy run` spawned keeps open:
     a program that loops natively held a run for a day. Killing the whole
-    group ends every process the command made, and the pipes with them.
+    group ends every process the command made, and the pipes with them. The
+    group is killed at the timeout, when the command has exited (a process
+    it left behind goes too), and when this process is interrupted or ends
+    by an exception; and the command itself is killed by the kernel if this
+    process dies without a chance to clean up (`_die_with_parent`): a fuzz
+    run killed from outside left a `ppy run` looping for seven hours, in a
+    session of its own that no signal to the run reached.
     """
-    with subprocess.Popen(
+    with subprocess.Popen(  # pylint: disable=subprocess-popen-preexec-fn
         _capped(command, "2G"),
         cwd=cwd,
         stdout=subprocess.PIPE,
@@ -1716,6 +3010,7 @@ def _execute(
         text=True,
         env=env,
         start_new_session=True,
+        preexec_fn=_die_with_parent,  # noqa: PLW1509 - no threads start processes here
     ) as process:
         try:
             out, err = process.communicate(timeout=timeout)
@@ -1724,13 +3019,30 @@ def _execute(
             with contextlib.suppress(subprocess.TimeoutExpired):
                 process.communicate(timeout=10)
             return TIMED_OUT, "", "timed out"
+        finally:
+            _kill_group(process)
         return process.returncode, out, err
+
+
+def _die_with_parent() -> None:
+    """In the child, before `exec`: ask Linux to SIGKILL it when the process
+    that started it dies (`PR_SET_PDEATHSIG`). It holds across `exec`, so the
+    command (`systemd-run --scope` execs it in place) gets it too."""
+    if not sys.platform.startswith("linux"):
+        return
+    with contextlib.suppress(OSError, AttributeError):
+        import ctypes  # pylint: disable=import-outside-toplevel
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.prctl(1, signal.SIGKILL, 0, 0, 0)  # PR_SET_PDEATHSIG
 
 
 def _kill_group(process: subprocess.Popen[str]) -> None:
     try:
         os.killpg(process.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
+    except ProcessLookupError:
+        pass
+    except PermissionError:
         process.kill()
 
 
@@ -1874,17 +3186,35 @@ def compare(results: dict[str, Result]) -> list[Mismatch]:
 # -- minimizing ---------------------------------------------------------------
 
 
+#: The structure classes whose methods the minimizer keeps whole: a link
+#: assignment taken out of a rotation or a push leaves a cycle, which every
+#: walk of the structure then loops around forever.
+_KEPT_CLASSES = frozenset({"STree", "DList"})
+
+
 def _statements(source: str) -> list[tuple[int, int]]:
     """Line spans (start, end, 1-based inclusive) of every statement inside a
-    function, innermost last, so removing one leaves valid Python."""
+    function, innermost last, so removing one leaves valid Python.
+
+    A deletion must not leave a program that never ends: a statement inside
+    a `while` loop is not offered (the loop may go, but not the step that
+    ends it, as `n -= 2` in `countdown`), nor any in the methods of the
+    structure classes (`_KEPT_CLASSES`)."""
     tree = ast.parse(source)
+    kept: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.While) or (
+            isinstance(node, ast.ClassDef) and node.name in _KEPT_CLASSES
+        ):
+            for part in (*node.body, *getattr(node, "orelse", ())):
+                kept.update(id(child) for child in ast.walk(part))
     spans: list[tuple[int, int]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name not in {"__init__", "bump", "biggest"}:
             spans.extend(
                 (child.lineno, child.end_lineno or child.lineno)
                 for child in ast.walk(node)
-                if child is not node and isinstance(child, ast.stmt)
+                if child is not node and isinstance(child, ast.stmt) and id(child) not in kept
             )
     spans.extend(
         (node.lineno, node.end_lineno or node.lineno)

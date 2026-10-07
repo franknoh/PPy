@@ -1,0 +1,66 @@
+# fuzz: path=run seed=0 (stdout differs)
+# fuzz: unannotated fields
+import ppy
+
+
+class SNode:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+
+
+class STree:
+    def __init__(self):
+        self.root = None
+        self.size = 0
+
+    @ppy.native
+    def insert(self, key: int) -> None:
+        self.size += 1
+        made = SNode(key)
+        if self.root is None:
+            self.root = made
+            return
+        node = self.root
+        while True:
+            if key < node.key:
+                if node.left is None:
+                    node.left = made
+                    return
+                node = node.left
+            else:
+                if node.right is None:
+                    node.right = made
+                    return
+                node = node.right
+
+    @ppy.native
+    def depth(self, key: int) -> int:
+        node = self.root
+        steps = 0
+        while node is not None and node.key != key:
+            node = node.left if key < node.key else node.right
+            steps += 1
+        return steps
+
+
+def main() -> None:
+    t = STree()
+    for key in (7, 3, 9):
+        t.insert(key)
+    print(t.depth(9), t.depth(3), t.size)
+    r = t.root
+    del r.key
+    try:
+        print(t.depth(3))
+    except AttributeError:
+        print("AttributeError")
+    r.key = 5
+    print(t.depth(9), t.size)
+    t.insert(12)
+    t.insert(1)
+    print(t.depth(12), t.depth(1), t.size)
+
+
+main()

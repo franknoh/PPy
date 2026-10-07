@@ -33,8 +33,10 @@ from dataclasses import dataclass, field
 
 from ..analysis import types as T
 from ..analysis.closures import own_names
+from ..analysis.decorators import reaches_body
 from ..analysis.effects import Effect
 from ..analysis.lexical import LexicalBindings
+from ..analysis.stdlib import lookup as stdlib_lookup
 from ..backend.llvm.lowering import Unsupported
 from ..ir import (
     BOOL,
@@ -604,6 +606,17 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         )
         return made if made is not None else self._word(0)  # type: ignore[attr-defined,no-any-return]
 
+    def _module_file(self) -> Value | None:
+        """`__file__`: the module's own, read through Python where it is called
+        (a module may be imported from anywhere). Reading it changes nothing,
+        so it is no barrier. None in a build without Python."""
+        if not self._effects_on() or self.frontend.standalone:  # type: ignore[attr-defined]
+            return None
+        if "__file__" in self._effect_locals():
+            return None
+        module = self.info.module  # type: ignore[attr-defined]
+        return self._python_call(f"{module}:__file__.__str__", [], _STR, pure=True)
+
     def _crossing(self, argument: ast.expr, callee: str) -> tuple[int, Value, bool]:
         """One argument of a call into Python: its kind, its value, and whether
         the caller owns it."""
@@ -666,12 +679,22 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         if isinstance(func, ast.Name):
             info = symbols.functions.get(func.id)
             if info is not None:
-                return self._returns_exactly(info.node, returned)
-            if func.id in symbols.imports:
-                return False
+                # A wrapper the decorator made gives what it likes.
+                return reaches_body(info.decorators) and self._returns_exactly(info.node, returned)
+            binding = symbols.imports.get(func.id)
+            if binding is not None:
+                # `from timeit import timeit`: a modelled standard-library
+                # function, whose result CPython makes what the model says.
+                return (
+                    binding.canonical.partition(".")[0] in sys.stdlib_module_names
+                    and stdlib_lookup(binding.canonical) is not None
+                )
             return func.id in _CERTAIN_BUILTINS
-        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-            binding = symbols.imports.get(func.value.id)
+        root = func
+        while isinstance(root, ast.Attribute):
+            root = root.value
+        if isinstance(func, ast.Attribute) and isinstance(root, ast.Name):
+            binding = symbols.imports.get(root.id)
             if binding is None:
                 return False
             return binding.canonical.partition(".")[0] in sys.stdlib_module_names

@@ -48,6 +48,7 @@ from .intness import gives_int
 
 __all__ = [
     "HANDLE",
+    "OPTIONAL_STR",
     "STR",
     "CollectionLowering",
     "Kind",
@@ -104,7 +105,9 @@ class Shape:
 
     #: "int", "float", "bool", "str", "tuple", "record", "collection", "object",
     #: "function" (a closure: its type is `class_args[0]`, spelled in `record`),
-    #: or "generator" (a generator's frame: what it yields is `class_args[0]`).
+    #: "generator" (a generator's frame: what it yields is `class_args[0]`), or
+    #: "optional" (a number or `None`, `parts` its kind: the number's word and
+    #: a word that says whether there is one, `lowering/optionals.py`).
     kind: str
     #: A tuple's items, or a record's fields: scalar kinds.
     parts: tuple[str, ...] = ()
@@ -120,22 +123,25 @@ class Shape:
 
     @property
     def words(self) -> int:
+        if self.kind == "optional":
+            return 1 if self.parts[0] == "str" else 2
         return len(self.parts) if self.kind in {"tuple", "record"} else 1
 
     @property
     def floats(self) -> int:
-        kinds = self.parts if self.kind in {"tuple", "record"} else (self.kind,)
-        return sum(1 << i for i, kind in enumerate(kinds) if kind == "float")
+        return sum(1 << i for i, kind in enumerate(_kinds(self)) if kind == "float")
 
     @property
     def handles(self) -> int:
-        return 1 if self.kind in {"collection", "object", "str", "function", "generator"} else 0
+        return 1 if self.reference else 0
 
     @property
     def reference(self) -> bool:
-        """Held by handle: a collection, a string, an instance of an object class,
-        or a function value."""
-        return self.kind in {"collection", "object", "str", "function", "generator"}
+        """Held by handle: a collection, a string (or `None`, the null handle,
+        where it may be), an instance of an object class, or a function value."""
+        return self.kind in {"collection", "object", "str", "function", "generator"} or (
+            self.kind == "optional" and self.parts[0] == "str"
+        )
 
     @property
     def comparable(self) -> bool:
@@ -147,7 +153,7 @@ class Shape:
     @property
     def text(self) -> int:
         """The words that are strings, as a key's mask."""
-        return 1 if self.kind == "str" else 0
+        return 1 if self.kind == "str" or self == OPTIONAL_STR else 0
 
     @property
     def leaves(self) -> int:
@@ -163,6 +169,9 @@ class Shape:
     def ir_type(self) -> IRType:
         if self.kind in _SCALARS:
             return _SCALARS[self.kind]
+        if self.kind == "optional" and self.parts[0] != "str":
+            # The number, and whether there is one.
+            return TupleType((_SCALARS[self.parts[0]], BOOL))
         if self.kind == "tuple":
             return TupleType(tuple(_SCALARS[part] for part in self.parts))
         if self.kind == "record":
@@ -182,6 +191,8 @@ class Shape:
 
 #: A string: one handle word.
 STR = Shape("str")
+#: A string or `None`: one handle word, null for `None`.
+OPTIONAL_STR = Shape("optional", ("str",))
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +226,8 @@ def spelled(kind: Kind) -> str:
     def shape(item: Shape) -> str:
         if item.kind == "tuple":
             return f"tuple[{', '.join(item.parts)}]"
+        if item.kind == "optional":
+            return f"{item.parts[0]} | NoneType"
         if item.kind in {"record", "object"}:
             return item.spelled if item.kind == "object" else item.record
         if item.kind == "collection":
@@ -270,6 +283,7 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
     """The shape of a value of type `t`, or None where it has none.
 
     `Node | None` is a `Node`: an object's handle may be null, which is `None`.
+    `int | None` is an optional number (`Shape("optional")`).
     """
     base = T.strip_literal(t)
     if isinstance(base, T.Union_):
@@ -277,6 +291,8 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
         if len(members) != 1 or len(members) == len(base.members):
             return None
         found = shape_of(members[0], records)
+        if found is not None and found.kind in {"int", "float", "bool", "str"}:
+            return Shape("optional", (found.kind,))
         return found if found is not None and found.kind == "object" else None
     if base in (T.INT, T.FLOAT, T.BOOL):
         return Shape(str(base))
@@ -461,6 +477,9 @@ class CollectionLowering:
         """Whether a handle parameter takes `kind`: the same type, or an object of a
         class deriving from the parameter's."""
         element = parameter.element  # type: ignore[attr-defined]
+        if kind == OPTIONAL_STR:
+            # A string that may be `None`, to a parameter that takes `None` too.
+            return element == "str" and bool(getattr(parameter, "nullable", False))
         if kind.spelled == element:
             return True
         if not isinstance(kind, Shape) or kind.kind != "object":
@@ -477,7 +496,12 @@ class CollectionLowering:
 
     def _reference_of(self, node: ast.expr) -> Kind | Shape | None:
         """A collection, a string, or an object: what native code holds `node` by handle as."""
-        return self._kind_of(node) or self._object_of(node) or self._string_of(node)  # type: ignore[attr-defined]
+        return (
+            self._kind_of(node)
+            or self._object_of(node)
+            or self._string_of(node)  # type: ignore[attr-defined]
+            or self._text_or_none(node)  # type: ignore[attr-defined]
+        )
 
     def _reference_of_type(self, t: T.Type) -> Kind | Shape | None:
         found = shape_of(t, self._records())
@@ -754,6 +778,12 @@ class CollectionLowering:
         del self._temporaries[waiting:]  # type: ignore[attr-defined]
         results = function.results  # type: ignore[attr-defined]
         overrides = [] if exact else self._overrides(shape, attr)
+        if overrides and any(
+            getattr(getattr(p, "native", p), "source", "") for p in rest.parameters
+        ):
+            # Module globals passed after the arguments are this method's
+            # own; an override takes its own, so no one call serves both.
+            raise Unsupported(f"`{attr}` reads module globals and is overridden")
         if overrides:
             called = self._dispatch(shape, attr, receiver, values, overrides, function)
         else:
@@ -1361,7 +1391,23 @@ class CollectionLowering:
             f"AttributeError: 'NoneType' object has no attribute '{target.attr}'",
         )
         self._store_into(self._field_address(handle, offset), field_shape, value, fresh=False)
+        self._touch(handle)
         self._done_with(handle, owned)
+
+    def _touch(self, handle: Value) -> None:
+        """After a field of `handle` is stored: a resident object's record (one
+        the Python boundary keeps between calls, `crossing.c`) is put on the
+        runtime's list once, so the boundary copies it back to its Python
+        object. Any other handle's word 19 never holds the mark."""
+        word = _header_word(self.b, handle, 19)
+        resident = core.cmp(self.b, "eq", word, self._word(RESIDENT_CLEAN))
+        touch = self._block("touch.call")  # type: ignore[attr-defined]
+        done = self._block("touch.done")  # type: ignore[attr-defined]
+        core.cond_br(self.b, resident, Successor(touch), Successor(done))
+        self.b.at_end(touch)  # type: ignore[attr-defined]
+        self._rt("ppy_coll_touch", (handle,), None)
+        core.br(self.b, Successor(done))
+        self.b.at_end(done)  # type: ignore[attr-defined]
 
     def _identity(self, node: ast.Compare) -> Value | None:
         """`x is None`, `x is not y`: handles compared as addresses."""
@@ -1486,6 +1532,9 @@ class CollectionLowering:
         # Any call names the runtime, not only one that makes a collection: a
         # function that only reads a collection it was handed links it too.
         self._use_collections()
+        inline = _INLINE.get(symbol)
+        if inline is not None and result is not None:
+            return inline(self.b, *arguments)
         results = (result,) if result is not None else ()
         found = core.call_extern(self.b, symbol, arguments, results)
         if symbol.startswith(_CALLS_BACK) and self._calls_back():
@@ -1744,10 +1793,20 @@ class CollectionLowering:
         kind = self._reference_of(value) if not isinstance(value, ast.Name) else None
         if isinstance(value, ast.Name) and value.id in self.collections:
             kind = self.collections[value.id].kind
+        if self._local_text_or_none(name):  # type: ignore[attr-defined]
+            # A local that is a string or `None` is held so, whatever it is bound to.
+            kind = OPTIONAL_STR
         if kind is None and declared is not None:
             kind = self._reference_of_type(declared)
         if kind is None and name in self.collections:
             kind = self.collections[name].kind
+        if kind is None and isinstance(value, ast.Constant) and value.value is None:
+            # `prev = None`, an object later: the name is `None` here, and
+            # what the function's locals end as says what it holds.
+            analysis = self.frontend.analysis.functions.get(self.info.qualname)  # type: ignore[attr-defined]
+            final = analysis.locals.get(name) if analysis is not None else None
+            if final is not None:
+                kind = self._reference_of_type(final)
         if kind is None:
             return False
         handle, owned = self._handle(value)
@@ -1759,6 +1818,9 @@ class CollectionLowering:
         held = self.collections.get(name)
         if held is not None and held.kind != kind and not _related(held.kind, kind):
             raise Unsupported(f"`{name}` keeps one collection type")
+        if held is not None and kind == OPTIONAL_STR:
+            # Bound to a string first, it may be `None` later.
+            held.kind = OPTIONAL_STR
         if held is None:
             slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
             # The slot owns what it holds (a generator's frame lets go of it).
@@ -1795,6 +1857,25 @@ class CollectionLowering:
 
     # -- handles in expressions ---------------------------------------------
 
+    def _reference_choice(self, node: ast.IfExp) -> Value:
+        """`node.left if key < node.key else node.right` of objects or
+        collections: only the side the test picks is evaluated, and each side
+        hands over a reference of its own, joined by a block argument."""
+        condition = self._test(node.test)  # type: ignore[attr-defined]
+        then_block = self._block("ref.then")  # type: ignore[attr-defined]
+        else_block = self._block("ref.else")  # type: ignore[attr-defined]
+        done = self._block("ref.join")  # type: ignore[attr-defined]
+        result = done.add_argument(HANDLE, "chosen")
+        core.cond_br(self.b, condition, Successor(then_block), Successor(else_block))
+        for block, side in ((then_block, node.body), (else_block, node.orelse)):
+            self.b.at_end(block)  # type: ignore[attr-defined]
+            handle, owned = self._handle(side)
+            if not owned:
+                self._retain(handle)  # type: ignore[attr-defined]
+            core.br(self.b, Successor(done, [handle]))
+        self.b.at_end(done)  # type: ignore[attr-defined]
+        return result
+
     def _handle(self, node: ast.expr) -> tuple[Value, bool]:
         """A collection-valued expression: its handle, and whether it is owned.
 
@@ -1804,8 +1885,16 @@ class CollectionLowering:
         """
         if isinstance(node, ast.Constant) and node.value is None:
             return self._rt("ppy_coll_none", (), HANDLE), True
+        if isinstance(node, (ast.Attribute, ast.Subscript)):
+            checked = self._narrowed_text(node)  # type: ignore[attr-defined]
+            if checked is not None:
+                return checked
         if isinstance(node, ast.Name):
             held = self.collections.get(node.id)
+            if held is None and node.id == "__file__":
+                found = self._module_file()  # type: ignore[attr-defined]
+                if found is not None:
+                    return found, True
             if held is None:
                 raise Unsupported(f"`{node.id}` is not a native collection")
             return core.load(self.b, held.slot), False
@@ -1847,6 +1936,12 @@ class CollectionLowering:
             return self._expr(node), True  # type: ignore[attr-defined]
         if isinstance(node, ast.Subscript):
             return self._element_handle(node)
+        if isinstance(node, ast.IfExp) and self._reference_of(node) is not None:
+            return self._reference_choice(node), True
+        if isinstance(node, ast.BoolOp):
+            chosen = self._text_or(node)  # type: ignore[attr-defined]
+            if chosen is not None:
+                return chosen, True
         if isinstance(node, (ast.BinOp, ast.UnaryOp, ast.IfExp)):
             return self._expr(node), True  # type: ignore[attr-defined]
         if isinstance(node, ast.Call):
@@ -1881,7 +1976,7 @@ class CollectionLowering:
         if shape.reference:
             return core.load(self.b, core.cast(self.b, address, _pointer(address, HANDLE)))
         items = [self._read_word(address, i, kind) for i, kind in enumerate(_kinds(shape))]
-        if shape.kind == "tuple":
+        if shape.kind in {"tuple", "optional"}:
             return core.tuple_make(self.b, *items)
         if shape.kind == "record":
             ir_type = shape.ir_type()
@@ -1904,7 +1999,7 @@ class CollectionLowering:
         if shape.reference:
             core.store(self.b, value, core.cast(self.b, address, _pointer(address, HANDLE)))
             return
-        if shape.kind == "tuple":
+        if shape.kind in {"tuple", "optional"}:
             items = [core.tuple_extract(self.b, value, i) for i in range(shape.words)]
         elif shape.kind == "record":
             items = [core.struct_extract(self.b, value, name) for name in shape.names]
@@ -1923,6 +2018,8 @@ class CollectionLowering:
         an owned handle (a collection element only)."""
         if shape.reference:
             return self._handle(node)
+        if shape.kind == "optional":
+            return self._optional_packed(node, shape.parts[0]), False  # type: ignore[attr-defined]
         if shape.kind == "tuple":
             items = self._tuple_expr(node)  # type: ignore[attr-defined]
             if items is None:
@@ -2444,6 +2541,9 @@ class CollectionLowering:
             items = [core.tuple_extract(self.b, value, i) for i in range(shape.words)]
             self._store_tuple(target, items)  # type: ignore[attr-defined]
             return
+        if shape.kind == "optional":
+            self._bind_optional(target, shape.parts[0], value)  # type: ignore[attr-defined]
+            return
         self._store(target, value)  # type: ignore[attr-defined]
 
 
@@ -2560,6 +2660,9 @@ def _copies_before_writes(function: ast.AST, record: str, type_of) -> bool:  # t
 def _related(held: Kind | Shape, kind: Kind | Shape) -> bool:
     """Two object classes: a name holds either by the same handle, and what the
     checker says of each use decides which class it is read as."""
+    if {held, kind} == {STR, OPTIONAL_STR}:
+        # A string that may be `None`: one handle, null for `None`.
+        return True
     return (
         isinstance(held, Shape) and isinstance(kind, Shape) and held.kind == kind.kind == "object"
     )
@@ -2588,6 +2691,8 @@ def _scalar_name(t: T.Type | None) -> str:
 
 
 def _kinds(shape: Shape) -> tuple[str, ...]:
+    if shape.kind == "optional":
+        return ("str",) if shape.parts[0] == "str" else (shape.parts[0], "bool")
     return shape.parts if shape.kind in {"tuple", "record"} else (shape.kind,)
 
 
@@ -2621,6 +2726,45 @@ def _ordered(node: ast.ClassDef) -> bool:
     return False
 
 
+def _reading(b: Builder, handle: Value, t: IRType) -> Value:
+    """`handle` as a pointer to its header's words, for reading them: marked
+    `ppy.reads`, a use that takes no reference (`exceptions._takes`)."""
+    header = core.cast(b, handle, _pointer(handle, t))
+    header.owner.attributes["ppy.reads"] = True  # type: ignore[union-attr]
+    return header
+
+
+def _header_word(b: Builder, handle: Value, word: int, t: IRType = I64) -> Value:
+    """Word `word` of a handle's header (`collections.c`), loaded as `t`."""
+    header = _reading(b, handle, t)
+    return core.load(b, core.ptr_offset(b, header, core.const(b, word, I64)))
+
+
+def _inline_length(b: Builder, handle: Value) -> Value:
+    """`ppy_coll_len`: the header's first word, read in place."""
+    return core.load(b, _reading(b, handle, I64))
+
+
+def _inline_seq_at(b: Builder, handle: Value, index: Value) -> Value:
+    """`ppy_seq_at`: the address of record `(first + index) % capacity`, computed
+    in place of a call into the runtime. An index is never past the length,
+    nor the first record past the capacity, so the sum is less than twice the
+    capacity and one subtraction takes the remainder."""
+    first = _header_word(b, handle, 3)
+    capacity = _header_word(b, handle, 1)
+    stride = _header_word(b, handle, 15)
+    records = _header_word(b, handle, 2, PtrType(I64))
+    at = core.add(b, first, index, overflow="wrap")
+    past = core.cmp(b, "ge", at, capacity)
+    wrapped = core.select(b, past, core.sub(b, at, capacity, overflow="wrap"), at)
+    offset = core.mul(b, wrapped, stride, overflow="wrap")
+    return core.cast(b, core.ptr_offset(b, records, offset), _pointer(handle, I8))
+
+
+#: Runtime calls the lowering writes out in place: one load or a few.
+_INLINE = {"ppy_coll_len": _inline_length, "ppy_seq_at": _inline_seq_at}
+
+
 def _pointer(address: Value, pointee: IRType) -> PtrType:
     """A pointer to `pointee` in the same memory as `address`: a stack buffer stays one."""
     assert isinstance(address.type, PtrType)
@@ -2632,6 +2776,11 @@ class _Called:
     """What `_dispatch` hands back in place of a call: its results."""
 
     results: tuple[Value, ...]
+
+
+#: Header word 19 of a resident object's handle while its record matches its
+#: Python object (`ppy_coll_touch`, `crossing.c`); one more once it does not.
+RESIDENT_CLEAN = 0x7078526573694400
 
 
 #: The header word an object's class tag is kept in: family word b, which a
@@ -2723,6 +2872,8 @@ def crossing_classes(
     def spelled_shape(shape: Shape, nullable: bool = False) -> str:
         if shape.kind == "tuple":
             return f"tuple[{', '.join(shape.parts)}]"
+        if shape.kind == "optional":
+            return f"{shape.parts[0]} | NoneType"
         if shape.kind in {"object", "record"}:
             return shape.record + ("?" if nullable else "")
         if shape.kind == "collection":
@@ -2794,6 +2945,68 @@ def crossing_classes(
                 floats=floats,
                 handles=handles | (leaves << 32),
                 tag=class_tag(sub.qualname),
-                bases=tuple(entry for entry in sub.mro if entry in by_name),
+                bases=tuple(entry for entry in sub.mro if entry in {c.qualname for c in chain}),
             )
-    return tuple(found[name] for name in sorted(found))
+    return _resident(found, by_name)
+
+
+#: The fields a resident object's record may hold besides objects: values
+#: Python cannot change in place.
+_RESIDENT_SCALARS = frozenset({"int", "float", "bool", "str"})
+
+
+def _resident(
+    found: dict[str, CrossingClass], by_name: dict[str, ClassInfo]
+) -> tuple[CrossingClass, ...]:
+    """The classes, each marked `resident` where its instances may keep their
+    native records between calls (`crossing.c`): a plain class whose every
+    field is a number, a string, a tuple of numbers, or an object of another
+    such class. A container, a value class, or anything else Python may
+    change without assigning one of the object's own attributes leaves the
+    class copied at every crossing."""
+
+    def plain(qualname: str) -> bool:
+        c = found[qualname]
+        info = by_name.get(qualname)
+        return (
+            c.kind == "object"
+            and info is not None
+            and not info.identity_rewritten
+            and info.slots is None
+            and not (info.is_enum or info.is_pydantic or info.is_protocol)
+        )
+
+    resident = {name for name in found if plain(name)}
+    changed = True
+    while changed:
+        changed = False
+        for name in sorted(resident):
+            for _field, _offset, spelled in found[name].fields:
+                # A number or a string that may be `None` is as immutable.
+                bare = spelled.removesuffix("?").removesuffix(" | NoneType")
+                if bare in _RESIDENT_SCALARS or spelled.startswith("tuple["):
+                    continue
+                if spelled.removesuffix("?") in resident:
+                    continue
+                resident.discard(name)
+                changed = True
+                break
+    return tuple(
+        _marked(found[name]) if name in resident else found[name] for name in sorted(found)
+    )
+
+
+def _marked(c: CrossingClass) -> CrossingClass:
+    return CrossingClass(
+        c.qualname,
+        c.module,
+        c.name,
+        c.kind,
+        c.fields,
+        words=c.words,
+        floats=c.floats,
+        handles=c.handles,
+        tag=c.tag,
+        bases=c.bases,
+        resident=True,
+    )

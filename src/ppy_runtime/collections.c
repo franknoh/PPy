@@ -131,6 +131,11 @@ void ppy_coll_track(int64_t *header) {
 }
 
 void ppy_coll_untrack(int64_t *header) {
+    if (header[18] == 0) {
+        /* Not on a heap list: a literal kept for good (strings.c), or a
+           handle a resident object holds (`ppy_coll_adopt`). */
+        return;
+    }
     int64_t *heap = ppy_coll_seen(header[18]);
     int64_t list = ppy_coll_holds(header) ? 0 : 1;
     int64_t *before = ppy_coll_seen(header[16]);
@@ -193,6 +198,66 @@ void ppy_coll_sweep(void) {
     }
     heap[3] = 0;
     heap[4] = 0;
+}
+
+/* Resident objects (the generated wrapper's `crossing.c`): an object of a
+   project class that crosses the Python boundary again and again keeps one
+   handle for as long as its Python object lives, instead of being copied
+   in and back at every call. Such a handle is on no thread's heap list
+   (`ppy_coll_adopt`): it outlives the call that made it, and neither a
+   sweep after a failed call nor the collector frees it; the wrapper holds a
+   reference to it.
+
+   Header word 19, the collector's own for the handles it tracks, holds
+   `0x7078526573694400` while the record matches its Python object, and one
+   more once native code wrote one of its fields since: the lowering checks
+   the word after every field it stores (`ppy_coll_touch`), and the wrapper
+   copies the fields of every record on the list below back into the Python
+   objects once the call answers.
+
+     [0] the touched handles (malloc'd)   [1] how many   [2] room
+     [3] 1 while a thread adds to it */
+int64_t *ppy_coll_touched(void) {
+    static int64_t touched[4];
+    return touched;
+}
+
+/* A field of `handle` was written: a resident record goes on the list once. */
+void ppy_coll_touch(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    int64_t clean = 0x7078526573694400LL;
+    if (!__atomic_compare_exchange_n(&header[19], &clean, clean + 1, 0, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_RELAXED)) {
+        return;
+    }
+    int64_t *touched = ppy_coll_touched();
+    while (__atomic_exchange_n(&touched[3], 1, __ATOMIC_ACQUIRE)) {
+    }
+    if (touched[1] == touched[2]) {
+        int64_t room = touched[2] > 0 ? touched[2] * 2 : 64;
+        int8_t **grown =
+            (int8_t **)realloc((void *)(intptr_t)touched[0], (size_t)room * sizeof(int8_t *));
+        if (grown == NULL) {
+            ppy_coll_fail();
+        }
+        touched[0] = (int64_t)(intptr_t)grown;
+        touched[2] = room;
+    }
+    ((int8_t **)(intptr_t)touched[0])[touched[1]++] = handle;
+    __atomic_store_n(&touched[3], 0, __ATOMIC_RELEASE);
+}
+
+/* A handle taken off its thread's heap list, to be held past the call that
+   made it: by a resident object, or by a record one holds. */
+void ppy_coll_adopt(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    if (header[18] != 0) {
+        ppy_coll_untrack(header);
+        header[16] = 0;
+        header[17] = 0;
+        header[18] = 0;
+    }
+    header[20] = 0;
 }
 
 /* How many handles this thread holds: what the tests count leaks by. */
@@ -343,14 +408,54 @@ int64_t *ppy_coll_live(int8_t *handle, int64_t index) {
     return record[keys + words + 2] >= 0 ? record + keys : NULL;
 }
 
-void ppy_coll_release(int8_t *handle) {
-    if (handle == NULL) {
-        return;
+/* The handles whose last reference is gone and that are not freed yet.
+
+   Freeing a handle lets go of what it holds, which may free those, and so
+   on: a linked list of a million nodes is a million frees deep, which
+   recursion would take on the C stack until it overflowed. So the first
+   release that frees anything drains a worklist, and a release made while
+   it drains (of a value, a key, the factory of a handle being freed) only
+   adds to it. The list starts in that outermost frame and moves to the
+   heap only for a longer chain.
+
+     [0] the list                [1] how many are on it   [2] its room
+     [3] 1 while a release drains it
+     [4] the outermost frame's own array, where the list starts */
+int64_t *ppy_coll_dying(void) {
+#ifdef __cplusplus
+    static thread_local int64_t dying[5];
+#else
+    static _Thread_local int64_t dying[5];
+#endif
+    return dying;
+}
+
+void ppy_coll_dying_push(int8_t *handle) {
+    int64_t *dying = ppy_coll_dying();
+    if (dying[1] == dying[2]) {
+        int64_t capacity = dying[2] * 2;
+        int8_t **items = (int8_t **)(intptr_t)dying[0];
+        int8_t **room;
+        if (dying[0] == dying[4]) {
+            room = (int8_t **)malloc((size_t)capacity * sizeof(int8_t *));
+            if (room != NULL) {
+                memcpy(room, items, (size_t)dying[1] * sizeof(int8_t *));
+            }
+        } else {
+            room = (int8_t **)realloc(items, (size_t)capacity * sizeof(int8_t *));
+        }
+        if (room == NULL) {
+            ppy_coll_fail();
+        }
+        dying[0] = (int64_t)(intptr_t)room;
+        dying[2] = capacity;
     }
+    ((int8_t **)(intptr_t)dying[0])[dying[1]++] = handle;
+}
+
+/* Let go of what a handle no one holds holds, then of its memory. */
+void ppy_coll_destroy(int8_t *handle) {
     int64_t *header = (int64_t *)handle;
-    if (--header[11] > 0) {
-        return;
-    }
     ppy_coll_release_keys(handle);
     if (header[10] != 0) {
         int64_t count = header[12] == 0 ? header[0] : header[1];
@@ -365,6 +470,38 @@ void ppy_coll_release(int8_t *handle) {
     }
     ppy_coll_release(ppy_coll_extra(header));
     ppy_coll_free(handle);
+}
+
+void ppy_coll_release(int8_t *handle) {
+    if (handle == NULL) {
+        return;
+    }
+    int64_t *header = (int64_t *)handle;
+    if (--header[11] > 0) {
+        return;
+    }
+    int64_t *dying = ppy_coll_dying();
+    if (dying[3]) {
+        ppy_coll_dying_push(handle);
+        return;
+    }
+    int8_t *local[64];
+    dying[0] = (int64_t)(intptr_t)local;
+    dying[4] = dying[0];
+    dying[1] = 0;
+    dying[2] = 64;
+    dying[3] = 1;
+    ppy_coll_destroy(handle);
+    while (dying[1] > 0) {
+        dying[1]--;
+        ppy_coll_destroy(((int8_t **)(intptr_t)dying[0])[dying[1]]);
+    }
+    dying[3] = 0;
+    if (dying[0] != dying[4]) {
+        free((void *)(intptr_t)dying[0]);
+    }
+    dying[0] = 0;
+    dying[4] = 0;
 }
 
 /* What word 25 of a map's header holds: a `defaultdict`'s factory, or null. */
@@ -1155,10 +1292,15 @@ int8_t *ppy_map_new(int64_t keys, int64_t words, int64_t floats, int64_t handles
     return handle;
 }
 
-/* Where `key` sits in the index, or -1. */
+/* Where `key` sits in the index, or -1. A map filled whole from Python's
+   (`ppy_coll_put_many`) has its index made at its first lookup: a walk over
+   it needs none. */
 int64_t ppy_map_slot(int8_t *handle, const int8_t *key) {
     int64_t *header = (int64_t *)handle;
     const int64_t *wanted = (const int64_t *)key;
+    if (header[4] == 0) {
+        ppy_map_reindex(handle, header[5]);
+    }
     int64_t *index = (int64_t *)(intptr_t)header[4];
     int64_t keys = (header[13] & 0xFFFFFFFF);
     int64_t mask = header[5] - 1;
@@ -1702,6 +1844,9 @@ int8_t *ppy_coll_copy(int8_t *handle) {
         copy[w] = header[w];
     }
     if (header[12] == 2) {
+        if (header[4] == 0) {
+            ppy_map_reindex(handle, header[5]);
+        }
         int64_t *index = (int64_t *)malloc((size_t)header[5] * sizeof(int64_t));
         if (index == NULL) {
             ppy_coll_fail();
@@ -2347,26 +2492,25 @@ void ppy_coll_put_many(int8_t *handle, const int8_t *keys, const int8_t *values,
         ppy_coll_reserve(handle, header[3] + count);
         int64_t stride = header[15];
         int64_t alive = key_words + words;
-        int64_t *index = (int64_t *)(intptr_t)header[4];
-        int64_t mask = header[5] - 1;
+        int64_t held = ppy_coll_held_keys(handle);
         for (int64_t i = 0; i < count; i++) {
             int64_t e = header[3]++;
             int64_t *record = ppy_coll_record(handle, e);
             memset(record, 0, (size_t)(stride * 8));
             memcpy(record, keys + i * key_words * 8, (size_t)(key_words * 8));
-            ppy_coll_hold_key(handle, record, 1);
+            if (held != 0) {
+                ppy_coll_hold_key(handle, record, 1);
+            }
             record[alive] = 1;
             if (words > 0) {
                 memcpy(record + key_words, values + i * words * 8, (size_t)(words * 8));
             }
-            int64_t at = ppy_map_hash(handle, record, mask);
-            while (index[at] >= 0) {
-                at = (at + 1) & mask;
-            }
-            index[at] = e;
-            header[0]++;
-            header[6]++;
         }
+        header[0] += count;
+        header[6] += count;
+        /* The index is made at the first lookup (`ppy_map_slot`). */
+        free((void *)(intptr_t)header[4]);
+        header[4] = 0;
         return;
     }
     for (int64_t i = 0; i < count; i++) {

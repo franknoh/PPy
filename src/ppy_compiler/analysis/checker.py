@@ -912,6 +912,8 @@ class _Checker:
         #: Under `--no-strict`, why the function stays on CPython whatever the
         #: road: code the analysis could not follow, so it cannot be lowered.
         self._python_only: list[str] = []
+        #: Functions a decorator nobody vouches for may replace (`_decorated_away`).
+        self._redecorated: set[str] = set()
         #: Under `--no-strict`, a `from m import *` may rebind any name the
         #: analysis believes it knows, so nothing in the module goes native.
         self._star_blockers: tuple[str, ...] = (
@@ -935,6 +937,8 @@ class _Checker:
         #: Parameters handed to a callee that writes through what it is given.
         self._delegated: set[str] = set()
         self._foreign_writes = False
+        #: The project's classes as this module calls them (`_constructor_calls`).
+        self._constructors: frozenset[str] | None = None
         #: Settled globals the body reads, and whether it read any other.
         self._settled_reads: dict[str, T.Type] = {}
         self._unsettled_global = False
@@ -1110,16 +1114,19 @@ class _Checker:
         # through it lands in the module's object as a parameter's does.
         settled = _settled_names(info, self.symbols.settled_globals)
         fresh = self._fresh_calls()
-        cached = self.project.alias_cache.get((id(info.node), immutable, settled, fresh))
+        made = self._constructor_calls()
+        key = (id(info.node), immutable, settled, fresh, made)
+        cached = self.project.alias_cache.get(key)
         if cached is None:
-            cached = analyze_aliases(info.node, immutable, settled, fresh)
-            self.project.alias_cache[(id(info.node), immutable, settled, fresh)] = cached
+            cached = analyze_aliases(info.node, immutable, settled, fresh, made)
+            self.project.alias_cache[key] = cached
         self._aliases = cached  # type: ignore[assignment]
         if info.dynamic:
             self._dynamic_depth += 1
 
         env = Env()
         self._seed_module_env(env)
+        self._decorated_away(info, env)
         # A parameter shadows a module global of the same name, so reading it
         # is not a global dependency.
         self._function_locals = {param.name for param in info.params}
@@ -1312,6 +1319,9 @@ class _Checker:
         if not info.ret_annotated:
             info.ret = inferred
             info.ret_facts = ret_facts
+        if info.qualname in self._redecorated:
+            # What a call by the name gives is the decorator's object's result.
+            info.ret_facts = Facts()
         return analysis
 
     def _seed_module_env(self, env: Env) -> None:
@@ -1334,7 +1344,24 @@ class _Checker:
         for name, info in self.symbols.functions.items():
             env.set(name, Binding(info.signature()))
         for name, declared in self.symbols.globals.items():
-            env.set(name, Binding(declared, self.symbols.global_facts.get(name, Facts())))
+            facts = self.symbols.global_facts.get(name, Facts())
+            if (
+                name not in self.symbols.constant_globals
+                and name not in self.symbols.settled_globals
+                and name not in self.symbols.pattern_globals
+            ):
+                # A global bound more than once (`COUNTER += 1` under `global`,
+                # a second module-level binding): what its first binding gave
+                # says nothing of what a call finds in it.
+                facts = facts.with_(
+                    int_range=None,
+                    length=None,
+                    constant=None,
+                    has_constant=False,
+                    exact_class=None,
+                    non_null=False,
+                )
+            env.set(name, Binding(declared, facts))
 
     def _imported_name_type(self, module: str, origin: str, depth: int = 0) -> T.Type:
         qualname = f"{module}.{origin}"
@@ -1508,6 +1535,20 @@ class _Checker:
         if node.value is not None and self._bind_type_alias([node.target], node.value, env):
             return
         resolved = self.annotations.resolve(node.annotation)
+        if (
+            isinstance(node.target, ast.Name)
+            and isinstance(node.annotation, ast.Name)
+            and node.annotation.id in {"list", "dict", "set"}
+            and isinstance(node.value, (ast.List, ast.Dict, ast.Set))
+            and not (node.value.keys if isinstance(node.value, ast.Dict) else node.value.elts)
+            and node.target.id not in env
+        ):
+            # `out: list = []`: the bare annotation says only what the empty
+            # display already does, so what the name holds is told, as for
+            # `out = []`, by what the function puts in it. Strict mode has
+            # already refused the bare annotation.
+            self._bind_target(node.target, self._expr(node.value, env), env, source=node.value)
+            return
         declared = Binding(resolved.type, resolved.facts)
         bound_type = resolved.type
         if node.value is not None:
@@ -1614,7 +1655,9 @@ class _Checker:
                 value = Binding(returned, value.facts)
             self._returns.append(value)
             self._provisional_returns.append(self._is_provisional(node.value, value, env))
-            if isinstance(node.value, ast.Name):
+            if isinstance(node.value, ast.Name) and not T.is_immutable(value.type):
+                # A number or a string returned is no object of anyone's,
+                # whatever the call that made it was given.
                 self._returned_names.update(self._roots(node.value, node.value.id))
             self._mark_escape(node.value, env)
             info = self._current
@@ -1935,9 +1978,7 @@ class _Checker:
         names = [resolver.decorator_identity(d) for d in node.decorator_list]
         if "ppy.dynamic" in names:
             return
-        for decorator, name in zip(node.decorator_list, names, strict=True):
-            if self._decorator_vouched(decorator, name, env, resolver):
-                continue
+        for decorator in self._unvouched_decorators(node, env):
             spelled = ast.unparse(decorator.func if isinstance(decorator, ast.Call) else decorator)
             report = self._dynamic_feature if self.strict else self._strictly
             report(
@@ -1947,6 +1988,44 @@ class _Checker:
                 help="use a vouched decorator, register this one's semantics with a "
                 "plugin, or mark the decorated definition `@ppy.dynamic`",
             )
+
+    def _unvouched_decorators(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, env: Env
+    ) -> list[ast.expr]:
+        """The decorators of `node` nobody vouches for: each may hand back
+        another object than the one the `def` made, which is then what the
+        name holds and what every call reaches."""
+        if not node.decorator_list:
+            return []
+        resolver = self.project.resolver(self.symbols)
+        return [
+            decorator
+            for decorator in node.decorator_list
+            if not self._decorator_vouched(
+                decorator, resolver.decorator_identity(decorator), env, resolver
+            )
+        ]
+
+    def _decorated_away(self, info: FunctionInfo, env: Env) -> None:
+        """A function whose decorator nobody vouches for is called through
+        what the decorator gave back, which may run anything before, after,
+        or instead of the body. Its name is not its body: the body stays in
+        Python, where the decorator's object calls it, and a call by the name
+        has effects no analysis sees, so nothing inlines, folds, or moves it."""
+        unvouched = self._unvouched_decorators(info.node, env)
+        if not unvouched:
+            return
+        self._redecorated.add(info.qualname)
+        first = unvouched[0]
+        spelled = ast.unparse(first.func if isinstance(first, ast.Call) else first)
+        message = (
+            f"decorated by `@{spelled}`, which hands back an object the compiler does not "
+            "know, so calls go to that object in Python"
+        )
+        self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
+        self._native_blockers.append(message)
+        self._python_only.append(message)
+        self._blockers.append(message)
 
     def _decorator_vouched(  # type: ignore[no-untyped-def]
         self, decorator: ast.expr, name: str, env: Env, resolver
@@ -3049,6 +3128,18 @@ class _Checker:
                 )
         return frozenset(spelled)
 
+    def _constructor_calls(self) -> frozenset[str]:
+        """The project's classes, spelled as this module calls them: each call
+        of one makes a new object."""
+        if self._constructors is not None:
+            return self._constructors
+        spelled = {info.name for info in self.symbols.classes.values()}
+        for local, binding in self.symbols.imports.items():
+            if binding.canonical in self.project.classes:
+                spelled.add(local)
+        self._constructors = frozenset(spelled)
+        return self._constructors
+
     def _reduce_call(self, node: ast.Call, env: Env) -> Binding | None:
         """`functools.reduce(f, xs[, initial])`: `f` typed as a function of the
         running value and an element, and the result what `f` gives. A lambda,
@@ -3356,6 +3447,8 @@ class _Checker:
             fits = T.is_assignable(argument.type, param.type)
             if not fits and signature.qualname in _LOOKUPS and index == 0:
                 fits = T.is_assignable(param.type, argument.type)
+            if signature.qualname in _LOOKUPS and index == 1:
+                fits = True  # a default of any type
             if not fits:
                 self._mismatch(
                     "E1301",
@@ -4001,6 +4094,16 @@ class _Checker:
                 (
                     T.Param(
                         "key", base.args[0] if isinstance(base, T.Instance) and base.args else T.ANY
+                    ),
+                    # Any default is taken; the parameter carries the value
+                    # type, which `None` added to the result would hide when
+                    # it holds `None` itself (`_refine_builtin_method`).
+                    T.Param(
+                        "default",
+                        base.args[1]
+                        if isinstance(base, T.Instance) and len(base.args) == 2
+                        else T.UNKNOWN,
+                        True,
                     ),
                 ),
                 T.union(base.args[1], T.NONE)
@@ -7115,6 +7218,9 @@ class _Checker:
 
     def _mark_escape(self, node: ast.expr, env: Env, *, retains: bool = True) -> None:
         if isinstance(node, ast.Name) and node.id in env:
+            binding = env.get(node.id)
+            if binding is not None and T.is_immutable(binding.type):
+                return
             roots = self._roots(node, node.id)
             self._escaping.update(roots - {EXTERNAL})
             if retains:
@@ -7276,6 +7382,16 @@ class _Checker:
             if self._aliases.only_local(roots):
                 self._local_writes.update(roots)
                 return
+        if isinstance(root, ast.Call) and self._aliases is not None and self._is_reference(root):
+            # `tail(head).value = 0`: an object a call handed back, which is
+            # one the call was given or reached from one.
+            params = self._aliases.param_roots(self._aliases.roots_of(root))
+            if params:
+                self._mutated.update(params)
+                for name in sorted(params):
+                    self._blockers.append(f"mutates parameter `{name}`")
+                self._external_writes = True
+                return
         # The target is an expression, so which object it reached is unknown.
         self._foreign_writes = True
         self._external_writes = True
@@ -7388,6 +7504,11 @@ class _Checker:
         """Could a mutating callee reach anything this function does not own?"""
         if declared is not None and T.is_immutable(declared):
             return True
+        if T.strip_literal(self.module.node_types.get(id(argument), T.UNKNOWN)) == T.NONE:
+            # `None` here (`root = None` before a loop that binds an object):
+            # nothing to write through. Where the name holds an object later,
+            # the pass that sees it asks again.
+            return True
         if (
             isinstance(argument, ast.Name)
             and self._aliases is not None
@@ -7461,8 +7582,17 @@ class _Checker:
     def _refine_builtin_method(self, signature: T.Callable_, args: list[Binding]) -> Binding | None:
         """Some builtin methods have a result the argument count decides."""
         if signature.qualname in {"dict.get", "dict.pop"} and len(args) == 2:
+            # The value where the key is, the default where it is not: a
+            # value type that holds `None` keeps it (`dict[str, int | None]`).
             self._effects = self._effects.add(Effect.READ_OBJECT)
-            return Binding(T.join(T.remove_none(signature.ret), args[1].type))
+            value = signature.ret
+            if signature.qualname == "dict.get":
+                value = (
+                    signature.params[1].type
+                    if len(signature.params) == 2
+                    else T.remove_none(signature.ret)
+                )
+            return Binding(T.join(value, args[1].type))
         return None
 
     def _plugin_qualname(self, func: ast.expr, env: Env) -> str | None:

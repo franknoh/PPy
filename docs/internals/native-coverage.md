@@ -281,3 +281,52 @@ that CPython also fails to find, a `MutableSequence[T]` parameter, a
 generator expression assigned to a bare `Generator`, `globals()` passed to
 `timeit`), a double free after a native call raised, and a segfault where
 CPython raises `RecursionError`.
+
+## With all of 0.7.0
+
+The same summary over the same tree after 0.7.0: fields typed from every
+store, methods that edit objects in place, containers read in place at the
+boundary, objects kept native between calls, numbers and strings that may
+be `None`, the smaller shapes (implicit ends, list shapes, `*args`, nested
+functions with cells, `d.get(k)`), more inference evidence, and the fixes
+found along the way.
+
+| tier | strict | `--no-strict` |
+|---|---:|---:|
+| native, called from Python | 909 functions (19%), 7,816 statements | 982 (21%), 8,424 |
+| native, called from native code | 642, 3,227 | 723, 3,570 |
+| Python | 3,135 (67%), 25,926 | 2,981 (64%), 24,975 |
+
+Against 0.6.0, the functions Python calls natively went from 806 to 909 in
+strict mode and from 846 to 982 with `--no-strict`, and all compiled
+functions from 1,418 to 1,705 with `--no-strict`. Writes to a parameter
+native code copies (173 functions), implicit ends (27), and fields that may
+be `None` (23) are gone as reasons; writes to an object native code does
+not own fell from 116 to 74, bare-`list` parameters from 80 to 40, and
+nested functions held back by the function around them from 51 to 11.
+
+Of the 723 compiled functions Python does not call natively, 295 read
+collections that cost more to bring across than the body does with them,
+mostly methods of classes with list or dict fields, which are still copied
+at every call. 175 are too small for the boundary to pay off, among them
+one-line getters that objects kept native made cheap to call but not
+cheaper than CPython. 57 call themselves without a loop, so CPython's
+recursion limit stays in force, and 10 make more objects than the boundary
+can hand back cheaply. Under `--no-strict` the top of the Python table is
+now:
+
+| statements | functions | reason |
+|---:|---:|---|
+| 2,190 | 292 | a parameter or result with no annotation the checker could infer |
+| 1,368 | 173 | a `numpy.ndarray` parameter |
+| 932 | 74 | writes to an object native code does not own |
+| 526 | 52 | a `list[Any]` result |
+| 448 | 40 | a `list[Any]` parameter |
+| 444 | 44 | reads a module global that can change |
+| 411 | 51 | a `ppy.dynamic` boundary |
+| 402 | 43 | a type defined in another module |
+| 317 | 32 | calls a Python function whose result native code cannot take back |
+| 314 | 36 | something that may fall back follows an effect |
+
+The 400-script comparison: 387 match and 13 are skipped as nondeterministic
+or slow under CPython. None differs.

@@ -223,7 +223,13 @@ class ClassInfo:
     #: Fields the class body annotated. Inference fills the others in and
     #: may widen them; these say what their author said.
     declared_fields: set[str] = field(default_factory=set)
+    #: Fields annotated anywhere: in the class body, or as `self.x: T = ...`
+    #: in `__init__`. What the program stores elsewhere does not widen them.
+    annotated_fields: set[str] = field(default_factory=set)
     class_vars: set[str] = field(default_factory=set)
+    #: Per inferred field, what was stored into it and where (`file:line`):
+    #: the evidence `infer_fields` joined, which `ppy explain` shows.
+    field_evidence: dict[str, list[tuple[T.Type, str]]] = field(default_factory=dict)
     #: Fields with a default, which construction may leave out.
     field_defaults: set[str] = field(default_factory=set)
     #: Fields construction must pass by keyword: `kw_only=True` on the class,
@@ -249,6 +255,14 @@ class ClassInfo:
     #: Class attributes the program assigns through the class after the body
     #: set them (`LRUCache._MAX_CAPACITY = n`): shared state, read as such.
     rebound: set[str] = field(default_factory=set)
+    #: What the MRO holds only structurally: `Iterable`, `Iterator`, and the
+    #: project Protocols whose members the class covers. None of them gives
+    #: the class a field or a method.
+    structural: set[str] = field(default_factory=set)
+    #: The program may give an instance another class or another `__dict__`
+    #: (`x.__class__ = C`, `x.__dict__ = d`, `setattr` of a name it computes,
+    #: `exec`): its objects are copied at every crossing, never kept resident.
+    identity_rewritten: bool = False
 
     def instance(self, args: tuple[T.Type, ...] = ()) -> T.Instance:
         return T.Instance(self.qualname, args, self.mro or (self.qualname, "object"))
@@ -611,7 +625,7 @@ class ProjectSymbols:
         #: attribute read.
         self.method_cache: dict[tuple[T.Type, str], T.Type | None] = {}
         self.alias_cache: dict[
-            tuple[int, frozenset[str], frozenset[str], frozenset[str]], object
+            tuple[int, frozenset[str], frozenset[str], frozenset[str], frozenset[str]], object
         ] = {}
         #: Whether every function already carries a summary from an earlier
         #: `analyze`, so the next one can start confirming instead of seeding.
@@ -641,7 +655,16 @@ class ProjectSymbols:
             self._resolve_signatures(self.modules[module.name])
         self._mark_constant_globals()
         self._mark_derivatives()
+        self._mark_identity_rewrites()
         return self
+
+    def _mark_identity_rewrites(self) -> None:
+        """Whether anything in the program can change an object's class or
+        replace its `__dict__`, which nothing at run time reports: then no
+        class's instances stay resident at the Python boundary (`crossing.c`)."""
+        if any(_rewrites_identity(symbols.module.tree) for symbols in self.modules.values()):
+            for info in self.classes.values():
+                info.identity_rewritten = True
 
     def _mark_derivatives(self) -> None:
         """`df = ppy.grad(f)` at module level binds a derivative, once and for all.
@@ -689,6 +712,7 @@ class ProjectSymbols:
                     gained.append(protocol.qualname)
             if gained:
                 kept = [entry for entry in info.mro if entry != "object"]
+                info.structural.update(g for g in gained if g not in kept)
                 info.mro = (*kept, *(g for g in gained if g not in kept), "object")
 
     def _member_names(self, info: ClassInfo) -> set[str]:
@@ -869,6 +893,12 @@ class ProjectSymbols:
         through it (spec 8.1).
         """
         resolver = self.resolver(symbols)
+        #: Names the module binds more than once: `head = None`, a node later,
+        #: is a variable, whatever its first value spells.
+        stores: dict[str, int] = {}
+        for inner in symbols.module.nodes:
+            if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Store):
+                stores[inner.id] = stores.get(inner.id, 0) + 1
         for node in symbols.module.tree.body:
             if isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
                 symbols.type_aliases[node.name.id] = node.value
@@ -894,6 +924,12 @@ class ProjectSymbols:
             ):
                 target, value = node.target, node.value
             if not isinstance(target, ast.Name) or value is None:
+                continue
+            if isinstance(node, ast.Assign) and (
+                stores.get(target.id, 0) > 1
+                or (isinstance(value, ast.Constant) and value.value is None)
+            ):
+                # `X = None` alone names nothing anyone annotates with.
                 continue
             if self._is_type_expression(symbols, value):
                 symbols.type_aliases[target.id] = value
@@ -1136,6 +1172,7 @@ class ProjectSymbols:
                 resolved = annotations.resolve(child.annotation)
                 info.fields[name] = resolved.type
                 info.declared_fields.add(name)
+                info.annotated_fields.add(name)
                 if info.is_dataclass:
                     if _has_default(child.value):
                         info.field_defaults.add(name)
@@ -1184,6 +1221,7 @@ class ProjectSymbols:
                 resolved = annotations.resolve(node.annotation)
                 info.fields.setdefault(attr, resolved.type)
                 info.field_facts.setdefault(attr, resolved.facts)
+                info.annotated_fields.add(attr)
 
     def _resolve_function(
         self,
@@ -1432,6 +1470,53 @@ def class_level(info: ClassInfo, name: str) -> bool:
             and isinstance(child.target, ast.Name)
             and child.target.id == name
         ):
+            return True
+    return False
+
+
+#: The attributes whose assignment changes what an object is, not what it holds.
+_IDENTITY_ATTRIBUTES = frozenset({"__class__", "__dict__"})
+
+
+def _rewrites_identity(tree: ast.Module) -> bool:
+    """`x.__class__ = C`, `x.__dict__ = d` (or `del`), `setattr` or `delattr`
+    (or `__setattr__`) of either name or of a name the program computes, and
+    `exec`, anywhere in the module."""
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+            and node.attr in _IDENTITY_ATTRIBUTES
+        ):
+            return True
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = (
+            func.id
+            if isinstance(func, ast.Name)
+            else func.attr
+            if isinstance(func, ast.Attribute)
+            else ""
+        )
+        if name == "exec":
+            return True
+        if name not in {"setattr", "delattr", "__setattr__", "__delattr__"}:
+            continue
+        if isinstance(func, ast.Attribute) and name in {"setattr", "delattr"}:
+            continue  # `monkeypatch.setattr(...)`: a method of its own
+        # `obj.__setattr__(name, v)` names the attribute first; `setattr(obj,
+        # name, v)` and `object.__setattr__(obj, name, v)` second.
+        bound = isinstance(func, ast.Attribute) and not (
+            isinstance(func.value, ast.Name) and func.value.id in {"object", "type", "super"}
+        )
+        at = 0 if bound else 1
+        if len(node.args) <= at:
+            return True
+        attr = node.args[at]
+        if not (isinstance(attr, ast.Constant) and isinstance(attr.value, str)):
+            return True
+        if attr.value in _IDENTITY_ATTRIBUTES:
             return True
     return False
 

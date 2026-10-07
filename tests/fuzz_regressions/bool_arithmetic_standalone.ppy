@@ -1,0 +1,20 @@
+# fuzz: path=standalone (`flag + flag` of two bools failed IR verification, and `+flag` stayed a bool)
+def f(s: str, flag: bool, other: bool) -> int:
+    k = flag + flag
+    k2 = flag * other - other
+    k3 = flag // True
+    k4 = flag % True
+    k5 = flag << 3
+    k6 = (flag ^ other) + 0
+    k7 = +flag
+    k += 1 if isinstance(k, int) and not isinstance(k, bool) else 0
+    print(k, k2, k3, k4, k5, k6, k7, flag & other, flag | other, -flag)
+    return k + len(s)
+
+
+def main() -> None:
+    print(f("abc", True, False))
+    print(f("ab", False, True))
+
+
+main()

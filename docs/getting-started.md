@@ -137,13 +137,18 @@ strict = false
 ```
 
 Then `ppy run script.py` types each unannotated parameter from the calls
-the project makes to it, its default value, and its doctests, compiles the
-functions that types, and runs the rest on CPython. What the analysis
+the project makes to it (an `argparse` option and an operator on an
+instance count as calls), its default value, and its doctests, and each
+unannotated field from what the program stores into it. It compiles the
+functions that types and runs the rest on CPython. What the analysis
 cannot follow, such as `eval` or an import that fails, is a `W2010`
 warning and runs as CPython runs it. `ppy explain --summary --no-strict .`
 says how much went native and what kept the rest in Python, and `ppy
 explain module.function` lists the types it inferred and where from.
-[An unannotated module](howto/52_unannotated.md) walks through one.
+[An unannotated module](howto/52_unannotated.md) walks through one,
+[Linked structures](howto/55_linked_structures.md) does the same for
+classes, and [Options and doctests](howto/56_options_and_doctests.md) for a
+script run from the command line.
 
 Two commands turn existing Python into PPy:
 
