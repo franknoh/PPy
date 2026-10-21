@@ -290,7 +290,12 @@ def write_pkg_config(
     return destination
 
 
-_C_TYPES = {"i64": "int64_t", "double": "double", "i8": "int8_t"}
+_C_TYPES = {
+    "double": "double",
+    **{
+        f"{s}{b}": f"{'u' if s == 'u' else ''}int{b}_t" for s in ("i", "u") for b in (8, 16, 32, 64)
+    },
+}
 
 
 def c_prototype(name: str, signature: NativeSignature) -> str:
@@ -303,18 +308,31 @@ def c_prototype(name: str, signature: NativeSignature) -> str:
             parameters.append(f"int64_t {parameter.name}_len")
         elif parameter.is_pointer:
             const = "const " if parameter.kind == "const_ptr" else ""
-            parameters.append(f"{const}{_C_TYPES[_abi_of(parameter.element)]} *{parameter.name}")
+            element = _C_TYPES[_abi_of(parameter.element)]
+            if parameter.shape:
+                dimensions = "".join(f"[{n}]" for n in parameter.shape)
+                parameters.append(f"{const}{element} (*{parameter.name}){dimensions}")
+            else:
+                parameters.append(f"{const}{element} *{parameter.name}")
         elif parameter.is_tuple or parameter.is_object or parameter.is_optional:
             for index, atom in enumerate(parameter.abi):
                 parameters.append(f"{_C_TYPES[atom]} {parameter.name}_{index}")
         else:
             parameters.append(f"{_C_TYPES[parameter.abi[0]]} {parameter.name}")
-    result = _C_TYPES[signature.returns[0]] if signature.returns else "void"
+    from ppy_runtime.collection_boundary import RETURNS_NOTHING
+
+    result = (
+        _C_TYPES[signature.returns[0]]
+        if signature.returns and signature.returned != RETURNS_NOTHING
+        else "void"
+    )
     return f"{result} {name}({', '.join(parameters) or 'void'});"
 
 
 def _abi_of(scalar: str) -> str:
-    return {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}[scalar]
+    from ppy_runtime.abi import _abi_name
+
+    return _abi_name(scalar)
 
 
 def write_header(destination: Path, exports: dict[str, NativeSignature]) -> Path:
@@ -387,7 +405,9 @@ def write_manifest(
                 "calling_convention": "c",
                 "arguments": [_argument(parameter) for parameter in signature.parameters],
                 "returns": {
-                    "semantic_type": _semantic(signature.ret),
+                    "semantic_type": ", ".join(signature.result_kinds)
+                    if signature.result_kinds
+                    else _semantic(signature.ret),
                     "native_type": signature.ret,
                     "ownership": "value",
                     "passed_as": "out_parameter",
@@ -414,6 +434,7 @@ def write_manifest(
                             "source": parameter.source,
                             "nullable": parameter.nullable,
                             "exact": parameter.exact,
+                            "shape": list(parameter.shape),
                         }
                         for parameter in signature.parameters
                     ],
@@ -426,6 +447,7 @@ def write_manifest(
                     "classes": classes_to_json(signature.classes),
                     "effects": signature.effects,
                     "optional": signature.optional,
+                    "result_kinds": list(signature.result_kinds),
                 },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)

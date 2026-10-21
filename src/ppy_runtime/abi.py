@@ -40,7 +40,7 @@ _ABI_NAMES = {
     "float": "double",
     "bool": "i8",
     "i8": "i8",
-    "u8": "i8",
+    **{f"{sign}{bits}": f"{sign}{bits}" for sign in ("i", "u") for bits in (8, 16, 32, 64)},
     # A collection's handle: native callers pass it, and the Python boundary
     # copies a collection into one and out of one.
     "handle": "i8*",
@@ -89,6 +89,8 @@ class NativeParam:
     #: int-ness the body would show: an `int` given for it keeps the call in
     #: Python, where it stays an `int`.
     exact: bool = False
+    #: Static inner extents of a borrowed C pointer-to-array (no descriptor).
+    shape: tuple[int, ...] = ()
 
     @property
     def is_buffer(self) -> bool:
@@ -137,7 +139,8 @@ class NativeParam:
         if self.is_buffer:
             return (f"{_abi_name(self.element)}*", "i64")
         if self.is_pointer:
-            return (f"{_abi_name(self.element)}*",)
+            dimensions = "".join(f"[{n}]" for n in self.shape)
+            return (f"{_abi_name(self.element)}{dimensions}*",)
         if self.is_handle:
             return ("i8*",)
         if self.is_text:
@@ -282,6 +285,8 @@ class NativeSignature:
     #: The result is a number of this kind or `None` (`int | None`): its two
     #: atoms are the number and a byte that says whether there is one.
     optional: str = ""
+    #: Semantic result kinds when the ABI atom alone is ambiguous (i8 vs bool).
+    result_kinds: tuple[str, ...] = ()
 
     @property
     def crosses_collections(self) -> bool:

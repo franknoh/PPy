@@ -479,6 +479,7 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
         ToolchainError,
         emit_object,
         link_shared_library,
+        write_header,
         write_manifest,
     )
     from ..ir import CodecError, read
@@ -503,6 +504,11 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
             for name, f in module.functions.items()
             if not f.is_declaration and "ppy.synthesized" not in f.attributes
         }
+        exports = {
+            str(f.attributes["ppy.export"]): str(f.attributes.get("ppy.qualname", name))
+            for name, f in module.functions.items()
+            if not f.is_declaration and "ppy.export" in f.attributes
+        }
     except Exception as error:  # noqa: BLE001 - the verifier's or the backend's refusal
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
         return 2
@@ -521,6 +527,7 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
         output / "ppy-bindings.json",
         signatures,  # type: ignore[arg-type]
         library=library,
+        exports=exports,
         program={
             "entry": module.name,
             "modules": [module.name],
@@ -529,6 +536,11 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
             "safeguards": project.config.llvm.safeguards or "off",
         },
     )
+    if exports:
+        header = write_header(
+            output / f"{module.name}.h", {name: signatures[q] for name, q in exports.items()}
+        )
+        reporter.note(f"header:   {header}")
     reporter.note("objects:  1")
     reporter.note(f"library:  {library}")
     reporter.note(f"manifest: {manifest}")

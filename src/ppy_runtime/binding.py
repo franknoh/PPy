@@ -44,6 +44,11 @@ _I64_LOW = -(1 << 63)
 _I64_HIGH = (1 << 63) - 1
 
 _CTYPES = {
+    **{
+        f"{s}{b}": getattr(ctypes, f"c_{'u' if s == 'u' else ''}int{b}")
+        for s in ("i", "u")
+        for b in (8, 16, 32, 64)
+    },
     "i64": ctypes.c_int64,
     "double": ctypes.c_double,
     "i8": ctypes.c_int8,
@@ -52,6 +57,7 @@ _CTYPES = {
 }
 
 _ELEMENT_CTYPES = {
+    **{k: v for k, v in _CTYPES.items() if k[0] in "iu" and k[1:].isdigit()},
     "int": ctypes.c_int64,
     "float": ctypes.c_double,
     "i8": ctypes.c_int8,
@@ -62,6 +68,13 @@ _ELEMENT_CTYPES = {
 #: assignment, `array.array` rejects an out-of-range value instead of
 #: truncating it, which is what keeps Python integer semantics intact.
 _ELEMENT_CODES = {"int": "q", "float": "d", "i8": "b", "u8": "B"}
+_ELEMENT_CODES.update(
+    {
+        f"{s}{b}": code.upper() if s == "u" else code
+        for s in ("i", "u")
+        for b, code in ((16, "h"), (32, "i"), (64, "q"))
+    }
+)
 
 #: Buffer-protocol formats a borrowed buffer accepts per element type. `l` is
 #: a signed long, which is the same width as `q` where this matters.
@@ -70,6 +83,7 @@ _ELEMENT_CODES = {"int": "q", "float": "d", "i8": "b", "u8": "B"}
 #: -1 where Python answers 255, so the wrong one is refused and the Python
 #: body runs instead.
 _ELEMENT_FORMATS = {
+    **{k: (v,) for k, v in _ELEMENT_CODES.items()},
     "int": ("q", "l"),
     "float": ("d",),
     "i8": ("b",),
@@ -499,7 +513,7 @@ def _bind(
         _expander_for(p, (lambda: namespace) if namespace is not None else None)
         for p in signature.parameters
     ]
-    finalizers = [_result_for(atom) for atom in signature.returns if atom != TEXT]
+    finalizers = _result_readers(signature)
     if signature.future:
         from .aio import NativeFuture, runtime_for
 
@@ -862,6 +876,8 @@ def _bind_collections(  # type: ignore[no-untyped-def]
     """
     from . import collection_boundary as crossing  # pylint: disable=import-outside-toplevel
 
+    finalizers = _result_readers(signature)
+
     unbound = NativeBinding(
         signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
     )
@@ -999,14 +1015,13 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             return _text_result(slots[0].value, slots[1].value)
         if signature.optional:
             # The number where its flag says there is one, else `None`.
-            first = _result_for(signature.returns[0])(slots[0].value)
+            first = finalizers[0](slots[0].value)
             return first if slots[1].value else None
         if len(slots) > 1:
             return tuple(
-                _result_for(atom)(slot.value)
-                for atom, slot in zip(signature.returns, slots, strict=True)
+                convert(slot.value) for convert, slot in zip(finalizers, slots, strict=True)
             )
-        return _result_for(signature.returns[0])(slots[0].value)
+        return finalizers[0](slots[0].value)
 
     _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
@@ -1170,17 +1185,13 @@ def _expander_for(
         return expand_tuple
 
     abi = parameter.abi[0]
-    if abi == "i64":
+    if parameter.kind != "bool" and abi in _CTYPES and abi[0] in "iu" and abi[1:].isdigit():
+        convert = _integer_guard(abi)
 
-        def expand_int(value: object, atoms: list, borrowed: list) -> None:
-            # A `bool` stays a `bool` in Python where native code would make it
-            # 1 or 0; the compiled wrapper refuses it too.
-            if type(value) is not int or not _I64_LOW <= value <= _I64_HIGH:
-                raise GuardFailed
-            atoms.append(value)
+        def expand_integer(value: object, atoms: list, borrowed: list) -> None:
+            atoms.append(convert(value))
 
-        return expand_int
-
+        return expand_integer
     if abi == "double":
         exact = parameter.exact
 
@@ -1203,10 +1214,20 @@ def _expander_for(
     return expand_bool
 
 
-def _result_for(abi: str) -> Callable[[object], object]:
+def _result_readers(signature: NativeSignature) -> list[Callable[[object], object]]:
+    return [
+        _result_for(atom, kind)
+        for atom, kind in zip(
+            signature.returns, signature.result_kinds or ("",) * len(signature.returns), strict=True
+        )
+        if atom != TEXT
+    ]
+
+
+def _result_for(abi: str, kind: str = "") -> Callable[[object], object]:
     if abi == "double":
         return float  # type: ignore[arg-type]
-    if abi == "i8":
+    if abi == "i8" and kind != "i8":
         return bool
     return int  # type: ignore[arg-type]
 
@@ -1218,14 +1239,8 @@ _EXACT_INT = 1 << 53
 def _scalar_guard(abi: str, exact: bool = False) -> Callable[[object], object]:
     """Guard and convert one scalar, raising `GuardFailed` when it does not fit;
     an `exact` float takes only a `float`."""
-    if abi == "i64":
-
-        def as_int(value: object) -> object:
-            if type(value) is not int or not _I64_LOW <= value <= _I64_HIGH:
-                raise GuardFailed
-            return value
-
-        return as_int
+    if abi != "i8" and abi in _CTYPES and abi[0] in "iu" and abi[1:].isdigit():
+        return _integer_guard(abi)
     if abi == "double":
 
         def as_float(value: object) -> object:
@@ -1293,7 +1308,23 @@ def _observe(
 
 
 def _abi_of(scalar: str) -> str:
-    return {"int": "i64", "float": "double", "bool": "i8"}[scalar]
+    from .abi import _abi_name
+
+    return _abi_name(scalar)
+
+
+def _integer_guard(kind: str) -> Callable[[object], object]:
+    bits = int(kind[1:])
+    signed = kind[0] == "i"
+    low = -(1 << (bits - 1)) if signed else 0
+    high = (1 << (bits - int(signed))) - 1
+
+    def convert(value: object) -> object:
+        if type(value) is not int or not low <= value <= high:
+            raise GuardFailed
+        return value
+
+    return convert
 
 
 def _watch(

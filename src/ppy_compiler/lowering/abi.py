@@ -12,12 +12,14 @@ from __future__ import annotations
 from ppy_runtime.abi import NativeParam, NativeSignature
 
 from ..ir import (
+    ArrayType,
     BoolType,
     BufferType,
     FloatType,
     IntType,
     IRFunction,
     IRType,
+    PtrType,
     StructType,
     TupleType,
 )
@@ -33,8 +35,7 @@ def _kind(t: IRType) -> str:
     if isinstance(t, IntType):
         if t.width == 64 and t.signed:
             return "int"
-        if t.width == 8:
-            return "i8" if t.signed else "u8"
+        return str(t)
     raise ValueError(f"{t} has no native ABI atom")
 
 
@@ -44,6 +45,15 @@ def signature_from_ir(function: IRFunction) -> NativeSignature:
         if isinstance(t, BufferType):
             kind = str(attributes.get("ppy.kind", "view"))
             parameters.append(NativeParam(name, kind, _kind(t.element)))
+        elif isinstance(t, PtrType):
+            element = t.pointee
+            shape = ()
+            if isinstance(element, ArrayType):
+                shape = element.shape
+                element = element.element
+            parameters.append(
+                NativeParam(name, "ptr" if t.mutable else "const_ptr", _kind(element), shape=shape)
+            )
         elif isinstance(t, TupleType):
             parameters.append(NativeParam(name, "tuple", elements=tuple(_kind(i) for i in t.items)))
         elif isinstance(t, StructType):
@@ -65,12 +75,15 @@ def signature_from_ir(function: IRFunction) -> NativeSignature:
             atoms.append(_kind(t))
     if not atoms:
         atoms = ["int"]
-    abi = {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}
+    from ppy_runtime.abi import _abi_name
+
     return NativeSignature(
         qualname=str(function.attributes.get("ppy.qualname", function.name)),
         symbol=str(function.attributes.get("ppy.symbol", function.name)),
         parameters=tuple(parameters),
-        returns=tuple(abi[a] for a in atoms),
+        returns=tuple(_abi_name(a) for a in atoms),
         releases_gil=bool(function.attributes.get("ppy.releases_gil", False)),
         cpu_features=tuple(str(f) for f in function.attributes.get("cpu.features", ())),  # type: ignore[union-attr]
+        returned="None" if not function.results else "",
+        result_kinds=tuple(atoms) if function.results and function.results[0] == IntType(8) else (),
     )

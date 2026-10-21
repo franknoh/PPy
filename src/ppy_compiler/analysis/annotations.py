@@ -127,10 +127,13 @@ _TENSOR_DTYPE_ALIASES = {
 _PASSTHROUGH = {"typing.Final", "typing.ClassVar", "typing.Required", "typing.NotRequired"}
 
 
-#: Element types whose storage is narrower than a machine word, by the width
-#: the marker asks for. Only a byte is offered: it is what text and packed
-#: data need, and every wider one is the machine word already.
-_NARROW_ELEMENTS = {(8, True): "i8", (8, False): "u8"}
+#: Explicit storage integers, by the marker's width and signedness. Scalar
+#: annotations carry these facts; nested storage types carry the type itself.
+_NARROW_ELEMENTS = {
+    (bits, signed): f"{'i' if signed else 'u'}{bits}"
+    for bits in (8, 16, 32, 64)
+    for signed in (True, False)
+}
 
 
 VECTOR = "ppy.simd.Vector"
@@ -177,11 +180,11 @@ def vector_parts(t: T.Type) -> tuple[T.Type, int] | None:
 
 
 def narrow_element(resolved: Resolved) -> T.Type | None:
-    """`i8`/`u8` as a buffer element: one byte, sign as declared."""
+    """An explicitly sized storage element, including its signedness."""
     width = resolved.facts.width
     if resolved.type != T.INT or width is None:
         return None
-    name = _NARROW_ELEMENTS.get(tuple(width))
+    name = _NARROW_ELEMENTS.get(width)
     return T.Instance(name, (), (name, "int", "object")) if name else None
 
 
@@ -367,6 +370,16 @@ class AnnotationResolver:
         if qualname in {"ppy.native.ptr", "ppy.native.const_ptr"}:
             resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             element = narrow_element(resolved) or resolved.type
+            if len(args) > 1:
+                extents = [self._literal_value(a) for a in args[1:]]
+                if any(type(n) is not int or n <= 0 for n in extents):
+                    self._error(
+                        "E1301", "pointer inner extents must be positive integer constants", expr
+                    )
+                    return Resolved(T.UNKNOWN)
+                element = T.Instance(
+                    "ppy.native.array", (element, *(T.Instance(str(n)) for n in extents))
+                )
             return Resolved(T.Instance(qualname, (element,), (qualname, "object")))
         if qualname == "ppy.simd.Vector":
             return self._simd_vector(args, expr)

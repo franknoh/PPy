@@ -556,9 +556,10 @@ def _mutates_in_place(t: T.Type) -> bool:
     return isinstance(base, T.Instance) and base.name in _IN_PLACE_MUTABLE
 
 
-#: What a buffer can hold. A machine word or a byte; anything else has no
-#: native storage, so the annotation would promise something untrue.
-_HOLDABLE = frozenset({"int", "float", "i8", "u8"})
+#: Scalar native storage, including each explicitly sized integer.
+_HOLDABLE = frozenset(
+    {"int", "float", "bool"} | {f"{s}{b}" for s in ("i", "u") for b in (8, 16, 32, 64)}
+)
 _ORDERS = ("relaxed", "acquire", "release", "acq_rel", "seq_cst")
 _RMW = frozenset({"add", "sub", "and", "or", "xor"})
 _LANE_BITS = {"int": 64, "float": 64, "bool": 8, "i8": 8, "u8": 8}
@@ -612,7 +613,12 @@ def _is_negative(facts: Facts) -> bool:
     return span is not None and span.high is not None and span.high < 0
 
 
-_WIDTHS = {"int": 8, "float": 8, "bool": 1, "i8": 1, "u8": 1}
+_WIDTHS = {
+    "int": 8,
+    "float": 8,
+    "bool": 1,
+    **{f"{s}{b}": b // 8 for s in ("i", "u") for b in (8, 16, 32, 64)},
+}
 
 
 def _is_byte_pointer(t: T.Type) -> bool:
@@ -639,7 +645,11 @@ def _scalar_name_of(t: T.Type) -> str:
 
 def _read_element(element: T.Type) -> T.Type:
     """What a read of an element hands out: a byte comes out an `int`."""
-    return T.INT if _scalar_name_of(element) in {"i8", "u8"} else element
+    return (
+        T.INT
+        if _scalar_name_of(element) in _WIDTHS and element not in (T.FLOAT, T.BOOL)
+        else element
+    )
 
 
 def _line_readable(t: T.Type) -> bool:
@@ -2254,6 +2264,20 @@ class _Checker:
         elif isinstance(target, ast.Subscript):
             container = T.strip_literal(self._expr(target.value, env).type)
             key = self._expr(target.slice, env)
+            if _is_pointer(container):
+                assert isinstance(container, T.Instance)
+                element = self._pointer_indices(container, target)
+                if container.name == "ppy.native.const_ptr":
+                    self._error("E1631", "cannot write through a const_ptr", target)
+                elif not T.is_assignable(value.type, _read_element(element)):
+                    self._mismatch(
+                        "E1301",
+                        f"storing `{value.type}` through a pointer to `{element}`",
+                        target,
+                        value.type,
+                    )
+                self._effects = self._effects.add(Effect.WRITE_MEMORY)
+                return
             container = self._widen_empty_dict(target.value, container, key, value, env)
             written = target.value
             if isinstance(container, T.Instance) and container.name in C.COLLECTIONS:
@@ -4332,6 +4356,11 @@ class _Checker:
         if narrowed is not None:
             return narrowed
         base = T.strip_literal(owner.type)
+        if _is_pointer(base):
+            assert isinstance(base, T.Instance)
+            element = self._pointer_indices(base, node)
+            self._effects = self._effects.add(Effect.READ_MEMORY)
+            return Binding(_read_element(element))
         is_slice = isinstance(node.slice, ast.Slice)
         base = self._named_tuple_view(base) or base
 
@@ -5206,6 +5235,20 @@ class _Checker:
             elif isinstance(node, ast.Name) and node.id in T.BUILTIN_MRO:
                 found.append(T.instance(node.id))
         return found
+
+    def _pointer_indices(self, pointer: T.Instance, node: ast.Subscript) -> T.Type:
+        element = pointer.args[0]
+        rank = 1
+        if isinstance(element, T.Instance) and element.name == "ppy.native.array":
+            rank = len(element.args)
+            element = element.args[0]
+        indices = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+        if len(indices) != rank:
+            self._error("E1301", f"this pointer requires {rank} indices", node)
+        for index in indices:
+            if T.numeric_rank(self.module.node_types.get(id(index), T.UNKNOWN)) not in (0, 1):
+                self._error("E1301", "native pointer indices must be integers", index)
+        return element
 
     def _native_call(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.native.load(p)` and the rest of the typed-memory namespace.
