@@ -51,6 +51,7 @@ func @abs(%x: i64) -> i64 {
 void  bool  i8 i16 i32 i64  u8 u16 u32 u64  f16 f32 f64  index
 ptr<T>  ptr<T, space>  ptr<T, space, const>
 buffer<T>                    contiguous elements with a readable length
+array<T, N, ...>             inline row-major storage with positive static extents
 vector<T, N>
 tuple<T, ...>
 struct<Name, field: T, ...>
@@ -63,6 +64,13 @@ returned or stored, and the verifier says so.
 
 `generic` is the host's address space. The gpu dialect adds `global`,
 `shared`, `private`, and `constant`, and a plugin's dialect may add more.
+
+`ptr<array<i32, 8>>` is a C `int32_t (*)[8]`, not an `int32_t **` or a
+descriptor. The array type describes the pointed-to row; the outer allocation's
+length is the caller's responsibility. `core.ptr_offset` keeps that pointee
+type and advances by a complete row. `core.ptr_index` takes one outer index and
+one per static extent, yielding a pointer to the scalar with the same address
+space and mutability. Frontend bounds checks precede the index operation.
 
 ## Core operations
 
@@ -77,6 +85,7 @@ returned or stored, and the verifier says so.
 | `core.br`, `cond_br`, `ret`, `unreachable` | terminators |
 | `core.alloca` | stack memory: `ptr<T, stack>` |
 | `core.load`, `store`, `ptr_offset` | pointer access; a store through `const` is refused |
+| `core.ptr_index %p, %row, %col, ...` | address of a scalar in contiguous rows; the verifier checks rank, integer indices, element type, and pointer qualifiers |
 | `core.buffer_data`, `buffer_len`, `buffer_load`, `buffer_store` | buffers |
 | `core.tuple_make`, `tuple_extract {index}` | fixed tuples |
 | `core.struct_make`, `struct_extract {field}` | structs |
