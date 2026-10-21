@@ -9,6 +9,8 @@
 - `native.ptr[T, ...]` and `native.const_ptr[T, ...]` borrow contiguous C
   arrays with static inner dimensions, tuple indexing, and pointer-to-array
   signatures, without copying or taking ownership of their storage.
+- Dictionary displays that unpack mappings preserve their key and value
+  types during inference, including native type lookup tables.
 
 ## 0.7.0 — 2026-10-07
 

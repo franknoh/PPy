@@ -4469,12 +4469,21 @@ class _Checker:
         return Binding(T.set_of(T.strip_literal(element)))
 
     def _expr_Dict(self, node: ast.Dict, env: Env) -> Binding:
-        keys = [self._expr(k, env) for k in node.keys if k is not None]
-        values = [self._expr(v, env) for v in node.values]
+        keys: list[T.Type] = []
+        values: list[T.Type] = []
+        for k, v in zip(node.keys, node.values, strict=True):
+            if k is None:
+                spread = self._expr(v, env)
+                key, value = _mapping_pairs(spread.type) or (T.UNKNOWN, T.UNKNOWN)
+            else:
+                key, value = self._expr(k, env).type, self._expr(v, env).type
+            keys.append(key)
+            values.append(value)
         self._effects = self._effects.add(Effect.ALLOC)
-        key = T.strip_literal(T.join(*[k.type for k in keys])) if keys else T.NEVER
-        value = T.strip_literal(T.join(*[v.type for v in values])) if values else T.NEVER
-        return Binding(T.dict_of(key, value), Facts(length=len(values)))
+        key = T.strip_literal(T.join(*keys)) if keys else T.NEVER
+        value = T.strip_literal(T.join(*values)) if values else T.NEVER
+        length = len(values) if all(k is not None for k in node.keys) else None
+        return Binding(T.dict_of(key, value), Facts(length=length))
 
     def _expr_JoinedStr(self, node: ast.JoinedStr, env: Env) -> Binding:
         for value in node.values:
