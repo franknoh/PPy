@@ -11,6 +11,8 @@
   signatures, without copying or taking ownership of their storage.
 - Dictionary displays that unpack mappings preserve their key and value
   types during inference, including native type lookup tables.
+- C/C++ output spells the signed 32-bit minimum as `INT64_C(-2147483648)`
+  in the default integer model so MSVC keeps narrowing guards signed.
 
 ## 0.7.0 — 2026-10-07
 

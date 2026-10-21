@@ -2322,7 +2322,7 @@ class _FunctionEmitter:
             return (str(number) if number < (1 << 31) else f"UINT64_C({number})"), _ATOM
         if number == -(1 << 63):
             return "INT64_MIN", _ATOM
-        if -(1 << 31) <= number < (1 << 31):
+        if -(1 << 31) < number < (1 << 31):
             # An `int` literal widens to the operation's type on its own.
             return str(number), (_UNARY if number < 0 else _ATOM)
         return f"INT64_C({number})", _ATOM

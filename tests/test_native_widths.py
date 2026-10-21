@@ -297,6 +297,8 @@ def unsigned_values(p: native.ptr[u32], q: native.ptr[u64]) -> u64:
 """,
     )
     text = _emit(tmp_path, kind)
+    if kind != "llvm":
+        assert "INT64_C(-2147483648)" in text
     library = ctypes.CDLL(str(_compile(tmp_path, text, kind)))
     narrow = library.ppy_lib_narrow
     narrow.argtypes = [ctypes.c_int64, ctypes.POINTER(ctypes.c_int32)]
@@ -306,6 +308,11 @@ def unsigned_values(p: native.ptr[u32], q: native.ptr[u64]) -> u64:
     assert result.value == 2147483647
     result.value = 999
     assert narrow(2147483648, ctypes.byref(result)) != 0
+    assert result.value == 999
+    assert narrow(-2147483648, ctypes.byref(result)) == 0
+    assert result.value == -2147483648
+    result.value = 999
+    assert narrow(-2147483649, ctypes.byref(result)) != 0
     assert result.value == 999
     function = library.unsigned_values
     function.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint64)]
