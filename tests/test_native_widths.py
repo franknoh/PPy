@@ -26,10 +26,10 @@ def _source(root: Path, source: str) -> None:
     (root / "lib.ppy").write_text(source, encoding="utf-8")
 
 
-def _emit(root: Path, kind: str = "c", *options: str) -> str:
+def _emit(root: Path, kind: str = "c") -> str:
     if kind == "llvm":
         kind = "llvm-ir"
-    done = _ppy(root, "emit", kind, "lib.ppy", *options)
+    done = _ppy(root, "emit", kind, "lib.ppy")
     assert done.returncode == 0, done.stderr
     return done.stdout
 

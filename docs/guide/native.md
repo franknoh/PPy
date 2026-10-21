@@ -63,9 +63,11 @@ traps on a failed guard.
 ```python
 from ppy import i32, native
 
+
 @native.export
 def game_init() -> None:
     pass
+
 
 @native.export
 def process(ice: native.ptr[i32, 8]) -> None:

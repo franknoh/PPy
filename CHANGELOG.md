@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.8.0 — unreleased
+## 0.7.1 — 2026-10-21
+
+- Explicit integer widths and signedness survive native lowering, including
+  pointer and Buffer element storage and scalar parameters and results.
+- Void native exports emit `void` declarations and preserve side effects,
+  including modules containing only functions returning `None`.
+- `native.ptr[T, ...]` and `native.const_ptr[T, ...]` borrow contiguous C
+  arrays with static inner dimensions, tuple indexing, and pointer-to-array
+  signatures, without copying or taking ownership of their storage.
 
 ## 0.7.0 — 2026-10-07
 
