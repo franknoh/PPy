@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.8.0 — unreleased
+## 0.7.1 — 2026-10-21
+
+- Explicit integer widths and signedness survive native lowering, including
+  pointer and Buffer element storage and scalar parameters and results.
+- Void native exports emit `void` declarations and preserve side effects,
+  including modules containing only functions returning `None`.
+- `native.ptr[T, ...]` and `native.const_ptr[T, ...]` borrow contiguous C
+  arrays with static inner dimensions, tuple indexing, and pointer-to-array
+  signatures, without copying or taking ownership of their storage.
+- Dictionary displays that unpack mappings preserve their key and value
+  types during inference, including native type lookup tables.
+- C/C++ output spells the signed 32-bit minimum as `INT64_C(-2147483648)`
+  in the default integer model so MSVC keeps narrowing guards signed.
 
 ## 0.7.0 — 2026-10-07
 

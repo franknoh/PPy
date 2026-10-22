@@ -30,6 +30,7 @@ __all__ = [
     "U32",
     "U64",
     "VOID",
+    "ArrayType",
     "BFloat16Type",
     "BoolType",
     "BufferType",
@@ -160,6 +161,23 @@ class PtrType(IRType):
         if not self.mutable:
             parts.append("const")
         return f"ptr<{', '.join(parts)}>"
+
+
+@dataclass(frozen=True, slots=True)
+class ArrayType(IRType):
+    """Inline row-major storage; ptr<array<T, N, ...>> has C pointer-to-array ABI."""
+
+    element: IRType
+    shape: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if not self.shape or any(type(n) is not int or n <= 0 for n in self.shape):
+            raise TypeError_("array extents must be positive integers")
+        if not is_scalar(self.element):
+            raise TypeError_(f"an array holds scalars, not {self.element}")
+
+    def __str__(self) -> str:
+        return f"array<{self.element}, {', '.join(map(str, self.shape))}>"
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,6 +402,14 @@ class _TypeParser:
             element = self.type_()
             self.expect(">")
             return BufferType(element)
+        if name == "array":
+            element = self.type_()
+            shape = []
+            while self.peek() == ",":
+                self.pos += 1
+                shape.append(int(self.word()))
+            self.expect(">")
+            return ArrayType(element, tuple(shape))
         if name == "future":
             inner = self.type_()
             self.expect(">")

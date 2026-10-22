@@ -79,6 +79,8 @@ def narrow_integers(module: IRModule) -> None:
         if item.type != BufferType(IntType(8, False)) or not isinstance(item.value, str):
             refuse("only literal string globals are supported")
     for function in module.functions.values():
+        if function.attributes.get("ppy.fixed_int_widths"):
+            refuse("explicit integer types require their declared storage widths")
         if function.is_declaration or function.attributes.get("ppy.abi") == "resume":
             refuse(f"@{function.name} has an external or asynchronous ABI")
         if len(function.results) > 1:

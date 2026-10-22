@@ -36,7 +36,7 @@ _IO = EffectSet.of(Effect.IO)
 
 #: Storage-only element types. A byte in memory is an `int` in hand: reading
 #: one hands out a Python integer, and the width is how it is stored.
-_STORAGE_ONLY = frozenset({"i8", "u8"})
+_STORAGE_ONLY = frozenset(f"{s}{b}" for s in ("i", "u") for b in (8, 16, 32, 64))
 
 
 #: `collections`' mappings, which iterate over their keys as a dict does.

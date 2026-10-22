@@ -34,6 +34,25 @@ def test_container_invariance_and_tuple_covariance():
     assert T.is_assignable(T.Tuple_((T.INT, T.INT)), T.Tuple_((T.FLOAT, T.FLOAT)))
 
 
+def test_dict_unpacking_preserves_mapping_key_and_value_types(write, analyze):
+    path = write(
+        "unpacked.ppy",
+        """
+        SPELLINGS = {"float": "double", **{str(n): str(n) for n in (8, 16, 32, 64)}}
+
+        def spelling(name: str) -> str:
+            return SPELLINGS[name]
+
+        def copied(values: dict[int, str]) -> dict[int, str]:
+            return {**values}
+
+        def merged(values: dict[int, str], extra: dict[int, str]) -> dict[int, str]:
+            return {**values, 7: "seven", **extra}
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
 def test_int_range_arithmetic():
     assert IntRange(1, 3) + IntRange(2, 4) == IntRange(3, 7)
     assert IntRange(1, 3) - IntRange(2, 4) == IntRange(-3, 1)

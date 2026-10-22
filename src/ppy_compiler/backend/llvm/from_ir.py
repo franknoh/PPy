@@ -25,6 +25,7 @@ from ppy_runtime.abi import (
 )
 
 from ...ir import (
+    ArrayType,
     Block,
     BoolType,
     BufferType,
@@ -236,6 +237,11 @@ class _ModuleEmitter:
 
     def llvm_type(self, t: IRType):  # type: ignore[no-untyped-def]
         ir = self.ir
+        if isinstance(t, ArrayType):
+            element = self.llvm_type(t.element)
+            for n in reversed(t.shape):
+                element = ir.ArrayType(element, n)
+            return element
         if isinstance(t, VectorType):
             return ir.VectorType(self.llvm_type(t.element), t.count)
         if isinstance(t, BoolType):
@@ -589,6 +595,10 @@ class _FunctionEmitter:
             case "ptr_offset":
                 pointer, offset = (self.value(v) for v in op.operands)
                 self.set(op.result, b.gep(pointer, [offset]))
+            case "ptr_index":
+                assert b is not None
+                pointer, *indices = (self.value(v) for v in op.operands)
+                self.set(op.result, b.gep(pointer, indices))
             case "buffer_data":
                 self.set(op.result, self.value(op.operands[0]).data)
             case "buffer_len":

@@ -337,6 +337,9 @@ def canonical_ir_modules(  # type: ignore[no-untyped-def]
             plugins=bundle.project.plugins,
             backend_name=backend.name if backend is not None else None,
         )
+        for qualname, reason in lowered.rejected.items():
+            if candidates[qualname][0].directive("native.export") is not None:
+                raise ValueError(f"C export `{qualname}` could not be lowered: {reason}")
         if backend is not None:
             for qualname, reason in lowered.rejected.items():
                 info, _analysis, node = candidates[qualname]
