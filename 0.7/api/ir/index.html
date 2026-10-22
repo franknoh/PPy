@@ -212,7 +212,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.7.0</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.1</span>
   </div>
 </a>
       </div>
@@ -419,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.7.0</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.1</span>
   </div>
 </a>
     </div>
@@ -4308,6 +4308,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.types.ArrayType" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ArrayType
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.ir.types.BufferType" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6261,6 +6272,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;PtrType
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.types.ArrayType" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ArrayType
       
     </span>
   </a>
@@ -8421,6 +8443,61 @@ so a backend dispatching IEEE types by width cannot substitute f16.</p>
 <p><code>stack</code> memory comes from <code>core.alloca</code> and may not escape the function;
 <code>generic</code> is anything the host addresses. A dialect adds spaces of its
 own (<code>global</code>, <code>shared</code>, ...).</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.ir.types.ArrayType" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">ArrayType</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.ir.types.ArrayType" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="              IRType()
+
+  
+      dataclass
+   (ppy_compiler.ir.types.IRType)" href="#ppy_compiler.ir.types.IRType">IRType</a></code></p>
+
+
+
+        <p>Inline row-major storage; ptr<array\<T, N, ...>> has C pointer-to-array ABI.</p>
 
 
 

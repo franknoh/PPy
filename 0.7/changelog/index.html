@@ -210,7 +210,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.7.0</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.1</span>
   </div>
 </a>
       </div>
@@ -417,7 +417,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.7.0</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.1</span>
   </div>
 </a>
     </div>
@@ -4362,6 +4362,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#071-2026-10-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.1 — 2026-10-22
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#070-2026-10-07" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5009,6 +5020,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#071-2026-10-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.1 — 2026-10-22
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#070-2026-10-07" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5642,6 +5664,20 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="071-2026-10-22">0.7.1 — 2026-10-22<a class="headerlink" href="#071-2026-10-22" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Explicit integer widths and signedness survive native lowering, including
+  pointer and Buffer element storage and scalar parameters and results.</li>
+<li>Void native exports emit <code>void</code> declarations and preserve side effects,
+  including modules containing only functions returning <code>None</code>.</li>
+<li><code>native.ptr[T, ...]</code> and <code>native.const_ptr[T, ...]</code> borrow contiguous C
+  arrays with static inner dimensions, tuple indexing, and pointer-to-array
+  signatures, without copying or taking ownership of their storage.</li>
+<li>Dictionary displays that unpack mappings preserve their key and value
+  types during inference, including native type lookup tables.</li>
+<li>C/C++ output spells the signed 32-bit minimum as <code>INT64_C(-2147483648)</code>
+  in the default integer model so MSVC keeps narrowing guards signed.</li>
+</ul>
 <h2 id="070-2026-10-07">0.7.0 — 2026-10-07<a class="headerlink" href="#070-2026-10-07" title="Permanent link">&para;</a></h2>
 <p>Classes written without annotations run natively: fields take their types
 from every store in the project, and methods that edit linked lists, trees,
@@ -7071,7 +7107,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1515</code>, <code>81</code>), and the
+  through markers (<code>1537</code>, <code>81</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
