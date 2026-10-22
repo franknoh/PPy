@@ -212,7 +212,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.8.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.1</span>
   </div>
 </a>
       </div>
@@ -419,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.8.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.1</span>
   </div>
 </a>
     </div>
@@ -1011,6 +1011,17 @@
     <span class="md-ellipsis">
       
         Under CPython
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#c-integer-and-array-interfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C integer and array interfaces
       
     </span>
   </a>
@@ -4480,6 +4491,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#c-integer-and-array-interfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C integer and array interfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#ppyffi" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4544,6 +4566,10 @@
 <td>a typed pointer. <code>T</code> is <code>int</code>, <code>float</code>, <code>bool</code>, or any fixed-width marker (<code>ppy.i8</code>, <code>u8</code>, <code>i16</code>, <code>u16</code>, <code>i32</code>, <code>u32</code>, <code>i64</code>, <code>u64</code>, <code>f32</code>, <code>f64</code>), each stored at its own width. A <code>const_ptr</code> refuses <code>store</code> (<code>E1631</code>).</td>
 </tr>
 <tr>
+<td><code>native.ptr[T, N, ...]</code>, <code>native.const_ptr[T, N, ...]</code></td>
+<td>borrowed contiguous C arrays with static positive inner extents; <code>p[row, col, ...]</code> reads or writes a scalar. The pointer's element is a complete row, so <code>native.offset(p, 1)</code> advances by one row. Supported by C, C++, and LLVM.</td>
+</tr>
+<tr>
 <td><code>native.load(p)</code>, <code>native.store(p, v)</code>, <code>native.offset(p, n)</code></td>
 <td>read, write, move. Reading a byte hands out an <code>int</code>, as a buffer does.</td>
 </tr>
@@ -4575,8 +4601,54 @@
 </table>
 <h2 id="under-cpython">Under CPython<a class="headerlink" href="#under-cpython" title="Permanent link">&para;</a></h2>
 <p>Under plain CPython each of these has a reference implementation over <code>array</code>
-memory, so the three paths agree. A function whose parameter is a pointer has
-no Python boundary and is called only from native code.</p>
+memory for scalar native operations. Row-pointer indexing is a native-code
+interface. A function whose parameter is a pointer has no automatic Python
+boundary and is called from native code.</p>
+<h2 id="c-integer-and-array-interfaces">C integer and array interfaces<a class="headerlink" href="#c-integer-and-array-interfaces" title="Permanent link">&para;</a></h2>
+<p>Explicit integer markers select both width and signedness in native parameters,
+results, pointers, and <code>Buffer</code> storage. For example, <code>i32</code> maps to <code>int32_t</code>,
+<code>u32</code> to <code>uint32_t</code>, and <code>native.ptr[i32]</code> to <code>int32_t *</code>. The ordinary <code>int</code>
+remains 64-bit. Conversions to narrower integers are checked; an incompatible
+pointer argument is rejected instead of being reinterpreted. An explicit
+<code>native.cast</code> remains the programmer's responsibility.</p>
+<p>Full-range <code>u64</code> values are supported at native boundaries and in unsigned
+storage. Mixed operations with negative signed integers, and unary operations
+that require a signed result outside the default integer range, can fail a
+native conversion guard. A Python caller then uses its Python body; a C export
+traps on a failed guard.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span><span class="p">,</span> <span class="n">native</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nd">@native</span><span class="o">.</span><span class="n">export</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">game_init</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">pass</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="nd">@native</span><span class="o">.</span><span class="n">export</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="n">ice</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="n">i32</span><span class="p">,</span> <span class="mi">8</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">ice</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">ice</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">7</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+</code></pre></div>
+<p>The C declarations are <code>void game_init(void)</code> and
+<code>void process(int32_t (*ice)[8])</code>. Generated C/C++ may spell the row type with
+an equivalent array typedef. <code>native.ptr[i32, 3, 4]</code> similarly maps to
+<code>int32_t (*)[3][4]</code>. Supply one index for the outer row plus one per inner
+extent. Array rows cannot be loaded, assigned, or copied as whole values.
+<code>Buffer[i32]</code> retains its existing pointer-and-length ABI; it is a different
+interface from a raw pointer-to-array.</p>
+<p>These pointers borrow the caller's allocation. No descriptor, allocation,
+copy, or free is introduced. The caller must keep correctly aligned, contiguous
+storage alive throughout every access and provide a valid outer row index.
+Inner indices are checked in safe code. <code>const_ptr</code> forbids writes through that
+pointer; it does not prevent another alias from changing the allocation.
+There is no runtime lifetime enforcement or automatic ownership transfer.
+When passing a C <code>int</code> array to <code>ptr[i32, ...]</code>, verify the target's <code>int</code> is
+the same type as <code>int32_t</code>; the example below includes a compile-time check.</p>
+<p><code>--int-width 32</code> remains an unsafe standalone C/C++ option for the default
+integer model. Its existing rewrite cannot safely change fixed runtime or
+foreign ABIs. Pointer parameters and explicitly sized integer programs are
+therefore refused by that mode; use the default 64-bit model with <code>i32</code> where
+the C interface needs 32 bits. Library mode still refuses <code>--int-width</code>.</p>
+<p>See <a href="https://github.com/franknoh/PPy/tree/main/examples/32_native_memory/c_arrays">the complete C caller example</a>.</p>
 <h2 id="ppyffi"><code>ppy.ffi</code><a class="headerlink" href="#ppyffi" title="Permanent link">&para;</a></h2>
 <p><code>ppy.ffi</code> is the binding layer over <code>extern</code>:</p>
 <ul>
