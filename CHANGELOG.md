@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.1 — 2026-10-21
+## 0.7.1 — 2026-10-22
 
 - Explicit integer widths and signedness survive native lowering, including
   pointer and Buffer element storage and scalar parameters and results.
