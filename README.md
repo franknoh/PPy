@@ -56,7 +56,7 @@ uv add "ppy-lang[llvm]"        # or: pip install "ppy-lang[llvm]"
 uv run ppy doctor              # reports what it found
 ```
 
-Pin an exact version before 1.0 (`ppy-lang[llvm]==0.7.0`). A minor release
+Pin an exact version before 1.0 (`ppy-lang[llvm]==0.7.1`). A minor release
 may change the language, and the [changelog](CHANGELOG.md) says what
 changed.
 
