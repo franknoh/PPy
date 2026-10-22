@@ -71,6 +71,7 @@ def _signature(payload: dict) -> NativeSignature:
     abi = payload["abi"]
     parameters = tuple(
         NativeParam(
+            shape=tuple(parameter.get("shape", ())),
             name=parameter["name"],
             kind=parameter["kind"],
             element=parameter.get("element", ""),
@@ -97,6 +98,7 @@ def _signature(payload: dict) -> NativeSignature:
         classes=classes_from_json(abi.get("classes", [])),
         effects=bool(abi.get("effects", False)),
         optional=str(abi.get("optional", "")),
+        result_kinds=tuple(abi.get("result_kinds", ())),
     )
 
 

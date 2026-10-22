@@ -116,18 +116,25 @@ class _PointerType:
         self.mutable = mutable
 
     def __getitem__(self, element: Any) -> Any:
-        return Annotated[Pointer, _PointerSpec(element, self.mutable)]
+        shape: tuple[int, ...] = ()
+        if isinstance(element, tuple):
+            element, *extents = element
+            if not extents or any(type(n) is not int or n <= 0 for n in extents):
+                raise TypeError("pointer inner extents must be positive integer constants")
+            shape = tuple(extents)
+        return Annotated[Pointer, _PointerSpec(element, self.mutable, shape)]
 
     def __repr__(self) -> str:
         return "native.ptr" if self.mutable else "native.const_ptr"
 
 
 class _PointerSpec:
-    __slots__ = ("element", "mutable")
+    __slots__ = ("element", "mutable", "shape")
 
-    def __init__(self, element: Any, mutable: bool) -> None:
+    def __init__(self, element: Any, mutable: bool, shape: tuple[int, ...] = ()) -> None:
         self.element = element
         self.mutable = mutable
+        self.shape = shape
 
 
 class _Sized:
@@ -317,7 +324,7 @@ class _Native:
         return _Extern(symbol, library, pure, convention)
 
     @staticmethod
-    def export(name: str | None = None) -> Callable[[_T], _T]:
+    def export(name: Any = None) -> Any:
         """Give a function a public C symbol in the built library."""
 
         def bind(obj: _T) -> _T:
@@ -325,7 +332,7 @@ class _Native:
                 obj, Directive("native.export", {"name": name or getattr(obj, "__name__", "")})
             )
 
-        return bind
+        return bind(name) if callable(name) else bind
 
     @staticmethod
     def compiled(function: Callable[..., Any]) -> bool:

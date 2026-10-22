@@ -61,6 +61,7 @@ from ..ir import (
     I64,
     U8,
     VOID,
+    ArrayType,
     Attribute,
     Block,
     BlockArgument,
@@ -68,6 +69,7 @@ from ..ir import (
     Builder,
     DialectType,
     FutureType,
+    IntType,
     IRFunction,
     IRModule,
     IRType,
@@ -116,8 +118,14 @@ from .walks import WalkLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
-_SCALAR_TYPES: dict[str, IRType] = {"int": I64, "float": F64, "bool": BOOL, "i8": I8, "u8": U8}
-_KINDS: dict[IRType, str] = {I64: "int", F64: "float", BOOL: "bool", I8: "i8", U8: "u8"}
+_SCALAR_TYPES: dict[str, IRType] = {
+    "int": I64,
+    "float": F64,
+    "bool": BOOL,
+    **{f"{s}{b}": IntType(b, s == "i") for s in ("i", "u") for b in (8, 16, 32, 64)},
+}
+_KINDS: dict[IRType, str] = {t: k for k, t in _SCALAR_TYPES.items()}
+_KINDS[I64] = "int"
 _COMPARISONS = {
     ast.Eq: "eq",
     ast.NotEq: "ne",
@@ -615,7 +623,7 @@ class Frontend:
             return found
         if type_ == T.NONE:
             return VOID
-        parameter = _native_param("value", type_, self.layouts)
+        parameter = _native_param("value", type_, self.layouts, facts=facts)
         if parameter is not None:
             return _param_type(parameter)
         raise Unsupported(f"type `{type_}` has no canonical IR representation (no native ABI)")
@@ -629,7 +637,7 @@ class Frontend:
             for argument in type_.args:
                 if isinstance(argument, IRType):
                     self.require_type(argument)
-        elif isinstance(type_, (PtrType, BufferType, VectorType)):
+        elif isinstance(type_, (PtrType, BufferType, VectorType, ArrayType)):
             if isinstance(type_, PtrType):
                 for dialect in self.registry.dialects.values():
                     if type_.address_space in dialect.address_spaces():
@@ -659,6 +667,7 @@ class Frontend:
                 parameter.type,
                 self.layouts,
                 parameter.name in written or info.is_generator,
+                parameter.facts,
             )
             if native_param is not None and native_param.is_handle:
                 # A list of numbers the function writes is held by handle, not lent.
@@ -673,6 +682,7 @@ class Frontend:
             facts = replace(
                 analysis.ret_facts,
                 dtype=analysis.ret_facts.dtype or facts.dtype,
+                width=facts.width,
                 shape=analysis.ret_facts.shape
                 if analysis.ret_facts.shape is not None
                 else facts.shape,
@@ -914,6 +924,16 @@ class Frontend:
     def declare(self, info: FunctionInfo, signature: NativeSignature | IRSignature) -> IRFunction:
         params = [(parameter.name, _param_type(parameter)) for parameter in signature.parameters]
         attributes: dict[str, Attribute] = {}
+        widths = {p.facts.width[0] for p in info.params if p.facts.width is not None}
+        if info.ret_facts.width is not None:
+            widths.add(info.ret_facts.width[0])
+        for node in ast.walk(info.node):
+            if isinstance(node, ast.AnnAssign):
+                facts = self.analysis.facts_of(node.target)
+                if facts.width is not None:
+                    widths.add(facts.width[0])
+        if widths:
+            attributes["ppy.fixed_int_widths"] = tuple(sorted(widths))
         kinds = self.parameter_attributes(info, signature)
         results = (
             signature.results
@@ -942,8 +962,8 @@ class Frontend:
         function.param_attributes = kinds
         export = info.directive("native.export")
         if export is not None:
-            if len(results) != 1 or isinstance(results[0], TupleType):
-                raise Unsupported("a C export returns one scalar")
+            if len(results) > 1 or (results and isinstance(results[0], TupleType)):
+                raise Unsupported("a C export returns one scalar or None")
             function.attributes["ppy.export"] = str(export.options.get("name") or info.name)
         features = info.directive("cpu.target")
         if features is not None:
@@ -1567,7 +1587,10 @@ def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
     if parameter.is_buffer:
         return BufferType(_scalar_type(parameter.element))
     if parameter.is_pointer:
-        return PtrType(_scalar_type(parameter.element), mutable=parameter.kind == "ptr")
+        element = _scalar_type(parameter.element)
+        if parameter.shape:
+            element = ArrayType(element, parameter.shape)
+        return PtrType(element, mutable=parameter.kind == "ptr")
     if parameter.is_handle:
         return HANDLE
     if parameter.is_tuple:
@@ -1580,7 +1603,7 @@ def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
 
 
 def _result_types(info: FunctionInfo, layouts: ClassLayouts | None = None) -> tuple[IRType, ...]:
-    atoms = _return_atoms(info.ret, layouts)
+    atoms = _return_atoms(info.ret, layouts, info.ret_facts)
     if atoms is None:
         return ()
     if atoms == ("handle",):
@@ -1979,7 +2002,12 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                         if values is not None:
                             self._store_tuple(node.target, values)
                             return
-                    self._store(node.target, self._expr(node.value))
+                    value = self._expr(node.value)
+                    facts = self.frontend.analysis.facts_of(node.target)  # type: ignore[attr-defined]
+                    if facts.width is not None:
+                        bits, signed = facts.width
+                        value = self._coerce_type(value, IntType(bits, signed))
+                    self._store(node.target, value)
             case ast.AugAssign():
                 self._augassign(node)
             case ast.If():
@@ -2298,7 +2326,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             )
             count = self._coerce(self._expr(value.args[0]), "int")
         element_type = _scalar_type(element)
-        width = core.const(self.b, 1 if element in _NARROW else 8, I64)
+        storage = _scalar_type(element)
+        width = core.const(self.b, storage.width // 8 if isinstance(storage, IntType) else 8, I64)
         raw = core.call_extern(
             self.b, "ppy_rt_alloc", (count, width), (PtrType(I8),), names=(f"{name}.raw",)
         ).results[0]
@@ -2480,6 +2509,16 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             self._object_store_item(target, combined)
             return
         if isinstance(node.target, ast.Subscript):
+            pointer = self._indexed_pointer(node.target)
+            if pointer is not None:
+                assert isinstance(pointer.type, PtrType)
+                if not pointer.type.mutable:
+                    raise Unsupported("a store through a const pointer")
+                current = core.load(self.b, pointer)
+                value = self._expr(node.value)
+                combined = self._binary(current, value, type(node.op))
+                core.store(self.b, self._coerce_type(combined, pointer.type.pointee), pointer)
+                return
             if not (
                 isinstance(node.target.value, ast.Name) and node.target.value.id in self.buffers
             ):
@@ -2512,6 +2551,13 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if isinstance(target, ast.Attribute):
             raise Unsupported("a flattened value class cannot be written back")
         if isinstance(target, ast.Subscript):
+            pointer = self._indexed_pointer(target)
+            if pointer is not None:
+                assert isinstance(pointer.type, PtrType)
+                if not pointer.type.mutable:
+                    raise Unsupported("a store through a const pointer")
+                core.store(self.b, self._coerce_type(value, pointer.type.pointee), pointer)
+                return
             if self._is_collection(target.value):
                 raise Unsupported("a collection element is assigned as a statement")
             if isinstance(target.value, ast.Name) and target.value.id in self.buffers:
@@ -2986,6 +3032,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 # parser; the literal alone is past a word, the value is not.
                 return core.const(self.b, -(1 << 63), I64)
             case ast.Constant(value=int() as value):
+                if (1 << 63) <= value < (1 << 64):
+                    return self._int_constant(value, IntType(64, False))
                 if not -(1 << 63) <= value < (1 << 63):
                     raise Unsupported("an integer literal exceeds the native machine range")
                 return self._int_constant(value)
@@ -3046,6 +3094,10 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                     return core.struct_extract(self.b, record, node.attr)
                 raise Unsupported("attribute access on this value has no native lowering")
             case ast.Subscript():
+                pointer = self._indexed_pointer(node)
+                if pointer is not None:
+                    loaded = core.load(self.b, pointer)
+                    return self._coerce(loaded, _read_as(_kind(loaded.type)))
                 if self._is_collection(node.value):
                     return self._item(node.value, node.slice)
                 indexed = self._object_item(node)
@@ -3069,6 +3121,35 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                             return core.tuple_extract(self.b, held, index)
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
+
+    def _indexed_pointer(self, node: ast.Subscript) -> Value | None:
+        base = T.strip_literal(self._type_of(node.value))
+        if not isinstance(base, T.Instance) or base.name not in {
+            "ppy.native.ptr",
+            "ppy.native.const_ptr",
+        }:
+            return None
+        pointer = self._pointer(node.value)
+        assert isinstance(pointer.type, PtrType)
+        row = pointer.type.pointee
+        shape = row.shape if isinstance(row, ArrayType) else ()
+        nodes = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+        if len(nodes) != len(shape) + 1:
+            raise Unsupported(f"this pointer requires {len(shape) + 1} indices")
+        indices = tuple(self._coerce(self._expr(n), "int") for n in nodes)
+        # Only inner bounds are known; the caller supplies the outer allocation.
+        for index, extent in zip(indices[1:], shape, strict=True):
+            self._guard(
+                core.bitwise(
+                    self.b,
+                    "and",
+                    core.cmp(self.b, "ge", index, self._int_constant(0)),
+                    core.cmp(self.b, "lt", index, self._int_constant(extent)),
+                ),
+                "bounds",
+                "native array inner index out of range",
+            )
+        return core.ptr_index(self.b, pointer, indices)
 
     def _struct_field(self, name: str, attr: str) -> Value:
         struct = self.objects[name]
@@ -3769,7 +3850,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             raise Unsupported(f"`ppy.native.{operation}` has no native lowering")
         element = _element_type(subscript)
         if operation.startswith(("sizeof", "alignof")):
-            width = 8 if element is None else {I64: 8, F64: 8, BOOL: 1, I8: 1, U8: 1}[element]
+            width = (
+                element.width // 8
+                if isinstance(element, IntType)
+                else (1 if element == BOOL else 8)
+            )
             return self._int_constant(width)
         if element is None:
             raise Unsupported(f"`{ast.unparse(subscript)}` is not an element native memory holds")
@@ -4800,7 +4885,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                     raise Unsupported("a buffer argument must be a buffer this function holds")
                 buffer = self.buffers[argument.id]
                 assert isinstance(buffer.type, BufferType)
-                if _kind(buffer.type.element) != parameter.element:
+                if buffer.type.element != _scalar_type(parameter.element):
                     raise Unsupported(
                         f"`{qualname}` expects a `{parameter.element}` buffer, "
                         f"and `{argument.id}` holds `{_kind(buffer.type.element)}`"
@@ -4857,7 +4942,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 arguments.append(core.tuple_make(self.b, *items))
                 continue
             if parameter.is_pointer:
-                arguments.append(self._coerce(self._pointer(argument), parameter.kind))
+                arguments.append(self._coerce_type(self._pointer(argument), _param_type(parameter)))
                 continue
             arguments.append(self._coerce(self._expr(argument), parameter.kind))
         return arguments
@@ -4876,7 +4961,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         operands: list[Value] = []
         for argument, parameter in zip(node.args, signature.parameters, strict=True):
             if parameter.is_pointer:
-                operands.append(self._pointer(argument))
+                operands.append(self._coerce_type(self._pointer(argument), _param_type(parameter)))
             elif parameter.is_buffer:
                 if not isinstance(argument, ast.Name) or argument.id not in self.buffers:
                     raise Unsupported("a buffer argument must be a buffer this function holds")
@@ -4885,7 +4970,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 operands.append(self._coerce(self._expr(argument), parameter.kind))
         results: tuple[IRType, ...] = ()
         if info.ret != T.NONE:
-            atoms = _return_atoms(info.ret)
+            atoms = _return_atoms(info.ret, facts=info.ret_facts)
             if atoms is None or len(atoms) != 1:
                 raise Unsupported(f"`{info.qualname}` returns something C cannot")
             results = (_scalar_type(atoms[0]),)
@@ -4989,6 +5074,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                     parts.extend(self._standalone_print_parts(item))
             return parts
         value = self._expr(argument)
+        if isinstance(value.type, IntType) and value.type.width < 64:
+            value = self._coerce(value, "int")
         if value.type not in _PRINT_SHIMS:
             raise Unsupported("only integers, floats, booleans, and string literals print natively")
         parts.append(value)
@@ -5601,8 +5688,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         )
 
     def _shift(self, left: Value, right: Value, op: type[ast.operator]) -> Value:
-        zero = core.const(self.b, 0, I64)
-        limit = core.const(self.b, 63, I64)
+        zero = core.const(self.b, 0, right.type)
+        limit = core.const(self.b, 63, right.type)
         in_range = core.bitwise(
             self.b,
             "and",
@@ -5629,7 +5716,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             core.guard(self.b, in_range, "range", "shift count outside the machine word")
         if op is ast.LShift:
             return self.b.create(
-                "core.shl", (left, right), (I64,), {"overflow": self.overflow}
+                "core.shl", (left, right), (left.type,), {"overflow": self.overflow}
             ).result
         return core.shift(self.b, "shr", left, right)
 
@@ -5648,6 +5735,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
     def _unify(self, left: str, right: str) -> str:
         if left == "float" or right == "float":
             return "float"
+        if "u64" in (left, right):
+            return "u64"
         if "int" in (left, right) or left in _NARROW or right in _NARROW:
             return "int"
         return "bool"
@@ -5655,6 +5744,19 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
     def _coerce_type(self, value: Value, expected: IRType) -> Value:
         if value.type == expected:
             return value
+        if isinstance(value.type, PtrType) and isinstance(expected, PtrType):
+            source = value.type
+            if (
+                source.pointee == expected.pointee
+                and (expected.address_space in (source.address_space, "generic"))
+                and (source.mutable or not expected.mutable)
+            ):
+                if source.mutable == expected.mutable:
+                    return value
+                return core.cast(
+                    self.b, value, PtrType(source.pointee, source.address_space, False)
+                )
+            raise Unsupported(f"incompatible pointer conversion from {source} to {expected}")
         if tensor_dialect.can_generalize_shape(value.type, expected):
             return self.b.create("tensor.shape_cast", (value,), (expected,)).result
         if expected not in _KINDS:
@@ -5674,21 +5776,26 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         current = _kind(value.type)
         if current == kind:
             return value
-        if current in _NARROW:
-            widened = core.cast(self.b, value, I64)
-            return self._coerce(widened, kind)
-        if kind in _NARROW:
-            narrowed = self._coerce(value, "int")
-            low, high = (-128, 127) if _NARROW[kind] else (0, 255)
-            fits = core.bitwise(
-                self.b,
-                "and",
-                core.cmp(self.b, "ge", narrowed, core.const(self.b, low, I64)),
-                core.cmp(self.b, "le", narrowed, core.const(self.b, high, I64)),
-            )
-            if not self.device:
-                core.guard(self.b, fits, "range", "value does not fit a byte")
-            return core.cast(self.b, narrowed, _scalar_type(kind))
+        target = _SCALAR_TYPES.get(kind)
+        if isinstance(value.type, IntType) and isinstance(target, IntType):
+            source = value.type
+            constant = _constant_of(value)
+            if isinstance(constant, int) and not target.fits(constant):
+                raise Unsupported(f"constant {constant} does not fit {target}")
+            for predicate, bound, needed in (
+                ("ge", target.min, source.min < target.min),
+                ("le", target.max, source.max > target.max),
+            ):
+                if needed:
+                    core.guard(
+                        self.b,
+                        core.cmp(self.b, predicate, value, core.const(self.b, bound, source)),
+                        "range",
+                        f"value does not fit {target}",
+                    )
+            return core.cast(self.b, value, target)
+        if current == "bool" and isinstance(target, IntType):
+            return core.cast(self.b, value, target)
         if kind == "float":
             widened = self._coerce(value, "int") if current == "bool" else value
             return core.cast(self.b, widened, F64)
@@ -6041,6 +6148,12 @@ _DISPLAYS = (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetCom
 _NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip", "aio", "tile")
 _SHUFFLES = {"shfl": "idx", "shfl_up": "up", "shfl_down": "down", "shfl_xor": "xor"}
 _ANNOTATION_KINDS = {
+    **{
+        prefix + k: k
+        for prefix in ("", "ppy.")
+        for k in _SCALAR_TYPES
+        if k[0] in "iu" and k[1:].isdigit()
+    },
     "int": "int",
     "float": "float",
     "bool": "bool",
@@ -6235,6 +6348,7 @@ def _analysis_type(t: IRType) -> T.Type:
 
 
 _ELEMENTS: dict[str, IRType] = {
+    **{prefix + k: t for prefix in ("", "ppy.") for k, t in _SCALAR_TYPES.items()},
     "int": I64,
     "float": F64,
     "bool": BOOL,
@@ -6306,7 +6420,12 @@ def _line_buffer_read(node: ast.Call) -> str | None:
 
 
 #: How a standalone `print` writes each scalar: a float as Python's `repr` does.
-_PRINT_SHIMS = {I64: "ppy_rt_print_i64", F64: "ppy_rt_print_f64", BOOL: "ppy_rt_print_bool"}
+_PRINT_SHIMS = {
+    I64: "ppy_rt_print_i64",
+    IntType(64, False): "ppy_rt_print_u64",
+    F64: "ppy_rt_print_f64",
+    BOOL: "ppy_rt_print_bool",
+}
 
 
 #: The runtime spelling of an element.

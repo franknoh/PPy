@@ -48,6 +48,7 @@ from ppy_runtime.abi import (
 )
 
 from ...ir import (
+    ArrayType,
     Block,
     BoolType,
     BufferType,
@@ -585,6 +586,15 @@ class _ModuleEmitter:
     # -- types ---------------------------------------------------------------
 
     def c_type(self, t: IRType) -> str:
+        if isinstance(t, ArrayType):
+            known = self.type_names.get(t)
+            if known is not None:
+                return known
+            name = f"ppy_array{len(self.type_names)}"
+            self.type_names[t] = name
+            dimensions = "".join(f"[{n}]" for n in t.shape)
+            self.unit.aggregates[name] = f"typedef {self.c_type(t.element)} {name}{dimensions};\n"
+            return name
         if isinstance(t, BoolType):
             if not self.cpp:
                 self.unit.headers.add("stdbool.h")
@@ -2216,6 +2226,11 @@ class _FunctionEmitter:
             case "ptr_offset":
                 (pointer, offset), reads = self.operands(op)
                 self.infix(op.result, "+", pointer, offset, reads)
+            case "ptr_index":
+                pointer, *indices = op.operands
+                expression = self.bare(pointer)
+                expression = f"({expression})" + "".join(f"[{self.bare(i)}]" for i in indices)
+                self.fold(op.result, (f"&{expression}", _UNARY), reads=self.reading(op.operands))
             case "buffer_data":
                 self.fold(op.result, (self.buffer(op.operands[0]).data, _ATOM))
             case "buffer_len":
@@ -2307,7 +2322,7 @@ class _FunctionEmitter:
             return (str(number) if number < (1 << 31) else f"UINT64_C({number})"), _ATOM
         if number == -(1 << 63):
             return "INT64_MIN", _ATOM
-        if -(1 << 31) <= number < (1 << 31):
+        if -(1 << 31) < number < (1 << 31):
             # An `int` literal widens to the operation's type on its own.
             return str(number), (_UNARY if number < 0 else _ATOM)
         return f"INT64_C({number})", _ATOM

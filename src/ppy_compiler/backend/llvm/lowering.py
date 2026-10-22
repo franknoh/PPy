@@ -49,6 +49,7 @@ from ...analysis.checker import FunctionAnalysis
 from ...analysis.closures import callable_spelled, is_plain_callable, shared_with_closures
 from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
+from ...analysis.refinements import Facts
 from ...analysis.settled import implicit_parameter_name
 from ...analysis.symbols import FunctionInfo, ParamInfo
 
@@ -68,14 +69,13 @@ __all__ = [
 #: The native entry point returns a status; a non-zero status means the caller
 #: must re-run the Python implementation (spec 16.9).
 
-_SCALARS = {"int", "float", "bool", "i8", "u8"}
+_SCALARS = {"int", "float", "bool"} | {f"{s}{b}" for s in ("i", "u") for b in (8, 16, 32, 64)}
 
-#: Element types a native buffer parameter may carry. `i8`/`u8` are one byte
-#: each, which is what text and packed data want; everything else is a word.
-_BUFFER_ELEMENTS = {"int", "float", "i8", "u8"}
+#: Element types a native buffer parameter may carry, with explicit storage widths.
+_BUFFER_ELEMENTS = _SCALARS - {"bool"}
 
-#: Buffer elements narrower than a machine word, and whether they are signed.
-_NARROW = {"i8": True, "u8": False}
+#: Storage integers whose values can be read losslessly as a default integer.
+_NARROW = {f"{s}{b}": s == "i" for s in ("i", "u") for b in (8, 16, 32)}
 
 
 def _read_as(element: str) -> str:
@@ -185,8 +185,11 @@ class LoweringResult:
     effects: dict[str, str] = field(default_factory=dict)
 
 
-def _scalar_name(t: T.Type) -> str | None:
+def _scalar_name(t: T.Type, facts: Facts | None = None) -> str | None:
     base = T.strip_literal(t)
+    if base == T.INT and facts is not None and facts.width is not None:
+        bits, signed = facts.width
+        return f"{'i' if signed else 'u'}{bits}"
     if isinstance(base, T.Instance) and base.name in _SCALARS:
         return base.name
     return None
@@ -470,12 +473,16 @@ def _held_natively(base: T.Instance, layouts: ClassLayouts | None) -> bool:
 
 
 def _native_param(
-    name: str, t: T.Type, layouts: ClassLayouts | None = None, written: bool = False
+    name: str,
+    t: T.Type,
+    layouts: ClassLayouts | None = None,
+    written: bool = False,
+    facts: Facts | None = None,
 ) -> NativeParam | None:
     collection = _collection_param(name, t, layouts, written)
     if collection is not None:
         return collection
-    scalar = _scalar_name(t)
+    scalar = _scalar_name(t, facts)
     if scalar is not None:
         return NativeParam(name, scalar)
     optional = optional_scalar(t)
@@ -484,6 +491,22 @@ def _native_param(
     pointer = _pointer_element(t)
     if pointer is not None:
         return NativeParam(name, pointer[0], pointer[1])
+    base = T.strip_literal(t)
+    if (
+        isinstance(base, T.Instance)
+        and base.name in {"ppy.native.ptr", "ppy.native.const_ptr"}
+        and len(base.args) == 1
+    ):
+        row = base.args[0]
+        if isinstance(row, T.Instance) and row.name == "ppy.native.array" and len(row.args) > 1:
+            element = _scalar_name(row.args[0])
+            if element is not None:
+                return NativeParam(
+                    name,
+                    "ptr" if base.name.endswith(".ptr") else "const_ptr",
+                    element,
+                    shape=tuple(int(n.name) for n in row.args[1:] if isinstance(n, T.Instance)),
+                )
     buffer = _buffer_element(t)
     if buffer is not None:
         kind, element = buffer
@@ -498,10 +521,12 @@ def _native_param(
     return None
 
 
-def _return_atoms(t: T.Type, layouts: ClassLayouts | None = None) -> tuple[str, ...] | None:
+def _return_atoms(
+    t: T.Type, layouts: ClassLayouts | None = None, facts: Facts | None = None
+) -> tuple[str, ...] | None:
     if _collection_param("", t, layouts) is not None:
         return ("handle",)
-    scalar = _scalar_name(t)
+    scalar = _scalar_name(t, facts)
     if scalar is not None:
         return (scalar,)
     optional = optional_scalar(t)
@@ -1318,7 +1343,7 @@ def _signature(
     parameters = tuple(
         _sourced(
             _written(
-                _native_param(p.name, p.type, layouts, p.name in held)
+                _native_param(p.name, p.type, layouts, p.name in held, p.facts)
                 or NativeParam(p.name, "int"),
                 written,
             ),
@@ -1327,7 +1352,7 @@ def _signature(
         for p in info.params
     )
     returned = _collection_param("", info.ret, layouts)
-    atoms = _return_atoms(info.ret, layouts) or ("int",)
+    atoms = _return_atoms(info.ret, layouts, info.ret_facts) or ("int",)
     returns = tuple(_abi_name(atom) for atom in atoms)
     future = ""
     if info.is_async:
@@ -1348,6 +1373,7 @@ def _signature(
         returned=_returned(info, returned),
         draws=analysis is not None and Effect.RANDOM in analysis.effects,
         optional=(optional_scalar(info.ret) or "") if not info.is_async else "",
+        result_kinds=atoms if info.ret_facts.width is not None and not info.is_async else (),
     )
 
 
@@ -1469,5 +1495,7 @@ def _brief_call(call: ast.Call) -> bool:
 
 
 def _abi_name(scalar: str) -> str:
-    names = {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}
+    from ppy_runtime.abi import _ABI_NAMES
+
+    names = _ABI_NAMES
     return names.get(scalar, "i8*")

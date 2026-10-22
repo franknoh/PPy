@@ -257,13 +257,14 @@ def _is_buffer_like(t: T.Type) -> bool:
     if base.name not in {"list", "Sequence", "Buffer", "memoryview", "array"}:
         return False
     element = T.strip_literal(base.args[0])
-    # / are the byte-wide elements: one byte in memory, an int in hand.
+    # Explicit storage integers are read as Python integers.
     return isinstance(element, T.Instance) and element.name in {
         "int",
         "float",
         "bool",
         "i8",
         "u8",
+        *(f"{s}{b}" for s in ("i", "u") for b in (16, 32, 64)),
     }
 
 

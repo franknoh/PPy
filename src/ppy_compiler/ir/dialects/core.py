@@ -25,6 +25,7 @@ from ..types import (
     BOOL,
     I64,
     INDEX,
+    ArrayType,
     BFloat16Type,
     BoolType,
     BufferType,
@@ -153,6 +154,7 @@ class CoreDialect(Dialect):
         add(OpSpec("core.load", verify=_verify_load, operands=1, results=1))
         add(OpSpec("core.store", verify=_verify_store, operands=2, results=0))
         add(OpSpec("core.ptr_offset", pure=True, verify=_verify_ptr_offset, operands=2, results=1))
+        add(OpSpec("core.ptr_index", pure=True, verify=_verify_ptr_index, results=1))
         add(
             OpSpec("core.buffer_data", pure=True, verify=_verify_buffer_data, operands=1, results=1)
         )
@@ -430,6 +432,23 @@ def _verify_ptr_offset(op: Operation, checker: Checker) -> None:
     if not is_integer(offset.type):
         checker.error(op, f"an offset is an integer, not {offset.type}")
     _result_matches(op, checker, pointer.type)
+
+
+def _verify_ptr_index(op: Operation, checker: Checker) -> None:
+    if len(op.operands) < 2 or not isinstance(op.operands[0].type, PtrType):
+        checker.error(op, "ptr_index needs a pointer and integer indices")
+        return
+    pointer = op.operands[0].type
+    element = pointer.pointee
+    rank = 1
+    if isinstance(element, ArrayType):
+        rank += len(element.shape)
+        element = element.element
+    if len(op.operands) != rank + 1:
+        checker.error(op, f"ptr_index needs {rank} indices")
+    if any(not is_integer(v.type) for v in op.operands[1:]):
+        checker.error(op, "ptr_index indices must be integers")
+    _result_matches(op, checker, PtrType(element, pointer.address_space, pointer.mutable))
 
 
 def _verify_buffer_data(op: Operation, checker: Checker) -> None:
@@ -724,6 +743,15 @@ def store(b: Builder, value: Value, pointer: Value) -> Operation:
 def ptr_offset(b: Builder, pointer: Value, offset: Value, name: str | None = None) -> Value:
     return b.create(
         "core.ptr_offset", (pointer, offset), (pointer.type,), result_names=(name,)
+    ).result
+
+
+def ptr_index(b: Builder, pointer: Value, indices: tuple[Value, ...]) -> Value:
+    t = pointer.type
+    assert isinstance(t, PtrType)
+    element = t.pointee.element if isinstance(t.pointee, ArrayType) else t.pointee
+    return b.create(
+        "core.ptr_index", (pointer, *indices), (PtrType(element, t.address_space, t.mutable),)
     ).result
 
 
