@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.8.0 — unreleased
+
 ## 0.7.1 — 2026-10-22
 
 - Explicit integer widths and signedness survive native lowering, including
