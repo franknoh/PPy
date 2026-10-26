@@ -15,9 +15,10 @@ meet at is written once after them, and a branch's arguments are assigned
 to the target block's parameters all at once, so a swap through two
 arguments stays a swap. A loop with several exits `break`s to the one the
 others flow into; an exit that ends the function -- a `return`, a raise, a
-failed guard -- is written where the loop jumps to it, and so is any block
-from which every path ends the function or continues or leaves its loop,
-once per branch that reaches it. A block that only tests folds into the
+failed guard -- is written where the loop jumps to it, and exits that go on
+to different places are told apart after the loop by a flag. A block from
+which every path ends the function, or continues or leaves its loop, is
+written once per branch that reaches it. A block that only tests folds into the
 condition before it as `&&` or `||`. `reducible.prepare` hands over a
 private copy of a graph that needs it first: empty forwarding blocks
 bypassed, and a cycle with several entries -- a resumed generator, a

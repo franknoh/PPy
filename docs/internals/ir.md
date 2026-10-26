@@ -826,7 +826,9 @@ and no others. A parameter keeps its Python name.
 A loop with several exits keeps one as the exit it `break`s to: the exit
 the others flow into, or the header's own. The rest are written where the
 loop jumps to them -- a `return` or a raise in place, or code followed by
-`break`. A block every path from which ends the function, or continues or
+`break`. Exits that go on to different places, none flowing into the
+other, are left by `break` with a small `int leaving` set first, and
+written after the loop under `if (leaving == k)`. A block every path from which ends the function, or continues or
 leaves the loop it is in, may be written in each branch that reaches it,
 so a shared raise path or clean-up does not need a label. A block that
 only tests, reached from one branch and sharing a target with it, folds
@@ -842,8 +844,11 @@ changed.
 
 A graph the reconstruction still cannot express, or one whose copies would
 grow past four times the function, falls back for that function alone to
-blocks as labels and branches as `goto`s. No example and no test program
-takes that path; `tests/test_c_structured.py` checks it.
+blocks as labels and branches as `goto`s. No example takes that path, in
+any of the C and C++ forms. One generated matcher in the regex tests does:
+`(a+)(b|c)*\d\s*$` re-enters its forward path at three places, and its
+structured form would copy that path about ten times. `tests/test_c_structured.py`
+checks both.
 
 `ppy emit c` and `ppy emit cpp` print it (`--format` runs it through
 clang-format). `tests/test_c_backend.py` compiles it and calls it on the LLVM
