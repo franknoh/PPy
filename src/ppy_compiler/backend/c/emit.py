@@ -815,6 +815,12 @@ class _ModuleEmitter:
             self.unit.functions.append(
                 self.scoped(members[0][0], "\n".join(text for _, text in members))
             )
+        # A string the lowering made but no written function reads -- its
+        # one reader folded away -- would be an unused static array.
+        written = "\n".join(self.unit.functions)
+        for name in [n for n in self.unit.strings if n in self.module.globals]:
+            if not re.search(rf"\b{re.escape(_ident(name))}\b", written):
+                del self.unit.strings[name]
         for function in defined:
             if "ppy.export" in function.attributes and not self.readable:
                 self.unit.exports.append(self.export(function))
