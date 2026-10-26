@@ -232,8 +232,17 @@ def _extra_entry(blocks: list[Block]) -> tuple[Block, list[Block]] | None:
             ordered = sorted(component, key=lambda b: position[id(b)])
             heads = [b for b in ordered if id(b) in entries]
             if len(heads) > 1:
-                # The entry that is cheapest to copy splits off; the rest stay.
-                split = min(heads, key=lambda b: (cost(b), -position[id(b)]))
+                # The entry most edges come in by stays the cycle's top (the
+                # dearer one on a tie); the cheapest other one is split off.
+                ranked = sorted(heads, key=cost)
+                header = ranked[-1]
+                for head in reversed(ranked):
+                    if len(entries[id(head)]) > len(entries[id(header)]):
+                        header = head
+                split = min(
+                    (b for b in heads if b is not header),
+                    key=lambda b: (cost(b), -position[id(b)]),
+                )
                 return split, entries[id(split)]
             header = heads[0] if heads else ordered[0]
             pending.append([b for b in ordered if b is not header])

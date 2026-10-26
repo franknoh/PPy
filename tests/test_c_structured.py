@@ -20,9 +20,14 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from test_regex import PATTERNS, _lowered
 
+from ppy_compiler.backend.c import Language, emit_module
+from ppy_compiler.backend.c import emit as emitter
 from ppy_compiler.backend.llvm import available as llvm_available
 from ppy_compiler.backend.llvm.link import c_compiler
+from ppy_compiler.driver.cli import main
+from ppy_compiler.ir.dialects import regex
 
 requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not installed")
 _CXX = next((c for c in ("c++", "g++", "clang++") if shutil.which(c)), None)
@@ -254,9 +259,6 @@ def _examples() -> list[Path]:
 @pytest.mark.parametrize("path", _examples(), ids=lambda p: p.parent.name)
 def test_no_example_falls_back_to_labels(monkeypatch, path: Path):
     """Every function of every example is written structured, as a library and as a program."""
-    from ppy_compiler.backend.c import emit as emitter
-    from ppy_compiler.driver.cli import main
-
     fallen: list[str] = []
     run = emitter._FunctionEmitter.run
 
@@ -277,3 +279,33 @@ def test_no_example_falls_back_to_labels(monkeypatch, path: Path):
     if not emitted:
         pytest.skip("no C form of this example")
     assert not fallen, fallen
+
+
+#: Generated matchers whose structured form would copy their forward path
+#: once per re-entry point, past four times the function: these keep labels.
+#: `(a+)(b|c)*\d\s*$` re-enters its forward path at three places.
+_LABELLED_MATCHERS = {rb"(a+)(b|c)*\d\s*$"}
+
+
+def test_regex_matchers_are_structured_but_the_largest(monkeypatch):
+    """The backtracking matchers of the regex tests: irreducible, split, and structured."""
+    fallen: set[bytes] = set()
+    current: list[bytes] = []
+    run = emitter._FunctionEmitter.run
+
+    def watched(self):  # type: ignore[no-untyped-def]
+        try:
+            return run(self)
+        except emitter._Unstructured:
+            fallen.add(current[-1])
+            raise
+
+    monkeypatch.setattr(emitter._FunctionEmitter, "run", watched)
+    for pattern, flags in PATTERNS:
+        for mode in regex.MODES:
+            current.append(pattern)
+            module, _ = _lowered(pattern, flags, mode)
+            text = emit_module(module, Language.C)
+            if pattern not in _LABELLED_MATCHERS:
+                _structured(text)
+    assert fallen == _LABELLED_MATCHERS

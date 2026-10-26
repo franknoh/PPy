@@ -194,6 +194,9 @@ int32_t ppy_regex_0(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, 
     int64_t t2 = t1 > buf_len ? buf_len : t1;
     int64_t t3 = pos < 0 ? 0 : pos;
     int64_t t4 = t3 > buf_len ? buf_len : t3;
+    stack[0] = 0;
+    stack[1] = 0;
+    stack[2] = 0;
     if (t4 <= t2) {
         int64_t s = t4;
         while (1) {
@@ -345,6 +348,9 @@ int32_t ppy_regex_1(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, 
     int64_t t2 = t1 > buf_len ? buf_len : t1;
     int64_t t3 = pos < 0 ? 0 : pos;
     int64_t t4 = t3 > buf_len ? buf_len : t3;
+    stack[0] = 0;
+    stack[1] = 0;
+    stack[2] = 0;
     if (t4 <= t2) {
         int64_t s = t4;
         while (1) {
@@ -1310,6 +1316,9 @@ int32_t ppy_regex_2(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, 
     int64_t t2 = t1 > buf_len ? buf_len : t1;
     int64_t t3 = pos < 0 ? 0 : pos;
     int64_t t4 = t3 > buf_len ? buf_len : t3;
+    stack[0] = 0;
+    stack[1] = 0;
+    stack[2] = 0;
     if (t4 <= t2) {
         int64_t s = t4;
         while (1) {
@@ -1452,6 +1461,9 @@ int32_t ppy_regex_3(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, 
     int64_t t2 = t1 > buf_len ? buf_len : t1;
     int64_t t3 = pos < 0 ? 0 : pos;
     int64_t t4 = t3 > buf_len ? buf_len : t3;
+    stack[0] = 0;
+    stack[1] = 0;
+    stack[2] = 0;
     int64_t p = t4;
     int64_t sp = 0;
     caps[0] = -1;

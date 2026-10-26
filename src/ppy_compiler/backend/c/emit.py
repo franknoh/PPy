@@ -428,6 +428,9 @@ class _Loop:
     #: The exit a `break` leaves to, written after the loop; every other exit
     #: is written where the loop jumps to it.
     exit: Block | None = None
+    #: Exits left by `break` with a flag set, written after the loop by the flag.
+    flagged: list = field(default_factory=list)
+    flag: str = ""
     #: Where the loop's `while` line went: which list of lines, and which line.
     writer: object = None
     start: int = 0
@@ -1174,6 +1177,8 @@ class _FunctionEmitter:
         self.stable: dict[int, str] = {}
         #: Inside a copy: its blocks are written again, not reached twice.
         self.copying = 0
+        #: The blocks being written, outermost first: a cycle among them has no `while`.
+        self.active: set[int] = set()
         #: The blocks each open copy has written so far, outermost first.
         self.copies: list[list] = []
         self.order: dict[int, int] = {}
@@ -1774,26 +1779,35 @@ class _FunctionEmitter:
                 if id(member) in loop.body:
                     self.loop_of[id(member)] = loop
         # A block every path from which ends the function -- a `return`, a
-        # raise, a failed guard -- with no loop on the way: it may be written
-        # wherever it is reached, as often as it is reached.
+        # raise, a failed guard -- through no loop but whole ones: it may be
+        # written wherever it is reached, as often as it is reached.
         changed = True
         while changed:
             changed = False
             for block in rpo:
-                if id(block) not in self.terminal and all(
-                    id(successor) in self.terminal for successor in block.successors
+                if (
+                    id(block) not in self.terminal
+                    and self.loop_of.get(id(block)) is None
+                    and all(id(successor) in self.terminal for successor in block.successors)
                 ):
                     self.terminal.add(id(block))
                     changed = True
+            for loop in self.loops.values():
+                # A loop that only ever leaves to such blocks counts as one, whole.
+                if id(loop.header) not in self.terminal and all(
+                    id(e) in self.terminal for e in loop.exits
+                ):
+                    self.terminal.add(id(loop.header))
+                    changed = True
         self.order = {id(b): i for i, b in enumerate(blocks)}
-        for loop in self.loops.values():
+        for loop in sorted(self.loops.values(), key=lambda found: -len(found.body)):
             loop.exit = self._main_exit(loop)
         for loop in self.loops.values():
             self.tails[id(loop.header)] = self._tails(loop)
 
     def _tails(self, loop: _Loop) -> set[int]:
         """The blocks of `loop` that may be copied where they are reached inside it."""
-        ends = {id(loop.header)} | self.terminal
+        ends = {id(loop.header)} | self.terminal | {id(e) for e in loop.flagged}
         if loop.exit is not None:
             ends.add(id(loop.exit))
         found: set[int] = set()
@@ -1832,17 +1846,53 @@ class _FunctionEmitter:
         With no exit that goes on, the loop's own -- the header's -- is the
         main one, else the first written that the header dominates.
         """
-        going = [e for e in loop.exits if id(e) not in self.terminal]
+        # The next turn or the end of a loop around: never written in place.
+        onward = []
+        outer = self._enclosing(loop)
+        while outer is not None:
+            onward.append(outer.header)
+            if outer.exit is not None and id(outer.exit) not in self.terminal:
+                onward.append(outer.exit)
+            outer = self._enclosing(outer)
+        going = [e for e in loop.exits if id(e) not in self.terminal or e in onward]
         if len(going) == 1:
             return going[0]
         if going:
+            # Flowing into another exit counts only short of the loops around.
+            around = set(loop.body)
+            outer = self._enclosing(loop)
+            while outer is not None:
+                around.add(id(outer.header))
+                outer = self._enclosing(outer)
             for candidate in going:
                 if all(
-                    other is candidate or self._reaches(other, candidate, loop.body)
-                    for other in going
+                    other is candidate or self._reaches(other, candidate, around) for other in going
                 ):
                     return candidate
-            return None
+            # Exits that go on to different places: the loop's own, or the
+            # first, is the main one; the others are left by a flag.
+            # A flag's exit is written after the loop: it must be reached from
+            # the loop alone, or be the next turn or the end of a loop around.
+            fixed = [
+                e
+                for e in going
+                if e not in onward and any(id(p) not in loop.body for p in self.preds[id(e)])
+            ]
+            if len(fixed) > 1:
+                return None
+            heads = [e for e in loop.header.successors if e in going]
+            if fixed:
+                main = fixed[0]
+            elif heads:
+                main = heads[0]
+            elif any(e in onward for e in going):
+                main = next(e for e in going if e in onward)
+            else:
+                main = min(going, key=lambda e: self.order[id(e)])
+            for other in going:
+                if other is not main and not self._reaches(other, main, around):
+                    loop.flagged.append(other)
+            return main
         for successor in loop.header.successors:
             if successor in loop.exits:
                 return successor
@@ -2028,12 +2078,24 @@ class _FunctionEmitter:
 
     def _copyable(self, block) -> bool:  # type: ignore[no-untyped-def]
         """Whether `block` may be written at each place that reaches it."""
+        if any(block is loop.header for loop in self.loop_stack):
+            # The top of a loop being written: reached again, it is that loop's next turn.
+            return False
         if id(block) in self.terminal:
             return True
         loop = self.loop_stack[-1] if self.loop_stack else None
         return loop is not None and id(block) in self.tails.get(id(loop.header), ())
 
     def _owned(self, block, follow) -> None:  # type: ignore[no-untyped-def]
+        if id(block) in self.active:
+            raise _Unstructured(f"^{block.name} is reached again while it is written")
+        self.active.add(id(block))
+        try:
+            self._owned_once(block, follow)
+        finally:
+            self.active.discard(id(block))
+
+    def _owned_once(self, block, follow) -> None:  # type: ignore[no-untyped-def]
         if not self.copying:
             if id(block) in self.emitted:
                 raise _Unstructured(f"^{block.name} is reached twice")
@@ -2061,6 +2123,9 @@ class _FunctionEmitter:
             and not self._dominates(block, exit_)
         ):
             raise _Unstructured(f"the loop at ^{block.name} leaves to ^{exit_.name}")
+        if loop.flagged:
+            loop.flag = self.fresh("leaving")
+            self.line(f"int {loop.flag} = 0;")
         loop.writer = self.body
         loop.start = len(self.body)
         self.line("while (1) {")
@@ -2073,10 +2138,47 @@ class _FunctionEmitter:
         if len(self.body) > loop.start + 1 and self.body[-1] == inner + "continue;":
             self.body.pop()
         self.line("}")
-        if onward is not None:
-            self.line(onward)
-        elif exit_ is not None and exit_ is not follow:
-            self._region(exit_, follow)
+
+        def after() -> None:
+            if onward is not None:
+                self.line(onward)
+            elif exit_ is not None and exit_ is not follow:
+                self._region(exit_, follow)
+
+        if not loop.flagged:
+            after()
+            return
+        depth = self.body.depth + 1
+        arms = [
+            (
+                f"{loop.flag} == {k}",
+                self._capture(lambda other=other: self._go(other, follow), depth),
+            )
+            for k, other in enumerate(loop.flagged, 1)
+        ]
+        rest = self._capture(after, depth)
+        for k, (condition, lines) in enumerate(arms):
+            self.line(f"if ({condition}) {{" if k == 0 else f"}} else if ({condition}) {{")
+            self.body.extend(lines)
+        if rest:
+            self.line("} else {")
+            self.body.extend(rest)
+        self.line("}")
+
+    def _go(self, target, follow) -> None:  # type: ignore[no-untyped-def]
+        """Control is at `target` after a loop: the loop around it moves on, or it is written."""
+        loop = self.loop_stack[-1] if self.loop_stack else None
+        if target is follow:
+            return
+        if loop is not None and target is loop.header:
+            self.line("continue;")
+        elif loop is not None and target is loop.exit:
+            self.line("break;")
+        elif loop is not None and target in loop.flagged:
+            self.line(f"{loop.flag} = {loop.flagged.index(target) + 1};")
+            self.line("break;")
+        else:
+            self._region(target, follow)
 
     def _block(self, block, follow) -> None:  # type: ignore[no-untyped-def]
         terminator = block.terminator
@@ -2109,6 +2211,11 @@ class _FunctionEmitter:
             self._moves(block, successor)
             self.line("break;")
             return
+        if loop is not None and target in loop.flagged:
+            self._moves(block, successor)
+            self.line(f"{loop.flag} = {loop.flagged.index(target) + 1};")
+            self.line("break;")
+            return
         if target is follow:
             self._moves(block, successor)
             return
@@ -2129,6 +2236,7 @@ class _FunctionEmitter:
             protected.add(id(loop.header))
             if loop.exit is not None:
                 protected.add(id(loop.exit))
+            protected.update(id(e) for e in loop.flagged)
         if follow is not None:
             protected.add(id(follow))
         (condition, _), (negation, _), then, otherwise, group = self._condition_chain(
