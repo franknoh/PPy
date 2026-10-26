@@ -45,7 +45,7 @@ True False
 
 **`ppy emit c patterns.ppy`**
 
-*1270 lines: [outputs/04-ppy-emit-c-patterns-ppy.txt](outputs/04-ppy-emit-c-patterns-ppy.txt)*
+*1535 lines: [outputs/04-ppy-emit-c-patterns-ppy.txt](outputs/04-ppy-emit-c-patterns-ppy.txt)*
 
 <!-- outputs:end -->
 
