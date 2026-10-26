@@ -287,9 +287,7 @@ def _split(region: Region, entry: Block, outside: list[Block]) -> None:
     mapping: dict[int, Value] = {}
     copies: dict[int, Block] = {}
     for block in owned:
-        copy = region.add_block(
-            f"{block.name}.again", [(a.name, a.type) for a in block.arguments]
-        )
+        copy = region.add_block(f"{block.name}.again", [(a.name, a.type) for a in block.arguments])
         copies[id(block)] = copy
         for old, new in zip(block.arguments, copy.arguments, strict=True):
             mapping[id(old)] = new
