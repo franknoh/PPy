@@ -6230,7 +6230,14 @@ C <code>main</code>, so the text is a whole program.</p>
 <code>ppy build</code> writes beside a library.</p>
 <p>The C is written to be read:</p>
 <ul>
-<li>loops are <code>while</code>, branches are <code>if</code>/<code>else</code></li>
+<li>loops are <code>while</code>, branches are <code>if</code>/<code>else</code>, with no labels or <code>goto</code></li>
+<li>a loop left from several places has one exit it <code>break</code>s to; an early
+  <code>return</code> or <code>raise</code> is written where it happens, and code that runs
+  before a <code>break</code> is written in front of it</li>
+<li>an exit several branches share and that ends the function (a raise,
+  the clean-up before a <code>return</code>) is written in each branch that takes it</li>
+<li>tests that share a target become one condition: <code>if (!seen || x &gt; best)</code></li>
+<li>a generator resumes from an <code>if</code> on its state, ahead of its loop</li>
 <li>a local keeps its Python name</li>
 <li>a value read once is written where it is read</li>
 </ul>
