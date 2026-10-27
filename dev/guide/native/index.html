@@ -4595,7 +4595,7 @@
 </tr>
 <tr>
 <td><code>@native.export(name="ppy_dot")</code></td>
-<td>a public C symbol in the built library, declared in the header <code>ppy build</code> writes beside it. A C caller has no Python to fall back to, so a failed guard traps.</td>
+<td>a public C symbol in the built library, declared in the header <code>ppy build</code> writes beside it. A C caller has no Python to fall back to. In a <code>ppy build --library</code> package, where the function raises it returns 0 and <code>ppy_last_error()</code> gives CPython's last line for the exception; elsewhere a failed guard traps.</td>
 </tr>
 </tbody>
 </table>
