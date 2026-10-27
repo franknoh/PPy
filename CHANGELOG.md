@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.2 — 2026-10-27
+
+- `ppy emit c` / `cpp` write every function with `while`, `if`/`else`,
+  `break`, `continue`, and `return`: loops with several exits, shared raise
+  and clean-up paths, generator resumes, and regex matchers no longer fall
+  back to labels and `goto`. Tests that share a target are written as one
+  condition (`if (!seen || x > best)`), and an `if` that returns has no
+  `else`.
+- `ppy build --library` stops with `E1807` when an exported function did not
+  lower, naming the function and the reason, instead of leaving it out of the
+  header.
+- The library links libm, so a C consumer needs only
+  `pkg-config --libs <name>`.
+- An export whose Python code raises returns 0, and `ppy_last_error()` gives
+  CPython's last line for the exception, instead of killing the caller with
+  `SIGILL`. `ppy emit c` exports print that line before they abort.
+- The safe C form no longer writes string constants that no function reads,
+  which `-Wunused-variable` flagged on Python 3.12 and 3.13.
+
 ## 0.7.1 — 2026-10-22
 
 - Explicit integer widths and signedness survive native lowering, including
