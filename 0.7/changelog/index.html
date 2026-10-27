@@ -210,7 +210,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.7.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.2</span>
   </div>
 </a>
       </div>
@@ -417,7 +417,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.7.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.7.2</span>
   </div>
 </a>
     </div>
@@ -4362,6 +4362,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#072-2026-10-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.2 — 2026-10-27
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#071-2026-10-22" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5020,6 +5031,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#072-2026-10-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.7.2 — 2026-10-27
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#071-2026-10-22" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5664,6 +5686,25 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="072-2026-10-27">0.7.2 — 2026-10-27<a class="headerlink" href="#072-2026-10-27" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>ppy emit c</code> / <code>cpp</code> write every function with <code>while</code>, <code>if</code>/<code>else</code>,
+  <code>break</code>, <code>continue</code>, and <code>return</code>: loops with several exits, shared raise
+  and clean-up paths, generator resumes, and regex matchers no longer fall
+  back to labels and <code>goto</code>. Tests that share a target are written as one
+  condition (<code>if (!seen || x &gt; best)</code>), and an <code>if</code> that returns has no
+  <code>else</code>.</li>
+<li><code>ppy build --library</code> stops with <code>E1807</code> when an exported function did not
+  lower, naming the function and the reason, instead of leaving it out of the
+  header.</li>
+<li>The library links libm, so a C consumer needs only
+  <code>pkg-config --libs &lt;name&gt;</code>.</li>
+<li>An export whose Python code raises returns 0, and <code>ppy_last_error()</code> gives
+  CPython's last line for the exception, instead of killing the caller with
+  <code>SIGILL</code>. <code>ppy emit c</code> exports print that line before they abort.</li>
+<li>The safe C form no longer writes string constants that no function reads,
+  which <code>-Wunused-variable</code> flagged on Python 3.12 and 3.13.</li>
+</ul>
 <h2 id="071-2026-10-22">0.7.1 — 2026-10-22<a class="headerlink" href="#071-2026-10-22" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Explicit integer widths and signedness survive native lowering, including
@@ -7107,7 +7148,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1537</code>, <code>81</code>), and the
+  through markers (<code>1543</code>, <code>82</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
