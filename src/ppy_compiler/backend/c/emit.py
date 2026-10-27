@@ -909,7 +909,8 @@ class _ModuleEmitter:
         """The public symbol: the internal function behind a C signature.
 
         A C caller has no Python to fall back to, so a failed guard aborts,
-        never answers wrong.
+        never answers wrong; where the module raises natively, CPython's
+        last line for the exception is said first.
         """
         name = str(function.attributes["ppy.export"])
         symbol = _ident(str(function.attributes.get("ppy.symbol", function.name)))
@@ -928,10 +929,14 @@ class _ModuleEmitter:
                 arguments.append(spelled)
         result = function.results[0] if function.results else None
         result_atom = self.atoms(result)[0] if result is not None else None
+        reported = bool(self.module.attributes.get("ppy.exceptions")) and self.collections
+        if reported:
+            self.shim("ppy_exc_report")
         lines = [
             f"{self.storage}{result_atom or 'void'} {name}({', '.join(parameters) or 'void'}) {{",
             f"    {result_atom or 'int64_t'} result;",
             f"    if ({symbol}({', '.join([*arguments, '&result'])}) != {STATUS_OK}) {{",
+            *(["        ppy_exc_report();"] if reported else []),
             f"        {self.std('abort')}();",
             "    }",
             "    return result;" if result is not None else "    (void)result;",

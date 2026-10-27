@@ -292,8 +292,12 @@ def lower_module_to_ir(
     plugins: PluginRegistry | None = None,
     cpu_compatible: bool = False,
     backend_name: str | None = None,
+    library: bool = False,
 ) -> Lowered:
-    """The IR of every eligible function in one module."""
+    """The IR of every eligible function in one module.
+
+    `library`: the module is built for C callers (`ppy build --library`).
+    """
 
     def build(exceptions: bool, python: dict[str, str]) -> tuple[Frontend, Lowered]:
         frontend = Frontend(
@@ -313,6 +317,7 @@ def lower_module_to_ir(
         # Print, input, and calls into Python under `ppy run` (`lowering/effects.py`).
         frontend.effects = cpu_compatible and backend_name == "llvm" and not standalone
         frontend.native_exceptions = exceptions
+        frontend.library = library
         frontend.python = python
         return frontend, frontend.build(functions)
 
@@ -429,6 +434,8 @@ class Frontend:
         #: exceptions native code can catch (`lowering/exceptions.py`). A
         #: standalone build sets it for every module where any has one.
         self.native_exceptions = False
+        #: Built for C callers: an export's checks raise natively (`build`).
+        self.library = False
         #: Whether `print`, `input`, and calls into Python lower natively under
         #: `ppy run`, and whether one found it needs exception mode for them.
         self.effects = False
@@ -500,6 +507,16 @@ class Frontend:
         bodies = [node for _info, _analysis, node in functions.values()]
         if uses_exceptions(bodies) or (self.effects and wants_exceptions(bodies)):
             self.native_exceptions = True
+        if self.library and any(
+            info.directive("native.export") is not None for info, _a, _n in functions.values()
+        ):
+            # A C caller of an export has no Python to run the call again:
+            # what CPython raises has to be raised here, and the runtime
+            # keeps its text for the caller (`backend/llvm/from_ir.py`).
+            self.native_exceptions = True
+            known = self.module.attributes.get("ppy.libraries", ())
+            if "ppy_collections" not in known:  # type: ignore[operator]
+                self.module.attributes["ppy.libraries"] = (*known, "ppy_collections")  # type: ignore[misc]
         if self.native_exceptions:
             # The backends ask each call's status for the raised one.
             self.module.attributes["ppy.exceptions"] = True

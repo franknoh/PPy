@@ -212,6 +212,28 @@ def _collect(bundle, opt_level: int | None = None, failures=None) -> dict[str, N
     return modules
 
 
+def _declared_exports(bundle) -> dict[str, tuple[str, str]]:  # type: ignore[no-untyped-def]
+    """Every `@ppy.native.export` of the project: C name -> (module, qualname)."""
+    declared: dict[str, tuple[str, str]] = {}
+    for name, symbols in bundle.symbols.modules.items():
+        infos = [
+            *symbols.functions.values(),
+            *(m for c in symbols.classes.values() for m in c.methods.values()),
+        ]
+        for info in infos:
+            export = info.directive("native.export")
+            if export is not None:
+                declared[str(export.options.get("name") or info.name)] = (name, info.qualname)
+    return declared
+
+
+def _why_not_native(native: NativeModule | None, qualname: str) -> str:
+    """What the lowering said about a function it left in Python."""
+    if native is not None and qualname in native.rejected:
+        return native.rejected[qualname]
+    return "it did not lower to native code"
+
+
 def _offer(available: dict, native: NativeModule) -> None:  # type: ignore[type-arg]
     """What `native` lowered, for the modules after it to call natively."""
     for qualname, lowered in native.functions.items():
@@ -239,6 +261,7 @@ def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # t
         imports=imports,
         sanitize=config.llvm.sanitize,
         instrument=config.llvm.instrument,
+        library=config.llvm.library,
         profile=profile_for(config),
         emit_llvm=False,
     )
@@ -524,7 +547,8 @@ def _library_key(objects: list[Path]) -> str:
     """A key over exactly the object files that go into the library."""
     from ...cache import digest
 
-    return digest("ppy-library", *(o.read_bytes().hex() for o in sorted(objects))) + ".so"
+    # "+m": linked with libm, so a library from before that is not reused.
+    return digest("ppy-library+m", *(o.read_bytes().hex() for o in sorted(objects))) + ".so"
 
 
 def _runtime_stamp(library: str) -> str:
@@ -712,6 +736,11 @@ def compile_project(  # type: ignore[no-untyped-def]
             lowered = native.functions.get(qualname)
             if lowered is not None:
                 exports[name] = lowered.signature
+    artifacts.unexported = {
+        name: (qualname, _why_not_native(natives.get(module), qualname))
+        for name, (module, qualname) in _declared_exports(bundle).items()
+        if name not in exports
+    }
     artifacts.generated = dict(output.generated)
     artifacts.signatures = dict(signatures)
     artifacts.exports = dict(exports)
@@ -735,7 +764,9 @@ def compile_project(  # type: ignore[no-untyped-def]
             _link_and_cache(artifacts, store, library_key, destination, needed, target)
         if exports:
             artifacts.header = write_header(
-                build_directory / f"{bundle.project.root.name}.h", exports
+                build_directory / f"{bundle.project.root.name}.h",
+                exports,
+                last_error=bundle.project.config.llvm.library,
             )
     generated_dir = build_directory / "generated"
     program: dict | None = None
