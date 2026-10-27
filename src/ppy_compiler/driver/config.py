@@ -84,6 +84,9 @@ class LlvmConfig:
     pgo: str | None = None
     #: Place profile counters in the IR; `ppy run --profile` sets it for its run.
     instrument: bool = False
+    #: `ppy build --library` sets it: an export's C caller has no Python, so
+    #: what it raises is lowered natively and the runtime keeps its text.
+    library: bool = False
 
 
 @dataclass(slots=True)

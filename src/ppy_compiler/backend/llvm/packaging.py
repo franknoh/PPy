@@ -73,6 +73,14 @@ def package_library(
     bundle, artifacts: BuildArtifacts, output: Path | None, target: TargetInfo
 ) -> Path:  # type: ignore[no-untyped-def]
     """`lib/`, `include/`, `lib/pkgconfig/`, and the manifest, in one directory."""
+    if artifacts.unexported:
+        # A C caller has no Python to run what did not lower, so an export
+        # left out of the header would only surface as a missing symbol.
+        missing = "; ".join(
+            f"`{name}` ({qualname}): {why}"
+            for name, (qualname, why) in sorted(artifacts.unexported.items())
+        )
+        raise PackagingError("E1807", f"an exported function is not native: {missing}")
     if not artifacts.exports:
         raise PackagingError(
             "E1805",

@@ -41,11 +41,11 @@ True False
 
 **`ppy emit ir patterns.ppy`**
 
-*1480 lines: [outputs/03-ppy-emit-ir-patterns-ppy.txt](outputs/03-ppy-emit-ir-patterns-ppy.txt)*
+*1520 lines: [outputs/03-ppy-emit-ir-patterns-ppy.txt](outputs/03-ppy-emit-ir-patterns-ppy.txt)*
 
 **`ppy emit c patterns.ppy`**
 
-*1270 lines: [outputs/04-ppy-emit-c-patterns-ppy.txt](outputs/04-ppy-emit-c-patterns-ppy.txt)*
+*1547 lines: [outputs/04-ppy-emit-c-patterns-ppy.txt](outputs/04-ppy-emit-c-patterns-ppy.txt)*
 
 <!-- outputs:end -->
 

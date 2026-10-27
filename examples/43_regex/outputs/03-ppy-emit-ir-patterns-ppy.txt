@@ -273,159 +273,169 @@ private func @ppy.regex.0(%buf: buffer<u8>, %pos: i64, %endpos: i64) -> (bool, i
     %caps = core.alloca {count = 2} : ptr<i64, stack>
     %12 = core.const 0 : i64
     %13 = core.cmp.gt %11, %7 : bool
+    %14 = core.const 0 : i64
+    %15 = core.const 0 : i64
+    %16 = core.ptr_offset %stack, %15 : ptr<i64, stack>
+    core.store %14, %16
+    %17 = core.const 1 : i64
+    %18 = core.ptr_offset %stack, %17 : ptr<i64, stack>
+    core.store %14, %18
+    %19 = core.const 2 : i64
+    %20 = core.ptr_offset %stack, %19 : ptr<i64, stack>
+    core.store %14, %20
     core.cond_br %13, ^notfound4, ^attempt1(%11)
 ^attempt1(%s: i64):
     core.store %s, %p
     core.store %s, %start
     core.store %12, %sp
-    %14 = core.const -1 : i64
-    %15 = core.const 0 : i64
-    %16 = core.ptr_offset %caps, %15 : ptr<i64, stack>
-    core.store %14, %16
-    %17 = core.const 1 : i64
-    %18 = core.ptr_offset %caps, %17 : ptr<i64, stack>
-    core.store %14, %18
-    %19 = core.const 0 : i64
-    %20 = core.ptr_offset %caps, %19 : ptr<i64, stack>
-    core.store %s, %20
-    %21 = core.load %p : i64
-    %22 = core.const 1 : i64
-    %23 = core.add %21, %22 {overflow = "proven"} : i64
-    %24 = core.cmp.le %23, %7 : bool
-    core.cond_br %24, ^fits7, ^fail2
-^fail2:
-    %25 = core.load %sp : i64
+    %21 = core.const -1 : i64
+    %22 = core.const 0 : i64
+    %23 = core.ptr_offset %caps, %22 : ptr<i64, stack>
+    core.store %21, %23
+    %24 = core.const 1 : i64
+    %25 = core.ptr_offset %caps, %24 : ptr<i64, stack>
+    core.store %21, %25
     %26 = core.const 0 : i64
-    %27 = core.cmp.eq %25, %26 : bool
-    core.cond_br %27, ^exhausted3, ^pop17
-^exhausted3:
-    %28 = core.load %start : i64
+    %27 = core.ptr_offset %caps, %26 : ptr<i64, stack>
+    core.store %s, %27
+    %28 = core.load %p : i64
     %29 = core.const 1 : i64
     %30 = core.add %28, %29 {overflow = "proven"} : i64
-    %31 = core.cmp.gt %30, %7 : bool
-    core.cond_br %31, ^notfound4, ^attempt1(%30)
+    %31 = core.cmp.le %30, %7 : bool
+    core.cond_br %31, ^fits7, ^fail2
+^fail2:
+    %32 = core.load %sp : i64
+    %33 = core.const 0 : i64
+    %34 = core.cmp.eq %32, %33 : bool
+    core.cond_br %34, ^exhausted3, ^pop17
+^exhausted3:
+    %35 = core.load %start : i64
+    %36 = core.const 1 : i64
+    %37 = core.add %35, %36 {overflow = "proven"} : i64
+    %38 = core.cmp.gt %37, %7 : bool
+    core.cond_br %38, ^notfound4, ^attempt1(%37)
 ^notfound4:
-    %32 = core.const false : bool
-    %33 = core.const -1 : i64
-    %34 = core.const -1 : i64
-    core.ret %32, %33, %34
+    %39 = core.const false : bool
+    %40 = core.const -1 : i64
+    %41 = core.const -1 : i64
+    core.ret %39, %40, %41
 ^fits7:
-    core.br ^scan8(%21)
+    core.br ^scan8(%28)
 ^scan8(%q: i64):
-    %35 = core.cmp.lt %q, %7 : bool
-    core.cond_br %35, ^bound9, ^scanned11(%q)
+    %42 = core.cmp.lt %q, %7 : bool
+    core.cond_br %42, ^bound9, ^scanned11(%q)
 ^bound9:
-    %36 = core.buffer_load %buf, %q : u8
-    %37 = core.cast %36 : i64
-    %38 = core.const 65 : i64
-    %39 = core.cmp.ge %37, %38 : bool
-    %40 = core.const 90 : i64
-    %41 = core.cmp.le %37, %40 : bool
-    %42 = core.and %39, %41 : bool
-    %43 = core.const 97 : i64
-    %44 = core.cmp.ge %37, %43 : bool
-    %45 = core.const 122 : i64
-    %46 = core.cmp.le %37, %45 : bool
-    %47 = core.and %44, %46 : bool
-    %48 = core.or %42, %47 : bool
-    %49 = core.const 1 : i64
-    %50 = core.add %q, %49 {overflow = "proven"} : i64
-    core.cond_br %48, ^scan8(%50), ^scanned11(%q)
+    %43 = core.buffer_load %buf, %q : u8
+    %44 = core.cast %43 : i64
+    %45 = core.const 65 : i64
+    %46 = core.cmp.ge %44, %45 : bool
+    %47 = core.const 90 : i64
+    %48 = core.cmp.le %44, %47 : bool
+    %49 = core.and %46, %48 : bool
+    %50 = core.const 97 : i64
+    %51 = core.cmp.ge %44, %50 : bool
+    %52 = core.const 122 : i64
+    %53 = core.cmp.le %44, %52 : bool
+    %54 = core.and %51, %53 : bool
+    %55 = core.or %49, %54 : bool
+    %56 = core.const 1 : i64
+    %57 = core.add %q, %56 {overflow = "proven"} : i64
+    core.cond_br %55, ^scan8(%57), ^scanned11(%q)
 ^scanned11(%0: i64):
-    %51 = core.const 1 : i64
-    %52 = core.add %21, %51 {overflow = "proven"} : i64
-    %53 = core.cmp.lt %0, %52 : bool
-    core.cond_br %53, ^fail2, ^enough13
+    %58 = core.const 1 : i64
+    %59 = core.add %28, %58 {overflow = "proven"} : i64
+    %60 = core.cmp.lt %0, %59 : bool
+    core.cond_br %60, ^fail2, ^enough13
 ^exit12:
-    %54 = core.load %p : i64
-    %55 = core.const 1 : i64
-    %56 = core.ptr_offset %caps, %55 : ptr<i64, stack>
-    core.store %54, %56
-    %57 = core.const true : bool
-    %58 = core.const 0 : i64
-    %59 = core.ptr_offset %caps, %58 : ptr<i64, stack>
-    %60 = core.load %59 : i64
-    %61 = core.const 1 : i64
-    %62 = core.ptr_offset %caps, %61 : ptr<i64, stack>
-    %63 = core.load %62 : i64
-    core.ret %57, %60, %63
+    %61 = core.load %p : i64
+    %62 = core.const 1 : i64
+    %63 = core.ptr_offset %caps, %62 : ptr<i64, stack>
+    core.store %61, %63
+    %64 = core.const true : bool
+    %65 = core.const 0 : i64
+    %66 = core.ptr_offset %caps, %65 : ptr<i64, stack>
+    %67 = core.load %66 : i64
+    %68 = core.const 1 : i64
+    %69 = core.ptr_offset %caps, %68 : ptr<i64, stack>
+    %70 = core.load %69 : i64
+    core.ret %64, %67, %70
 ^enough13:
     core.store %0, %p
-    %64 = core.cmp.gt %0, %52 : bool
-    core.cond_br %64, ^keep15, ^exit12
+    %71 = core.cmp.gt %0, %59 : bool
+    core.cond_br %71, ^keep15, ^exit12
 ^giveback14(%held: i64):
-    %65 = core.load %p : i64
-    %66 = core.const 1 : i64
-    %67 = core.sub %65, %66 {overflow = "proven"} : i64
-    core.store %67, %p
-    %68 = core.cmp.gt %67, %held : bool
-    core.cond_br %68, ^keep16, ^exit12
+    %72 = core.load %p : i64
+    %73 = core.const 1 : i64
+    %74 = core.sub %72, %73 {overflow = "proven"} : i64
+    core.store %74, %p
+    %75 = core.cmp.gt %74, %held : bool
+    core.cond_br %75, ^keep16, ^exit12
 ^keep15:
-    %69 = core.load %sp : i64
-    %70 = core.const 4096 : i64
-    %71 = core.cmp.lt %69, %70 : bool
-    core.guard %71 {kind = "range", label = "regex.stack.ok"}
-    %72 = core.const 3 : i64
-    %73 = core.mul %69, %72 {overflow = "proven"} : i64
-    %74 = core.ptr_offset %stack, %73 : ptr<i64, stack>
-    %75 = core.const 0 : i64
-    %76 = core.load %p : i64
-    %77 = core.const 0 : i64
-    %78 = core.ptr_offset %74, %77 : ptr<i64, stack>
-    core.store %75, %78
-    %79 = core.const 1 : i64
-    %80 = core.ptr_offset %74, %79 : ptr<i64, stack>
-    core.store %76, %80
-    %81 = core.const 2 : i64
-    %82 = core.ptr_offset %74, %81 : ptr<i64, stack>
-    core.store %52, %82
-    %83 = core.const 1 : i64
-    %84 = core.add %69, %83 {overflow = "proven"} : i64
-    core.store %84, %sp
+    %76 = core.load %sp : i64
+    %77 = core.const 4096 : i64
+    %78 = core.cmp.lt %76, %77 : bool
+    core.guard %78 {kind = "range", label = "regex.stack.ok"}
+    %79 = core.const 3 : i64
+    %80 = core.mul %76, %79 {overflow = "proven"} : i64
+    %81 = core.ptr_offset %stack, %80 : ptr<i64, stack>
+    %82 = core.const 0 : i64
+    %83 = core.load %p : i64
+    %84 = core.const 0 : i64
+    %85 = core.ptr_offset %81, %84 : ptr<i64, stack>
+    core.store %82, %85
+    %86 = core.const 1 : i64
+    %87 = core.ptr_offset %81, %86 : ptr<i64, stack>
+    core.store %83, %87
+    %88 = core.const 2 : i64
+    %89 = core.ptr_offset %81, %88 : ptr<i64, stack>
+    core.store %59, %89
+    %90 = core.const 1 : i64
+    %91 = core.add %76, %90 {overflow = "proven"} : i64
+    core.store %91, %sp
     core.br ^exit12
 ^keep16:
-    %85 = core.load %sp : i64
-    %86 = core.const 4096 : i64
-    %87 = core.cmp.lt %85, %86 : bool
-    core.guard %87 {kind = "range", label = "regex.stack.ok"}
-    %88 = core.const 3 : i64
-    %89 = core.mul %85, %88 {overflow = "proven"} : i64
-    %90 = core.ptr_offset %stack, %89 : ptr<i64, stack>
-    %91 = core.const 0 : i64
-    %92 = core.load %p : i64
-    %93 = core.const 0 : i64
-    %94 = core.ptr_offset %90, %93 : ptr<i64, stack>
-    core.store %91, %94
-    %95 = core.const 1 : i64
-    %96 = core.ptr_offset %90, %95 : ptr<i64, stack>
-    core.store %92, %96
-    %97 = core.const 2 : i64
-    %98 = core.ptr_offset %90, %97 : ptr<i64, stack>
-    core.store %held, %98
-    %99 = core.const 1 : i64
-    %100 = core.add %85, %99 {overflow = "proven"} : i64
-    core.store %100, %sp
+    %92 = core.load %sp : i64
+    %93 = core.const 4096 : i64
+    %94 = core.cmp.lt %92, %93 : bool
+    core.guard %94 {kind = "range", label = "regex.stack.ok"}
+    %95 = core.const 3 : i64
+    %96 = core.mul %92, %95 {overflow = "proven"} : i64
+    %97 = core.ptr_offset %stack, %96 : ptr<i64, stack>
+    %98 = core.const 0 : i64
+    %99 = core.load %p : i64
+    %100 = core.const 0 : i64
+    %101 = core.ptr_offset %97, %100 : ptr<i64, stack>
+    core.store %98, %101
+    %102 = core.const 1 : i64
+    %103 = core.ptr_offset %97, %102 : ptr<i64, stack>
+    core.store %99, %103
+    %104 = core.const 2 : i64
+    %105 = core.ptr_offset %97, %104 : ptr<i64, stack>
+    core.store %held, %105
+    %106 = core.const 1 : i64
+    %107 = core.add %92, %106 {overflow = "proven"} : i64
+    core.store %107, %sp
     core.br ^exit12
 ^pop17:
-    %101 = core.const 1 : i64
-    %102 = core.sub %25, %101 {overflow = "proven"} : i64
-    core.store %102, %sp
-    %103 = core.const 3 : i64
-    %104 = core.mul %102, %103 {overflow = "proven"} : i64
-    %105 = core.ptr_offset %stack, %104 : ptr<i64, stack>
-    %106 = core.const 0 : i64
-    %107 = core.ptr_offset %105, %106 : ptr<i64, stack>
-    %108 = core.load %107 : i64
-    %109 = core.const 1 : i64
-    %110 = core.ptr_offset %105, %109 : ptr<i64, stack>
-    %111 = core.load %110 : i64
-    core.store %111, %p
-    %112 = core.const 2 : i64
-    %113 = core.ptr_offset %105, %112 : ptr<i64, stack>
-    %114 = core.load %113 : i64
-    %115 = core.const 0 : i64
-    %116 = core.cmp.eq %108, %115 : bool
-    core.cond_br %116, ^giveback14(%114), ^dispatch18
+    %108 = core.const 1 : i64
+    %109 = core.sub %32, %108 {overflow = "proven"} : i64
+    core.store %109, %sp
+    %110 = core.const 3 : i64
+    %111 = core.mul %109, %110 {overflow = "proven"} : i64
+    %112 = core.ptr_offset %stack, %111 : ptr<i64, stack>
+    %113 = core.const 0 : i64
+    %114 = core.ptr_offset %112, %113 : ptr<i64, stack>
+    %115 = core.load %114 : i64
+    %116 = core.const 1 : i64
+    %117 = core.ptr_offset %112, %116 : ptr<i64, stack>
+    %118 = core.load %117 : i64
+    core.store %118, %p
+    %119 = core.const 2 : i64
+    %120 = core.ptr_offset %112, %119 : ptr<i64, stack>
+    %121 = core.load %120 : i64
+    %122 = core.const 0 : i64
+    %123 = core.cmp.eq %115, %122 : bool
+    core.cond_br %123, ^giveback14(%121), ^dispatch18
 ^dispatch18:
     core.unreachable
 }
@@ -450,619 +460,629 @@ private func @ppy.regex.1(%buf: buffer<u8>, %pos: i64, %endpos: i64) -> (bool, i
     %caps = core.alloca {count = 6} : ptr<i64, stack>
     %25 = core.const 0 : i64
     %26 = core.cmp.gt %24, %20 : bool
+    %27 = core.const 0 : i64
+    %28 = core.const 0 : i64
+    %29 = core.ptr_offset %stack, %28 : ptr<i64, stack>
+    core.store %27, %29
+    %30 = core.const 1 : i64
+    %31 = core.ptr_offset %stack, %30 : ptr<i64, stack>
+    core.store %27, %31
+    %32 = core.const 2 : i64
+    %33 = core.ptr_offset %stack, %32 : ptr<i64, stack>
+    core.store %27, %33
     core.cond_br %26, ^notfound4, ^attempt1(%24)
 ^attempt1(%s: i64):
     core.store %s, %p
     core.store %s, %start
     core.store %25, %sp
-    %27 = core.const -1 : i64
-    %28 = core.const 0 : i64
-    %29 = core.ptr_offset %caps, %28 : ptr<i64, stack>
-    core.store %27, %29
-    %30 = core.const 1 : i64
-    %31 = core.ptr_offset %caps, %30 : ptr<i64, stack>
-    core.store %27, %31
-    %32 = core.const 2 : i64
-    %33 = core.ptr_offset %caps, %32 : ptr<i64, stack>
-    core.store %27, %33
-    %34 = core.const 3 : i64
-    %35 = core.ptr_offset %caps, %34 : ptr<i64, stack>
-    core.store %27, %35
-    %36 = core.const 4 : i64
-    %37 = core.ptr_offset %caps, %36 : ptr<i64, stack>
-    core.store %27, %37
-    %38 = core.const 5 : i64
-    %39 = core.ptr_offset %caps, %38 : ptr<i64, stack>
-    core.store %27, %39
-    %40 = core.const 0 : i64
-    %41 = core.ptr_offset %caps, %40 : ptr<i64, stack>
-    core.store %s, %41
-    %42 = core.const 2 : i64
-    %43 = core.ptr_offset %caps, %42 : ptr<i64, stack>
-    %44 = core.load %43 : i64
-    %45 = core.load %sp : i64
-    %46 = core.const 4096 : i64
-    %47 = core.cmp.lt %45, %46 : bool
-    core.guard %47 {kind = "range", label = "regex.stack.ok"}
-    %48 = core.const 3 : i64
-    %49 = core.mul %45, %48 {overflow = "proven"} : i64
-    %50 = core.ptr_offset %stack, %49 : ptr<i64, stack>
-    %51 = core.const 0 : i64
-    %52 = core.load %p : i64
-    %53 = core.const 0 : i64
-    %54 = core.ptr_offset %50, %53 : ptr<i64, stack>
-    core.store %51, %54
-    %55 = core.const 1 : i64
-    %56 = core.ptr_offset %50, %55 : ptr<i64, stack>
-    core.store %52, %56
-    %57 = core.const 2 : i64
-    %58 = core.ptr_offset %50, %57 : ptr<i64, stack>
-    core.store %44, %58
-    %59 = core.const 1 : i64
-    %60 = core.add %45, %59 {overflow = "proven"} : i64
-    core.store %60, %sp
-    %61 = core.load %p : i64
-    %62 = core.const 2 : i64
-    %63 = core.ptr_offset %caps, %62 : ptr<i64, stack>
-    core.store %61, %63
-    %64 = core.load %p : i64
-    %65 = core.const 1 : i64
-    %66 = core.add %64, %65 {overflow = "proven"} : i64
-    %67 = core.cmp.le %66, %20 : bool
-    core.cond_br %67, ^fits8, ^fail2
-^fail2:
-    %68 = core.load %sp : i64
-    %69 = core.const 0 : i64
-    %70 = core.cmp.eq %68, %69 : bool
-    core.cond_br %70, ^exhausted3, ^pop53
-^exhausted3:
-    %71 = core.load %start : i64
+    %34 = core.const -1 : i64
+    %35 = core.const 0 : i64
+    %36 = core.ptr_offset %caps, %35 : ptr<i64, stack>
+    core.store %34, %36
+    %37 = core.const 1 : i64
+    %38 = core.ptr_offset %caps, %37 : ptr<i64, stack>
+    core.store %34, %38
+    %39 = core.const 2 : i64
+    %40 = core.ptr_offset %caps, %39 : ptr<i64, stack>
+    core.store %34, %40
+    %41 = core.const 3 : i64
+    %42 = core.ptr_offset %caps, %41 : ptr<i64, stack>
+    core.store %34, %42
+    %43 = core.const 4 : i64
+    %44 = core.ptr_offset %caps, %43 : ptr<i64, stack>
+    core.store %34, %44
+    %45 = core.const 5 : i64
+    %46 = core.ptr_offset %caps, %45 : ptr<i64, stack>
+    core.store %34, %46
+    %47 = core.const 0 : i64
+    %48 = core.ptr_offset %caps, %47 : ptr<i64, stack>
+    core.store %s, %48
+    %49 = core.const 2 : i64
+    %50 = core.ptr_offset %caps, %49 : ptr<i64, stack>
+    %51 = core.load %50 : i64
+    %52 = core.load %sp : i64
+    %53 = core.const 4096 : i64
+    %54 = core.cmp.lt %52, %53 : bool
+    core.guard %54 {kind = "range", label = "regex.stack.ok"}
+    %55 = core.const 3 : i64
+    %56 = core.mul %52, %55 {overflow = "proven"} : i64
+    %57 = core.ptr_offset %stack, %56 : ptr<i64, stack>
+    %58 = core.const 0 : i64
+    %59 = core.load %p : i64
+    %60 = core.const 0 : i64
+    %61 = core.ptr_offset %57, %60 : ptr<i64, stack>
+    core.store %58, %61
+    %62 = core.const 1 : i64
+    %63 = core.ptr_offset %57, %62 : ptr<i64, stack>
+    core.store %59, %63
+    %64 = core.const 2 : i64
+    %65 = core.ptr_offset %57, %64 : ptr<i64, stack>
+    core.store %51, %65
+    %66 = core.const 1 : i64
+    %67 = core.add %52, %66 {overflow = "proven"} : i64
+    core.store %67, %sp
+    %68 = core.load %p : i64
+    %69 = core.const 2 : i64
+    %70 = core.ptr_offset %caps, %69 : ptr<i64, stack>
+    core.store %68, %70
+    %71 = core.load %p : i64
     %72 = core.const 1 : i64
     %73 = core.add %71, %72 {overflow = "proven"} : i64
-    %74 = core.cmp.gt %73, %20 : bool
-    core.cond_br %74, ^notfound4, ^attempt1(%73)
+    %74 = core.cmp.le %73, %20 : bool
+    core.cond_br %74, ^fits8, ^fail2
+^fail2:
+    %75 = core.load %sp : i64
+    %76 = core.const 0 : i64
+    %77 = core.cmp.eq %75, %76 : bool
+    core.cond_br %77, ^exhausted3, ^pop53
+^exhausted3:
+    %78 = core.load %start : i64
+    %79 = core.const 1 : i64
+    %80 = core.add %78, %79 {overflow = "proven"} : i64
+    %81 = core.cmp.gt %80, %20 : bool
+    core.cond_br %81, ^notfound4, ^attempt1(%80)
 ^notfound4:
-    %75 = core.const false : bool
-    %76 = core.const -1 : i64
-    %77 = core.const -1 : i64
-    %78 = core.const -1 : i64
-    %79 = core.const -1 : i64
-    %80 = core.const -1 : i64
-    %81 = core.const -1 : i64
-    core.ret %75, %76, %77, %78, %79, %80, %81
+    %82 = core.const false : bool
+    %83 = core.const -1 : i64
+    %84 = core.const -1 : i64
+    %85 = core.const -1 : i64
+    %86 = core.const -1 : i64
+    %87 = core.const -1 : i64
+    %88 = core.const -1 : i64
+    core.ret %82, %83, %84, %85, %86, %87, %88
 ^restore7(%held: i64):
-    %82 = core.const 2 : i64
-    %83 = core.ptr_offset %caps, %82 : ptr<i64, stack>
-    core.store %held, %83
+    %89 = core.const 2 : i64
+    %90 = core.ptr_offset %caps, %89 : ptr<i64, stack>
+    core.store %held, %90
     core.br ^fail2
 ^fits8:
-    core.br ^scan9(%64)
+    core.br ^scan9(%71)
 ^scan9(%q: i64):
-    %84 = core.cmp.lt %q, %20 : bool
-    core.cond_br %84, ^bound10, ^scanned12(%q)
+    %91 = core.cmp.lt %q, %20 : bool
+    core.cond_br %91, ^bound10, ^scanned12(%q)
 ^bound10:
-    %85 = core.buffer_load %buf, %q : u8
-    %86 = core.cast %85 : i64
-    %87 = core.const 0 : i64
-    %88 = core.const 192 : i64
-    %89 = core.cmp.lt %86, %88 : bool
-    %90 = core.const 0 : i64
-    %91 = core.select %89, %90, %87 : i64
-    %92 = core.const 128 : i64
-    %93 = core.cmp.lt %86, %92 : bool
-    %94 = core.const 576460745995190270 : i64
-    %95 = core.select %93, %94, %91 : i64
-    %96 = core.const 64 : i64
-    %97 = core.cmp.lt %86, %96 : bool
-    %98 = core.const 287948901175001088 : i64
-    %99 = core.select %97, %98, %95 : i64
-    %100 = core.const 63 : i64
-    %101 = core.and %86, %100 : i64
-    %102 = core.shr %99, %101 : i64
-    %103 = core.const 1 : i64
-    %104 = core.and %102, %103 : i64
-    %105 = core.const 0 : i64
-    %106 = core.cmp.ne %104, %105 : bool
-    %107 = core.const 1 : i64
-    %108 = core.add %q, %107 {overflow = "proven"} : i64
-    core.cond_br %106, ^scan9(%108), ^scanned12(%q)
+    %92 = core.buffer_load %buf, %q : u8
+    %93 = core.cast %92 : i64
+    %94 = core.const 0 : i64
+    %95 = core.const 192 : i64
+    %96 = core.cmp.lt %93, %95 : bool
+    %97 = core.const 0 : i64
+    %98 = core.select %96, %97, %94 : i64
+    %99 = core.const 128 : i64
+    %100 = core.cmp.lt %93, %99 : bool
+    %101 = core.const 576460745995190270 : i64
+    %102 = core.select %100, %101, %98 : i64
+    %103 = core.const 64 : i64
+    %104 = core.cmp.lt %93, %103 : bool
+    %105 = core.const 287948901175001088 : i64
+    %106 = core.select %104, %105, %102 : i64
+    %107 = core.const 63 : i64
+    %108 = core.and %93, %107 : i64
+    %109 = core.shr %106, %108 : i64
+    %110 = core.const 1 : i64
+    %111 = core.and %109, %110 : i64
+    %112 = core.const 0 : i64
+    %113 = core.cmp.ne %111, %112 : bool
+    %114 = core.const 1 : i64
+    %115 = core.add %q, %114 {overflow = "proven"} : i64
+    core.cond_br %113, ^scan9(%115), ^scanned12(%q)
 ^scanned12(%0: i64):
-    %109 = core.const 1 : i64
-    %110 = core.add %64, %109 {overflow = "proven"} : i64
-    %111 = core.cmp.lt %0, %110 : bool
-    core.cond_br %111, ^fail2, ^enough14
+    %116 = core.const 1 : i64
+    %117 = core.add %71, %116 {overflow = "proven"} : i64
+    %118 = core.cmp.lt %0, %117 : bool
+    core.cond_br %118, ^fail2, ^enough14
 ^exit13:
-    %112 = core.const 3 : i64
-    %113 = core.ptr_offset %caps, %112 : ptr<i64, stack>
-    %114 = core.load %113 : i64
-    %115 = core.load %sp : i64
-    %116 = core.const 4096 : i64
-    %117 = core.cmp.lt %115, %116 : bool
-    core.guard %117 {kind = "range", label = "regex.stack.ok"}
-    %118 = core.const 3 : i64
-    %119 = core.mul %115, %118 {overflow = "proven"} : i64
-    %120 = core.ptr_offset %stack, %119 : ptr<i64, stack>
-    %121 = core.const 2 : i64
-    %122 = core.load %p : i64
-    %123 = core.const 0 : i64
-    %124 = core.ptr_offset %120, %123 : ptr<i64, stack>
-    core.store %121, %124
-    %125 = core.const 1 : i64
-    %126 = core.ptr_offset %120, %125 : ptr<i64, stack>
-    core.store %122, %126
-    %127 = core.const 2 : i64
-    %128 = core.ptr_offset %120, %127 : ptr<i64, stack>
-    core.store %114, %128
-    %129 = core.const 1 : i64
-    %130 = core.add %115, %129 {overflow = "proven"} : i64
-    core.store %130, %sp
-    %131 = core.load %p : i64
-    %132 = core.const 3 : i64
-    %133 = core.ptr_offset %caps, %132 : ptr<i64, stack>
-    core.store %131, %133
-    %134 = core.load %p : i64
-    %135 = core.cmp.le %134, %20 : bool
-    core.cond_br %135, ^fits19, ^fail2
+    %119 = core.const 3 : i64
+    %120 = core.ptr_offset %caps, %119 : ptr<i64, stack>
+    %121 = core.load %120 : i64
+    %122 = core.load %sp : i64
+    %123 = core.const 4096 : i64
+    %124 = core.cmp.lt %122, %123 : bool
+    core.guard %124 {kind = "range", label = "regex.stack.ok"}
+    %125 = core.const 3 : i64
+    %126 = core.mul %122, %125 {overflow = "proven"} : i64
+    %127 = core.ptr_offset %stack, %126 : ptr<i64, stack>
+    %128 = core.const 2 : i64
+    %129 = core.load %p : i64
+    %130 = core.const 0 : i64
+    %131 = core.ptr_offset %127, %130 : ptr<i64, stack>
+    core.store %128, %131
+    %132 = core.const 1 : i64
+    %133 = core.ptr_offset %127, %132 : ptr<i64, stack>
+    core.store %129, %133
+    %134 = core.const 2 : i64
+    %135 = core.ptr_offset %127, %134 : ptr<i64, stack>
+    core.store %121, %135
+    %136 = core.const 1 : i64
+    %137 = core.add %122, %136 {overflow = "proven"} : i64
+    core.store %137, %sp
+    %138 = core.load %p : i64
+    %139 = core.const 3 : i64
+    %140 = core.ptr_offset %caps, %139 : ptr<i64, stack>
+    core.store %138, %140
+    %141 = core.load %p : i64
+    %142 = core.cmp.le %141, %20 : bool
+    core.cond_br %142, ^fits19, ^fail2
 ^enough14:
     core.store %0, %p
-    %136 = core.cmp.gt %0, %110 : bool
-    core.cond_br %136, ^keep16, ^exit13
+    %143 = core.cmp.gt %0, %117 : bool
+    core.cond_br %143, ^keep16, ^exit13
 ^giveback15(%1: i64):
-    %137 = core.load %p : i64
-    %138 = core.const 1 : i64
-    %139 = core.sub %137, %138 {overflow = "proven"} : i64
-    core.store %139, %p
-    %140 = core.cmp.gt %139, %1 : bool
-    core.cond_br %140, ^keep17, ^exit13
+    %144 = core.load %p : i64
+    %145 = core.const 1 : i64
+    %146 = core.sub %144, %145 {overflow = "proven"} : i64
+    core.store %146, %p
+    %147 = core.cmp.gt %146, %1 : bool
+    core.cond_br %147, ^keep17, ^exit13
 ^keep16:
-    %141 = core.load %sp : i64
-    %142 = core.const 4096 : i64
-    %143 = core.cmp.lt %141, %142 : bool
-    core.guard %143 {kind = "range", label = "regex.stack.ok"}
-    %144 = core.const 3 : i64
-    %145 = core.mul %141, %144 {overflow = "proven"} : i64
-    %146 = core.ptr_offset %stack, %145 : ptr<i64, stack>
-    %147 = core.const 1 : i64
-    %148 = core.load %p : i64
-    %149 = core.const 0 : i64
-    %150 = core.ptr_offset %146, %149 : ptr<i64, stack>
-    core.store %147, %150
-    %151 = core.const 1 : i64
-    %152 = core.ptr_offset %146, %151 : ptr<i64, stack>
-    core.store %148, %152
-    %153 = core.const 2 : i64
-    %154 = core.ptr_offset %146, %153 : ptr<i64, stack>
-    core.store %110, %154
-    %155 = core.const 1 : i64
-    %156 = core.add %141, %155 {overflow = "proven"} : i64
-    core.store %156, %sp
+    %148 = core.load %sp : i64
+    %149 = core.const 4096 : i64
+    %150 = core.cmp.lt %148, %149 : bool
+    core.guard %150 {kind = "range", label = "regex.stack.ok"}
+    %151 = core.const 3 : i64
+    %152 = core.mul %148, %151 {overflow = "proven"} : i64
+    %153 = core.ptr_offset %stack, %152 : ptr<i64, stack>
+    %154 = core.const 1 : i64
+    %155 = core.load %p : i64
+    %156 = core.const 0 : i64
+    %157 = core.ptr_offset %153, %156 : ptr<i64, stack>
+    core.store %154, %157
+    %158 = core.const 1 : i64
+    %159 = core.ptr_offset %153, %158 : ptr<i64, stack>
+    core.store %155, %159
+    %160 = core.const 2 : i64
+    %161 = core.ptr_offset %153, %160 : ptr<i64, stack>
+    core.store %117, %161
+    %162 = core.const 1 : i64
+    %163 = core.add %148, %162 {overflow = "proven"} : i64
+    core.store %163, %sp
     core.br ^exit13
 ^keep17:
-    %157 = core.load %sp : i64
-    %158 = core.const 4096 : i64
-    %159 = core.cmp.lt %157, %158 : bool
-    core.guard %159 {kind = "range", label = "regex.stack.ok"}
-    %160 = core.const 3 : i64
-    %161 = core.mul %157, %160 {overflow = "proven"} : i64
-    %162 = core.ptr_offset %stack, %161 : ptr<i64, stack>
-    %163 = core.const 1 : i64
-    %164 = core.load %p : i64
-    %165 = core.const 0 : i64
-    %166 = core.ptr_offset %162, %165 : ptr<i64, stack>
-    core.store %163, %166
-    %167 = core.const 1 : i64
-    %168 = core.ptr_offset %162, %167 : ptr<i64, stack>
-    core.store %164, %168
-    %169 = core.const 2 : i64
-    %170 = core.ptr_offset %162, %169 : ptr<i64, stack>
-    core.store %1, %170
-    %171 = core.const 1 : i64
-    %172 = core.add %157, %171 {overflow = "proven"} : i64
-    core.store %172, %sp
+    %164 = core.load %sp : i64
+    %165 = core.const 4096 : i64
+    %166 = core.cmp.lt %164, %165 : bool
+    core.guard %166 {kind = "range", label = "regex.stack.ok"}
+    %167 = core.const 3 : i64
+    %168 = core.mul %164, %167 {overflow = "proven"} : i64
+    %169 = core.ptr_offset %stack, %168 : ptr<i64, stack>
+    %170 = core.const 1 : i64
+    %171 = core.load %p : i64
+    %172 = core.const 0 : i64
+    %173 = core.ptr_offset %169, %172 : ptr<i64, stack>
+    core.store %170, %173
+    %174 = core.const 1 : i64
+    %175 = core.ptr_offset %169, %174 : ptr<i64, stack>
+    core.store %171, %175
+    %176 = core.const 2 : i64
+    %177 = core.ptr_offset %169, %176 : ptr<i64, stack>
+    core.store %1, %177
+    %178 = core.const 1 : i64
+    %179 = core.add %164, %178 {overflow = "proven"} : i64
+    core.store %179, %sp
     core.br ^exit13
 ^restore18(%2: i64):
-    %173 = core.const 3 : i64
-    %174 = core.ptr_offset %caps, %173 : ptr<i64, stack>
-    core.store %2, %174
+    %180 = core.const 3 : i64
+    %181 = core.ptr_offset %caps, %180 : ptr<i64, stack>
+    core.store %2, %181
     core.br ^fail2
 ^fits19:
-    core.br ^scan20(%134)
+    core.br ^scan20(%141)
 ^scan20(%3: i64):
-    %175 = core.cmp.lt %3, %20 : bool
-    core.cond_br %175, ^bound21, ^scanned23(%3)
+    %182 = core.cmp.lt %3, %20 : bool
+    core.cond_br %182, ^bound21, ^scanned23(%3)
 ^bound21:
-    %176 = core.buffer_load %buf, %3 : u8
-    %177 = core.cast %176 : i64
-    %178 = core.const 9 : i64
-    %179 = core.cmp.ge %177, %178 : bool
-    %180 = core.const 13 : i64
-    %181 = core.cmp.le %177, %180 : bool
-    %182 = core.and %179, %181 : bool
-    %183 = core.const 32 : i64
-    %184 = core.cmp.eq %177, %183 : bool
-    %185 = core.or %182, %184 : bool
-    %186 = core.const 1 : i64
-    %187 = core.add %3, %186 {overflow = "proven"} : i64
-    core.cond_br %185, ^scan20(%187), ^scanned23(%3)
+    %183 = core.buffer_load %buf, %3 : u8
+    %184 = core.cast %183 : i64
+    %185 = core.const 9 : i64
+    %186 = core.cmp.ge %184, %185 : bool
+    %187 = core.const 13 : i64
+    %188 = core.cmp.le %184, %187 : bool
+    %189 = core.and %186, %188 : bool
+    %190 = core.const 32 : i64
+    %191 = core.cmp.eq %184, %190 : bool
+    %192 = core.or %189, %191 : bool
+    %193 = core.const 1 : i64
+    %194 = core.add %3, %193 {overflow = "proven"} : i64
+    core.cond_br %192, ^scan20(%194), ^scanned23(%3)
 ^scanned23(%4: i64):
-    %188 = core.cmp.lt %4, %134 : bool
-    core.cond_br %188, ^fail2, ^enough25
+    %195 = core.cmp.lt %4, %141 : bool
+    core.cond_br %195, ^fail2, ^enough25
 ^exit24:
-    %189 = core.load %p : i64
-    %190 = core.cmp.lt %189, %20 : bool
-    core.cond_br %190, ^read29, ^fail2
+    %196 = core.load %p : i64
+    %197 = core.cmp.lt %196, %20 : bool
+    core.cond_br %197, ^read29, ^fail2
 ^enough25:
     core.store %4, %p
-    %191 = core.cmp.gt %4, %134 : bool
-    core.cond_br %191, ^keep27, ^exit24
+    %198 = core.cmp.gt %4, %141 : bool
+    core.cond_br %198, ^keep27, ^exit24
 ^giveback26(%5: i64):
-    %192 = core.load %p : i64
-    %193 = core.const 1 : i64
-    %194 = core.sub %192, %193 {overflow = "proven"} : i64
-    core.store %194, %p
-    %195 = core.cmp.gt %194, %5 : bool
-    core.cond_br %195, ^keep28, ^exit24
+    %199 = core.load %p : i64
+    %200 = core.const 1 : i64
+    %201 = core.sub %199, %200 {overflow = "proven"} : i64
+    core.store %201, %p
+    %202 = core.cmp.gt %201, %5 : bool
+    core.cond_br %202, ^keep28, ^exit24
 ^keep27:
-    %196 = core.load %sp : i64
-    %197 = core.const 4096 : i64
-    %198 = core.cmp.lt %196, %197 : bool
-    core.guard %198 {kind = "range", label = "regex.stack.ok"}
-    %199 = core.const 3 : i64
-    %200 = core.mul %196, %199 {overflow = "proven"} : i64
-    %201 = core.ptr_offset %stack, %200 : ptr<i64, stack>
-    %202 = core.const 3 : i64
-    %203 = core.load %p : i64
-    %204 = core.const 0 : i64
-    %205 = core.ptr_offset %201, %204 : ptr<i64, stack>
-    core.store %202, %205
-    %206 = core.const 1 : i64
-    %207 = core.ptr_offset %201, %206 : ptr<i64, stack>
-    core.store %203, %207
-    %208 = core.const 2 : i64
-    %209 = core.ptr_offset %201, %208 : ptr<i64, stack>
-    core.store %134, %209
-    %210 = core.const 1 : i64
-    %211 = core.add %196, %210 {overflow = "proven"} : i64
-    core.store %211, %sp
+    %203 = core.load %sp : i64
+    %204 = core.const 4096 : i64
+    %205 = core.cmp.lt %203, %204 : bool
+    core.guard %205 {kind = "range", label = "regex.stack.ok"}
+    %206 = core.const 3 : i64
+    %207 = core.mul %203, %206 {overflow = "proven"} : i64
+    %208 = core.ptr_offset %stack, %207 : ptr<i64, stack>
+    %209 = core.const 3 : i64
+    %210 = core.load %p : i64
+    %211 = core.const 0 : i64
+    %212 = core.ptr_offset %208, %211 : ptr<i64, stack>
+    core.store %209, %212
+    %213 = core.const 1 : i64
+    %214 = core.ptr_offset %208, %213 : ptr<i64, stack>
+    core.store %210, %214
+    %215 = core.const 2 : i64
+    %216 = core.ptr_offset %208, %215 : ptr<i64, stack>
+    core.store %141, %216
+    %217 = core.const 1 : i64
+    %218 = core.add %203, %217 {overflow = "proven"} : i64
+    core.store %218, %sp
     core.br ^exit24
 ^keep28:
-    %212 = core.load %sp : i64
-    %213 = core.const 4096 : i64
-    %214 = core.cmp.lt %212, %213 : bool
-    core.guard %214 {kind = "range", label = "regex.stack.ok"}
-    %215 = core.const 3 : i64
-    %216 = core.mul %212, %215 {overflow = "proven"} : i64
-    %217 = core.ptr_offset %stack, %216 : ptr<i64, stack>
-    %218 = core.const 3 : i64
-    %219 = core.load %p : i64
-    %220 = core.const 0 : i64
-    %221 = core.ptr_offset %217, %220 : ptr<i64, stack>
-    core.store %218, %221
-    %222 = core.const 1 : i64
-    %223 = core.ptr_offset %217, %222 : ptr<i64, stack>
-    core.store %219, %223
-    %224 = core.const 2 : i64
-    %225 = core.ptr_offset %217, %224 : ptr<i64, stack>
-    core.store %5, %225
-    %226 = core.const 1 : i64
-    %227 = core.add %212, %226 {overflow = "proven"} : i64
-    core.store %227, %sp
+    %219 = core.load %sp : i64
+    %220 = core.const 4096 : i64
+    %221 = core.cmp.lt %219, %220 : bool
+    core.guard %221 {kind = "range", label = "regex.stack.ok"}
+    %222 = core.const 3 : i64
+    %223 = core.mul %219, %222 {overflow = "proven"} : i64
+    %224 = core.ptr_offset %stack, %223 : ptr<i64, stack>
+    %225 = core.const 3 : i64
+    %226 = core.load %p : i64
+    %227 = core.const 0 : i64
+    %228 = core.ptr_offset %224, %227 : ptr<i64, stack>
+    core.store %225, %228
+    %229 = core.const 1 : i64
+    %230 = core.ptr_offset %224, %229 : ptr<i64, stack>
+    core.store %226, %230
+    %231 = core.const 2 : i64
+    %232 = core.ptr_offset %224, %231 : ptr<i64, stack>
+    core.store %5, %232
+    %233 = core.const 1 : i64
+    %234 = core.add %219, %233 {overflow = "proven"} : i64
+    core.store %234, %sp
     core.br ^exit24
 ^read29:
-    %228 = core.buffer_load %buf, %189 : u8
-    %229 = core.cast %228 : i64
-    %230 = core.const 61 : i64
-    %231 = core.cmp.eq %229, %230 : bool
-    core.cond_br %231, ^advance30, ^fail2
+    %235 = core.buffer_load %buf, %196 : u8
+    %236 = core.cast %235 : i64
+    %237 = core.const 61 : i64
+    %238 = core.cmp.eq %236, %237 : bool
+    core.cond_br %238, ^advance30, ^fail2
 ^advance30:
-    %232 = core.const 1 : i64
-    %233 = core.add %189, %232 {overflow = "proven"} : i64
-    core.store %233, %p
-    %234 = core.load %p : i64
-    %235 = core.cmp.le %234, %20 : bool
-    core.cond_br %235, ^fits31, ^fail2
+    %239 = core.const 1 : i64
+    %240 = core.add %196, %239 {overflow = "proven"} : i64
+    core.store %240, %p
+    %241 = core.load %p : i64
+    %242 = core.cmp.le %241, %20 : bool
+    core.cond_br %242, ^fits31, ^fail2
 ^fits31:
-    core.br ^scan32(%234)
+    core.br ^scan32(%241)
 ^scan32(%6: i64):
-    %236 = core.cmp.lt %6, %20 : bool
-    core.cond_br %236, ^bound33, ^scanned35(%6)
+    %243 = core.cmp.lt %6, %20 : bool
+    core.cond_br %243, ^bound33, ^scanned35(%6)
 ^bound33:
-    %237 = core.buffer_load %buf, %6 : u8
-    %238 = core.cast %237 : i64
-    %239 = core.const 9 : i64
-    %240 = core.cmp.ge %238, %239 : bool
-    %241 = core.const 13 : i64
-    %242 = core.cmp.le %238, %241 : bool
-    %243 = core.and %240, %242 : bool
-    %244 = core.const 32 : i64
-    %245 = core.cmp.eq %238, %244 : bool
-    %246 = core.or %243, %245 : bool
-    %247 = core.const 1 : i64
-    %248 = core.add %6, %247 {overflow = "proven"} : i64
-    core.cond_br %246, ^scan32(%248), ^scanned35(%6)
+    %244 = core.buffer_load %buf, %6 : u8
+    %245 = core.cast %244 : i64
+    %246 = core.const 9 : i64
+    %247 = core.cmp.ge %245, %246 : bool
+    %248 = core.const 13 : i64
+    %249 = core.cmp.le %245, %248 : bool
+    %250 = core.and %247, %249 : bool
+    %251 = core.const 32 : i64
+    %252 = core.cmp.eq %245, %251 : bool
+    %253 = core.or %250, %252 : bool
+    %254 = core.const 1 : i64
+    %255 = core.add %6, %254 {overflow = "proven"} : i64
+    core.cond_br %253, ^scan32(%255), ^scanned35(%6)
 ^scanned35(%7: i64):
-    %249 = core.cmp.lt %7, %234 : bool
-    core.cond_br %249, ^fail2, ^enough37
+    %256 = core.cmp.lt %7, %241 : bool
+    core.cond_br %256, ^fail2, ^enough37
 ^exit36:
-    %250 = core.const 4 : i64
-    %251 = core.ptr_offset %caps, %250 : ptr<i64, stack>
-    %252 = core.load %251 : i64
-    %253 = core.load %sp : i64
-    %254 = core.const 4096 : i64
-    %255 = core.cmp.lt %253, %254 : bool
-    core.guard %255 {kind = "range", label = "regex.stack.ok"}
-    %256 = core.const 3 : i64
-    %257 = core.mul %253, %256 {overflow = "proven"} : i64
-    %258 = core.ptr_offset %stack, %257 : ptr<i64, stack>
-    %259 = core.const 5 : i64
-    %260 = core.load %p : i64
-    %261 = core.const 0 : i64
-    %262 = core.ptr_offset %258, %261 : ptr<i64, stack>
-    core.store %259, %262
-    %263 = core.const 1 : i64
-    %264 = core.ptr_offset %258, %263 : ptr<i64, stack>
-    core.store %260, %264
-    %265 = core.const 2 : i64
-    %266 = core.ptr_offset %258, %265 : ptr<i64, stack>
-    core.store %252, %266
-    %267 = core.const 1 : i64
-    %268 = core.add %253, %267 {overflow = "proven"} : i64
-    core.store %268, %sp
-    %269 = core.load %p : i64
-    %270 = core.const 4 : i64
-    %271 = core.ptr_offset %caps, %270 : ptr<i64, stack>
-    core.store %269, %271
-    %272 = core.load %p : i64
-    %273 = core.const 1 : i64
-    %274 = core.add %272, %273 {overflow = "proven"} : i64
-    %275 = core.cmp.le %274, %20 : bool
-    core.cond_br %275, ^fits42, ^fail2
+    %257 = core.const 4 : i64
+    %258 = core.ptr_offset %caps, %257 : ptr<i64, stack>
+    %259 = core.load %258 : i64
+    %260 = core.load %sp : i64
+    %261 = core.const 4096 : i64
+    %262 = core.cmp.lt %260, %261 : bool
+    core.guard %262 {kind = "range", label = "regex.stack.ok"}
+    %263 = core.const 3 : i64
+    %264 = core.mul %260, %263 {overflow = "proven"} : i64
+    %265 = core.ptr_offset %stack, %264 : ptr<i64, stack>
+    %266 = core.const 5 : i64
+    %267 = core.load %p : i64
+    %268 = core.const 0 : i64
+    %269 = core.ptr_offset %265, %268 : ptr<i64, stack>
+    core.store %266, %269
+    %270 = core.const 1 : i64
+    %271 = core.ptr_offset %265, %270 : ptr<i64, stack>
+    core.store %267, %271
+    %272 = core.const 2 : i64
+    %273 = core.ptr_offset %265, %272 : ptr<i64, stack>
+    core.store %259, %273
+    %274 = core.const 1 : i64
+    %275 = core.add %260, %274 {overflow = "proven"} : i64
+    core.store %275, %sp
+    %276 = core.load %p : i64
+    %277 = core.const 4 : i64
+    %278 = core.ptr_offset %caps, %277 : ptr<i64, stack>
+    core.store %276, %278
+    %279 = core.load %p : i64
+    %280 = core.const 1 : i64
+    %281 = core.add %279, %280 {overflow = "proven"} : i64
+    %282 = core.cmp.le %281, %20 : bool
+    core.cond_br %282, ^fits42, ^fail2
 ^enough37:
     core.store %7, %p
-    %276 = core.cmp.gt %7, %234 : bool
-    core.cond_br %276, ^keep39, ^exit36
+    %283 = core.cmp.gt %7, %241 : bool
+    core.cond_br %283, ^keep39, ^exit36
 ^giveback38(%8: i64):
-    %277 = core.load %p : i64
-    %278 = core.const 1 : i64
-    %279 = core.sub %277, %278 {overflow = "proven"} : i64
-    core.store %279, %p
-    %280 = core.cmp.gt %279, %8 : bool
-    core.cond_br %280, ^keep40, ^exit36
+    %284 = core.load %p : i64
+    %285 = core.const 1 : i64
+    %286 = core.sub %284, %285 {overflow = "proven"} : i64
+    core.store %286, %p
+    %287 = core.cmp.gt %286, %8 : bool
+    core.cond_br %287, ^keep40, ^exit36
 ^keep39:
-    %281 = core.load %sp : i64
-    %282 = core.const 4096 : i64
-    %283 = core.cmp.lt %281, %282 : bool
-    core.guard %283 {kind = "range", label = "regex.stack.ok"}
-    %284 = core.const 3 : i64
-    %285 = core.mul %281, %284 {overflow = "proven"} : i64
-    %286 = core.ptr_offset %stack, %285 : ptr<i64, stack>
-    %287 = core.const 4 : i64
-    %288 = core.load %p : i64
-    %289 = core.const 0 : i64
-    %290 = core.ptr_offset %286, %289 : ptr<i64, stack>
-    core.store %287, %290
-    %291 = core.const 1 : i64
-    %292 = core.ptr_offset %286, %291 : ptr<i64, stack>
-    core.store %288, %292
-    %293 = core.const 2 : i64
-    %294 = core.ptr_offset %286, %293 : ptr<i64, stack>
-    core.store %234, %294
-    %295 = core.const 1 : i64
-    %296 = core.add %281, %295 {overflow = "proven"} : i64
-    core.store %296, %sp
+    %288 = core.load %sp : i64
+    %289 = core.const 4096 : i64
+    %290 = core.cmp.lt %288, %289 : bool
+    core.guard %290 {kind = "range", label = "regex.stack.ok"}
+    %291 = core.const 3 : i64
+    %292 = core.mul %288, %291 {overflow = "proven"} : i64
+    %293 = core.ptr_offset %stack, %292 : ptr<i64, stack>
+    %294 = core.const 4 : i64
+    %295 = core.load %p : i64
+    %296 = core.const 0 : i64
+    %297 = core.ptr_offset %293, %296 : ptr<i64, stack>
+    core.store %294, %297
+    %298 = core.const 1 : i64
+    %299 = core.ptr_offset %293, %298 : ptr<i64, stack>
+    core.store %295, %299
+    %300 = core.const 2 : i64
+    %301 = core.ptr_offset %293, %300 : ptr<i64, stack>
+    core.store %241, %301
+    %302 = core.const 1 : i64
+    %303 = core.add %288, %302 {overflow = "proven"} : i64
+    core.store %303, %sp
     core.br ^exit36
 ^keep40:
-    %297 = core.load %sp : i64
-    %298 = core.const 4096 : i64
-    %299 = core.cmp.lt %297, %298 : bool
-    core.guard %299 {kind = "range", label = "regex.stack.ok"}
-    %300 = core.const 3 : i64
-    %301 = core.mul %297, %300 {overflow = "proven"} : i64
-    %302 = core.ptr_offset %stack, %301 : ptr<i64, stack>
-    %303 = core.const 4 : i64
-    %304 = core.load %p : i64
-    %305 = core.const 0 : i64
-    %306 = core.ptr_offset %302, %305 : ptr<i64, stack>
-    core.store %303, %306
-    %307 = core.const 1 : i64
-    %308 = core.ptr_offset %302, %307 : ptr<i64, stack>
-    core.store %304, %308
-    %309 = core.const 2 : i64
-    %310 = core.ptr_offset %302, %309 : ptr<i64, stack>
-    core.store %8, %310
-    %311 = core.const 1 : i64
-    %312 = core.add %297, %311 {overflow = "proven"} : i64
-    core.store %312, %sp
+    %304 = core.load %sp : i64
+    %305 = core.const 4096 : i64
+    %306 = core.cmp.lt %304, %305 : bool
+    core.guard %306 {kind = "range", label = "regex.stack.ok"}
+    %307 = core.const 3 : i64
+    %308 = core.mul %304, %307 {overflow = "proven"} : i64
+    %309 = core.ptr_offset %stack, %308 : ptr<i64, stack>
+    %310 = core.const 4 : i64
+    %311 = core.load %p : i64
+    %312 = core.const 0 : i64
+    %313 = core.ptr_offset %309, %312 : ptr<i64, stack>
+    core.store %310, %313
+    %314 = core.const 1 : i64
+    %315 = core.ptr_offset %309, %314 : ptr<i64, stack>
+    core.store %311, %315
+    %316 = core.const 2 : i64
+    %317 = core.ptr_offset %309, %316 : ptr<i64, stack>
+    core.store %8, %317
+    %318 = core.const 1 : i64
+    %319 = core.add %304, %318 {overflow = "proven"} : i64
+    core.store %319, %sp
     core.br ^exit36
 ^restore41(%9: i64):
-    %313 = core.const 4 : i64
-    %314 = core.ptr_offset %caps, %313 : ptr<i64, stack>
-    core.store %9, %314
+    %320 = core.const 4 : i64
+    %321 = core.ptr_offset %caps, %320 : ptr<i64, stack>
+    core.store %9, %321
     core.br ^fail2
 ^fits42:
-    core.br ^scan43(%272)
+    core.br ^scan43(%279)
 ^scan43(%10: i64):
-    %315 = core.cmp.lt %10, %20 : bool
-    core.cond_br %315, ^bound44, ^scanned46(%10)
+    %322 = core.cmp.lt %10, %20 : bool
+    core.cond_br %322, ^bound44, ^scanned46(%10)
 ^bound44:
-    %316 = core.buffer_load %buf, %10 : u8
-    %317 = core.cast %316 : i64
-    %318 = core.const 48 : i64
-    %319 = core.cmp.ge %317, %318 : bool
-    %320 = core.const 57 : i64
-    %321 = core.cmp.le %317, %320 : bool
-    %322 = core.and %319, %321 : bool
-    %323 = core.const 1 : i64
-    %324 = core.add %10, %323 {overflow = "proven"} : i64
-    core.cond_br %322, ^scan43(%324), ^scanned46(%10)
+    %323 = core.buffer_load %buf, %10 : u8
+    %324 = core.cast %323 : i64
+    %325 = core.const 48 : i64
+    %326 = core.cmp.ge %324, %325 : bool
+    %327 = core.const 57 : i64
+    %328 = core.cmp.le %324, %327 : bool
+    %329 = core.and %326, %328 : bool
+    %330 = core.const 1 : i64
+    %331 = core.add %10, %330 {overflow = "proven"} : i64
+    core.cond_br %329, ^scan43(%331), ^scanned46(%10)
 ^scanned46(%11: i64):
-    %325 = core.const 1 : i64
-    %326 = core.add %272, %325 {overflow = "proven"} : i64
-    %327 = core.cmp.lt %11, %326 : bool
-    core.cond_br %327, ^fail2, ^enough48
+    %332 = core.const 1 : i64
+    %333 = core.add %279, %332 {overflow = "proven"} : i64
+    %334 = core.cmp.lt %11, %333 : bool
+    core.cond_br %334, ^fail2, ^enough48
 ^exit47:
-    %328 = core.const 5 : i64
-    %329 = core.ptr_offset %caps, %328 : ptr<i64, stack>
-    %330 = core.load %329 : i64
-    %331 = core.load %sp : i64
-    %332 = core.const 4096 : i64
-    %333 = core.cmp.lt %331, %332 : bool
-    core.guard %333 {kind = "range", label = "regex.stack.ok"}
-    %334 = core.const 3 : i64
-    %335 = core.mul %331, %334 {overflow = "proven"} : i64
-    %336 = core.ptr_offset %stack, %335 : ptr<i64, stack>
-    %337 = core.const 7 : i64
-    %338 = core.load %p : i64
-    %339 = core.const 0 : i64
-    %340 = core.ptr_offset %336, %339 : ptr<i64, stack>
-    core.store %337, %340
-    %341 = core.const 1 : i64
-    %342 = core.ptr_offset %336, %341 : ptr<i64, stack>
-    core.store %338, %342
-    %343 = core.const 2 : i64
-    %344 = core.ptr_offset %336, %343 : ptr<i64, stack>
-    core.store %330, %344
-    %345 = core.const 1 : i64
-    %346 = core.add %331, %345 {overflow = "proven"} : i64
-    core.store %346, %sp
-    %347 = core.load %p : i64
-    %348 = core.const 5 : i64
-    %349 = core.ptr_offset %caps, %348 : ptr<i64, stack>
-    core.store %347, %349
-    %350 = core.load %p : i64
-    %351 = core.const 1 : i64
-    %352 = core.ptr_offset %caps, %351 : ptr<i64, stack>
-    core.store %350, %352
-    %353 = core.const true : bool
-    %354 = core.const 0 : i64
-    %355 = core.ptr_offset %caps, %354 : ptr<i64, stack>
-    %356 = core.load %355 : i64
-    %357 = core.const 1 : i64
-    %358 = core.ptr_offset %caps, %357 : ptr<i64, stack>
-    %359 = core.load %358 : i64
-    %360 = core.const 2 : i64
-    %361 = core.ptr_offset %caps, %360 : ptr<i64, stack>
-    %362 = core.load %361 : i64
-    %363 = core.const 3 : i64
-    %364 = core.ptr_offset %caps, %363 : ptr<i64, stack>
-    %365 = core.load %364 : i64
-    %366 = core.const 4 : i64
-    %367 = core.ptr_offset %caps, %366 : ptr<i64, stack>
-    %368 = core.load %367 : i64
-    %369 = core.const 5 : i64
-    %370 = core.ptr_offset %caps, %369 : ptr<i64, stack>
-    %371 = core.load %370 : i64
-    core.ret %353, %356, %359, %362, %365, %368, %371
+    %335 = core.const 5 : i64
+    %336 = core.ptr_offset %caps, %335 : ptr<i64, stack>
+    %337 = core.load %336 : i64
+    %338 = core.load %sp : i64
+    %339 = core.const 4096 : i64
+    %340 = core.cmp.lt %338, %339 : bool
+    core.guard %340 {kind = "range", label = "regex.stack.ok"}
+    %341 = core.const 3 : i64
+    %342 = core.mul %338, %341 {overflow = "proven"} : i64
+    %343 = core.ptr_offset %stack, %342 : ptr<i64, stack>
+    %344 = core.const 7 : i64
+    %345 = core.load %p : i64
+    %346 = core.const 0 : i64
+    %347 = core.ptr_offset %343, %346 : ptr<i64, stack>
+    core.store %344, %347
+    %348 = core.const 1 : i64
+    %349 = core.ptr_offset %343, %348 : ptr<i64, stack>
+    core.store %345, %349
+    %350 = core.const 2 : i64
+    %351 = core.ptr_offset %343, %350 : ptr<i64, stack>
+    core.store %337, %351
+    %352 = core.const 1 : i64
+    %353 = core.add %338, %352 {overflow = "proven"} : i64
+    core.store %353, %sp
+    %354 = core.load %p : i64
+    %355 = core.const 5 : i64
+    %356 = core.ptr_offset %caps, %355 : ptr<i64, stack>
+    core.store %354, %356
+    %357 = core.load %p : i64
+    %358 = core.const 1 : i64
+    %359 = core.ptr_offset %caps, %358 : ptr<i64, stack>
+    core.store %357, %359
+    %360 = core.const true : bool
+    %361 = core.const 0 : i64
+    %362 = core.ptr_offset %caps, %361 : ptr<i64, stack>
+    %363 = core.load %362 : i64
+    %364 = core.const 1 : i64
+    %365 = core.ptr_offset %caps, %364 : ptr<i64, stack>
+    %366 = core.load %365 : i64
+    %367 = core.const 2 : i64
+    %368 = core.ptr_offset %caps, %367 : ptr<i64, stack>
+    %369 = core.load %368 : i64
+    %370 = core.const 3 : i64
+    %371 = core.ptr_offset %caps, %370 : ptr<i64, stack>
+    %372 = core.load %371 : i64
+    %373 = core.const 4 : i64
+    %374 = core.ptr_offset %caps, %373 : ptr<i64, stack>
+    %375 = core.load %374 : i64
+    %376 = core.const 5 : i64
+    %377 = core.ptr_offset %caps, %376 : ptr<i64, stack>
+    %378 = core.load %377 : i64
+    core.ret %360, %363, %366, %369, %372, %375, %378
 ^enough48:
     core.store %11, %p
-    %372 = core.cmp.gt %11, %326 : bool
-    core.cond_br %372, ^keep50, ^exit47
+    %379 = core.cmp.gt %11, %333 : bool
+    core.cond_br %379, ^keep50, ^exit47
 ^giveback49(%12: i64):
-    %373 = core.load %p : i64
-    %374 = core.const 1 : i64
-    %375 = core.sub %373, %374 {overflow = "proven"} : i64
-    core.store %375, %p
-    %376 = core.cmp.gt %375, %12 : bool
-    core.cond_br %376, ^keep51, ^exit47
+    %380 = core.load %p : i64
+    %381 = core.const 1 : i64
+    %382 = core.sub %380, %381 {overflow = "proven"} : i64
+    core.store %382, %p
+    %383 = core.cmp.gt %382, %12 : bool
+    core.cond_br %383, ^keep51, ^exit47
 ^keep50:
-    %377 = core.load %sp : i64
-    %378 = core.const 4096 : i64
-    %379 = core.cmp.lt %377, %378 : bool
-    core.guard %379 {kind = "range", label = "regex.stack.ok"}
-    %380 = core.const 3 : i64
-    %381 = core.mul %377, %380 {overflow = "proven"} : i64
-    %382 = core.ptr_offset %stack, %381 : ptr<i64, stack>
-    %383 = core.const 6 : i64
-    %384 = core.load %p : i64
-    %385 = core.const 0 : i64
-    %386 = core.ptr_offset %382, %385 : ptr<i64, stack>
-    core.store %383, %386
-    %387 = core.const 1 : i64
-    %388 = core.ptr_offset %382, %387 : ptr<i64, stack>
-    core.store %384, %388
-    %389 = core.const 2 : i64
-    %390 = core.ptr_offset %382, %389 : ptr<i64, stack>
-    core.store %326, %390
-    %391 = core.const 1 : i64
-    %392 = core.add %377, %391 {overflow = "proven"} : i64
-    core.store %392, %sp
+    %384 = core.load %sp : i64
+    %385 = core.const 4096 : i64
+    %386 = core.cmp.lt %384, %385 : bool
+    core.guard %386 {kind = "range", label = "regex.stack.ok"}
+    %387 = core.const 3 : i64
+    %388 = core.mul %384, %387 {overflow = "proven"} : i64
+    %389 = core.ptr_offset %stack, %388 : ptr<i64, stack>
+    %390 = core.const 6 : i64
+    %391 = core.load %p : i64
+    %392 = core.const 0 : i64
+    %393 = core.ptr_offset %389, %392 : ptr<i64, stack>
+    core.store %390, %393
+    %394 = core.const 1 : i64
+    %395 = core.ptr_offset %389, %394 : ptr<i64, stack>
+    core.store %391, %395
+    %396 = core.const 2 : i64
+    %397 = core.ptr_offset %389, %396 : ptr<i64, stack>
+    core.store %333, %397
+    %398 = core.const 1 : i64
+    %399 = core.add %384, %398 {overflow = "proven"} : i64
+    core.store %399, %sp
     core.br ^exit47
 ^keep51:
-    %393 = core.load %sp : i64
-    %394 = core.const 4096 : i64
-    %395 = core.cmp.lt %393, %394 : bool
-    core.guard %395 {kind = "range", label = "regex.stack.ok"}
-    %396 = core.const 3 : i64
-    %397 = core.mul %393, %396 {overflow = "proven"} : i64
-    %398 = core.ptr_offset %stack, %397 : ptr<i64, stack>
-    %399 = core.const 6 : i64
-    %400 = core.load %p : i64
-    %401 = core.const 0 : i64
-    %402 = core.ptr_offset %398, %401 : ptr<i64, stack>
-    core.store %399, %402
-    %403 = core.const 1 : i64
-    %404 = core.ptr_offset %398, %403 : ptr<i64, stack>
-    core.store %400, %404
-    %405 = core.const 2 : i64
-    %406 = core.ptr_offset %398, %405 : ptr<i64, stack>
-    core.store %12, %406
-    %407 = core.const 1 : i64
-    %408 = core.add %393, %407 {overflow = "proven"} : i64
-    core.store %408, %sp
+    %400 = core.load %sp : i64
+    %401 = core.const 4096 : i64
+    %402 = core.cmp.lt %400, %401 : bool
+    core.guard %402 {kind = "range", label = "regex.stack.ok"}
+    %403 = core.const 3 : i64
+    %404 = core.mul %400, %403 {overflow = "proven"} : i64
+    %405 = core.ptr_offset %stack, %404 : ptr<i64, stack>
+    %406 = core.const 6 : i64
+    %407 = core.load %p : i64
+    %408 = core.const 0 : i64
+    %409 = core.ptr_offset %405, %408 : ptr<i64, stack>
+    core.store %406, %409
+    %410 = core.const 1 : i64
+    %411 = core.ptr_offset %405, %410 : ptr<i64, stack>
+    core.store %407, %411
+    %412 = core.const 2 : i64
+    %413 = core.ptr_offset %405, %412 : ptr<i64, stack>
+    core.store %12, %413
+    %414 = core.const 1 : i64
+    %415 = core.add %400, %414 {overflow = "proven"} : i64
+    core.store %415, %sp
     core.br ^exit47
 ^restore52(%13: i64):
-    %409 = core.const 5 : i64
-    %410 = core.ptr_offset %caps, %409 : ptr<i64, stack>
-    core.store %13, %410
+    %416 = core.const 5 : i64
+    %417 = core.ptr_offset %caps, %416 : ptr<i64, stack>
+    core.store %13, %417
     core.br ^fail2
 ^pop53:
-    %411 = core.const 1 : i64
-    %412 = core.sub %68, %411 {overflow = "proven"} : i64
-    core.store %412, %sp
-    %413 = core.const 3 : i64
-    %414 = core.mul %412, %413 {overflow = "proven"} : i64
-    %415 = core.ptr_offset %stack, %414 : ptr<i64, stack>
-    %416 = core.const 0 : i64
-    %417 = core.ptr_offset %415, %416 : ptr<i64, stack>
-    %418 = core.load %417 : i64
-    %419 = core.const 1 : i64
-    %420 = core.ptr_offset %415, %419 : ptr<i64, stack>
-    %421 = core.load %420 : i64
-    core.store %421, %p
-    %422 = core.const 2 : i64
-    %423 = core.ptr_offset %415, %422 : ptr<i64, stack>
-    %424 = core.load %423 : i64
-    %425 = core.const 0 : i64
-    %426 = core.cmp.eq %418, %425 : bool
-    core.cond_br %426, ^restore7(%424), ^dispatch54
-^dispatch54:
-    %427 = core.const 1 : i64
-    %428 = core.cmp.eq %418, %427 : bool
-    core.cond_br %428, ^giveback15(%424), ^dispatch55
-^dispatch55:
+    %418 = core.const 1 : i64
+    %419 = core.sub %75, %418 {overflow = "proven"} : i64
+    core.store %419, %sp
+    %420 = core.const 3 : i64
+    %421 = core.mul %419, %420 {overflow = "proven"} : i64
+    %422 = core.ptr_offset %stack, %421 : ptr<i64, stack>
+    %423 = core.const 0 : i64
+    %424 = core.ptr_offset %422, %423 : ptr<i64, stack>
+    %425 = core.load %424 : i64
+    %426 = core.const 1 : i64
+    %427 = core.ptr_offset %422, %426 : ptr<i64, stack>
+    %428 = core.load %427 : i64
+    core.store %428, %p
     %429 = core.const 2 : i64
-    %430 = core.cmp.eq %418, %429 : bool
-    core.cond_br %430, ^restore18(%424), ^dispatch56
+    %430 = core.ptr_offset %422, %429 : ptr<i64, stack>
+    %431 = core.load %430 : i64
+    %432 = core.const 0 : i64
+    %433 = core.cmp.eq %425, %432 : bool
+    core.cond_br %433, ^restore7(%431), ^dispatch54
+^dispatch54:
+    %434 = core.const 1 : i64
+    %435 = core.cmp.eq %425, %434 : bool
+    core.cond_br %435, ^giveback15(%431), ^dispatch55
+^dispatch55:
+    %436 = core.const 2 : i64
+    %437 = core.cmp.eq %425, %436 : bool
+    core.cond_br %437, ^restore18(%431), ^dispatch56
 ^dispatch56:
-    %431 = core.const 3 : i64
-    %432 = core.cmp.eq %418, %431 : bool
-    core.cond_br %432, ^giveback26(%424), ^dispatch57
+    %438 = core.const 3 : i64
+    %439 = core.cmp.eq %425, %438 : bool
+    core.cond_br %439, ^giveback26(%431), ^dispatch57
 ^dispatch57:
-    %433 = core.const 4 : i64
-    %434 = core.cmp.eq %418, %433 : bool
-    core.cond_br %434, ^giveback38(%424), ^dispatch58
+    %440 = core.const 4 : i64
+    %441 = core.cmp.eq %425, %440 : bool
+    core.cond_br %441, ^giveback38(%431), ^dispatch58
 ^dispatch58:
-    %435 = core.const 5 : i64
-    %436 = core.cmp.eq %418, %435 : bool
-    core.cond_br %436, ^restore41(%424), ^dispatch59
+    %442 = core.const 5 : i64
+    %443 = core.cmp.eq %425, %442 : bool
+    core.cond_br %443, ^restore41(%431), ^dispatch59
 ^dispatch59:
-    %437 = core.const 6 : i64
-    %438 = core.cmp.eq %418, %437 : bool
-    core.cond_br %438, ^giveback49(%424), ^dispatch60
+    %444 = core.const 6 : i64
+    %445 = core.cmp.eq %425, %444 : bool
+    core.cond_br %445, ^giveback49(%431), ^dispatch60
 ^dispatch60:
-    %439 = core.const 7 : i64
-    %440 = core.cmp.eq %418, %439 : bool
-    core.cond_br %440, ^restore52(%424), ^dispatch61
+    %446 = core.const 7 : i64
+    %447 = core.cmp.eq %425, %446 : bool
+    core.cond_br %447, ^restore52(%431), ^dispatch61
 ^dispatch61:
     core.unreachable
 }
@@ -1087,194 +1107,204 @@ private func @ppy.regex.2(%buf: buffer<u8>, %pos: i64, %endpos: i64) -> (bool, i
     %caps = core.alloca {count = 2} : ptr<i64, stack>
     %12 = core.const 0 : i64
     %13 = core.cmp.gt %11, %7 : bool
+    %14 = core.const 0 : i64
+    %15 = core.const 0 : i64
+    %16 = core.ptr_offset %stack, %15 : ptr<i64, stack>
+    core.store %14, %16
+    %17 = core.const 1 : i64
+    %18 = core.ptr_offset %stack, %17 : ptr<i64, stack>
+    core.store %14, %18
+    %19 = core.const 2 : i64
+    %20 = core.ptr_offset %stack, %19 : ptr<i64, stack>
+    core.store %14, %20
     core.cond_br %13, ^notfound4, ^attempt1(%11)
 ^attempt1(%s: i64):
     core.store %s, %p
     core.store %s, %start
     core.store %12, %sp
-    %14 = core.const -1 : i64
-    %15 = core.const 0 : i64
-    %16 = core.ptr_offset %caps, %15 : ptr<i64, stack>
-    core.store %14, %16
-    %17 = core.const 1 : i64
-    %18 = core.ptr_offset %caps, %17 : ptr<i64, stack>
-    core.store %14, %18
-    %19 = core.const 0 : i64
-    %20 = core.ptr_offset %caps, %19 : ptr<i64, stack>
-    core.store %s, %20
-    %21 = core.load %p : i64
-    %22 = core.cmp.lt %21, %7 : bool
-    core.cond_br %22, ^read7, ^fail2
+    %21 = core.const -1 : i64
+    %22 = core.const 0 : i64
+    %23 = core.ptr_offset %caps, %22 : ptr<i64, stack>
+    core.store %21, %23
+    %24 = core.const 1 : i64
+    %25 = core.ptr_offset %caps, %24 : ptr<i64, stack>
+    core.store %21, %25
+    %26 = core.const 0 : i64
+    %27 = core.ptr_offset %caps, %26 : ptr<i64, stack>
+    core.store %s, %27
+    %28 = core.load %p : i64
+    %29 = core.cmp.lt %28, %7 : bool
+    core.cond_br %29, ^read7, ^fail2
 ^fail2:
-    %23 = core.load %sp : i64
-    %24 = core.const 0 : i64
-    %25 = core.cmp.eq %23, %24 : bool
-    core.cond_br %25, ^exhausted3, ^pop21
+    %30 = core.load %sp : i64
+    %31 = core.const 0 : i64
+    %32 = core.cmp.eq %30, %31 : bool
+    core.cond_br %32, ^exhausted3, ^pop21
 ^exhausted3:
-    %26 = core.load %start : i64
-    %27 = core.const 1 : i64
-    %28 = core.add %26, %27 {overflow = "proven"} : i64
-    %29 = core.cmp.gt %28, %7 : bool
-    core.cond_br %29, ^notfound4, ^attempt1(%28)
+    %33 = core.load %start : i64
+    %34 = core.const 1 : i64
+    %35 = core.add %33, %34 {overflow = "proven"} : i64
+    %36 = core.cmp.gt %35, %7 : bool
+    core.cond_br %36, ^notfound4, ^attempt1(%35)
 ^notfound4:
-    %30 = core.const false : bool
-    %31 = core.const -1 : i64
-    %32 = core.const -1 : i64
-    core.ret %30, %31, %32
+    %37 = core.const false : bool
+    %38 = core.const -1 : i64
+    %39 = core.const -1 : i64
+    core.ret %37, %38, %39
 ^read7:
-    %33 = core.buffer_load %buf, %21 : u8
-    %34 = core.cast %33 : i64
-    %35 = core.const 48 : i64
-    %36 = core.cmp.eq %34, %35 : bool
-    core.cond_br %36, ^advance8, ^fail2
+    %40 = core.buffer_load %buf, %28 : u8
+    %41 = core.cast %40 : i64
+    %42 = core.const 48 : i64
+    %43 = core.cmp.eq %41, %42 : bool
+    core.cond_br %43, ^advance8, ^fail2
 ^advance8:
-    %37 = core.const 1 : i64
-    %38 = core.add %21, %37 {overflow = "proven"} : i64
-    core.store %38, %p
-    %39 = core.load %p : i64
-    %40 = core.cmp.lt %39, %7 : bool
-    core.cond_br %40, ^read9, ^fail2
+    %44 = core.const 1 : i64
+    %45 = core.add %28, %44 {overflow = "proven"} : i64
+    core.store %45, %p
+    %46 = core.load %p : i64
+    %47 = core.cmp.lt %46, %7 : bool
+    core.cond_br %47, ^read9, ^fail2
 ^read9:
-    %41 = core.buffer_load %buf, %39 : u8
-    %42 = core.cast %41 : i64
-    %43 = core.const 88 : i64
-    %44 = core.cmp.eq %42, %43 : bool
-    %45 = core.const 120 : i64
-    %46 = core.cmp.eq %42, %45 : bool
-    %47 = core.or %44, %46 : bool
-    core.cond_br %47, ^advance10, ^fail2
+    %48 = core.buffer_load %buf, %46 : u8
+    %49 = core.cast %48 : i64
+    %50 = core.const 88 : i64
+    %51 = core.cmp.eq %49, %50 : bool
+    %52 = core.const 120 : i64
+    %53 = core.cmp.eq %49, %52 : bool
+    %54 = core.or %51, %53 : bool
+    core.cond_br %54, ^advance10, ^fail2
 ^advance10:
-    %48 = core.const 1 : i64
-    %49 = core.add %39, %48 {overflow = "proven"} : i64
-    core.store %49, %p
-    %50 = core.load %p : i64
-    %51 = core.const 1 : i64
-    %52 = core.add %50, %51 {overflow = "proven"} : i64
-    %53 = core.cmp.le %52, %7 : bool
-    core.cond_br %53, ^fits11, ^fail2
+    %55 = core.const 1 : i64
+    %56 = core.add %46, %55 {overflow = "proven"} : i64
+    core.store %56, %p
+    %57 = core.load %p : i64
+    %58 = core.const 1 : i64
+    %59 = core.add %57, %58 {overflow = "proven"} : i64
+    %60 = core.cmp.le %59, %7 : bool
+    core.cond_br %60, ^fits11, ^fail2
 ^fits11:
-    core.br ^scan12(%50)
+    core.br ^scan12(%57)
 ^scan12(%q: i64):
-    %54 = core.cmp.lt %q, %7 : bool
-    core.cond_br %54, ^bound13, ^scanned15(%q)
+    %61 = core.cmp.lt %q, %7 : bool
+    core.cond_br %61, ^bound13, ^scanned15(%q)
 ^bound13:
-    %55 = core.buffer_load %buf, %q : u8
-    %56 = core.cast %55 : i64
-    %57 = core.const 48 : i64
-    %58 = core.cmp.ge %56, %57 : bool
-    %59 = core.const 57 : i64
-    %60 = core.cmp.le %56, %59 : bool
-    %61 = core.and %58, %60 : bool
-    %62 = core.const 65 : i64
-    %63 = core.cmp.ge %56, %62 : bool
-    %64 = core.const 70 : i64
-    %65 = core.cmp.le %56, %64 : bool
-    %66 = core.and %63, %65 : bool
-    %67 = core.const 97 : i64
-    %68 = core.cmp.ge %56, %67 : bool
-    %69 = core.const 102 : i64
-    %70 = core.cmp.le %56, %69 : bool
-    %71 = core.and %68, %70 : bool
-    %72 = core.or %61, %66 : bool
-    %73 = core.or %72, %71 : bool
-    %74 = core.const 1 : i64
-    %75 = core.add %q, %74 {overflow = "proven"} : i64
-    core.cond_br %73, ^scan12(%75), ^scanned15(%q)
+    %62 = core.buffer_load %buf, %q : u8
+    %63 = core.cast %62 : i64
+    %64 = core.const 48 : i64
+    %65 = core.cmp.ge %63, %64 : bool
+    %66 = core.const 57 : i64
+    %67 = core.cmp.le %63, %66 : bool
+    %68 = core.and %65, %67 : bool
+    %69 = core.const 65 : i64
+    %70 = core.cmp.ge %63, %69 : bool
+    %71 = core.const 70 : i64
+    %72 = core.cmp.le %63, %71 : bool
+    %73 = core.and %70, %72 : bool
+    %74 = core.const 97 : i64
+    %75 = core.cmp.ge %63, %74 : bool
+    %76 = core.const 102 : i64
+    %77 = core.cmp.le %63, %76 : bool
+    %78 = core.and %75, %77 : bool
+    %79 = core.or %68, %73 : bool
+    %80 = core.or %79, %78 : bool
+    %81 = core.const 1 : i64
+    %82 = core.add %q, %81 {overflow = "proven"} : i64
+    core.cond_br %80, ^scan12(%82), ^scanned15(%q)
 ^scanned15(%0: i64):
-    %76 = core.const 1 : i64
-    %77 = core.add %50, %76 {overflow = "proven"} : i64
-    %78 = core.cmp.lt %0, %77 : bool
-    core.cond_br %78, ^fail2, ^enough17
+    %83 = core.const 1 : i64
+    %84 = core.add %57, %83 {overflow = "proven"} : i64
+    %85 = core.cmp.lt %0, %84 : bool
+    core.cond_br %85, ^fail2, ^enough17
 ^exit16:
-    %79 = core.load %p : i64
-    %80 = core.const 1 : i64
-    %81 = core.ptr_offset %caps, %80 : ptr<i64, stack>
-    core.store %79, %81
-    %82 = core.const true : bool
-    %83 = core.const 0 : i64
-    %84 = core.ptr_offset %caps, %83 : ptr<i64, stack>
-    %85 = core.load %84 : i64
-    %86 = core.const 1 : i64
-    %87 = core.ptr_offset %caps, %86 : ptr<i64, stack>
-    %88 = core.load %87 : i64
-    core.ret %82, %85, %88
+    %86 = core.load %p : i64
+    %87 = core.const 1 : i64
+    %88 = core.ptr_offset %caps, %87 : ptr<i64, stack>
+    core.store %86, %88
+    %89 = core.const true : bool
+    %90 = core.const 0 : i64
+    %91 = core.ptr_offset %caps, %90 : ptr<i64, stack>
+    %92 = core.load %91 : i64
+    %93 = core.const 1 : i64
+    %94 = core.ptr_offset %caps, %93 : ptr<i64, stack>
+    %95 = core.load %94 : i64
+    core.ret %89, %92, %95
 ^enough17:
     core.store %0, %p
-    %89 = core.cmp.gt %0, %77 : bool
-    core.cond_br %89, ^keep19, ^exit16
+    %96 = core.cmp.gt %0, %84 : bool
+    core.cond_br %96, ^keep19, ^exit16
 ^giveback18(%held: i64):
-    %90 = core.load %p : i64
-    %91 = core.const 1 : i64
-    %92 = core.sub %90, %91 {overflow = "proven"} : i64
-    core.store %92, %p
-    %93 = core.cmp.gt %92, %held : bool
-    core.cond_br %93, ^keep20, ^exit16
+    %97 = core.load %p : i64
+    %98 = core.const 1 : i64
+    %99 = core.sub %97, %98 {overflow = "proven"} : i64
+    core.store %99, %p
+    %100 = core.cmp.gt %99, %held : bool
+    core.cond_br %100, ^keep20, ^exit16
 ^keep19:
-    %94 = core.load %sp : i64
-    %95 = core.const 4096 : i64
-    %96 = core.cmp.lt %94, %95 : bool
-    core.guard %96 {kind = "range", label = "regex.stack.ok"}
-    %97 = core.const 3 : i64
-    %98 = core.mul %94, %97 {overflow = "proven"} : i64
-    %99 = core.ptr_offset %stack, %98 : ptr<i64, stack>
-    %100 = core.const 0 : i64
-    %101 = core.load %p : i64
-    %102 = core.const 0 : i64
-    %103 = core.ptr_offset %99, %102 : ptr<i64, stack>
-    core.store %100, %103
-    %104 = core.const 1 : i64
-    %105 = core.ptr_offset %99, %104 : ptr<i64, stack>
-    core.store %101, %105
-    %106 = core.const 2 : i64
-    %107 = core.ptr_offset %99, %106 : ptr<i64, stack>
-    core.store %77, %107
-    %108 = core.const 1 : i64
-    %109 = core.add %94, %108 {overflow = "proven"} : i64
-    core.store %109, %sp
+    %101 = core.load %sp : i64
+    %102 = core.const 4096 : i64
+    %103 = core.cmp.lt %101, %102 : bool
+    core.guard %103 {kind = "range", label = "regex.stack.ok"}
+    %104 = core.const 3 : i64
+    %105 = core.mul %101, %104 {overflow = "proven"} : i64
+    %106 = core.ptr_offset %stack, %105 : ptr<i64, stack>
+    %107 = core.const 0 : i64
+    %108 = core.load %p : i64
+    %109 = core.const 0 : i64
+    %110 = core.ptr_offset %106, %109 : ptr<i64, stack>
+    core.store %107, %110
+    %111 = core.const 1 : i64
+    %112 = core.ptr_offset %106, %111 : ptr<i64, stack>
+    core.store %108, %112
+    %113 = core.const 2 : i64
+    %114 = core.ptr_offset %106, %113 : ptr<i64, stack>
+    core.store %84, %114
+    %115 = core.const 1 : i64
+    %116 = core.add %101, %115 {overflow = "proven"} : i64
+    core.store %116, %sp
     core.br ^exit16
 ^keep20:
-    %110 = core.load %sp : i64
-    %111 = core.const 4096 : i64
-    %112 = core.cmp.lt %110, %111 : bool
-    core.guard %112 {kind = "range", label = "regex.stack.ok"}
-    %113 = core.const 3 : i64
-    %114 = core.mul %110, %113 {overflow = "proven"} : i64
-    %115 = core.ptr_offset %stack, %114 : ptr<i64, stack>
-    %116 = core.const 0 : i64
-    %117 = core.load %p : i64
-    %118 = core.const 0 : i64
-    %119 = core.ptr_offset %115, %118 : ptr<i64, stack>
-    core.store %116, %119
-    %120 = core.const 1 : i64
-    %121 = core.ptr_offset %115, %120 : ptr<i64, stack>
-    core.store %117, %121
-    %122 = core.const 2 : i64
-    %123 = core.ptr_offset %115, %122 : ptr<i64, stack>
-    core.store %held, %123
-    %124 = core.const 1 : i64
-    %125 = core.add %110, %124 {overflow = "proven"} : i64
-    core.store %125, %sp
+    %117 = core.load %sp : i64
+    %118 = core.const 4096 : i64
+    %119 = core.cmp.lt %117, %118 : bool
+    core.guard %119 {kind = "range", label = "regex.stack.ok"}
+    %120 = core.const 3 : i64
+    %121 = core.mul %117, %120 {overflow = "proven"} : i64
+    %122 = core.ptr_offset %stack, %121 : ptr<i64, stack>
+    %123 = core.const 0 : i64
+    %124 = core.load %p : i64
+    %125 = core.const 0 : i64
+    %126 = core.ptr_offset %122, %125 : ptr<i64, stack>
+    core.store %123, %126
+    %127 = core.const 1 : i64
+    %128 = core.ptr_offset %122, %127 : ptr<i64, stack>
+    core.store %124, %128
+    %129 = core.const 2 : i64
+    %130 = core.ptr_offset %122, %129 : ptr<i64, stack>
+    core.store %held, %130
+    %131 = core.const 1 : i64
+    %132 = core.add %117, %131 {overflow = "proven"} : i64
+    core.store %132, %sp
     core.br ^exit16
 ^pop21:
-    %126 = core.const 1 : i64
-    %127 = core.sub %23, %126 {overflow = "proven"} : i64
-    core.store %127, %sp
-    %128 = core.const 3 : i64
-    %129 = core.mul %127, %128 {overflow = "proven"} : i64
-    %130 = core.ptr_offset %stack, %129 : ptr<i64, stack>
-    %131 = core.const 0 : i64
-    %132 = core.ptr_offset %130, %131 : ptr<i64, stack>
-    %133 = core.load %132 : i64
-    %134 = core.const 1 : i64
-    %135 = core.ptr_offset %130, %134 : ptr<i64, stack>
-    %136 = core.load %135 : i64
-    core.store %136, %p
-    %137 = core.const 2 : i64
-    %138 = core.ptr_offset %130, %137 : ptr<i64, stack>
-    %139 = core.load %138 : i64
-    %140 = core.const 0 : i64
-    %141 = core.cmp.eq %133, %140 : bool
-    core.cond_br %141, ^giveback18(%139), ^dispatch22
+    %133 = core.const 1 : i64
+    %134 = core.sub %30, %133 {overflow = "proven"} : i64
+    core.store %134, %sp
+    %135 = core.const 3 : i64
+    %136 = core.mul %134, %135 {overflow = "proven"} : i64
+    %137 = core.ptr_offset %stack, %136 : ptr<i64, stack>
+    %138 = core.const 0 : i64
+    %139 = core.ptr_offset %137, %138 : ptr<i64, stack>
+    %140 = core.load %139 : i64
+    %141 = core.const 1 : i64
+    %142 = core.ptr_offset %137, %141 : ptr<i64, stack>
+    %143 = core.load %142 : i64
+    core.store %143, %p
+    %144 = core.const 2 : i64
+    %145 = core.ptr_offset %137, %144 : ptr<i64, stack>
+    %146 = core.load %145 : i64
+    %147 = core.const 0 : i64
+    %148 = core.cmp.eq %140, %147 : bool
+    core.cond_br %148, ^giveback18(%146), ^dispatch22
 ^dispatch22:
     core.unreachable
 }
@@ -1297,184 +1327,194 @@ private func @ppy.regex.3(%buf: buffer<u8>, %pos: i64, %endpos: i64) -> (bool, i
     %stack = core.alloca {count = 12288} : ptr<i64, stack>
     %caps = core.alloca {count = 2} : ptr<i64, stack>
     %12 = core.const 0 : i64
-    core.store %11, %p
-    core.store %12, %sp
-    %13 = core.const -1 : i64
+    %13 = core.const 0 : i64
     %14 = core.const 0 : i64
-    %15 = core.ptr_offset %caps, %14 : ptr<i64, stack>
+    %15 = core.ptr_offset %stack, %14 : ptr<i64, stack>
     core.store %13, %15
     %16 = core.const 1 : i64
-    %17 = core.ptr_offset %caps, %16 : ptr<i64, stack>
+    %17 = core.ptr_offset %stack, %16 : ptr<i64, stack>
     core.store %13, %17
-    %18 = core.const 0 : i64
-    %19 = core.ptr_offset %caps, %18 : ptr<i64, stack>
-    core.store %11, %19
-    %20 = core.load %p : i64
-    %21 = core.cmp.lt %20, %7 : bool
-    core.cond_br %21, ^read7, ^fail2
+    %18 = core.const 2 : i64
+    %19 = core.ptr_offset %stack, %18 : ptr<i64, stack>
+    core.store %13, %19
+    core.store %11, %p
+    core.store %12, %sp
+    %20 = core.const -1 : i64
+    %21 = core.const 0 : i64
+    %22 = core.ptr_offset %caps, %21 : ptr<i64, stack>
+    core.store %20, %22
+    %23 = core.const 1 : i64
+    %24 = core.ptr_offset %caps, %23 : ptr<i64, stack>
+    core.store %20, %24
+    %25 = core.const 0 : i64
+    %26 = core.ptr_offset %caps, %25 : ptr<i64, stack>
+    core.store %11, %26
+    %27 = core.load %p : i64
+    %28 = core.cmp.lt %27, %7 : bool
+    core.cond_br %28, ^read7, ^fail2
 ^fail2:
-    %22 = core.load %sp : i64
-    %23 = core.const 0 : i64
-    %24 = core.cmp.eq %22, %23 : bool
-    core.cond_br %24, ^exhausted3, ^pop19
+    %29 = core.load %sp : i64
+    %30 = core.const 0 : i64
+    %31 = core.cmp.eq %29, %30 : bool
+    core.cond_br %31, ^exhausted3, ^pop19
 ^exhausted3:
-    %25 = core.const false : bool
-    %26 = core.const -1 : i64
-    %27 = core.const -1 : i64
-    core.ret %25, %26, %27
+    %32 = core.const false : bool
+    %33 = core.const -1 : i64
+    %34 = core.const -1 : i64
+    core.ret %32, %33, %34
 ^success5:
-    %28 = core.load %p : i64
-    %29 = core.const 1 : i64
-    %30 = core.ptr_offset %caps, %29 : ptr<i64, stack>
-    core.store %28, %30
-    %31 = core.const true : bool
-    %32 = core.const 0 : i64
-    %33 = core.ptr_offset %caps, %32 : ptr<i64, stack>
-    %34 = core.load %33 : i64
-    %35 = core.const 1 : i64
-    %36 = core.ptr_offset %caps, %35 : ptr<i64, stack>
-    %37 = core.load %36 : i64
-    core.ret %31, %34, %37
+    %35 = core.load %p : i64
+    %36 = core.const 1 : i64
+    %37 = core.ptr_offset %caps, %36 : ptr<i64, stack>
+    core.store %35, %37
+    %38 = core.const true : bool
+    %39 = core.const 0 : i64
+    %40 = core.ptr_offset %caps, %39 : ptr<i64, stack>
+    %41 = core.load %40 : i64
+    %42 = core.const 1 : i64
+    %43 = core.ptr_offset %caps, %42 : ptr<i64, stack>
+    %44 = core.load %43 : i64
+    core.ret %38, %41, %44
 ^read7:
-    %38 = core.buffer_load %buf, %20 : u8
-    %39 = core.cast %38 : i64
-    %40 = core.const 65 : i64
-    %41 = core.cmp.ge %39, %40 : bool
-    %42 = core.const 90 : i64
-    %43 = core.cmp.le %39, %42 : bool
-    %44 = core.and %41, %43 : bool
-    %45 = core.const 95 : i64
-    %46 = core.cmp.eq %39, %45 : bool
-    %47 = core.const 97 : i64
-    %48 = core.cmp.ge %39, %47 : bool
-    %49 = core.const 122 : i64
-    %50 = core.cmp.le %39, %49 : bool
+    %45 = core.buffer_load %buf, %27 : u8
+    %46 = core.cast %45 : i64
+    %47 = core.const 65 : i64
+    %48 = core.cmp.ge %46, %47 : bool
+    %49 = core.const 90 : i64
+    %50 = core.cmp.le %46, %49 : bool
     %51 = core.and %48, %50 : bool
-    %52 = core.or %44, %46 : bool
-    %53 = core.or %52, %51 : bool
-    core.cond_br %53, ^advance8, ^fail2
+    %52 = core.const 95 : i64
+    %53 = core.cmp.eq %46, %52 : bool
+    %54 = core.const 97 : i64
+    %55 = core.cmp.ge %46, %54 : bool
+    %56 = core.const 122 : i64
+    %57 = core.cmp.le %46, %56 : bool
+    %58 = core.and %55, %57 : bool
+    %59 = core.or %51, %53 : bool
+    %60 = core.or %59, %58 : bool
+    core.cond_br %60, ^advance8, ^fail2
 ^advance8:
-    %54 = core.const 1 : i64
-    %55 = core.add %20, %54 {overflow = "proven"} : i64
-    core.store %55, %p
-    %56 = core.load %p : i64
-    %57 = core.cmp.le %56, %7 : bool
-    core.cond_br %57, ^fits9, ^fail2
+    %61 = core.const 1 : i64
+    %62 = core.add %27, %61 {overflow = "proven"} : i64
+    core.store %62, %p
+    %63 = core.load %p : i64
+    %64 = core.cmp.le %63, %7 : bool
+    core.cond_br %64, ^fits9, ^fail2
 ^fits9:
-    core.br ^scan10(%56)
+    core.br ^scan10(%63)
 ^scan10(%q: i64):
-    %58 = core.cmp.lt %q, %7 : bool
-    core.cond_br %58, ^bound11, ^scanned13(%q)
+    %65 = core.cmp.lt %q, %7 : bool
+    core.cond_br %65, ^bound11, ^scanned13(%q)
 ^bound11:
-    %59 = core.buffer_load %buf, %q : u8
-    %60 = core.cast %59 : i64
-    %61 = core.const 0 : i64
-    %62 = core.const 192 : i64
-    %63 = core.cmp.lt %60, %62 : bool
-    %64 = core.const 0 : i64
-    %65 = core.select %63, %64, %61 : i64
-    %66 = core.const 128 : i64
-    %67 = core.cmp.lt %60, %66 : bool
-    %68 = core.const 576460745995190270 : i64
-    %69 = core.select %67, %68, %65 : i64
-    %70 = core.const 64 : i64
-    %71 = core.cmp.lt %60, %70 : bool
-    %72 = core.const 287948901175001088 : i64
-    %73 = core.select %71, %72, %69 : i64
-    %74 = core.const 63 : i64
-    %75 = core.and %60, %74 : i64
-    %76 = core.shr %73, %75 : i64
-    %77 = core.const 1 : i64
-    %78 = core.and %76, %77 : i64
-    %79 = core.const 0 : i64
-    %80 = core.cmp.ne %78, %79 : bool
-    %81 = core.const 1 : i64
-    %82 = core.add %q, %81 {overflow = "proven"} : i64
-    core.cond_br %80, ^scan10(%82), ^scanned13(%q)
+    %66 = core.buffer_load %buf, %q : u8
+    %67 = core.cast %66 : i64
+    %68 = core.const 0 : i64
+    %69 = core.const 192 : i64
+    %70 = core.cmp.lt %67, %69 : bool
+    %71 = core.const 0 : i64
+    %72 = core.select %70, %71, %68 : i64
+    %73 = core.const 128 : i64
+    %74 = core.cmp.lt %67, %73 : bool
+    %75 = core.const 576460745995190270 : i64
+    %76 = core.select %74, %75, %72 : i64
+    %77 = core.const 64 : i64
+    %78 = core.cmp.lt %67, %77 : bool
+    %79 = core.const 287948901175001088 : i64
+    %80 = core.select %78, %79, %76 : i64
+    %81 = core.const 63 : i64
+    %82 = core.and %67, %81 : i64
+    %83 = core.shr %80, %82 : i64
+    %84 = core.const 1 : i64
+    %85 = core.and %83, %84 : i64
+    %86 = core.const 0 : i64
+    %87 = core.cmp.ne %85, %86 : bool
+    %88 = core.const 1 : i64
+    %89 = core.add %q, %88 {overflow = "proven"} : i64
+    core.cond_br %87, ^scan10(%89), ^scanned13(%q)
 ^scanned13(%0: i64):
-    %83 = core.cmp.lt %0, %56 : bool
-    core.cond_br %83, ^fail2, ^enough15
+    %90 = core.cmp.lt %0, %63 : bool
+    core.cond_br %90, ^fail2, ^enough15
 ^exit14:
-    %84 = core.load %p : i64
-    %85 = core.cmp.eq %84, %7 : bool
-    core.cond_br %85, ^success5, ^fail2
+    %91 = core.load %p : i64
+    %92 = core.cmp.eq %91, %7 : bool
+    core.cond_br %92, ^success5, ^fail2
 ^enough15:
     core.store %0, %p
-    %86 = core.cmp.gt %0, %56 : bool
-    core.cond_br %86, ^keep17, ^exit14
+    %93 = core.cmp.gt %0, %63 : bool
+    core.cond_br %93, ^keep17, ^exit14
 ^giveback16(%held: i64):
-    %87 = core.load %p : i64
-    %88 = core.const 1 : i64
-    %89 = core.sub %87, %88 {overflow = "proven"} : i64
-    core.store %89, %p
-    %90 = core.cmp.gt %89, %held : bool
-    core.cond_br %90, ^keep18, ^exit14
+    %94 = core.load %p : i64
+    %95 = core.const 1 : i64
+    %96 = core.sub %94, %95 {overflow = "proven"} : i64
+    core.store %96, %p
+    %97 = core.cmp.gt %96, %held : bool
+    core.cond_br %97, ^keep18, ^exit14
 ^keep17:
-    %91 = core.load %sp : i64
-    %92 = core.const 4096 : i64
-    %93 = core.cmp.lt %91, %92 : bool
-    core.guard %93 {kind = "range", label = "regex.stack.ok"}
-    %94 = core.const 3 : i64
-    %95 = core.mul %91, %94 {overflow = "proven"} : i64
-    %96 = core.ptr_offset %stack, %95 : ptr<i64, stack>
-    %97 = core.const 0 : i64
-    %98 = core.load %p : i64
-    %99 = core.const 0 : i64
-    %100 = core.ptr_offset %96, %99 : ptr<i64, stack>
-    core.store %97, %100
-    %101 = core.const 1 : i64
-    %102 = core.ptr_offset %96, %101 : ptr<i64, stack>
-    core.store %98, %102
-    %103 = core.const 2 : i64
-    %104 = core.ptr_offset %96, %103 : ptr<i64, stack>
-    core.store %56, %104
-    %105 = core.const 1 : i64
-    %106 = core.add %91, %105 {overflow = "proven"} : i64
-    core.store %106, %sp
+    %98 = core.load %sp : i64
+    %99 = core.const 4096 : i64
+    %100 = core.cmp.lt %98, %99 : bool
+    core.guard %100 {kind = "range", label = "regex.stack.ok"}
+    %101 = core.const 3 : i64
+    %102 = core.mul %98, %101 {overflow = "proven"} : i64
+    %103 = core.ptr_offset %stack, %102 : ptr<i64, stack>
+    %104 = core.const 0 : i64
+    %105 = core.load %p : i64
+    %106 = core.const 0 : i64
+    %107 = core.ptr_offset %103, %106 : ptr<i64, stack>
+    core.store %104, %107
+    %108 = core.const 1 : i64
+    %109 = core.ptr_offset %103, %108 : ptr<i64, stack>
+    core.store %105, %109
+    %110 = core.const 2 : i64
+    %111 = core.ptr_offset %103, %110 : ptr<i64, stack>
+    core.store %63, %111
+    %112 = core.const 1 : i64
+    %113 = core.add %98, %112 {overflow = "proven"} : i64
+    core.store %113, %sp
     core.br ^exit14
 ^keep18:
-    %107 = core.load %sp : i64
-    %108 = core.const 4096 : i64
-    %109 = core.cmp.lt %107, %108 : bool
-    core.guard %109 {kind = "range", label = "regex.stack.ok"}
-    %110 = core.const 3 : i64
-    %111 = core.mul %107, %110 {overflow = "proven"} : i64
-    %112 = core.ptr_offset %stack, %111 : ptr<i64, stack>
-    %113 = core.const 0 : i64
-    %114 = core.load %p : i64
-    %115 = core.const 0 : i64
-    %116 = core.ptr_offset %112, %115 : ptr<i64, stack>
-    core.store %113, %116
-    %117 = core.const 1 : i64
-    %118 = core.ptr_offset %112, %117 : ptr<i64, stack>
-    core.store %114, %118
-    %119 = core.const 2 : i64
-    %120 = core.ptr_offset %112, %119 : ptr<i64, stack>
-    core.store %held, %120
-    %121 = core.const 1 : i64
-    %122 = core.add %107, %121 {overflow = "proven"} : i64
-    core.store %122, %sp
+    %114 = core.load %sp : i64
+    %115 = core.const 4096 : i64
+    %116 = core.cmp.lt %114, %115 : bool
+    core.guard %116 {kind = "range", label = "regex.stack.ok"}
+    %117 = core.const 3 : i64
+    %118 = core.mul %114, %117 {overflow = "proven"} : i64
+    %119 = core.ptr_offset %stack, %118 : ptr<i64, stack>
+    %120 = core.const 0 : i64
+    %121 = core.load %p : i64
+    %122 = core.const 0 : i64
+    %123 = core.ptr_offset %119, %122 : ptr<i64, stack>
+    core.store %120, %123
+    %124 = core.const 1 : i64
+    %125 = core.ptr_offset %119, %124 : ptr<i64, stack>
+    core.store %121, %125
+    %126 = core.const 2 : i64
+    %127 = core.ptr_offset %119, %126 : ptr<i64, stack>
+    core.store %held, %127
+    %128 = core.const 1 : i64
+    %129 = core.add %114, %128 {overflow = "proven"} : i64
+    core.store %129, %sp
     core.br ^exit14
 ^pop19:
-    %123 = core.const 1 : i64
-    %124 = core.sub %22, %123 {overflow = "proven"} : i64
-    core.store %124, %sp
-    %125 = core.const 3 : i64
-    %126 = core.mul %124, %125 {overflow = "proven"} : i64
-    %127 = core.ptr_offset %stack, %126 : ptr<i64, stack>
-    %128 = core.const 0 : i64
-    %129 = core.ptr_offset %127, %128 : ptr<i64, stack>
-    %130 = core.load %129 : i64
-    %131 = core.const 1 : i64
-    %132 = core.ptr_offset %127, %131 : ptr<i64, stack>
-    %133 = core.load %132 : i64
-    core.store %133, %p
-    %134 = core.const 2 : i64
-    %135 = core.ptr_offset %127, %134 : ptr<i64, stack>
-    %136 = core.load %135 : i64
-    %137 = core.const 0 : i64
-    %138 = core.cmp.eq %130, %137 : bool
-    core.cond_br %138, ^giveback16(%136), ^dispatch20
+    %130 = core.const 1 : i64
+    %131 = core.sub %29, %130 {overflow = "proven"} : i64
+    core.store %131, %sp
+    %132 = core.const 3 : i64
+    %133 = core.mul %131, %132 {overflow = "proven"} : i64
+    %134 = core.ptr_offset %stack, %133 : ptr<i64, stack>
+    %135 = core.const 0 : i64
+    %136 = core.ptr_offset %134, %135 : ptr<i64, stack>
+    %137 = core.load %136 : i64
+    %138 = core.const 1 : i64
+    %139 = core.ptr_offset %134, %138 : ptr<i64, stack>
+    %140 = core.load %139 : i64
+    core.store %140, %p
+    %141 = core.const 2 : i64
+    %142 = core.ptr_offset %134, %141 : ptr<i64, stack>
+    %143 = core.load %142 : i64
+    %144 = core.const 0 : i64
+    %145 = core.cmp.eq %137, %144 : bool
+    core.cond_br %145, ^giveback16(%143), ^dispatch20
 ^dispatch20:
     core.unreachable
 }
