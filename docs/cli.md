@@ -597,7 +597,14 @@ C `main`, so the text is a whole program.
 
 The C is written to be read:
 
-- loops are `while`, branches are `if`/`else`
+- loops are `while`, branches are `if`/`else`, with no labels or `goto`
+- a loop left from several places has one exit it `break`s to; an early
+  `return` or `raise` is written where it happens, and code that runs
+  before a `break` is written in front of it
+- an exit several branches share and that ends the function (a raise,
+  the clean-up before a `return`) is written in each branch that takes it
+- tests that share a target become one condition: `if (!seen || x > best)`
+- a generator resumes from an `if` on its state, ahead of its loop
 - a local keeps its Python name
 - a value read once is written where it is read
 

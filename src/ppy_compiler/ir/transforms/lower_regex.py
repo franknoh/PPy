@@ -323,7 +323,26 @@ class _Matcher:
 
         self.dispatcher()
         self.prune()
+        self.clear_first_frame()
         return self.function
+
+    def clear_first_frame(self) -> None:
+        """Zero the stack's first entry on the way in.
+
+        A pop reads only what a push wrote, but a C compiler cannot follow
+        `sp` around the backtracking loop and may warn that the first entry
+        is read uninitialized. Three stores a call keep that warning out.
+        """
+        alloca = self.stack.owner
+        if not isinstance(alloca, Operation) or alloca.parent is None:
+            return
+        entry = self.function.body.blocks[0]
+        terminator = entry.terminator_for(self.registry)
+        assert terminator is not None
+        b = Builder().before(terminator)
+        zero = core.const(b, 0, I64)
+        for slot in range(self.entry_size):
+            core.store(b, zero, core.ptr_offset(b, self.stack, core.const(b, slot, I64)))
 
     def prune(self) -> None:
         """Drop the blocks nothing reaches: a pattern that cannot fail has no backtracking."""

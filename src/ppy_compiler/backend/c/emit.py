@@ -13,12 +13,21 @@ reads the dominator tree and the loops of the function's graph and writes
 from one place is written where it is reached, a block several branches
 meet at is written once after them, and a branch's arguments are assigned
 to the target block's parameters all at once, so a swap through two
-arguments stays a swap. A value used once, in the block that computed it,
-is written where it is used; a stack slot that is only ever loaded and
-stored is a plain variable; a parameter keeps the name the Python had.
-A graph the reconstruction cannot express -- one that Python control flow
-does not produce -- is written with labels and `goto`s instead, for that
-function only, so the output is always correct.
+arguments stays a swap. A loop with several exits `break`s to the one the
+others flow into; an exit that ends the function -- a `return`, a raise, a
+failed guard -- is written where the loop jumps to it, and exits that go on
+to different places are told apart after the loop by a flag. A block from
+which every path ends the function, or continues or leaves its loop, is
+written once per branch that reaches it. A block that only tests folds into the
+condition before it as `&&` or `||`. `reducible.prepare` hands over a
+private copy of a graph that needs it first: empty forwarding blocks
+bypassed, and a cycle with several entries -- a resumed generator, a
+backtracking regex -- split to one. A value used once, in the block that
+computed it, is written where it is used; a stack slot that is only ever
+loaded and stored is a plain variable; a parameter keeps the name the
+Python had. A graph the reconstruction still cannot express is written
+with labels and `goto`s instead, for that function only, so the output is
+always correct.
 
 The C++ form is the same emitter with `Language.CPP` set: it makes its
 structural choices -- `extern "C"` around the public symbols, `static_cast`
@@ -32,6 +41,7 @@ things the output is for.
 
 from __future__ import annotations
 
+import copy
 import enum
 import math
 import re
@@ -89,6 +99,7 @@ from .gpu import emit_gpu
 from .presentation import PrintFormat, string_literal, string_symbol
 from .prof import emit_prof
 from .ranges import truncating_divisions
+from .reducible import prepare
 from .runtime import SHIMS, definition, program_main
 from .source import definition_order
 
@@ -343,6 +354,37 @@ def _negate(text: str) -> str:
     return f"!{text}" if _is_atomic(text) else f"!({text})"
 
 
+#: What writing a block changes in a function emitter, for a trial that is taken back.
+_STATE = (
+    "scalars",
+    "levels",
+    "reads_of",
+    "flipped",
+    "infixes",
+    "unsigned_form",
+    "buffers",
+    "immutable",
+    "skipped",
+    "declarations",
+    "slot_declarations",
+    "used",
+    "counter",
+    "stable",
+    "print_format",
+)
+
+
+def _level(text: str) -> int:
+    """The level an expression's outermost operator binds at, read from its text."""
+    if _is_atomic(text):
+        return _ATOM
+    if text.startswith("!") and _is_atomic(text[1:]):
+        return _UNARY
+    if _flip_equality(text) is not None:
+        return _INFIX["=="]
+    return 0
+
+
 def _flip_equality(text: str) -> str | None:
     """`a != b` for `a == b` (and back) when both sides are atoms; exact for any type."""
     for symbol in (" == ", " != "):
@@ -384,13 +426,15 @@ class _Loop:
     latches: list = field(default_factory=list)
     body: set = field(default_factory=set)
     exits: list = field(default_factory=list)
+    #: The exit a `break` leaves to, written after the loop; every other exit
+    #: is written where the loop jumps to it.
+    exit: Block | None = None
+    #: Exits left by `break` with a flag set, written after the loop by the flag.
+    flagged: list = field(default_factory=list)
+    flag: str = ""
     #: Where the loop's `while` line went: which list of lines, and which line.
     writer: object = None
     start: int = 0
-
-    @property
-    def exit(self):  # type: ignore[no-untyped-def]
-        return self.exits[0] if len(self.exits) == 1 else None
 
 
 @dataclass(slots=True)
@@ -771,6 +815,12 @@ class _ModuleEmitter:
             self.unit.functions.append(
                 self.scoped(members[0][0], "\n".join(text for _, text in members))
             )
+        # A string the lowering made but no written function reads -- its
+        # one reader folded away -- would be an unused static array.
+        written = "\n".join(self.unit.functions)
+        for name in [n for n in self.unit.strings if n in self.module.globals]:
+            if not re.search(rf"\b{re.escape(_ident(name))}\b", written):
+                del self.unit.strings[name]
         for function in defined:
             if "ppy.export" in function.attributes and not self.readable:
                 self.unit.exports.append(self.export(function))
@@ -1064,6 +1114,8 @@ class _FunctionEmitter:
     """
 
     def __init__(self, owner: _ModuleEmitter, function: IRFunction, structured: bool = True):
+        if structured:
+            function = prepare(function)
         self.owner = owner
         self.function = function
         self.structured = structured
@@ -1113,6 +1165,7 @@ class _FunctionEmitter:
             self.used.add("frame")
         # The graph.
         self.blocks = list(function.body.blocks)
+        self.size = sum(len(block.operations) for block in self.blocks)
         self.preds: dict[int, list] = {}
         self.idom: dict[int, object] = {}
         self.children: dict[int, list] = {}
@@ -1121,6 +1174,25 @@ class _FunctionEmitter:
         self.succ_block: dict[int, object] = {}
         self.loop_stack: list[_Loop] = []
         self.emitted: set[int] = set()
+        #: Blocks from which every path ends the function, loop-free.
+        self.terminal: set[int] = set()
+        #: Per loop header: the blocks of its body from which every path
+        #: continues the loop, breaks it, or ends the function, through no
+        #: cycle but whole inner loops -- the loop's own `terminal`.
+        self.tails: dict[int, set[int]] = {}
+        #: Values with a variable declared at the top: the same one in every copy.
+        self.stable: dict[int, str] = {}
+        #: Inside a copy: its blocks are written again, not reached twice.
+        self.copying = 0
+        #: The blocks being written, outermost first: a cycle among them has no `while`.
+        self.active: set[int] = set()
+        #: The blocks each open copy has written so far, outermost first.
+        self.copies: list[list] = []
+        self.order: dict[int, int] = {}
+        #: Operations written so far, copies included, against a runaway copy.
+        self.written = 0
+        #: A chained test is being written: one call may be its condition.
+        self.testing = False
         #: Pure operations nothing reads, transitively: never written.
         self.dead: set[int] = set()
         for block in reversed(self.blocks):
@@ -1176,23 +1248,36 @@ class _FunctionEmitter:
 
     def declare(self, v: Value) -> None:
         """A local (two for a buffer) for `v`, declared at the top."""
-        name = self.fresh(v.name)
+        known = self.stable.get(id(v))
+        name = known or self.fresh(v.name)
+        self.stable[id(v)] = name
         if isinstance(v.type, BufferType):
-            self.declarations.append(f"    {self.owner.c_type(v.type.element)} *{name}_data;")
-            self.declarations.append(f"    int64_t {name}_len;")
+            if known is None:
+                self.declarations.append(f"    {self.owner.c_type(v.type.element)} *{name}_data;")
+                self.declarations.append(f"    int64_t {name}_len;")
             self.buffers[id(v)] = _Buffer(f"{name}_data", f"{name}_len")
             return
-        self.declarations.append(f"    {_declare(self.owner.c_type(v.type), name)};")
+        if known is None:
+            self.declarations.append(f"    {_declare(self.owner.c_type(v.type), name)};")
         self.scalars[id(v)] = name
+
+    def _top(self, v: Value) -> str:
+        """The variable declared at the top for `v`: one name however often `v`
+        is written, so a copy of its block writes what is read after it."""
+        name = self.stable.get(id(v))
+        if name is None:
+            name = self.fresh(v.name)
+            self.stable[id(v)] = name
+            self.declarations.append(f"    {_declare(self.owner.c_type(v.type), name)};")
+        return name
 
     def variable(self, v: Value) -> str:
         """A variable for `v` with no initializer yet -- for a helper to write into."""
-        name = self.fresh(v.name)
-        spelled = _declare(self.owner.c_type(v.type), name)
         if self.structured and not self._crosses_scope(v):
-            self.line(f"{spelled};")
+            name = self.fresh(v.name)
+            self.line(f"{_declare(self.owner.c_type(v.type), name)};")
         else:
-            self.declarations.append(f"    {spelled};")
+            name = self._top(v)
         self.scalars[id(v)] = name
         return name
 
@@ -1202,12 +1287,11 @@ class _FunctionEmitter:
         if slot is not None:
             self.line(f"{slot} = {expression};")
             return slot
-        name = self.fresh(v.name)
-        spelled = _declare(self.owner.c_type(v.type), name)
         if self.structured and not self._crosses_scope(v):
-            self.line(f"{spelled} = {expression};")
+            name = self.fresh(v.name)
+            self.line(f"{_declare(self.owner.c_type(v.type), name)} = {expression};")
         else:
-            self.declarations.append(f"    {spelled};")
+            name = self._top(v)
             self.line(f"{name} = {expression};")
         if not v.uses:
             # Computed for its effect alone; say so, or a C compiler warns.
@@ -1218,7 +1302,7 @@ class _FunctionEmitter:
     def effect(self, v: Value, expression: str) -> str:
         """`expression` has an effect -- a call: written where `v` is read when
         that is a store or a return right after it, held in a variable otherwise."""
-        if self.structured and self._consumed_next(v):
+        if self.structured and (self._consumed_next(v) or self._tested(v)):
             self.scalars[id(v)] = expression
             self.levels[id(v)] = _ATOM if _is_atomic(expression) else 0
             return expression
@@ -1366,6 +1450,26 @@ class _FunctionEmitter:
         if declaration is not None:
             self.line(f"{declaration};")
         return slot
+
+    def _tested(self, v: Value) -> bool:
+        """Whether a chained test reads the call `v` once, against a constant:
+        the call can then be the test, `&&` or `||` choosing whether it runs."""
+        if not self.testing or len(v.uses) != 1:
+            return False
+        user, _index = v.uses[0]
+        if not isinstance(user, Operation) or user.parent is not v.owner.parent:
+            return False
+        if user.name == "core.cmp" and len(user.operands) == 2:
+            other = user.operands[1] if user.operands[0] is v else user.operands[0]
+            if not isinstance(other.owner, Operation) or other.owner.name != "core.const":
+                return False
+            if len(user.result.uses) != 1:
+                return False
+            user = user.result.uses[0][0]
+        if not isinstance(user, Operation) or user.name != "core.cond_br":
+            return False
+        self.testing = False
+        return True
 
     def _consumed_next(self, v: Value) -> bool:
         """Whether the one thing reading `v` is a store or a return right after it:
@@ -1681,6 +1785,140 @@ class _FunctionEmitter:
             for member in blocks:
                 if id(member) in loop.body:
                     self.loop_of[id(member)] = loop
+        # A block every path from which ends the function -- a `return`, a
+        # raise, a failed guard -- through no loop but whole ones: it may be
+        # written wherever it is reached, as often as it is reached.
+        changed = True
+        while changed:
+            changed = False
+            for block in rpo:
+                if (
+                    id(block) not in self.terminal
+                    and self.loop_of.get(id(block)) is None
+                    and all(id(successor) in self.terminal for successor in block.successors)
+                ):
+                    self.terminal.add(id(block))
+                    changed = True
+            for loop in self.loops.values():
+                # A loop that only ever leaves to such blocks counts as one, whole.
+                if id(loop.header) not in self.terminal and all(
+                    id(e) in self.terminal for e in loop.exits
+                ):
+                    self.terminal.add(id(loop.header))
+                    changed = True
+        self.order = {id(b): i for i, b in enumerate(blocks)}
+        for loop in sorted(self.loops.values(), key=lambda found: -len(found.body)):
+            loop.exit = self._main_exit(loop)
+        for loop in self.loops.values():
+            self.tails[id(loop.header)] = self._tails(loop)
+
+    def _tails(self, loop: _Loop) -> set[int]:
+        """The blocks of `loop` that may be copied where they are reached inside it."""
+        ends = {id(loop.header)} | self.terminal | {id(e) for e in loop.flagged}
+        if loop.exit is not None:
+            ends.add(id(loop.exit))
+        found: set[int] = set()
+        candidates = [
+            b
+            for b in self.blocks
+            if id(b) in loop.body and b is not loop.header and self.loop_of.get(id(b)) is loop
+        ]
+        inner = [
+            m
+            for m in self.loops.values()
+            if m is not loop and id(m.header) in loop.body and self._enclosing(m) is loop
+        ]
+        changed = True
+        while changed:
+            changed = False
+            for block in candidates:
+                if id(block) not in found and all(
+                    id(s) in ends or id(s) in found for s in block.successors
+                ):
+                    found.add(id(block))
+                    changed = True
+            for m in inner:
+                if id(m.header) not in found and all(
+                    id(e) in ends or id(e) in found for e in m.exits
+                ):
+                    found.add(id(m.header))
+                    changed = True
+        return found
+
+    def _main_exit(self, loop: _Loop):  # type: ignore[no-untyped-def]
+        """The exit a loop `break`s to: the one the others flow into.
+
+        An exit that ends the function is written where it is jumped to, and
+        so is one that flows into the main exit -- its code, then `break`.
+        With no exit that goes on, the loop's own -- the header's -- is the
+        main one, else the first written that the header dominates.
+        """
+        # The next turn or the end of a loop around: never written in place.
+        onward = []
+        outer = self._enclosing(loop)
+        while outer is not None:
+            onward.append(outer.header)
+            if outer.exit is not None and id(outer.exit) not in self.terminal:
+                onward.append(outer.exit)
+            outer = self._enclosing(outer)
+        going = [e for e in loop.exits if id(e) not in self.terminal or e in onward]
+        if len(going) == 1:
+            return going[0]
+        if going:
+            # Flowing into another exit counts only short of the loops around.
+            around = set(loop.body)
+            outer = self._enclosing(loop)
+            while outer is not None:
+                around.add(id(outer.header))
+                outer = self._enclosing(outer)
+            for candidate in going:
+                if all(
+                    other is candidate or self._reaches(other, candidate, around) for other in going
+                ):
+                    return candidate
+            # Exits that go on to different places: the loop's own, or the
+            # first, is the main one; the others are left by a flag.
+            # A flag's exit is written after the loop: it must be reached from
+            # the loop alone, or be the next turn or the end of a loop around.
+            fixed = [
+                e
+                for e in going
+                if e not in onward and any(id(p) not in loop.body for p in self.preds[id(e)])
+            ]
+            if len(fixed) > 1:
+                return None
+            heads = [e for e in loop.header.successors if e in going]
+            if fixed:
+                main = fixed[0]
+            elif heads:
+                main = heads[0]
+            elif any(e in onward for e in going):
+                main = next(e for e in going if e in onward)
+            else:
+                main = min(going, key=lambda e: self.order[id(e)])
+            for other in going:
+                if other is not main and not self._reaches(other, main, around):
+                    loop.flagged.append(other)
+            return main
+        for successor in loop.header.successors:
+            if successor in loop.exits:
+                return successor
+        owned = [e for e in loop.exits if self._dominates(loop.header, e)]
+        return min(owned, key=lambda e: self.order[id(e)]) if owned else None
+
+    def _reaches(self, start, goal, avoiding: set[int]) -> bool:  # type: ignore[no-untyped-def]
+        """Whether `goal` is reachable from `start` along blocks outside `avoiding`."""
+        seen: set[int] = set()
+        work = [start]
+        while work:
+            block = work.pop()
+            if block is goal:
+                return True
+            if id(block) in seen or id(block) in avoiding:
+                continue
+            seen.add(id(block))
+            work.extend(block.successors)
+        return False
 
     def _dominates(self, a, b) -> bool:  # type: ignore[no-untyped-def]
         while b is not None:
@@ -1789,18 +2027,112 @@ class _FunctionEmitter:
 
     def _region(self, block, follow) -> None:  # type: ignore[no-untyped-def]
         """Write `block` and what it owns, until control reaches `follow` or leaves."""
-        if id(block) in self.emitted:
-            raise _Unstructured(f"^{block.name} is reached twice")
-        self.emitted.add(id(block))
+        if self._copyable(block):
+            # Written once per place that reaches it: a copy starts afresh.
+            pending = dict(self.slot_declarations)
+            self.copying += 1
+            self.copies.append([])
+            try:
+                self._owned(block, follow)
+            finally:
+                self.copying -= 1
+                written = self.copies.pop()
+                self.slot_declarations.update(pending)
+            self._contained(written)
+            return
+        self._owned(block, follow)
+
+    def _forget(self, block) -> None:  # type: ignore[no-untyped-def]
+        """`block` is being written: once more, when it is a copy, defining its values afresh."""
+        for written in self.copies:
+            written.append(block)
+        for op in block.operations:
+            for result in op.results:
+                for known in (
+                    self.scalars,
+                    self.levels,
+                    self.reads_of,
+                    self.flipped,
+                    self.infixes,
+                    self.unsigned_form,
+                    self.buffers,
+                ):
+                    known.pop(id(result), None)
+
+    def _contained(self, written: list) -> None:
+        """A copy's values are read inside the copy: nothing after it may name them."""
+        inside = {id(block) for block in written}
+        lasting = set(self.slots.values()) | set(self.stable.values())
+        for block in written:
+            for op in block.operations:
+                for result in op.results:
+                    text = self.scalars.get(id(result))
+                    if text in lasting or (text is not None and _LITERAL.match(text)):
+                        continue
+                    if id(result) in self.buffers and id(result) in self.stable:
+                        continue
+                    for user, _index in result.uses:
+                        owner = (
+                            user.parent
+                            if isinstance(user, Operation)
+                            else self.succ_block.get(id(user))
+                        )
+                        if owner is None or id(owner) not in inside:
+                            raise _Unstructured(
+                                f"a value of ^{block.name} is read past its copy"
+                                + (f" in ^{owner.name}" if owner is not None else "")
+                            )
+
+    def _copyable(self, block) -> bool:  # type: ignore[no-untyped-def]
+        """Whether `block` may be written at each place that reaches it."""
+        if any(block is loop.header for loop in self.loop_stack):
+            # The top of a loop being written: reached again, it is that loop's next turn.
+            return False
+        if id(block) in self.terminal:
+            return True
+        loop = self.loop_stack[-1] if self.loop_stack else None
+        return loop is not None and id(block) in self.tails.get(id(loop.header), ())
+
+    def _owned(self, block, follow) -> None:  # type: ignore[no-untyped-def]
+        if id(block) in self.active:
+            raise _Unstructured(f"^{block.name} is reached again while it is written")
+        self.active.add(id(block))
+        try:
+            self._owned_once(block, follow)
+        finally:
+            self.active.discard(id(block))
+
+    def _owned_once(self, block, follow) -> None:  # type: ignore[no-untyped-def]
+        if not self.copying:
+            if id(block) in self.emitted:
+                raise _Unstructured(f"^{block.name} is reached twice")
+            self.emitted.add(id(block))
         loop = self.loops.get(id(block))
         if loop is None:
             self._block(block, follow)
             return
-        if len(loop.exits) > 1:
-            raise _Unstructured(f"the loop at ^{block.name} leaves to several places")
         exit_ = loop.exit
-        if exit_ is not None and exit_ is not follow and not self._dominates(block, exit_):
+        if exit_ is None and any(id(e) not in self.terminal for e in loop.exits):
+            raise _Unstructured(f"the loop at ^{block.name} leaves to several places")
+        # A loop that leaves straight to the next turn, or the end, of the loop around it.
+        outer = self.loop_stack[-1] if self.loop_stack else None
+        onward = None
+        if outer is not None and exit_ is not None and exit_ is not follow:
+            if exit_ is outer.header:
+                onward = "continue;"
+            elif exit_ is outer.exit:
+                onward = "break;"
+        if (
+            exit_ is not None
+            and exit_ is not follow
+            and onward is None
+            and not self._copyable(exit_)
+            and not self._dominates(block, exit_)
+        ):
             raise _Unstructured(f"the loop at ^{block.name} leaves to ^{exit_.name}")
+        if loop.flagged:
+            loop.flag = self.fresh("leaving")
+            self.line(f"int {loop.flag} = 0;")
         loop.writer = self.body
         loop.start = len(self.body)
         self.line("while (1) {")
@@ -1813,13 +2145,56 @@ class _FunctionEmitter:
         if len(self.body) > loop.start + 1 and self.body[-1] == inner + "continue;":
             self.body.pop()
         self.line("}")
-        if exit_ is not None and exit_ is not follow:
-            self._region(exit_, follow)
+
+        def after() -> None:
+            if onward is not None:
+                self.line(onward)
+            elif exit_ is not None and exit_ is not follow:
+                self._region(exit_, follow)
+
+        if not loop.flagged:
+            after()
+            return
+        depth = self.body.depth + 1
+        arms = [
+            (
+                f"{loop.flag} == {k}",
+                self._capture(lambda other=other: self._go(other, follow), depth),
+            )
+            for k, other in enumerate(loop.flagged, 1)
+        ]
+        rest = self._capture(after, depth)
+        for k, (condition, lines) in enumerate(arms):
+            self.line(f"if ({condition}) {{" if k == 0 else f"}} else if ({condition}) {{")
+            self.body.extend(lines)
+        if rest:
+            self.line("} else {")
+            self.body.extend(rest)
+        self.line("}")
+
+    def _go(self, target, follow) -> None:  # type: ignore[no-untyped-def]
+        """Control is at `target` after a loop: the loop around it moves on, or it is written."""
+        loop = self.loop_stack[-1] if self.loop_stack else None
+        if target is follow:
+            return
+        if loop is not None and target is loop.header:
+            self.line("continue;")
+        elif loop is not None and target is loop.exit:
+            self.line("break;")
+        elif loop is not None and target in loop.flagged:
+            self.line(f"{loop.flag} = {loop.flagged.index(target) + 1};")
+            self.line("break;")
+        else:
+            self._region(target, follow)
 
     def _block(self, block, follow) -> None:  # type: ignore[no-untyped-def]
         terminator = block.terminator
         if terminator is None:
             raise _Unstructured(f"^{block.name} has no terminator")
+        self.written += len(block.operations)
+        if self.written > 4 * self.size + 256:
+            raise _Unstructured("the copies of shared exits grow too large")
+        self._forget(block)
         for op in block.operations[:-1]:
             if id(op) not in self.dead:
                 self.op(op)
@@ -1843,6 +2218,11 @@ class _FunctionEmitter:
             self._moves(block, successor)
             self.line("break;")
             return
+        if loop is not None and target in loop.flagged:
+            self._moves(block, successor)
+            self.line(f"{loop.flag} = {loop.flagged.index(target) + 1};")
+            self.line("break;")
+            return
         if target is follow:
             self._moves(block, successor)
             return
@@ -1851,43 +2231,60 @@ class _FunctionEmitter:
             and self.idom.get(id(target)) is block
             and self._entering(target) == [block]
             and id(target) not in self.emitted
-        ):
+        ) or self._copyable(target):
             self._moves(block, successor)
             self._region(target, follow)
             return
         raise _Unstructured(f"^{block.name} jumps to ^{target.name}")
 
     def _conditional(self, block, terminator: Operation, follow) -> None:  # type: ignore[no-untyped-def]
-        chooser = terminator.operands[0]
-        condition = self.bare(chooser)
-        then, otherwise = terminator.successors
         protected: set[int] = set()
         for loop in self.loop_stack:
             protected.add(id(loop.header))
             if loop.exit is not None:
                 protected.add(id(loop.exit))
-        merge = None
-        for child in self.children[id(block)]:
-            if child is then.block or child is otherwise.block or id(child) in protected:
-                continue
-            if merge is not None:
-                raise _Unstructured(f"^{block.name} has two join points")
-            merge = child
+            protected.update(id(e) for e in loop.flagged)
+        if follow is not None:
+            protected.add(id(follow))
+        (condition, _), (negation, _), then, otherwise, group = self._condition_chain(
+            block, terminator, protected
+        )
+        members = {id(member) for member in group}
+        joins: list = []
+        for member in group:
+            for child in self.children[id(member)]:
+                if (
+                    child is then.block
+                    or child is otherwise.block
+                    or id(child) in protected
+                    or id(child) in members
+                ):
+                    continue
+                joins.append(child)
         for successor in (then, otherwise):
             target = successor.block
-            if target is follow or id(target) in protected:
+            if target is follow or id(target) in protected or target in joins:
                 continue
-            if len(self._entering(target)) > 1:
-                if merge is not None and merge is not target:
-                    raise _Unstructured(f"^{block.name} has two join points")
-                merge = target
+            entering = self._entering(target)
+            if len(entering) > 1 and not all(id(p) in members for p in entering):
+                joins.append(target)
+        if len(joins) > 1:
+            # A join that ends the function is written in each branch instead.
+            joins = [join for join in joins if not self._copyable(join)]
+        if len(joins) > 1:
+            names = ", ".join(f"^{join.name}" for join in joins)
+            raise _Unstructured(f"^{block.name} has two join points: {names}")
+        merge = joins[0] if joins else None
         inner = merge if merge is not None else follow
 
         def kind(successor: Successor) -> str:
             target = successor.block
             if target is merge or target is inner or id(target) in protected:
                 return "jump"
-            if self.idom.get(id(target)) is block and self._entering(target) == [block]:
+            if (
+                id(self.idom.get(id(target))) in members
+                and all(id(p) in members for p in self._entering(target))
+            ) or self._copyable(target):
                 return "own"
             raise _Unstructured(f"^{block.name} branches to ^{target.name}, reached elsewhere")
 
@@ -1917,37 +2314,121 @@ class _FunctionEmitter:
                 header = loop
         if kinds == ("jump", "jump"):
             then_lines, else_lines = jump(then, depth + 1), jump(otherwise, depth + 1)
-            self._if_else(condition, self.negated(chooser), then_lines, else_lines)
+            self._if_else(condition, negation, then_lines, else_lines)
         elif kinds == ("own", "jump"):
             else_lines = jump(otherwise, depth + 1)
             if header is not None and _only_break(else_lines):
                 self.body[header.start] = "    " * (depth - 1) + f"while ({condition}) {{"
                 self.body.extend(own(then, depth))
             elif _leaves(else_lines):
-                self._if(self.negated(chooser), else_lines)
+                self._if(negation, else_lines)
                 self.body.extend(own(then, depth))
             else:
-                self._if_else(condition, self.negated(chooser), own(then, depth + 1), else_lines)
+                self._if_else(condition, negation, own(then, depth + 1), else_lines)
         elif kinds == ("jump", "own"):
             then_lines = jump(then, depth + 1)
             if header is not None and _only_break(then_lines):
-                self.body[header.start] = (
-                    "    " * (depth - 1) + f"while ({self.negated(chooser)}) {{"
-                )
+                self.body[header.start] = "    " * (depth - 1) + f"while ({negation}) {{"
                 self.body.extend(own(otherwise, depth))
             elif _leaves(then_lines):
                 self._if(condition, then_lines)
                 self.body.extend(own(otherwise, depth))
             else:
-                self._if_else(
-                    condition, self.negated(chooser), then_lines, own(otherwise, depth + 1)
-                )
+                self._if_else(condition, negation, then_lines, own(otherwise, depth + 1))
         else:
-            self._if_else(
-                condition, self.negated(chooser), own(then, depth + 1), own(otherwise, depth + 1)
-            )
+            self._if_else(condition, negation, own(then, depth + 1), own(otherwise, depth + 1))
         if merge is not None:
             self._region(merge, follow)
+
+    def _condition_chain(self, block, terminator: Operation, protected: set[int]):  # type: ignore[no-untyped-def]
+        """The branch at the end of `block`, with the tests it chains into folded in.
+
+        A block that only tests -- nothing written but its condition -- reached
+        from one branch alone, and sending one way where that branch's partner
+        goes, is the right side of an `&&` or an `||`: `if (a || b)` rather
+        than an `if` per test and the shared code written twice. Returns the
+        condition, its negation, the two successors, and the blocks it covers.
+        """
+        chooser = terminator.operands[0]
+        condition = self.expr(chooser)
+        negation = self._negation_expr(chooser)
+        then, otherwise = terminator.successors
+        group = [block]
+        while True:
+            for side in (otherwise, then):
+                test = side.block
+                partner = then if side is otherwise else otherwise
+                joined = self._chained_test(test, side, partner, group, protected)
+                if joined is None:
+                    continue
+                test_terminator = test.terminator
+                assert test_terminator is not None
+                c = self.expr(test_terminator.operands[0])
+                n = self._negation_expr(test_terminator.operands[0])
+                yes, no = test_terminator.successors
+                same_way = (yes if side is otherwise else no).block is partner.block
+                # The else side tests again: `a || b`; the then side: `a && b`.
+                joiner, dual = ("||", "&&") if side is otherwise else ("&&", "||")
+                test_if, test_unless = (c, n) if same_way else (n, c)
+                condition = _infix(joiner, condition, test_if)
+                negation = _infix(dual, negation, test_unless)
+                if side is otherwise:
+                    otherwise = no if same_way else yes
+                else:
+                    then = yes if same_way else no
+                group.append(test)
+                self.emitted.add(id(test))
+                break
+            else:
+                return condition, negation, then, otherwise, group
+
+    def _chained_test(self, test, side: Successor, partner: Successor, group, protected):  # type: ignore[no-untyped-def]
+        """Whether `test` folds into the condition before it: written, it is only a test."""
+        terminator = test.terminator
+        if (
+            terminator is None
+            or terminator.name != "core.cond_br"
+            or test in group
+            or id(test) in self.emitted
+            or id(test) in protected
+            or id(test) in self.loops
+            or side.arguments
+            or self._entering(test) != [self.succ_block[id(side)]]
+        ):
+            return None
+        shared = [s for s in terminator.successors if s.block is partner.block]
+        if len(shared) != 1 or [id(v) for v in shared[0].arguments] != [
+            id(v) for v in partner.arguments
+        ]:
+            return None
+        saved = {name: copy.copy(getattr(self, name)) for name in _STATE}
+        copies = [list(written) for written in self.copies]
+
+        def emit() -> None:
+            self._forget(test)
+            self.testing = True
+            try:
+                for op in test.operations[:-1]:
+                    if id(op) not in self.dead:
+                        self.op(op)
+                self.flush_print()
+            finally:
+                self.testing = False
+
+        if not self._capture(emit, self.body.depth) and self.declarations == saved["declarations"]:
+            return test
+        # Written, it is more than a test: forget it was, to write it in its place.
+        for name, value in saved.items():
+            setattr(self, name, value)
+        self.copies = copies
+        return None
+
+    def _negation_expr(self, v: Value) -> _Expr:
+        exact = self._negation(v)
+        if exact is not None:
+            return exact
+        text = self.negated(v)
+        return text, _level(text)
 
     def _capture(self, emit, depth: int) -> list[str]:  # type: ignore[no-untyped-def]
         """The lines `emit` writes, at `depth`, without writing them yet."""
@@ -1972,14 +2453,25 @@ class _FunctionEmitter:
     def _if_else(
         self, condition: str, negated: str, then_lines: list[str], else_lines: list[str]
     ) -> None:
+        if (
+            then_lines
+            and else_lines
+            and then_lines[-1] == else_lines[-1]
+            and then_lines[-1].strip() in {"continue;", "break;"}
+        ):
+            # Both arms end the same way: say it once, after them.
+            jump = then_lines[-1].strip()
+            self._if_else(condition, negated, then_lines[:-1], else_lines[:-1])
+            self.line(jump)
+            return
         if not then_lines:
             self._if(negated, else_lines)
             return
         if not else_lines:
             self._if(condition, then_lines)
             return
-        if len(then_lines) == 1 and _leaves(then_lines):
-            # `if (c) return;` needs no `else`.
+        if _leaves(then_lines):
+            # `if (c) { ...; return; }` needs no `else`.
             self._if(condition, then_lines)
             self.body.extend(line.removeprefix("    ") for line in else_lines)
             return

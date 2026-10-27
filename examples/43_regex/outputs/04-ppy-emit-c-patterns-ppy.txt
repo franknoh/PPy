@@ -83,50 +83,28 @@ int32_t ppy_patterns_count_words(uint8_t *text, int64_t text_len, int64_t *out) 
 }
 
 int32_t ppy_patterns_longest_word(uint8_t *text, int64_t text_len, int64_t *out) {
-    int64_t best;
-    int64_t pos;
-    bool m_found;
-    int64_t start;
-    int64_t end;
     int64_t m_spans[2];
-    int8_t res;
-    int64_t t1;
-    int64_t t2;
-    int64_t t3;
 
-    best = 0;
-    pos = 0;
-    goto L1_while_head1;
-    L1_while_head1:;
-    if (pos < text_len) {
-        goto L2_while_body2;
-    } else {
-        goto L3_while_end3;
+    int64_t best = 0;
+    int64_t pos = 0;
+    while (pos < text_len) {
+        int8_t res;
+        int64_t t1;
+        int64_t t2;
+        if (ppy_regex_0(text, text_len, pos, text_len, &res, &t1, &t2) != 0) return 1; /* call.ok */
+        bool m_found = res != 0;
+        m_spans[0] = t1;
+        m_spans[1] = t2;
+        if (m_found ^ true) break;
+        int64_t start = m_spans[0];
+        int64_t end = m_spans[1];
+        int64_t t3;
+        if (ppy_ovf_sub_i64(end, start, &t3)) return 1; /* arith.ok */
+        best = t3 > best ? t3 : best;
+        pos = end;
     }
-    L2_while_body2:;
-    if (!(ppy_regex_0(text, text_len, pos, text_len, &res, &t1, &t2) == 0)) goto fallback; /* call.ok */
-    m_found = res != 0;
-    m_spans[0] = t1;
-    m_spans[1] = t2;
-    if (m_found ^ true) {
-        goto L4_then4;
-    } else {
-        goto L5_else5;
-    }
-    L3_while_end3:;
     *out = best;
     return 0;
-    L4_then4:;
-    goto L3_while_end3;
-    L5_else5:;
-    start = m_spans[0];
-    end = m_spans[1];
-    if (!(!ppy_ovf_sub_i64(end, start, &t3))) goto fallback; /* arith.ok */
-    best = t3 > best ? t3 : best;
-    pos = end;
-    goto L1_while_head1;
-    fallback:
-    return 1;
 }
 
 int32_t ppy_patterns_sum_values(uint8_t *text, int64_t text_len, int64_t *out) {
@@ -205,172 +183,146 @@ int32_t ppy_patterns_is_identifier(uint8_t *text, int64_t text_len, int8_t *out)
 int32_t ppy_regex_0(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, int8_t *out0, int64_t *out1, int64_t *out2) {
     int64_t p;
     int64_t sp;
-    int64_t start;
-    int64_t s;
-    int64_t q;
     int64_t q_2;
     int64_t held;
-    int64_t t1;
-    int64_t t2;
-    int64_t t3;
-    int64_t t4;
     int64_t stack[12288];
     int64_t caps[2];
-    int64_t pass;
-    int64_t t5;
-    int64_t t6;
     int64_t t7;
-    int64_t pass_2;
-    int64_t pass_3;
-    int64_t pass_4;
     int64_t t8;
-    int64_t pass_5;
-    int64_t pass_6;
-    int64_t t9;
-    int64_t t10;
-    int64_t *t11;
-    int64_t *t12;
-    int64_t t13;
-    int64_t *t14;
-    int64_t pass_7;
 
-    t1 = endpos < 0 ? 0 : endpos;
-    t2 = t1 > buf_len ? buf_len : t1;
-    t3 = pos < 0 ? 0 : pos;
-    t4 = t3 > buf_len ? buf_len : t3;
-    if (t4 > t2) {
-        goto L4_notfound4;
-    } else {
-        pass = t4;
-        s = pass;
-        goto L1_attempt1;
+    int64_t t1 = endpos < 0 ? 0 : endpos;
+    int64_t t2 = t1 > buf_len ? buf_len : t1;
+    int64_t t3 = pos < 0 ? 0 : pos;
+    int64_t t4 = t3 > buf_len ? buf_len : t3;
+    stack[0] = 0;
+    stack[1] = 0;
+    stack[2] = 0;
+    if (t4 <= t2) {
+        int64_t s = t4;
+        while (1) {
+            p = s;
+            int64_t start = s;
+            sp = 0;
+            caps[0] = -1;
+            caps[1] = -1;
+            caps[0] = s;
+            int64_t t5 = p;
+            if (t5 + 1 <= t2) {
+                int64_t q = t5;
+                while (1) {
+                    if (q >= t2) {
+                        q_2 = q;
+                        break;
+                    }
+                    int64_t t6 = (int64_t)buf[q];
+                    if (((t6 >= 65) & (t6 <= 90)) | ((t6 >= 97) & (t6 <= 122))) {
+                        int64_t pass = q + 1;
+                        q = pass;
+                        continue;
+                    }
+                    q_2 = q;
+                    break;
+                }
+                t7 = t5 + 1;
+                if (q_2 >= t7) break;
+                t8 = sp;
+                if (t8 == 0) {
+                    int64_t t9 = start + 1;
+                    if (t9 <= t2) {
+                        s = t9;
+                        continue;
+                    }
+                    *out0 = (int8_t)false;
+                    *out1 = -1;
+                    *out2 = -1;
+                    return 0;
+                }
+                int64_t t10 = t8 - 1;
+                sp = t10;
+                int64_t *t11 = stack + t10 * 3;
+                p = t11[1];
+                if (t11[0] == 0) {
+                    held = t11[2];
+                    int64_t t12 = p - 1;
+                    p = t12;
+                    if (t12 > held) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t13 = stack + sp * 3;
+                        t13[0] = 0;
+                        t13[1] = p;
+                        t13[2] = held;
+                        sp += 1;
+                    }
+                    caps[1] = p;
+                    *out0 = (int8_t)true;
+                    *out1 = caps[0];
+                    *out2 = caps[1];
+                    return 0;
+                }
+                PPY_UNREACHABLE();
+            } else {
+                t8 = sp;
+                if (t8 == 0) {
+                    int64_t t14 = start + 1;
+                    if (t14 <= t2) {
+                        s = t14;
+                        continue;
+                    }
+                    *out0 = (int8_t)false;
+                    *out1 = -1;
+                    *out2 = -1;
+                    return 0;
+                }
+                int64_t t15 = t8 - 1;
+                sp = t15;
+                int64_t *t16 = stack + t15 * 3;
+                p = t16[1];
+                if (t16[0] == 0) {
+                    held = t16[2];
+                    int64_t t17 = p - 1;
+                    p = t17;
+                    if (t17 > held) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t18 = stack + sp * 3;
+                        t18[0] = 0;
+                        t18[1] = p;
+                        t18[2] = held;
+                        sp += 1;
+                    }
+                    caps[1] = p;
+                    *out0 = (int8_t)true;
+                    *out1 = caps[0];
+                    *out2 = caps[1];
+                    return 0;
+                }
+                PPY_UNREACHABLE();
+            }
+        }
+        p = q_2;
+        if (q_2 > t7) {
+            if (sp >= 4096) return 1; /* regex.stack.ok */
+            int64_t *t19 = stack + sp * 3;
+            t19[0] = 0;
+            t19[1] = p;
+            t19[2] = t7;
+            sp += 1;
+        }
+        caps[1] = p;
+        *out0 = (int8_t)true;
+        *out1 = caps[0];
+        *out2 = caps[1];
+        return 0;
     }
-    L1_attempt1:;
-    p = s;
-    start = s;
-    sp = 0;
-    caps[0] = -1;
-    caps[1] = -1;
-    caps[0] = s;
-    t5 = p;
-    if (t5 + 1 <= t2) {
-        goto L5_fits7;
-    } else {
-        goto L2_fail2;
-    }
-    L2_fail2:;
-    t6 = sp;
-    if (t6 == 0) {
-        goto L3_exhausted3;
-    } else {
-        goto L14_pop17;
-    }
-    L3_exhausted3:;
-    t7 = start + 1;
-    if (t7 > t2) {
-        goto L4_notfound4;
-    } else {
-        pass_2 = t7;
-        s = pass_2;
-        goto L1_attempt1;
-    }
-    L4_notfound4:;
     *out0 = (int8_t)false;
     *out1 = -1;
     *out2 = -1;
     return 0;
-    L5_fits7:;
-    pass_3 = t5;
-    q = pass_3;
-    goto L6_scan8;
-    L6_scan8:;
-    if (q < t2) {
-        goto L7_bound9;
-    } else {
-        pass_4 = q;
-        q_2 = pass_4;
-        goto L8_scanned11;
-    }
-    L7_bound9:;
-    t8 = (int64_t)buf[q];
-    if (((t8 >= 65) & (t8 <= 90)) | ((t8 >= 97) & (t8 <= 122))) {
-        pass_5 = q + 1;
-        q = pass_5;
-        goto L6_scan8;
-    } else {
-        pass_6 = q;
-        q_2 = pass_6;
-        goto L8_scanned11;
-    }
-    L8_scanned11:;
-    t9 = t5 + 1;
-    if (q_2 < t9) {
-        goto L2_fail2;
-    } else {
-        goto L10_enough13;
-    }
-    L9_exit12:;
-    caps[1] = p;
-    *out0 = (int8_t)true;
-    *out1 = caps[0];
-    *out2 = caps[1];
-    return 0;
-    L10_enough13:;
-    p = q_2;
-    if (q_2 > t9) {
-        goto L12_keep15;
-    } else {
-        goto L9_exit12;
-    }
-    L11_giveback14:;
-    t10 = p - 1;
-    p = t10;
-    if (t10 > held) {
-        goto L13_keep16;
-    } else {
-        goto L9_exit12;
-    }
-    L12_keep15:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t11 = stack + sp * 3;
-    t11[0] = 0;
-    t11[1] = p;
-    t11[2] = t9;
-    sp += 1;
-    goto L9_exit12;
-    L13_keep16:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t12 = stack + sp * 3;
-    t12[0] = 0;
-    t12[1] = p;
-    t12[2] = held;
-    sp += 1;
-    goto L9_exit12;
-    L14_pop17:;
-    t13 = t6 - 1;
-    sp = t13;
-    t14 = stack + t13 * 3;
-    p = t14[1];
-    if (t14[0] == 0) {
-        pass_7 = t14[2];
-        held = pass_7;
-        goto L11_giveback14;
-    } else {
-        goto L15_dispatch18;
-    }
-    L15_dispatch18:;
-    PPY_UNREACHABLE();
-    fallback:
-    return 1;
 }
 
 int32_t ppy_regex_1(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, int8_t *out0, int64_t *out1, int64_t *out2, int64_t *out3, int64_t *out4, int64_t *out5, int64_t *out6) {
     int64_t p;
     int64_t sp;
-    int64_t start;
-    int64_t s;
     int64_t held;
-    int64_t q;
     int64_t q_2;
     int64_t held_2;
     int64_t held_3;
@@ -385,129 +337,961 @@ int32_t ppy_regex_1(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, 
     int64_t q_8;
     int64_t held_7;
     int64_t held_8;
-    int64_t t1;
-    int64_t t2;
-    int64_t t3;
-    int64_t t4;
+    int64_t q_10;
+    int64_t q_12;
+    int64_t q_14;
     int64_t stack[12288];
     int64_t caps[6];
-    int64_t pass;
-    int64_t t5;
-    int64_t *t6;
-    int64_t t7;
-    int64_t t8;
-    int64_t t9;
-    int64_t pass_2;
-    int64_t pass_3;
-    int64_t pass_4;
-    int64_t t10;
-    int64_t pass_5;
-    int64_t pass_6;
-    int64_t t11;
-    int64_t t12;
-    int64_t *t13;
-    int64_t t14;
-    int64_t t15;
-    int64_t *t16;
-    int64_t *t17;
-    int64_t pass_7;
-    int64_t pass_8;
-    int64_t t18;
-    int64_t pass_9;
-    int64_t pass_10;
-    int64_t t19;
-    int64_t t20;
-    int64_t *t21;
-    int64_t *t22;
-    int64_t t23;
-    int64_t pass_11;
-    int64_t pass_12;
-    int64_t t24;
-    int64_t pass_13;
-    int64_t pass_14;
-    int64_t t25;
-    int64_t *t26;
-    int64_t t27;
-    int64_t t28;
-    int64_t *t29;
-    int64_t *t30;
-    int64_t pass_15;
-    int64_t pass_16;
-    int64_t t31;
-    int64_t pass_17;
-    int64_t pass_18;
-    int64_t t32;
-    int64_t t33;
-    int64_t *t34;
-    int64_t t35;
-    int64_t *t36;
-    int64_t *t37;
-    int64_t t38;
-    int64_t *t39;
-    int64_t t40;
-    int64_t t41;
-    int64_t pass_19;
-    int64_t pass_20;
-    int64_t pass_21;
-    int64_t pass_22;
-    int64_t pass_23;
-    int64_t pass_24;
-    int64_t pass_25;
-    int64_t pass_26;
+    int64_t t48;
 
-    t1 = endpos < 0 ? 0 : endpos;
-    t2 = t1 > buf_len ? buf_len : t1;
-    t3 = pos < 0 ? 0 : pos;
-    t4 = t3 > buf_len ? buf_len : t3;
-    if (t4 > t2) {
-        goto L4_notfound4;
-    } else {
-        pass = t4;
-        s = pass;
-        goto L1_attempt1;
+    int64_t t1 = endpos < 0 ? 0 : endpos;
+    int64_t t2 = t1 > buf_len ? buf_len : t1;
+    int64_t t3 = pos < 0 ? 0 : pos;
+    int64_t t4 = t3 > buf_len ? buf_len : t3;
+    stack[0] = 0;
+    stack[1] = 0;
+    stack[2] = 0;
+    if (t4 <= t2) {
+        int64_t s = t4;
+        while (1) {
+            p = s;
+            int64_t start = s;
+            sp = 0;
+            caps[0] = -1;
+            caps[1] = -1;
+            caps[2] = -1;
+            caps[3] = -1;
+            caps[4] = -1;
+            caps[5] = -1;
+            caps[0] = s;
+            int64_t t5 = caps[2];
+            if (sp >= 4096) return 1; /* regex.stack.ok */
+            int64_t *t6 = stack + sp * 3;
+            t6[0] = 0;
+            t6[1] = p;
+            t6[2] = t5;
+            sp += 1;
+            caps[2] = p;
+            int64_t t7 = p;
+            if (t7 + 1 <= t2) {
+                int64_t q = t7;
+                while (1) {
+                    if (q >= t2) {
+                        q_2 = q;
+                        break;
+                    }
+                    int64_t t8 = (int64_t)buf[q];
+                    if ((((t8 < 64 ? INT64_C(287948901175001088) : (t8 < 128 ? INT64_C(576460745995190270) : (t8 < 192 ? 0 : 0))) >> (t8 & 63)) & 1) != 0) {
+                        int64_t pass = q + 1;
+                        q = pass;
+                        continue;
+                    }
+                    q_2 = q;
+                    break;
+                }
+                int64_t t9 = t7 + 1;
+                if (q_2 >= t9) {
+                    p = q_2;
+                    if (q_2 > t9) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t10 = stack + sp * 3;
+                        t10[0] = 1;
+                        t10[1] = p;
+                        t10[2] = t9;
+                        sp += 1;
+                    }
+                    int64_t t11 = caps[3];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t12 = stack + sp * 3;
+                    t12[0] = 2;
+                    t12[1] = p;
+                    t12[2] = t11;
+                    sp += 1;
+                    caps[3] = p;
+                    int64_t t13 = p;
+                    if (t13 <= t2) {
+                        int64_t q_9 = t13;
+                        while (1) {
+                            if (q_9 >= t2) {
+                                q_10 = q_9;
+                                break;
+                            }
+                            int64_t t14 = (int64_t)buf[q_9];
+                            if (((t14 >= 9) & (t14 <= 13)) | (t14 == 32)) {
+                                int64_t pass_2 = q_9 + 1;
+                                q_9 = pass_2;
+                                continue;
+                            }
+                            q_10 = q_9;
+                            break;
+                        }
+                        if (q_10 >= t13) {
+                            p = q_10;
+                            if (q_10 > t13) {
+                                if (sp >= 4096) return 1; /* regex.stack.ok */
+                                int64_t *t15 = stack + sp * 3;
+                                t15[0] = 3;
+                                t15[1] = p;
+                                t15[2] = t13;
+                                sp += 1;
+                            }
+                            int64_t t16 = p;
+                            if (t16 < t2 && (int64_t)buf[t16] == 61) {
+                                p = t16 + 1;
+                                int64_t t17 = p;
+                                if (t17 <= t2) {
+                                    int64_t q_11 = t17;
+                                    while (1) {
+                                        if (q_11 >= t2) {
+                                            q_12 = q_11;
+                                            break;
+                                        }
+                                        int64_t t18 = (int64_t)buf[q_11];
+                                        if (((t18 >= 9) & (t18 <= 13)) | (t18 == 32)) {
+                                            int64_t pass_3 = q_11 + 1;
+                                            q_11 = pass_3;
+                                            continue;
+                                        }
+                                        q_12 = q_11;
+                                        break;
+                                    }
+                                    if (q_12 >= t17) {
+                                        p = q_12;
+                                        if (q_12 > t17) {
+                                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                                            int64_t *t19 = stack + sp * 3;
+                                            t19[0] = 4;
+                                            t19[1] = p;
+                                            t19[2] = t17;
+                                            sp += 1;
+                                        }
+                                        int64_t t20 = caps[4];
+                                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                                        int64_t *t21 = stack + sp * 3;
+                                        t21[0] = 5;
+                                        t21[1] = p;
+                                        t21[2] = t20;
+                                        sp += 1;
+                                        caps[4] = p;
+                                        int64_t t22 = p;
+                                        if (t22 + 1 <= t2) {
+                                            int64_t q_13 = t22;
+                                            while (1) {
+                                                if (q_13 >= t2) {
+                                                    q_14 = q_13;
+                                                    break;
+                                                }
+                                                int64_t t23 = (int64_t)buf[q_13];
+                                                if ((t23 >= 48) & (t23 <= 57)) {
+                                                    int64_t pass_4 = q_13 + 1;
+                                                    q_13 = pass_4;
+                                                    continue;
+                                                }
+                                                q_14 = q_13;
+                                                break;
+                                            }
+                                            int64_t t24 = t22 + 1;
+                                            if (q_14 >= t24) {
+                                                p = q_14;
+                                                if (q_14 > t24) {
+                                                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                                                    int64_t *t25 = stack + sp * 3;
+                                                    t25[0] = 6;
+                                                    t25[1] = p;
+                                                    t25[2] = t24;
+                                                    sp += 1;
+                                                }
+                                                int64_t t26 = caps[5];
+                                                if (sp >= 4096) return 1; /* regex.stack.ok */
+                                                int64_t *t27 = stack + sp * 3;
+                                                t27[0] = 7;
+                                                t27[1] = p;
+                                                t27[2] = t26;
+                                                sp += 1;
+                                                caps[5] = p;
+                                                caps[1] = p;
+                                                *out0 = (int8_t)true;
+                                                *out1 = caps[0];
+                                                *out2 = caps[1];
+                                                *out3 = caps[2];
+                                                *out4 = caps[3];
+                                                *out5 = caps[4];
+                                                *out6 = caps[5];
+                                                return 0;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                while (1) {
+                    int64_t t28 = sp;
+                    if (t28 == 0) break;
+                    int64_t t29 = t28 - 1;
+                    sp = t29;
+                    int64_t *t30 = stack + t29 * 3;
+                    int64_t t31 = t30[0];
+                    p = t30[1];
+                    int64_t t32 = t30[2];
+                    if (t31 == 0) {
+                        held = t32;
+                        caps[2] = held;
+                        continue;
+                    }
+                    if (t31 == 1) {
+                        held_2 = t32;
+                        int64_t t33 = p - 1;
+                        p = t33;
+                        if (t33 > held_2) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t34 = stack + sp * 3;
+                            t34[0] = 1;
+                            t34[1] = p;
+                            t34[2] = held_2;
+                            sp += 1;
+                        }
+                        int64_t t35 = caps[3];
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t36 = stack + sp * 3;
+                        t36[0] = 2;
+                        t36[1] = p;
+                        t36[2] = t35;
+                        sp += 1;
+                        caps[3] = p;
+                        int64_t t37 = p;
+                        if (t37 > t2) continue;
+                        q_3 = t37;
+                        while (1) {
+                            if (q_3 >= t2) {
+                                q_4 = q_3;
+                                break;
+                            }
+                            int64_t t38 = (int64_t)buf[q_3];
+                            if (((t38 >= 9) & (t38 <= 13)) | (t38 == 32)) {
+                                int64_t pass_5 = q_3 + 1;
+                                q_3 = pass_5;
+                                continue;
+                            }
+                            q_4 = q_3;
+                            break;
+                        }
+                        if (q_4 < t37) continue;
+                        p = q_4;
+                        if (q_4 > t37) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t39 = stack + sp * 3;
+                            t39[0] = 3;
+                            t39[1] = p;
+                            t39[2] = t37;
+                            sp += 1;
+                        }
+                        int64_t t40 = p;
+                        if (t40 >= t2 || (int64_t)buf[t40] != 61) continue;
+                        p = t40 + 1;
+                        int64_t t41 = p;
+                        if (t41 > t2) continue;
+                        q_5 = t41;
+                        while (1) {
+                            if (q_5 >= t2) {
+                                q_6 = q_5;
+                                break;
+                            }
+                            int64_t t42 = (int64_t)buf[q_5];
+                            if (((t42 >= 9) & (t42 <= 13)) | (t42 == 32)) {
+                                int64_t pass_6 = q_5 + 1;
+                                q_5 = pass_6;
+                                continue;
+                            }
+                            q_6 = q_5;
+                            break;
+                        }
+                        if (q_6 < t41) continue;
+                        p = q_6;
+                        if (q_6 > t41) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t43 = stack + sp * 3;
+                            t43[0] = 4;
+                            t43[1] = p;
+                            t43[2] = t41;
+                            sp += 1;
+                        }
+                        int64_t t44 = caps[4];
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t45 = stack + sp * 3;
+                        t45[0] = 5;
+                        t45[1] = p;
+                        t45[2] = t44;
+                        sp += 1;
+                        caps[4] = p;
+                        int64_t t46 = p;
+                        if (t46 + 1 > t2) continue;
+                        q_7 = t46;
+                        while (1) {
+                            if (q_7 >= t2) {
+                                q_8 = q_7;
+                                break;
+                            }
+                            int64_t t47 = (int64_t)buf[q_7];
+                            if ((t47 >= 48) & (t47 <= 57)) {
+                                int64_t pass_7 = q_7 + 1;
+                                q_7 = pass_7;
+                                continue;
+                            }
+                            q_8 = q_7;
+                            break;
+                        }
+                        t48 = t46 + 1;
+                        if (q_8 < t48) continue;
+                        p = q_8;
+                        if (q_8 > t48) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t49 = stack + sp * 3;
+                            t49[0] = 6;
+                            t49[1] = p;
+                            t49[2] = t48;
+                            sp += 1;
+                        }
+                        int64_t t50 = caps[5];
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t51 = stack + sp * 3;
+                        t51[0] = 7;
+                        t51[1] = p;
+                        t51[2] = t50;
+                        sp += 1;
+                        caps[5] = p;
+                        caps[1] = p;
+                        *out0 = (int8_t)true;
+                        *out1 = caps[0];
+                        *out2 = caps[1];
+                        *out3 = caps[2];
+                        *out4 = caps[3];
+                        *out5 = caps[4];
+                        *out6 = caps[5];
+                        return 0;
+                    }
+                    if (t31 == 2) {
+                        held_3 = t32;
+                        caps[3] = held_3;
+                        continue;
+                    }
+                    if (t31 == 3) {
+                        held_4 = t32;
+                        int64_t t52 = p - 1;
+                        p = t52;
+                        if (t52 > held_4) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t53 = stack + sp * 3;
+                            t53[0] = 3;
+                            t53[1] = p;
+                            t53[2] = held_4;
+                            sp += 1;
+                        }
+                        int64_t t54 = p;
+                        if (t54 >= t2) continue;
+                        if ((int64_t)buf[t54] != 61) continue;
+                        p = t54 + 1;
+                        int64_t t55 = p;
+                        if (t55 > t2) continue;
+                        q_5 = t55;
+                        while (1) {
+                            if (q_5 >= t2) {
+                                q_6 = q_5;
+                                break;
+                            }
+                            int64_t t56 = (int64_t)buf[q_5];
+                            if (((t56 >= 9) & (t56 <= 13)) | (t56 == 32)) {
+                                int64_t pass_8 = q_5 + 1;
+                                q_5 = pass_8;
+                                continue;
+                            }
+                            q_6 = q_5;
+                            break;
+                        }
+                        if (q_6 < t55) continue;
+                        p = q_6;
+                        if (q_6 > t55) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t57 = stack + sp * 3;
+                            t57[0] = 4;
+                            t57[1] = p;
+                            t57[2] = t55;
+                            sp += 1;
+                        }
+                        int64_t t58 = caps[4];
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t59 = stack + sp * 3;
+                        t59[0] = 5;
+                        t59[1] = p;
+                        t59[2] = t58;
+                        sp += 1;
+                        caps[4] = p;
+                        int64_t t60 = p;
+                        if (t60 + 1 > t2) continue;
+                        q_7 = t60;
+                        while (1) {
+                            if (q_7 >= t2) {
+                                q_8 = q_7;
+                                break;
+                            }
+                            int64_t t61 = (int64_t)buf[q_7];
+                            if ((t61 >= 48) & (t61 <= 57)) {
+                                int64_t pass_9 = q_7 + 1;
+                                q_7 = pass_9;
+                                continue;
+                            }
+                            q_8 = q_7;
+                            break;
+                        }
+                        t48 = t60 + 1;
+                        if (q_8 < t48) continue;
+                        p = q_8;
+                        if (q_8 > t48) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t62 = stack + sp * 3;
+                            t62[0] = 6;
+                            t62[1] = p;
+                            t62[2] = t48;
+                            sp += 1;
+                        }
+                        int64_t t63 = caps[5];
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t64 = stack + sp * 3;
+                        t64[0] = 7;
+                        t64[1] = p;
+                        t64[2] = t63;
+                        sp += 1;
+                        caps[5] = p;
+                        caps[1] = p;
+                        *out0 = (int8_t)true;
+                        *out1 = caps[0];
+                        *out2 = caps[1];
+                        *out3 = caps[2];
+                        *out4 = caps[3];
+                        *out5 = caps[4];
+                        *out6 = caps[5];
+                        return 0;
+                    }
+                    if (t31 == 4) {
+                        held_5 = t32;
+                        int64_t t65 = p - 1;
+                        p = t65;
+                        if (t65 > held_5) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t66 = stack + sp * 3;
+                            t66[0] = 4;
+                            t66[1] = p;
+                            t66[2] = held_5;
+                            sp += 1;
+                        }
+                        int64_t t67 = caps[4];
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t68 = stack + sp * 3;
+                        t68[0] = 5;
+                        t68[1] = p;
+                        t68[2] = t67;
+                        sp += 1;
+                        caps[4] = p;
+                        int64_t t69 = p;
+                        if (t69 + 1 > t2) continue;
+                        q_7 = t69;
+                        while (1) {
+                            if (q_7 >= t2) {
+                                q_8 = q_7;
+                                break;
+                            }
+                            int64_t t70 = (int64_t)buf[q_7];
+                            if ((t70 >= 48) & (t70 <= 57)) {
+                                int64_t pass_10 = q_7 + 1;
+                                q_7 = pass_10;
+                                continue;
+                            }
+                            q_8 = q_7;
+                            break;
+                        }
+                        t48 = t69 + 1;
+                        if (q_8 < t48) continue;
+                        p = q_8;
+                        if (q_8 > t48) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t71 = stack + sp * 3;
+                            t71[0] = 6;
+                            t71[1] = p;
+                            t71[2] = t48;
+                            sp += 1;
+                        }
+                        int64_t t72 = caps[5];
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t73 = stack + sp * 3;
+                        t73[0] = 7;
+                        t73[1] = p;
+                        t73[2] = t72;
+                        sp += 1;
+                        caps[5] = p;
+                        caps[1] = p;
+                        *out0 = (int8_t)true;
+                        *out1 = caps[0];
+                        *out2 = caps[1];
+                        *out3 = caps[2];
+                        *out4 = caps[3];
+                        *out5 = caps[4];
+                        *out6 = caps[5];
+                        return 0;
+                    }
+                    if (t31 == 5) {
+                        held_6 = t32;
+                        caps[4] = held_6;
+                        continue;
+                    }
+                    if (t31 == 6) {
+                        held_7 = t32;
+                        int64_t t74 = p - 1;
+                        p = t74;
+                        if (t74 > held_7) {
+                            if (sp >= 4096) return 1; /* regex.stack.ok */
+                            int64_t *t75 = stack + sp * 3;
+                            t75[0] = 6;
+                            t75[1] = p;
+                            t75[2] = held_7;
+                            sp += 1;
+                        }
+                        int64_t t76 = caps[5];
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t77 = stack + sp * 3;
+                        t77[0] = 7;
+                        t77[1] = p;
+                        t77[2] = t76;
+                        sp += 1;
+                        caps[5] = p;
+                        caps[1] = p;
+                        *out0 = (int8_t)true;
+                        *out1 = caps[0];
+                        *out2 = caps[1];
+                        *out3 = caps[2];
+                        *out4 = caps[3];
+                        *out5 = caps[4];
+                        *out6 = caps[5];
+                        return 0;
+                    }
+                    if (t31 == 7) {
+                        held_8 = t32;
+                        caps[5] = held_8;
+                        continue;
+                    }
+                    PPY_UNREACHABLE();
+                }
+                int64_t t78 = start + 1;
+                if (t78 <= t2) {
+                    s = t78;
+                    continue;
+                }
+                *out0 = (int8_t)false;
+                *out1 = -1;
+                *out2 = -1;
+                *out3 = -1;
+                *out4 = -1;
+                *out5 = -1;
+                *out6 = -1;
+                return 0;
+            }
+            while (1) {
+                int64_t t79 = sp;
+                if (t79 == 0) break;
+                int64_t t80 = t79 - 1;
+                sp = t80;
+                int64_t *t81 = stack + t80 * 3;
+                int64_t t82 = t81[0];
+                p = t81[1];
+                int64_t t83 = t81[2];
+                if (t82 == 0) {
+                    held = t83;
+                    caps[2] = held;
+                    continue;
+                }
+                if (t82 == 1) {
+                    held_2 = t83;
+                    int64_t t84 = p - 1;
+                    p = t84;
+                    if (t84 > held_2) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t85 = stack + sp * 3;
+                        t85[0] = 1;
+                        t85[1] = p;
+                        t85[2] = held_2;
+                        sp += 1;
+                    }
+                    int64_t t86 = caps[3];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t87 = stack + sp * 3;
+                    t87[0] = 2;
+                    t87[1] = p;
+                    t87[2] = t86;
+                    sp += 1;
+                    caps[3] = p;
+                    int64_t t88 = p;
+                    if (t88 > t2) continue;
+                    q_3 = t88;
+                    while (1) {
+                        if (q_3 >= t2) {
+                            q_4 = q_3;
+                            break;
+                        }
+                        int64_t t89 = (int64_t)buf[q_3];
+                        if (((t89 >= 9) & (t89 <= 13)) | (t89 == 32)) {
+                            int64_t pass_11 = q_3 + 1;
+                            q_3 = pass_11;
+                            continue;
+                        }
+                        q_4 = q_3;
+                        break;
+                    }
+                    if (q_4 < t88) continue;
+                    p = q_4;
+                    if (q_4 > t88) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t90 = stack + sp * 3;
+                        t90[0] = 3;
+                        t90[1] = p;
+                        t90[2] = t88;
+                        sp += 1;
+                    }
+                    int64_t t91 = p;
+                    if (t91 >= t2) continue;
+                    if ((int64_t)buf[t91] != 61) continue;
+                    p = t91 + 1;
+                    int64_t t92 = p;
+                    if (t92 > t2) continue;
+                    q_5 = t92;
+                    while (1) {
+                        if (q_5 >= t2) {
+                            q_6 = q_5;
+                            break;
+                        }
+                        int64_t t93 = (int64_t)buf[q_5];
+                        if (((t93 >= 9) & (t93 <= 13)) | (t93 == 32)) {
+                            int64_t pass_12 = q_5 + 1;
+                            q_5 = pass_12;
+                            continue;
+                        }
+                        q_6 = q_5;
+                        break;
+                    }
+                    if (q_6 < t92) continue;
+                    p = q_6;
+                    if (q_6 > t92) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t94 = stack + sp * 3;
+                        t94[0] = 4;
+                        t94[1] = p;
+                        t94[2] = t92;
+                        sp += 1;
+                    }
+                    int64_t t95 = caps[4];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t96 = stack + sp * 3;
+                    t96[0] = 5;
+                    t96[1] = p;
+                    t96[2] = t95;
+                    sp += 1;
+                    caps[4] = p;
+                    int64_t t97 = p;
+                    if (t97 + 1 > t2) continue;
+                    q_7 = t97;
+                    while (1) {
+                        if (q_7 >= t2) {
+                            q_8 = q_7;
+                            break;
+                        }
+                        int64_t t98 = (int64_t)buf[q_7];
+                        if ((t98 >= 48) & (t98 <= 57)) {
+                            int64_t pass_13 = q_7 + 1;
+                            q_7 = pass_13;
+                            continue;
+                        }
+                        q_8 = q_7;
+                        break;
+                    }
+                    t48 = t97 + 1;
+                    if (q_8 < t48) continue;
+                    p = q_8;
+                    if (q_8 > t48) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t99 = stack + sp * 3;
+                        t99[0] = 6;
+                        t99[1] = p;
+                        t99[2] = t48;
+                        sp += 1;
+                    }
+                    int64_t t100 = caps[5];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t101 = stack + sp * 3;
+                    t101[0] = 7;
+                    t101[1] = p;
+                    t101[2] = t100;
+                    sp += 1;
+                    caps[5] = p;
+                    caps[1] = p;
+                    *out0 = (int8_t)true;
+                    *out1 = caps[0];
+                    *out2 = caps[1];
+                    *out3 = caps[2];
+                    *out4 = caps[3];
+                    *out5 = caps[4];
+                    *out6 = caps[5];
+                    return 0;
+                }
+                if (t82 == 2) {
+                    held_3 = t83;
+                    caps[3] = held_3;
+                    continue;
+                }
+                if (t82 == 3) {
+                    held_4 = t83;
+                    int64_t t102 = p - 1;
+                    p = t102;
+                    if (t102 > held_4) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t103 = stack + sp * 3;
+                        t103[0] = 3;
+                        t103[1] = p;
+                        t103[2] = held_4;
+                        sp += 1;
+                    }
+                    int64_t t104 = p;
+                    if (t104 >= t2) continue;
+                    if ((int64_t)buf[t104] != 61) continue;
+                    p = t104 + 1;
+                    int64_t t105 = p;
+                    if (t105 > t2) continue;
+                    q_5 = t105;
+                    while (1) {
+                        if (q_5 >= t2) {
+                            q_6 = q_5;
+                            break;
+                        }
+                        int64_t t106 = (int64_t)buf[q_5];
+                        if (((t106 >= 9) & (t106 <= 13)) | (t106 == 32)) {
+                            int64_t pass_14 = q_5 + 1;
+                            q_5 = pass_14;
+                            continue;
+                        }
+                        q_6 = q_5;
+                        break;
+                    }
+                    if (q_6 < t105) continue;
+                    p = q_6;
+                    if (q_6 > t105) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t107 = stack + sp * 3;
+                        t107[0] = 4;
+                        t107[1] = p;
+                        t107[2] = t105;
+                        sp += 1;
+                    }
+                    int64_t t108 = caps[4];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t109 = stack + sp * 3;
+                    t109[0] = 5;
+                    t109[1] = p;
+                    t109[2] = t108;
+                    sp += 1;
+                    caps[4] = p;
+                    int64_t t110 = p;
+                    if (t110 + 1 > t2) continue;
+                    q_7 = t110;
+                    while (1) {
+                        if (q_7 >= t2) {
+                            q_8 = q_7;
+                            break;
+                        }
+                        int64_t t111 = (int64_t)buf[q_7];
+                        if ((t111 >= 48) & (t111 <= 57)) {
+                            int64_t pass_15 = q_7 + 1;
+                            q_7 = pass_15;
+                            continue;
+                        }
+                        q_8 = q_7;
+                        break;
+                    }
+                    t48 = t110 + 1;
+                    if (q_8 < t48) continue;
+                    p = q_8;
+                    if (q_8 > t48) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t112 = stack + sp * 3;
+                        t112[0] = 6;
+                        t112[1] = p;
+                        t112[2] = t48;
+                        sp += 1;
+                    }
+                    int64_t t113 = caps[5];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t114 = stack + sp * 3;
+                    t114[0] = 7;
+                    t114[1] = p;
+                    t114[2] = t113;
+                    sp += 1;
+                    caps[5] = p;
+                    caps[1] = p;
+                    *out0 = (int8_t)true;
+                    *out1 = caps[0];
+                    *out2 = caps[1];
+                    *out3 = caps[2];
+                    *out4 = caps[3];
+                    *out5 = caps[4];
+                    *out6 = caps[5];
+                    return 0;
+                }
+                if (t82 == 4) {
+                    held_5 = t83;
+                    int64_t t115 = p - 1;
+                    p = t115;
+                    if (t115 > held_5) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t116 = stack + sp * 3;
+                        t116[0] = 4;
+                        t116[1] = p;
+                        t116[2] = held_5;
+                        sp += 1;
+                    }
+                    int64_t t117 = caps[4];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t118 = stack + sp * 3;
+                    t118[0] = 5;
+                    t118[1] = p;
+                    t118[2] = t117;
+                    sp += 1;
+                    caps[4] = p;
+                    int64_t t119 = p;
+                    if (t119 + 1 > t2) continue;
+                    q_7 = t119;
+                    while (1) {
+                        if (q_7 >= t2) {
+                            q_8 = q_7;
+                            break;
+                        }
+                        int64_t t120 = (int64_t)buf[q_7];
+                        if ((t120 >= 48) & (t120 <= 57)) {
+                            int64_t pass_16 = q_7 + 1;
+                            q_7 = pass_16;
+                            continue;
+                        }
+                        q_8 = q_7;
+                        break;
+                    }
+                    t48 = t119 + 1;
+                    if (q_8 < t48) continue;
+                    p = q_8;
+                    if (q_8 > t48) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t121 = stack + sp * 3;
+                        t121[0] = 6;
+                        t121[1] = p;
+                        t121[2] = t48;
+                        sp += 1;
+                    }
+                    int64_t t122 = caps[5];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t123 = stack + sp * 3;
+                    t123[0] = 7;
+                    t123[1] = p;
+                    t123[2] = t122;
+                    sp += 1;
+                    caps[5] = p;
+                    caps[1] = p;
+                    *out0 = (int8_t)true;
+                    *out1 = caps[0];
+                    *out2 = caps[1];
+                    *out3 = caps[2];
+                    *out4 = caps[3];
+                    *out5 = caps[4];
+                    *out6 = caps[5];
+                    return 0;
+                }
+                if (t82 == 5) {
+                    held_6 = t83;
+                    caps[4] = held_6;
+                    continue;
+                }
+                if (t82 == 6) {
+                    held_7 = t83;
+                    int64_t t124 = p - 1;
+                    p = t124;
+                    if (t124 > held_7) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t125 = stack + sp * 3;
+                        t125[0] = 6;
+                        t125[1] = p;
+                        t125[2] = held_7;
+                        sp += 1;
+                    }
+                    int64_t t126 = caps[5];
+                    if (sp >= 4096) return 1; /* regex.stack.ok */
+                    int64_t *t127 = stack + sp * 3;
+                    t127[0] = 7;
+                    t127[1] = p;
+                    t127[2] = t126;
+                    sp += 1;
+                    caps[5] = p;
+                    caps[1] = p;
+                    *out0 = (int8_t)true;
+                    *out1 = caps[0];
+                    *out2 = caps[1];
+                    *out3 = caps[2];
+                    *out4 = caps[3];
+                    *out5 = caps[4];
+                    *out6 = caps[5];
+                    return 0;
+                }
+                if (t82 == 7) {
+                    held_8 = t83;
+                    caps[5] = held_8;
+                    continue;
+                }
+                PPY_UNREACHABLE();
+            }
+            int64_t t128 = start + 1;
+            if (t128 <= t2) {
+                s = t128;
+                continue;
+            }
+            *out0 = (int8_t)false;
+            *out1 = -1;
+            *out2 = -1;
+            *out3 = -1;
+            *out4 = -1;
+            *out5 = -1;
+            *out6 = -1;
+            return 0;
+        }
+        p = q_8;
+        if (q_8 > t48) {
+            if (sp >= 4096) return 1; /* regex.stack.ok */
+            int64_t *t129 = stack + sp * 3;
+            t129[0] = 6;
+            t129[1] = p;
+            t129[2] = t48;
+            sp += 1;
+        }
+        int64_t t130 = caps[5];
+        if (sp >= 4096) return 1; /* regex.stack.ok */
+        int64_t *t131 = stack + sp * 3;
+        t131[0] = 7;
+        t131[1] = p;
+        t131[2] = t130;
+        sp += 1;
+        caps[5] = p;
+        caps[1] = p;
+        *out0 = (int8_t)true;
+        *out1 = caps[0];
+        *out2 = caps[1];
+        *out3 = caps[2];
+        *out4 = caps[3];
+        *out5 = caps[4];
+        *out6 = caps[5];
+        return 0;
     }
-    L1_attempt1:;
-    p = s;
-    start = s;
-    sp = 0;
-    caps[0] = -1;
-    caps[1] = -1;
-    caps[2] = -1;
-    caps[3] = -1;
-    caps[4] = -1;
-    caps[5] = -1;
-    caps[0] = s;
-    t5 = caps[2];
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t6 = stack + sp * 3;
-    t6[0] = 0;
-    t6[1] = p;
-    t6[2] = t5;
-    sp += 1;
-    caps[2] = p;
-    t7 = p;
-    if (t7 + 1 <= t2) {
-        goto L6_fits8;
-    } else {
-        goto L2_fail2;
-    }
-    L2_fail2:;
-    t8 = sp;
-    if (t8 == 0) {
-        goto L3_exhausted3;
-    } else {
-        goto L47_pop53;
-    }
-    L3_exhausted3:;
-    t9 = start + 1;
-    if (t9 > t2) {
-        goto L4_notfound4;
-    } else {
-        pass_2 = t9;
-        s = pass_2;
-        goto L1_attempt1;
-    }
-    L4_notfound4:;
     *out0 = (int8_t)false;
     *out1 = -1;
     *out2 = -1;
@@ -516,755 +1300,248 @@ int32_t ppy_regex_1(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, 
     *out5 = -1;
     *out6 = -1;
     return 0;
-    L5_restore7:;
-    caps[2] = held;
-    goto L2_fail2;
-    L6_fits8:;
-    pass_3 = t7;
-    q = pass_3;
-    goto L7_scan9;
-    L7_scan9:;
-    if (q < t2) {
-        goto L8_bound10;
-    } else {
-        pass_4 = q;
-        q_2 = pass_4;
-        goto L9_scanned12;
-    }
-    L8_bound10:;
-    t10 = (int64_t)buf[q];
-    if ((((t10 < 64 ? INT64_C(287948901175001088) : (t10 < 128 ? INT64_C(576460745995190270) : (t10 < 192 ? 0 : 0))) >> (t10 & 63)) & 1) != 0) {
-        pass_5 = q + 1;
-        q = pass_5;
-        goto L7_scan9;
-    } else {
-        pass_6 = q;
-        q_2 = pass_6;
-        goto L9_scanned12;
-    }
-    L9_scanned12:;
-    t11 = t7 + 1;
-    if (q_2 < t11) {
-        goto L2_fail2;
-    } else {
-        goto L11_enough14;
-    }
-    L10_exit13:;
-    t12 = caps[3];
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t13 = stack + sp * 3;
-    t13[0] = 2;
-    t13[1] = p;
-    t13[2] = t12;
-    sp += 1;
-    caps[3] = p;
-    t14 = p;
-    if (t14 <= t2) {
-        goto L16_fits19;
-    } else {
-        goto L2_fail2;
-    }
-    L11_enough14:;
-    p = q_2;
-    if (q_2 > t11) {
-        goto L13_keep16;
-    } else {
-        goto L10_exit13;
-    }
-    L12_giveback15:;
-    t15 = p - 1;
-    p = t15;
-    if (t15 > held_2) {
-        goto L14_keep17;
-    } else {
-        goto L10_exit13;
-    }
-    L13_keep16:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t16 = stack + sp * 3;
-    t16[0] = 1;
-    t16[1] = p;
-    t16[2] = t11;
-    sp += 1;
-    goto L10_exit13;
-    L14_keep17:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t17 = stack + sp * 3;
-    t17[0] = 1;
-    t17[1] = p;
-    t17[2] = held_2;
-    sp += 1;
-    goto L10_exit13;
-    L15_restore18:;
-    caps[3] = held_3;
-    goto L2_fail2;
-    L16_fits19:;
-    pass_7 = t14;
-    q_3 = pass_7;
-    goto L17_scan20;
-    L17_scan20:;
-    if (q_3 < t2) {
-        goto L18_bound21;
-    } else {
-        pass_8 = q_3;
-        q_4 = pass_8;
-        goto L19_scanned23;
-    }
-    L18_bound21:;
-    t18 = (int64_t)buf[q_3];
-    if (((t18 >= 9) & (t18 <= 13)) | (t18 == 32)) {
-        pass_9 = q_3 + 1;
-        q_3 = pass_9;
-        goto L17_scan20;
-    } else {
-        pass_10 = q_3;
-        q_4 = pass_10;
-        goto L19_scanned23;
-    }
-    L19_scanned23:;
-    if (q_4 < t14) {
-        goto L2_fail2;
-    } else {
-        goto L21_enough25;
-    }
-    L20_exit24:;
-    t19 = p;
-    if (t19 < t2) {
-        goto L25_read29;
-    } else {
-        goto L2_fail2;
-    }
-    L21_enough25:;
-    p = q_4;
-    if (q_4 > t14) {
-        goto L23_keep27;
-    } else {
-        goto L20_exit24;
-    }
-    L22_giveback26:;
-    t20 = p - 1;
-    p = t20;
-    if (t20 > held_4) {
-        goto L24_keep28;
-    } else {
-        goto L20_exit24;
-    }
-    L23_keep27:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t21 = stack + sp * 3;
-    t21[0] = 3;
-    t21[1] = p;
-    t21[2] = t14;
-    sp += 1;
-    goto L20_exit24;
-    L24_keep28:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t22 = stack + sp * 3;
-    t22[0] = 3;
-    t22[1] = p;
-    t22[2] = held_4;
-    sp += 1;
-    goto L20_exit24;
-    L25_read29:;
-    if ((int64_t)buf[t19] == 61) {
-        goto L26_advance30;
-    } else {
-        goto L2_fail2;
-    }
-    L26_advance30:;
-    p = t19 + 1;
-    t23 = p;
-    if (t23 <= t2) {
-        goto L27_fits31;
-    } else {
-        goto L2_fail2;
-    }
-    L27_fits31:;
-    pass_11 = t23;
-    q_5 = pass_11;
-    goto L28_scan32;
-    L28_scan32:;
-    if (q_5 < t2) {
-        goto L29_bound33;
-    } else {
-        pass_12 = q_5;
-        q_6 = pass_12;
-        goto L30_scanned35;
-    }
-    L29_bound33:;
-    t24 = (int64_t)buf[q_5];
-    if (((t24 >= 9) & (t24 <= 13)) | (t24 == 32)) {
-        pass_13 = q_5 + 1;
-        q_5 = pass_13;
-        goto L28_scan32;
-    } else {
-        pass_14 = q_5;
-        q_6 = pass_14;
-        goto L30_scanned35;
-    }
-    L30_scanned35:;
-    if (q_6 < t23) {
-        goto L2_fail2;
-    } else {
-        goto L32_enough37;
-    }
-    L31_exit36:;
-    t25 = caps[4];
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t26 = stack + sp * 3;
-    t26[0] = 5;
-    t26[1] = p;
-    t26[2] = t25;
-    sp += 1;
-    caps[4] = p;
-    t27 = p;
-    if (t27 + 1 <= t2) {
-        goto L37_fits42;
-    } else {
-        goto L2_fail2;
-    }
-    L32_enough37:;
-    p = q_6;
-    if (q_6 > t23) {
-        goto L34_keep39;
-    } else {
-        goto L31_exit36;
-    }
-    L33_giveback38:;
-    t28 = p - 1;
-    p = t28;
-    if (t28 > held_5) {
-        goto L35_keep40;
-    } else {
-        goto L31_exit36;
-    }
-    L34_keep39:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t29 = stack + sp * 3;
-    t29[0] = 4;
-    t29[1] = p;
-    t29[2] = t23;
-    sp += 1;
-    goto L31_exit36;
-    L35_keep40:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t30 = stack + sp * 3;
-    t30[0] = 4;
-    t30[1] = p;
-    t30[2] = held_5;
-    sp += 1;
-    goto L31_exit36;
-    L36_restore41:;
-    caps[4] = held_6;
-    goto L2_fail2;
-    L37_fits42:;
-    pass_15 = t27;
-    q_7 = pass_15;
-    goto L38_scan43;
-    L38_scan43:;
-    if (q_7 < t2) {
-        goto L39_bound44;
-    } else {
-        pass_16 = q_7;
-        q_8 = pass_16;
-        goto L40_scanned46;
-    }
-    L39_bound44:;
-    t31 = (int64_t)buf[q_7];
-    if ((t31 >= 48) & (t31 <= 57)) {
-        pass_17 = q_7 + 1;
-        q_7 = pass_17;
-        goto L38_scan43;
-    } else {
-        pass_18 = q_7;
-        q_8 = pass_18;
-        goto L40_scanned46;
-    }
-    L40_scanned46:;
-    t32 = t27 + 1;
-    if (q_8 < t32) {
-        goto L2_fail2;
-    } else {
-        goto L42_enough48;
-    }
-    L41_exit47:;
-    t33 = caps[5];
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t34 = stack + sp * 3;
-    t34[0] = 7;
-    t34[1] = p;
-    t34[2] = t33;
-    sp += 1;
-    caps[5] = p;
-    caps[1] = p;
-    *out0 = (int8_t)true;
-    *out1 = caps[0];
-    *out2 = caps[1];
-    *out3 = caps[2];
-    *out4 = caps[3];
-    *out5 = caps[4];
-    *out6 = caps[5];
-    return 0;
-    L42_enough48:;
-    p = q_8;
-    if (q_8 > t32) {
-        goto L44_keep50;
-    } else {
-        goto L41_exit47;
-    }
-    L43_giveback49:;
-    t35 = p - 1;
-    p = t35;
-    if (t35 > held_7) {
-        goto L45_keep51;
-    } else {
-        goto L41_exit47;
-    }
-    L44_keep50:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t36 = stack + sp * 3;
-    t36[0] = 6;
-    t36[1] = p;
-    t36[2] = t32;
-    sp += 1;
-    goto L41_exit47;
-    L45_keep51:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t37 = stack + sp * 3;
-    t37[0] = 6;
-    t37[1] = p;
-    t37[2] = held_7;
-    sp += 1;
-    goto L41_exit47;
-    L46_restore52:;
-    caps[5] = held_8;
-    goto L2_fail2;
-    L47_pop53:;
-    t38 = t8 - 1;
-    sp = t38;
-    t39 = stack + t38 * 3;
-    t40 = t39[0];
-    p = t39[1];
-    t41 = t39[2];
-    if (t40 == 0) {
-        pass_19 = t41;
-        held = pass_19;
-        goto L5_restore7;
-    } else {
-        goto L48_dispatch54;
-    }
-    L48_dispatch54:;
-    if (t40 == 1) {
-        pass_20 = t41;
-        held_2 = pass_20;
-        goto L12_giveback15;
-    } else {
-        goto L49_dispatch55;
-    }
-    L49_dispatch55:;
-    if (t40 == 2) {
-        pass_21 = t41;
-        held_3 = pass_21;
-        goto L15_restore18;
-    } else {
-        goto L50_dispatch56;
-    }
-    L50_dispatch56:;
-    if (t40 == 3) {
-        pass_22 = t41;
-        held_4 = pass_22;
-        goto L22_giveback26;
-    } else {
-        goto L51_dispatch57;
-    }
-    L51_dispatch57:;
-    if (t40 == 4) {
-        pass_23 = t41;
-        held_5 = pass_23;
-        goto L33_giveback38;
-    } else {
-        goto L52_dispatch58;
-    }
-    L52_dispatch58:;
-    if (t40 == 5) {
-        pass_24 = t41;
-        held_6 = pass_24;
-        goto L36_restore41;
-    } else {
-        goto L53_dispatch59;
-    }
-    L53_dispatch59:;
-    if (t40 == 6) {
-        pass_25 = t41;
-        held_7 = pass_25;
-        goto L43_giveback49;
-    } else {
-        goto L54_dispatch60;
-    }
-    L54_dispatch60:;
-    if (t40 == 7) {
-        pass_26 = t41;
-        held_8 = pass_26;
-        goto L46_restore52;
-    } else {
-        goto L55_dispatch61;
-    }
-    L55_dispatch61:;
-    PPY_UNREACHABLE();
-    fallback:
-    return 1;
 }
 
 int32_t ppy_regex_2(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, int8_t *out0, int64_t *out1, int64_t *out2) {
     int64_t p;
     int64_t sp;
-    int64_t start;
-    int64_t s;
-    int64_t q;
     int64_t q_2;
     int64_t held;
-    int64_t t1;
-    int64_t t2;
-    int64_t t3;
-    int64_t t4;
     int64_t stack[12288];
     int64_t caps[2];
-    int64_t pass;
-    int64_t t5;
-    int64_t t6;
-    int64_t t7;
-    int64_t pass_2;
-    int64_t t8;
-    int64_t t9;
     int64_t t10;
-    int64_t pass_3;
-    int64_t pass_4;
     int64_t t11;
-    int64_t pass_5;
-    int64_t pass_6;
-    int64_t t12;
-    int64_t t13;
-    int64_t *t14;
-    int64_t *t15;
-    int64_t t16;
-    int64_t *t17;
-    int64_t pass_7;
 
-    t1 = endpos < 0 ? 0 : endpos;
-    t2 = t1 > buf_len ? buf_len : t1;
-    t3 = pos < 0 ? 0 : pos;
-    t4 = t3 > buf_len ? buf_len : t3;
-    if (t4 > t2) {
-        goto L4_notfound4;
-    } else {
-        pass = t4;
-        s = pass;
-        goto L1_attempt1;
+    int64_t t1 = endpos < 0 ? 0 : endpos;
+    int64_t t2 = t1 > buf_len ? buf_len : t1;
+    int64_t t3 = pos < 0 ? 0 : pos;
+    int64_t t4 = t3 > buf_len ? buf_len : t3;
+    stack[0] = 0;
+    stack[1] = 0;
+    stack[2] = 0;
+    if (t4 <= t2) {
+        int64_t s = t4;
+        while (1) {
+            p = s;
+            int64_t start = s;
+            sp = 0;
+            caps[0] = -1;
+            caps[1] = -1;
+            caps[0] = s;
+            int64_t t5 = p;
+            if (t5 < t2 && (int64_t)buf[t5] == 48) {
+                p = t5 + 1;
+                int64_t t6 = p;
+                if (t6 < t2) {
+                    int64_t t7 = (int64_t)buf[t6];
+                    if ((t7 == 88) | (t7 == 120)) {
+                        p = t6 + 1;
+                        int64_t t8 = p;
+                        if (t8 + 1 <= t2) {
+                            int64_t q = t8;
+                            while (1) {
+                                if (q >= t2) {
+                                    q_2 = q;
+                                    break;
+                                }
+                                int64_t t9 = (int64_t)buf[q];
+                                if ((((t9 >= 48) & (t9 <= 57)) | ((t9 >= 65) & (t9 <= 70))) | ((t9 >= 97) & (t9 <= 102))) {
+                                    int64_t pass = q + 1;
+                                    q = pass;
+                                    continue;
+                                }
+                                q_2 = q;
+                                break;
+                            }
+                            t10 = t8 + 1;
+                            if (q_2 >= t10) break;
+                        }
+                    }
+                }
+                t11 = sp;
+                if (t11 == 0) {
+                    int64_t t12 = start + 1;
+                    if (t12 <= t2) {
+                        s = t12;
+                        continue;
+                    }
+                    *out0 = (int8_t)false;
+                    *out1 = -1;
+                    *out2 = -1;
+                    return 0;
+                }
+                int64_t t13 = t11 - 1;
+                sp = t13;
+                int64_t *t14 = stack + t13 * 3;
+                p = t14[1];
+                if (t14[0] == 0) {
+                    held = t14[2];
+                    int64_t t15 = p - 1;
+                    p = t15;
+                    if (t15 > held) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t16 = stack + sp * 3;
+                        t16[0] = 0;
+                        t16[1] = p;
+                        t16[2] = held;
+                        sp += 1;
+                    }
+                    caps[1] = p;
+                    *out0 = (int8_t)true;
+                    *out1 = caps[0];
+                    *out2 = caps[1];
+                    return 0;
+                }
+                PPY_UNREACHABLE();
+            } else {
+                t11 = sp;
+                if (t11 == 0) {
+                    int64_t t17 = start + 1;
+                    if (t17 <= t2) {
+                        s = t17;
+                        continue;
+                    }
+                    *out0 = (int8_t)false;
+                    *out1 = -1;
+                    *out2 = -1;
+                    return 0;
+                }
+                int64_t t18 = t11 - 1;
+                sp = t18;
+                int64_t *t19 = stack + t18 * 3;
+                p = t19[1];
+                if (t19[0] == 0) {
+                    held = t19[2];
+                    int64_t t20 = p - 1;
+                    p = t20;
+                    if (t20 > held) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t21 = stack + sp * 3;
+                        t21[0] = 0;
+                        t21[1] = p;
+                        t21[2] = held;
+                        sp += 1;
+                    }
+                    caps[1] = p;
+                    *out0 = (int8_t)true;
+                    *out1 = caps[0];
+                    *out2 = caps[1];
+                    return 0;
+                }
+                PPY_UNREACHABLE();
+            }
+        }
+        p = q_2;
+        if (q_2 > t10) {
+            if (sp >= 4096) return 1; /* regex.stack.ok */
+            int64_t *t22 = stack + sp * 3;
+            t22[0] = 0;
+            t22[1] = p;
+            t22[2] = t10;
+            sp += 1;
+        }
+        caps[1] = p;
+        *out0 = (int8_t)true;
+        *out1 = caps[0];
+        *out2 = caps[1];
+        return 0;
     }
-    L1_attempt1:;
-    p = s;
-    start = s;
-    sp = 0;
-    caps[0] = -1;
-    caps[1] = -1;
-    caps[0] = s;
-    t5 = p;
-    if (t5 < t2) {
-        goto L5_read7;
-    } else {
-        goto L2_fail2;
-    }
-    L2_fail2:;
-    t6 = sp;
-    if (t6 == 0) {
-        goto L3_exhausted3;
-    } else {
-        goto L18_pop21;
-    }
-    L3_exhausted3:;
-    t7 = start + 1;
-    if (t7 > t2) {
-        goto L4_notfound4;
-    } else {
-        pass_2 = t7;
-        s = pass_2;
-        goto L1_attempt1;
-    }
-    L4_notfound4:;
     *out0 = (int8_t)false;
     *out1 = -1;
     *out2 = -1;
     return 0;
-    L5_read7:;
-    if ((int64_t)buf[t5] == 48) {
-        goto L6_advance8;
-    } else {
-        goto L2_fail2;
-    }
-    L6_advance8:;
-    p = t5 + 1;
-    t8 = p;
-    if (t8 < t2) {
-        goto L7_read9;
-    } else {
-        goto L2_fail2;
-    }
-    L7_read9:;
-    t9 = (int64_t)buf[t8];
-    if ((t9 == 88) | (t9 == 120)) {
-        goto L8_advance10;
-    } else {
-        goto L2_fail2;
-    }
-    L8_advance10:;
-    p = t8 + 1;
-    t10 = p;
-    if (t10 + 1 <= t2) {
-        goto L9_fits11;
-    } else {
-        goto L2_fail2;
-    }
-    L9_fits11:;
-    pass_3 = t10;
-    q = pass_3;
-    goto L10_scan12;
-    L10_scan12:;
-    if (q < t2) {
-        goto L11_bound13;
-    } else {
-        pass_4 = q;
-        q_2 = pass_4;
-        goto L12_scanned15;
-    }
-    L11_bound13:;
-    t11 = (int64_t)buf[q];
-    if ((((t11 >= 48) & (t11 <= 57)) | ((t11 >= 65) & (t11 <= 70))) | ((t11 >= 97) & (t11 <= 102))) {
-        pass_5 = q + 1;
-        q = pass_5;
-        goto L10_scan12;
-    } else {
-        pass_6 = q;
-        q_2 = pass_6;
-        goto L12_scanned15;
-    }
-    L12_scanned15:;
-    t12 = t10 + 1;
-    if (q_2 < t12) {
-        goto L2_fail2;
-    } else {
-        goto L14_enough17;
-    }
-    L13_exit16:;
-    caps[1] = p;
-    *out0 = (int8_t)true;
-    *out1 = caps[0];
-    *out2 = caps[1];
-    return 0;
-    L14_enough17:;
-    p = q_2;
-    if (q_2 > t12) {
-        goto L16_keep19;
-    } else {
-        goto L13_exit16;
-    }
-    L15_giveback18:;
-    t13 = p - 1;
-    p = t13;
-    if (t13 > held) {
-        goto L17_keep20;
-    } else {
-        goto L13_exit16;
-    }
-    L16_keep19:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t14 = stack + sp * 3;
-    t14[0] = 0;
-    t14[1] = p;
-    t14[2] = t12;
-    sp += 1;
-    goto L13_exit16;
-    L17_keep20:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t15 = stack + sp * 3;
-    t15[0] = 0;
-    t15[1] = p;
-    t15[2] = held;
-    sp += 1;
-    goto L13_exit16;
-    L18_pop21:;
-    t16 = t6 - 1;
-    sp = t16;
-    t17 = stack + t16 * 3;
-    p = t17[1];
-    if (t17[0] == 0) {
-        pass_7 = t17[2];
-        held = pass_7;
-        goto L15_giveback18;
-    } else {
-        goto L19_dispatch22;
-    }
-    L19_dispatch22:;
-    PPY_UNREACHABLE();
-    fallback:
-    return 1;
 }
 
 int32_t ppy_regex_3(uint8_t *buf, int64_t buf_len, int64_t pos, int64_t endpos, int8_t *out0, int64_t *out1, int64_t *out2) {
-    int64_t p;
-    int64_t sp;
-    int64_t q;
     int64_t q_2;
-    int64_t held;
-    int64_t t1;
-    int64_t t2;
-    int64_t t3;
-    int64_t t4;
     int64_t stack[12288];
     int64_t caps[2];
-    int64_t t5;
-    int64_t t6;
-    int64_t t7;
-    int64_t t8;
-    int64_t pass;
-    int64_t pass_2;
-    int64_t t9;
-    int64_t pass_3;
-    int64_t pass_4;
-    int64_t t10;
-    int64_t *t11;
-    int64_t *t12;
-    int64_t t13;
-    int64_t *t14;
-    int64_t pass_5;
 
-    t1 = endpos < 0 ? 0 : endpos;
-    t2 = t1 > buf_len ? buf_len : t1;
-    t3 = pos < 0 ? 0 : pos;
-    t4 = t3 > buf_len ? buf_len : t3;
-    p = t4;
-    sp = 0;
+    int64_t t1 = endpos < 0 ? 0 : endpos;
+    int64_t t2 = t1 > buf_len ? buf_len : t1;
+    int64_t t3 = pos < 0 ? 0 : pos;
+    int64_t t4 = t3 > buf_len ? buf_len : t3;
+    stack[0] = 0;
+    stack[1] = 0;
+    stack[2] = 0;
+    int64_t p = t4;
+    int64_t sp = 0;
     caps[0] = -1;
     caps[1] = -1;
     caps[0] = t4;
-    t5 = p;
+    int64_t t5 = p;
     if (t5 < t2) {
-        goto L4_read7;
-    } else {
-        goto L1_fail2;
+        int64_t t6 = (int64_t)buf[t5];
+        if ((((t6 >= 65) & (t6 <= 90)) | (t6 == 95)) | ((t6 >= 97) & (t6 <= 122))) {
+            p = t5 + 1;
+            int64_t t7 = p;
+            if (t7 <= t2) {
+                int64_t q = t7;
+                while (1) {
+                    if (q >= t2) {
+                        q_2 = q;
+                        break;
+                    }
+                    int64_t t8 = (int64_t)buf[q];
+                    if ((((t8 < 64 ? INT64_C(287948901175001088) : (t8 < 128 ? INT64_C(576460745995190270) : (t8 < 192 ? 0 : 0))) >> (t8 & 63)) & 1) != 0) {
+                        int64_t pass = q + 1;
+                        q = pass;
+                        continue;
+                    }
+                    q_2 = q;
+                    break;
+                }
+                if (q_2 >= t7) {
+                    p = q_2;
+                    if (q_2 > t7) {
+                        if (sp >= 4096) return 1; /* regex.stack.ok */
+                        int64_t *t9 = stack + sp * 3;
+                        t9[0] = 0;
+                        t9[1] = p;
+                        t9[2] = t7;
+                        sp += 1;
+                    }
+                    if (p == t2) {
+                        caps[1] = p;
+                        *out0 = (int8_t)true;
+                        *out1 = caps[0];
+                        *out2 = caps[1];
+                        return 0;
+                    }
+                }
+            }
+        }
     }
-    L1_fail2:;
-    t6 = sp;
-    if (t6 == 0) {
-        goto L2_exhausted3;
-    } else {
-        goto L15_pop19;
+    while (1) {
+        int64_t t10 = sp;
+        if (t10 == 0) break;
+        int64_t t11 = t10 - 1;
+        sp = t11;
+        int64_t *t12 = stack + t11 * 3;
+        p = t12[1];
+        if (t12[0] == 0) {
+            int64_t held = t12[2];
+            int64_t t13 = p - 1;
+            p = t13;
+            if (t13 > held) {
+                if (sp >= 4096) return 1; /* regex.stack.ok */
+                int64_t *t14 = stack + sp * 3;
+                t14[0] = 0;
+                t14[1] = p;
+                t14[2] = held;
+                sp += 1;
+            }
+            if (p != t2) continue;
+            caps[1] = p;
+            *out0 = (int8_t)true;
+            *out1 = caps[0];
+            *out2 = caps[1];
+            return 0;
+        }
+        PPY_UNREACHABLE();
     }
-    L2_exhausted3:;
     *out0 = (int8_t)false;
     *out1 = -1;
     *out2 = -1;
     return 0;
-    L3_success5:;
-    caps[1] = p;
-    *out0 = (int8_t)true;
-    *out1 = caps[0];
-    *out2 = caps[1];
-    return 0;
-    L4_read7:;
-    t7 = (int64_t)buf[t5];
-    if ((((t7 >= 65) & (t7 <= 90)) | (t7 == 95)) | ((t7 >= 97) & (t7 <= 122))) {
-        goto L5_advance8;
-    } else {
-        goto L1_fail2;
-    }
-    L5_advance8:;
-    p = t5 + 1;
-    t8 = p;
-    if (t8 <= t2) {
-        goto L6_fits9;
-    } else {
-        goto L1_fail2;
-    }
-    L6_fits9:;
-    pass = t8;
-    q = pass;
-    goto L7_scan10;
-    L7_scan10:;
-    if (q < t2) {
-        goto L8_bound11;
-    } else {
-        pass_2 = q;
-        q_2 = pass_2;
-        goto L9_scanned13;
-    }
-    L8_bound11:;
-    t9 = (int64_t)buf[q];
-    if ((((t9 < 64 ? INT64_C(287948901175001088) : (t9 < 128 ? INT64_C(576460745995190270) : (t9 < 192 ? 0 : 0))) >> (t9 & 63)) & 1) != 0) {
-        pass_3 = q + 1;
-        q = pass_3;
-        goto L7_scan10;
-    } else {
-        pass_4 = q;
-        q_2 = pass_4;
-        goto L9_scanned13;
-    }
-    L9_scanned13:;
-    if (q_2 < t8) {
-        goto L1_fail2;
-    } else {
-        goto L11_enough15;
-    }
-    L10_exit14:;
-    if (p == t2) {
-        goto L3_success5;
-    } else {
-        goto L1_fail2;
-    }
-    L11_enough15:;
-    p = q_2;
-    if (q_2 > t8) {
-        goto L13_keep17;
-    } else {
-        goto L10_exit14;
-    }
-    L12_giveback16:;
-    t10 = p - 1;
-    p = t10;
-    if (t10 > held) {
-        goto L14_keep18;
-    } else {
-        goto L10_exit14;
-    }
-    L13_keep17:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t11 = stack + sp * 3;
-    t11[0] = 0;
-    t11[1] = p;
-    t11[2] = t8;
-    sp += 1;
-    goto L10_exit14;
-    L14_keep18:;
-    if (!(sp < 4096)) goto fallback; /* regex.stack.ok */
-    t12 = stack + sp * 3;
-    t12[0] = 0;
-    t12[1] = p;
-    t12[2] = held;
-    sp += 1;
-    goto L10_exit14;
-    L15_pop19:;
-    t13 = t6 - 1;
-    sp = t13;
-    t14 = stack + t13 * 3;
-    p = t14[1];
-    if (t14[0] == 0) {
-        pass_5 = t14[2];
-        held = pass_5;
-        goto L12_giveback16;
-    } else {
-        goto L16_dispatch20;
-    }
-    L16_dispatch20:;
-    PPY_UNREACHABLE();
-    fallback:
-    return 1;
 }

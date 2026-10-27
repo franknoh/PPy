@@ -823,10 +823,32 @@ loaded and stored is a variable named after it. A value read once, in its own
 block, is written where it is read, with the parentheses C's precedence needs
 and no others. A parameter keeps its Python name.
 
-Some graphs the reconstruction cannot express: a loop with two exits, or a
-block reached from two places that dominate neither. For that function alone
-the emitter falls back to blocks as labels and branches as `goto`s, so the
-text is always correct and usually plain.
+A loop with several exits keeps one as the exit it `break`s to: the exit
+the others flow into, or the header's own. The rest are written where the
+loop jumps to them -- a `return` or a raise in place, or code followed by
+`break`. Exits that go on to different places, none flowing into the
+other, are left by `break` with a small `int leaving` set first, and
+written after the loop under `if (leaving == k)`. A block every path from which ends the function, or continues or
+leaves the loop it is in, may be written in each branch that reaches it,
+so a shared raise path or clean-up does not need a label. A block that
+only tests, reached from one branch and sharing a target with it, folds
+into that branch's condition with `&&` or `||`.
+
+Before that, `backend/c/reducible.py` works on a private copy of a
+function when its graph needs it: an empty block that only branches on is
+bypassed, and a cycle entered at more than one block -- a generator
+resumed inside its loop, a backtracking regex re-entering its forward
+path -- has each extra entry split off, copying the entry and the blocks it
+dominates for the predecessors outside the cycle. The module is never
+changed.
+
+A graph the reconstruction still cannot express, or one whose copies would
+grow past four times the function, falls back for that function alone to
+blocks as labels and branches as `goto`s. No example takes that path, in
+any of the C and C++ forms. One generated matcher in the regex tests does:
+`(a+)(b|c)*\d\s*$` re-enters its forward path at three places, and its
+structured form would copy that path about ten times. `tests/test_c_structured.py`
+checks both.
 
 `ppy emit c` and `ppy emit cpp` print it (`--format` runs it through
 clang-format). `tests/test_c_backend.py` compiles it and calls it on the LLVM
