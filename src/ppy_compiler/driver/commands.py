@@ -512,6 +512,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
                 )
             )
             return 2
+        if getattr(options, "library", False):
+            project.config.llvm.library = True
     bundle = analyze_paths(project, collect_sources(target), backend=backend)
     errors = reporter.report(bundle.diagnostics)
     if errors:

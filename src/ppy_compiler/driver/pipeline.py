@@ -294,6 +294,8 @@ def module_cache_key(
             extra = (*extra, f"sanitize={','.join(sorted(config.llvm.sanitize))}")
         if config.llvm.instrument:
             extra = (*extra, "profile=instrument")
+        if config.llvm.library:
+            extra = (*extra, "library")
         if config.llvm.pgo:
             from .profile import profile_digest
 

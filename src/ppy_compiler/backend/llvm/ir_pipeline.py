@@ -57,6 +57,7 @@ def lower_module_via_ir(
     instrument: bool = False,
     profile=None,  # type: ignore[no-untyped-def]
     emit_llvm: bool = True,
+    library: bool = False,
 ) -> LoweringResult:
     """One module lowered to the canonical IR and through the shared passes,
     and emitted as LLVM IR unless `emit_llvm` is False: a build that links the
@@ -72,6 +73,7 @@ def lower_module_via_ir(
         backend_name="llvm",
         safeguards=safeguards,
         standalone=standalone,
+        library=library,
         prover=prover,
         root=root,
         imports=imports,

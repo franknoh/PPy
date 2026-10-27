@@ -62,6 +62,8 @@ class BuildArtifacts:
     #: public C symbols by name, and the libraries the bindings need.
     signatures: dict[str, NativeSignature] = field(default_factory=dict)
     exports: dict[str, NativeSignature] = field(default_factory=dict)
+    #: Exports the source asks for that did not lower: name -> (qualname, why).
+    unexported: dict[str, tuple[str, str]] = field(default_factory=dict)
     libraries: tuple[str, ...] = ()
     #: `--python-extension`: the importable module; `--library`: the package.
     extension: Path | None = None
@@ -175,10 +177,24 @@ def link_shared_library(
             command.append(str(runtime_object(source, linker[0]) if host else source))
         else:
             command.append(f"-l{library}")
+    if _needs_libm(target) and "m" not in libraries:
+        # The objects and the runtimes call `sqrt`, `pow`, and the rest of
+        # libm; linked here, a C consumer needs only `-lppy_<name>`.
+        command.append("-lm")
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         raise ToolchainError(f"link failed: {completed.stderr.strip() or completed.stdout.strip()}")
     return destination
+
+
+def _needs_libm(target) -> bool:  # type: ignore[no-untyped-def]
+    """Whether the math functions live in a libm of their own: on ELF systems,
+    not on macOS (libSystem) or Windows (the C runtime)."""
+    if target is None:
+        from ...target import host_target
+
+        target = host_target()
+    return target.os not in {"darwin", "ios", "windows"}
 
 
 #: Bumped when the flags `runtime_object` compiles with change.
@@ -335,15 +351,19 @@ def _abi_of(scalar: str) -> str:
     return _abi_name(scalar)
 
 
-def write_header(destination: Path, exports: dict[str, NativeSignature]) -> Path:
+def write_header(
+    destination: Path, exports: dict[str, NativeSignature], *, last_error: bool = False
+) -> Path:
     """A C header declaring every exported symbol of the library."""
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(header_text(destination.stem, exports), encoding="utf-8")
+    text = header_text(destination.stem, exports, last_error=last_error)
+    destination.write_text(text, encoding="utf-8")
     return destination
 
 
-def header_text(stem: str, exports: dict[str, NativeSignature]) -> str:
-    """The C header declaring `exports`, guarded by a name made from `stem`."""
+def header_text(stem: str, exports: dict[str, NativeSignature], *, last_error: bool = False) -> str:
+    """The C header declaring `exports`, guarded by a name made from `stem`;
+    with `last_error`, and `ppy_last_error()`, which a library build has."""
     guard = "PPY_" + "".join(c if c.isalnum() else "_" for c in stem).upper() + "_H"
     lines = [
         f"#ifndef {guard}",
@@ -357,6 +377,17 @@ def header_text(stem: str, exports: dict[str, NativeSignature]) -> str:
         "",
     ]
     lines.extend(c_prototype(name, signature) for name, signature in sorted(exports.items()))
+    if last_error:
+        lines.extend(
+            [
+                "",
+                "/* Where the Python code raises, a function above returns 0 and",
+                "   ppy_last_error() gives CPython's last line for the exception, such as",
+                '   "IndexError: list index out of range". A call that returns clears it',
+                "   (NULL). The text is the library's, per thread, until its next call. */",
+                "const char *ppy_last_error(void);",
+            ]
+        )
     lines.extend(["", "#ifdef __cplusplus", "}", "#endif", "", f"#endif /* {guard} */", ""])
     return "\n".join(lines)
 

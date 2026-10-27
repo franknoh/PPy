@@ -414,7 +414,38 @@ source did. It is built against the interpreter that builds it.
 - the manifest describing the ABI
 
 A module with no `@ppy.native.export` has nothing to package and says so
-(`E1805`).
+(`E1805`). An export that did not lower to native code stops the build
+with the function and the reason (`E1807`), instead of being left out of
+the header.
+
+The shared library is linked against everything it calls, libm included,
+so a consumer needs only what the `.pc` file says:
+
+```bash
+cc app.c $(pkg-config --cflags --libs <name>) -o app
+```
+
+A C caller has no Python to raise in. Where the Python code would raise,
+an export returns 0 and `ppy_last_error()`, declared in the same header,
+gives CPython's last line for the exception. A call that returns clears
+it, so the caller checks after each call that matters:
+
+```c
+int64_t value = pick(7);
+const char *error = ppy_last_error();
+if (error != NULL) {
+    fprintf(stderr, "%s\n", error);   /* IndexError: list index out of range */
+}
+```
+
+The text belongs to the library and lasts, per thread, until that
+thread's next call into it. A check native code cannot answer at all,
+such as an integer result past 64 bits, which Python would compute,
+reads `RuntimeError: a native guard failed with no Python to fall back to`.
+For this, every module with an export links the collections runtime in a
+library build. A plain `ppy build` and `ppy emit llvm-ir` do not add it,
+so their objects still link without it where the code needs none, and an
+export of such a module traps on a failed guard.
 
 ### `--warm`
 

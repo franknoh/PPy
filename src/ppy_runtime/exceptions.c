@@ -107,3 +107,66 @@ void ppy_exc_report(void) {
     fflush(stderr);
     ppy_coll_release(pending);
 }
+
+/* What a C caller of a library's exports reads where a call failed, since it
+   has no Python to raise in: CPython's last line for the exception, per
+   thread, as text the runtime owns. */
+int64_t *ppy_exc_error_slot(void) {
+#ifdef __cplusplus
+    static thread_local int64_t text;
+#else
+    static _Thread_local int64_t text;
+#endif
+    return &text;
+}
+
+/* Forgets the thread's last failed call: an export that returns calls it. */
+void ppy_exc_clear(void) {
+    int64_t *slot = ppy_exc_error_slot();
+    free((char *)(intptr_t)*slot);
+    *slot = 0;
+}
+
+/* An export's call failed: keeps CPython's last line for the pending
+   exception ("IndexError: list index out of range") and lets go of it. With
+   nothing pending, a guard failed that knows no exception, and the line is
+   the one a standalone program prints for it. */
+void ppy_exc_fail(void) {
+    static const char unknown[] = "RuntimeError: a native guard failed with no Python to fall back to";
+    ppy_exc_clear();
+    int8_t *pending = ppy_exc_take();
+    const char *name = unknown;
+    size_t named = sizeof unknown - 1;
+    const char *said = "";
+    size_t length = 0;
+    if (pending != NULL) {
+        int64_t *record = ppy_exc_record(pending);
+        int8_t *kind = (int8_t *)(intptr_t)record[1];
+        int8_t *message = (int8_t *)(intptr_t)record[2];
+        name = (const char *)ppy_str_raw(kind);
+        named = (size_t)ppy_str_bytes(kind);
+        said = (const char *)ppy_str_raw(message);
+        length = (size_t)ppy_str_bytes(message);
+    }
+    char *text = (char *)malloc(named + 2 + length + 1);
+    if (text != NULL) {
+        memcpy(text, name, named);
+        size_t at = named;
+        if (length > 0) {
+            memcpy(text + at, ": ", 2);
+            memcpy(text + at + 2, said, length);
+            at += 2 + length;
+        }
+        text[at] = '\0';
+        *ppy_exc_error_slot() = (int64_t)(intptr_t)text;
+    }
+    if (pending != NULL) {
+        ppy_coll_release(pending);
+    }
+}
+
+/* The thread's last failed export call, as `ppy_exc_fail` spelled it, or
+   NULL where the last call returned. */
+int8_t *ppy_last_error(void) {
+    return (int8_t *)(intptr_t)*ppy_exc_error_slot();
+}

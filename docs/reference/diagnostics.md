@@ -132,6 +132,7 @@ emit. Each diagnostic has a stable code (spec 29.1).
 | `E1804` | A header-only unit cannot carry runtime state; the feature needing it is named. |
 | `E1805` | A library build has nothing to export; `@ppy.native.export` names what to publish. |
 | `E1806` | A C header could not be imported; the reason is named. |
+| `E1807` | An exported function is not native in a library build; the reason is named. |
 
 ## Plugins and backends
 

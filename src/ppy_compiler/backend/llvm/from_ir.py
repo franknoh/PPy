@@ -192,8 +192,13 @@ class _ModuleEmitter:
     def _export(self, function: IRFunction) -> None:
         """The public C symbol: the internal function behind a C signature.
 
-        A C caller has no Python to fall back to, so a failed guard is a
-        trap, never a wrong answer.
+        A C caller has no Python to fall back to. Where the module links the
+        runtime -- every module with an export does in a library build
+        (`lowering/ast_to_ir.py`) -- a failed call returns zero and the
+        runtime keeps CPython's last line for what it raised, which
+        `ppy_last_error()` gives the caller; a call that returns clears it.
+        Without the runtime there is nowhere to keep it, and a failed guard
+        is a trap, never a wrong answer.
         """
         ir = self.ir
         name = str(function.attributes["ppy.export"])
@@ -212,17 +217,64 @@ class _ModuleEmitter:
         good = wrapper.append_basic_block("ok")
         bad = wrapper.append_basic_block("fail")
         builder.cbranch(ok, good, bad)
+        if "ppy_collections" not in self.module.attributes.get("ppy.libraries", ()):  # type: ignore[operator]
+            builder.position_at_end(bad)
+            trap = self.llvm.globals.get("llvm.trap") or ir.Function(
+                self.llvm, ir.FunctionType(ir.VoidType(), []), name="llvm.trap"
+            )
+            builder.call(trap, [])
+            builder.unreachable()
+            builder.position_at_end(good)
+            if result is None:
+                builder.ret_void()
+            else:
+                builder.ret(builder.load(slot))
+            return
+        # Once any call has failed, a call that returns forgets it; until then
+        # a returning call reads one plain flag and calls nothing.
+        failed = self._failed_once()
         builder.position_at_end(bad)
-        trap = self.llvm.globals.get("llvm.trap") or ir.Function(
-            self.llvm, ir.FunctionType(ir.VoidType(), []), name="llvm.trap"
-        )
-        builder.call(trap, [])
-        builder.unreachable()
+        builder.store_atomic(ir.Constant(ir.IntType(8), 1), failed, "monotonic", 1)
+        builder.call(self._runtime_void("ppy_exc_fail"), [])
+        if result is None:
+            builder.ret_void()
+        elif isinstance(result_type, ir.IntType):
+            builder.ret(ir.Constant(result_type, 0))
+        else:
+            builder.ret(ir.Constant(result_type, 0.0))
         builder.position_at_end(good)
+        clear = wrapper.append_basic_block("clear")
+        done = wrapper.append_basic_block("done")
+        once = builder.load_atomic(failed, "monotonic", 1)
+        seen = builder.icmp_unsigned("!=", once, ir.Constant(ir.IntType(8), 0))
+        builder.cbranch(seen, clear, done)
+        builder.position_at_end(clear)
+        builder.call(self._runtime_void("ppy_exc_clear"), [])
+        builder.branch(done)
+        builder.position_at_end(done)
         if result is None:
             builder.ret_void()
         else:
             builder.ret(builder.load(slot))
+
+    def _failed_once(self):  # type: ignore[no-untyped-def]
+        """Whether an export call of the library has ever failed: one flag
+        however many modules export, which the runtime's last-error text is
+        only cleared behind."""
+        ir = self.ir
+        flag = self.llvm.globals.get("ppy_export_failed_once")
+        if flag is None:
+            flag = ir.GlobalVariable(self.llvm, ir.IntType(8), name="ppy_export_failed_once")
+            flag.linkage = "weak_odr"
+            flag.initializer = ir.Constant(ir.IntType(8), 0)
+        return flag
+
+    def _runtime_void(self, name: str):  # type: ignore[no-untyped-def]
+        """A runtime function of no arguments and no result, declared once."""
+        ir = self.ir
+        return self.llvm.globals.get(name) or ir.Function(
+            self.llvm, ir.FunctionType(ir.VoidType(), []), name=name
+        )
 
     @property
     def data_layout(self):  # type: ignore[no-untyped-def]
