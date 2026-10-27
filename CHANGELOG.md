@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.8.0 — unreleased
+
 ## 0.7.2 — 2026-10-27
 
 - `ppy emit c` / `cpp` write every function with `while`, `if`/`else`,
